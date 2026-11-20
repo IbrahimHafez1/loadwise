@@ -163,6 +163,7 @@ The optional [editor extension](editor/README.md) adds syntax-highlighted hover 
 | ------------------------- | ---------------------------------------- | ---------------- |
 | Source and ORM checks     | `loadwise perf -p tsconfig.json`         | No               |
 | Migration safety          | `loadwise perf migrations`               | No               |
+| API contract safety       | `loadwise perf contracts`                | No               |
 | Schema-aware index checks | `loadwise perf --schema snap.json`       | No (snapshot)    |
 | Live database inspection  | `loadwise perf db`                       | Yes, read-only   |
 | Traces and executed plans | `traces trace.json`, `plan explain.json` | No               |
@@ -382,6 +383,31 @@ npx loadwise perf migrations                    # new migrations fail; baselined
 ```
 
 Commit the baseline. `--baseline FILE` reads or writes another path. Exit codes match the source checks: 0 passed, 1 findings in enforced migrations, 2 invalid input.
+
+## API contract safety
+
+`npx loadwise perf contracts [--changed-since REF] [--json]` compares the working tree with the merge base of `REF` (default `HEAD`) and flags changes that break API clients. It reads files and git history only. `loadwise check --changed-since REF` runs it too and adds its findings to the performance report. Every finding is enforced, because it describes a change you are about to ship; exit code 1 means a breaking change, 2 invalid input. Use a full-history checkout (`fetch-depth: 0`) so the ref resolves.
+
+It compares three kinds of source:
+
+- **OpenAPI and Swagger JSON** (`openapi.json`, `swagger.json`). YAML documents are skipped with a note, because no YAML parser ships with loadwise; commit or check a JSON export instead.
+- **GraphQL SDL** (`*.graphql`, `*.gql`, for example the `schema.gql` a code-first server emits). Query documents are skipped.
+- **NestJS classes** used as `@Body()` types or as controller return types (also `@ApiResponse({ type })`), found in `*.controller.ts` and read from the file that declares them (relative imports only). Only property names, `?`, `@IsOptional()` and the written type text are compared.
+
+| Rule                     | What it flags                                                                                                               |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `api-removed-operation`  | An OpenAPI path and method, or a GraphQL `Query`, `Mutation` or `Subscription` field, that no longer exists.                |
+| `api-removed-field`      | A response field, GraphQL type, field, argument or union member, or a DTO property returned to clients, that was removed.   |
+| `api-required-input`     | A request field, parameter, GraphQL argument or input field that is new and required, or changed from optional to required. |
+| `api-type-changed`       | A field or parameter whose type changed, or a GraphQL type that became nullable (output) or non-null (input).               |
+| `api-enum-value-removed` | An enum value or string-literal option that requests (or, in GraphQL, any client) can no longer use.                        |
+
+Removals point at the line in the old version (the message says so); every other finding points at the new line. A new version next to the old one (`/v2/users` added while `/v1/users` stays) breaks nothing and is not flagged. A removed request property is flagged only when the project builds a `ValidationPipe` with `forbidNonWhitelisted: true`, because only then do clients that still send it get a 400. Properties inherited from a base class in a relative import count as the class's own.
+
+```sh
+npx loadwise perf contracts --changed-since origin/main
+npx loadwise check --changed-since origin/main
+```
 
 ## Schema-aware index checks
 

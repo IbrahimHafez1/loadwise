@@ -146,6 +146,8 @@ const missingIndex = sqlExample(
   'Index the filtered column, then re-run EXPLAIN ANALYZE to confirm an index scan.',
 );
 
+const contractExample = (language, before, after, note) => ({ language, before, code: after, note });
+
 const standaloneExamples = {
   'duplicate-key-read': {
     language: 'javascript',
@@ -408,6 +410,36 @@ const standaloneExamples = {
     'ALTER TABLE orders ADD COLUMN note TEXT;',
     'ALTER TABLE orders ADD COLUMN note TEXT, ALGORITHM=INSTANT;',
     'State ALGORITHM (and LOCK) so MySQL refuses a statement that would silently lock or copy the table.',
+  ),
+  'api-removed-operation': contractExample(
+    'graphql',
+    'type Query {\n  user(id: ID!): User\n}',
+    'type Query {\n  user(id: ID!): User\n  userV2(id: ID!): User\n}',
+    'Keep the old operation (or serve /v1 beside a new /v2) until no deployed client calls it.',
+  ),
+  'api-removed-field': contractExample(
+    'typescript',
+    'class UserDto {\n  name: string;\n}',
+    'class UserDto {\n  name: string;\n  /** @deprecated read name */\n  fullName?: string;\n}',
+    'Deprecate a response field first and remove it after clients stop reading it.',
+  ),
+  'api-required-input': contractExample(
+    'typescript',
+    'class CreateUserDto {\n  nickname?: string;\n}',
+    'class CreateUserDto {\n  nickname?: string;\n}\n// make it required only in a new API version',
+    'A newly required input rejects every client that has not been updated; give it a default or version the API.',
+  ),
+  'api-type-changed': contractExample(
+    'typescript',
+    'class OrderDto {\n  total: number;\n}',
+    'class OrderDto {\n  total: number;\n  totalText: string;\n}',
+    'Add a new field for the new type and keep the old one until clients migrate.',
+  ),
+  'api-enum-value-removed': contractExample(
+    'typescript',
+    "type Status = 'open' | 'closed' | 'archived';",
+    "type Status = 'open' | 'closed' | 'archived'; // keep accepting 'archived'",
+    'Keep accepting the old value (map it to the new one) until clients stop sending it.',
   ),
   'db-unindexed-foreign-key': sqlExample(foreignKeyBefore, foreignKeyIndex, foreignKeyNote),
   'db-unused-index': sqlExample(
