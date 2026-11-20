@@ -238,6 +238,15 @@ describe('mysql tokenizer and recognizer', () => {
     );
   });
 
+  test('each ALTER TABLE action carries its own start offset', () => {
+    const sql = 'ALTER TABLE t\n  DROP COLUMN a,\n  MODIFY b INT';
+    const { actions } = only1(sql);
+    assert.deepEqual(
+      actions.map((action) => sql.slice(action.start, action.start + 6)),
+      ['DROP C', 'MODIFY'],
+    );
+  });
+
   test('unrecognized or incomplete statements are other', () => {
     assert.equal(only1('ALTER VIEW v AS SELECT 1').kind, 'other');
     assert.equal(only1('ALTER TABLE').kind, 'other');

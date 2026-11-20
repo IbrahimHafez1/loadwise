@@ -172,6 +172,20 @@ describe('MySQL SQL extraction', () => {
     assert.equal(operations[9].line, 3);
   });
 
+  test('places each ALTER TABLE action on its own line and skips IF EXISTS', () => {
+    const operations = mysql(
+      'ALTER TABLE users\n  DROP COLUMN IF EXISTS a,\n  ADD COLUMN IF NOT EXISTS b INT,\n  MODIFY c BIGINT;',
+    );
+    assert.deepEqual(
+      operations.map((operation) => [operation.kind, operation.columnName, operation.line, operation.column]),
+      [
+        ['drop-column', 'a', 2, 3],
+        ['add-column', 'b', 3, 3],
+        ['alter-column-type', 'c', 4, 3],
+      ],
+    );
+  });
+
   test('maps CREATE TABLE, CREATE INDEX, DROP, RENAME TABLE and data statements', () => {
     const operations = mysql(
       'CREATE TABLE IF NOT EXISTS `orders` (id INT);\nCREATE INDEX i ON orders (a) ALGORITHM=COPY;\n' +

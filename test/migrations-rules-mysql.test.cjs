@@ -16,6 +16,16 @@ function check(sql) {
 const summary = (findings) => findings.map((finding) => [finding.ruleId, finding.line]);
 
 describe('MySQL migration rules', () => {
+  test('findings land on each ALTER TABLE sub-command line', () => {
+    const findings = check(
+      'ALTER TABLE orders\n  DROP COLUMN IF EXISTS legacy,\n  ADD COLUMN IF NOT EXISTS note INT NOT NULL,\n  MODIFY total BIGINT;',
+    );
+    const found = findings.map((finding) => [finding.ruleId, finding.line]);
+    assert.ok(found.some(([ruleId, line]) => ruleId === 'migration-not-null-without-default' && line === 3));
+    assert.ok(found.some(([ruleId, line]) => ruleId === 'migration-mysql-table-copy' && line === 4));
+    assert.ok(found.some(([ruleId, line]) => ruleId === 'migration-breaking-drop' && line === 2));
+  });
+
   test('known COPY operations', () => {
     const findings = check(
       'ALTER TABLE orders MODIFY total BIGINT, ALGORITHM=INPLACE, LOCK=NONE;\n' +
