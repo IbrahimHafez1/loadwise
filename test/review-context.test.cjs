@@ -28,7 +28,8 @@ test('context requires bounded seed data, timed polling or an actual benchmark e
   withProgram('', fixtures, (program) => {
     for (const [filename, expected] of [
       ['seeds/setup.ts', [true, false]],
-      ['service.spec.ts', [true, false]],
+      // A test source is contextual either way; only the timed poll has its own reason.
+      ['service.spec.ts', [true, true]],
       ['model-benchmark.ts', [true, false]],
     ]) {
       const file = program
@@ -40,6 +41,9 @@ test('context requires bounded seed data, timed polling or an actual benchmark e
         filename,
       );
     }
+    const spec = program.getSourceFiles().find((item) => item.fileName.endsWith('service.spec.ts'));
+    assert.match(analyzeFile(program, spec)[0].contextualReason, /polls with a timer/);
+    assert.doesNotMatch(analyzeFile(program, spec)[1].contextualReason, /polls with a timer/);
   });
 });
 
