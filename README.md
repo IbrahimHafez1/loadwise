@@ -100,7 +100,7 @@ The optional [editor extension](editor/README.md) adds syntax-highlighted hover 
 Text findings carry a stable `#id`, a **Fix** diff where one applies and, for loops and repeated spans, an **Impact:** line. Impact always says which side is measured and which is estimated.
 
 ```text
-examples/slow.ts:7:48 [array-repeated-find #9ab891a8b8f7] Each item can rescan the lookup array with find(), so cost grows with items times rows. Build `const byKey = new Map()` once (first match wins) and call `byKey.get(key)`; keep the original key-equality semantics.
+examples/slow.ts:7:48 [array-repeated-find #9ab891a8b8f7] medium: Each item can rescan the lookup array with find(), so cost grows with items times rows. Build `const byKey = new Map()` once (first match wins) and call `byKey.get(key)`; keep the original key-equality semantics.
   Fix (examples/slow.ts:7):
     - const names = visible.map(order => customers.find(customer => customer.id === order.customerId)?.name ?? 'Unknown');
     + const customersById = new Map(customers.map((customer) => [customer.id, customer] as const).reverse());
@@ -401,6 +401,115 @@ Start with the endpoint's query count, latency and a representative input size. 
 
 The rules cover query shape, caching candidates, pooling, selected blocking work and collection complexity. Response compression settings, CDN placement, load balancing, partitioning, service boundaries and capacity planning depend on traffic, topology and operational costs. Use workload measurements when making those deployment decisions. [10 Essential Tips for Backend Performance Optimization](https://medium.com/@rhgustmfrh/10-essential-tips-for-backend-performance-optimization-8b55fce0ca17) · [Backend Performance Best Practices roadmap](https://roadmap.sh/backend-performance-best-practices)
 
+## Impact levels
+
+Every finding carries an impact level. `--min-impact <low|medium|high|critical>` reports only findings at that level or above, and the filtered ones do not count toward the exit code; an unknown level exits 2. JSON findings carry it as `impactLevel` (`impact` is the before/after estimate). Text output shows the level after the rule and lists the most severe finding first within each file, keeping the current order for equal levels.
+
+- `critical`: data loss or corruption, an outage or a lock risk in production.
+- `high`: a per-request scaling problem such as an N+1 or query in a loop, a deep offset, a missing foreign-key or filter index, an HTTP call without a timeout, or a dependency cycle with load-time effects.
+- `medium`: a measurable but local cost, or significant maintainability debt.
+- `low`: a micro-optimization or a readability issue.
+
+| Rule                                  | Impact   |
+| ------------------------------------- | -------- |
+| `drizzle-unfiltered-write`            | critical |
+| `migration-breaking-drop`             | critical |
+| `migration-column-type-rewrite`       | critical |
+| `migration-index-not-concurrent`      | critical |
+| `migration-mysql-table-copy`          | critical |
+| `migration-table-rewrite-command`     | critical |
+| `pg-transaction-on-pool`              | critical |
+| `pg-unreleased-checkout`              | critical |
+| `pool-created-per-request-or-item`    | critical |
+| `prisma-read-modify-write`            | critical |
+| `prisma-transaction-client-escape`    | critical |
+| `typeorm-transaction-client-escape`   | critical |
+| `db-missing-index`                    | high     |
+| `db-seq-scan-heavy-table`             | high     |
+| `db-slow-query-plan`                  | high     |
+| `db-unindexed-foreign-key`            | high     |
+| `drizzle-query-in-loop`               | high     |
+| `drizzle-scope-unverified`            | high     |
+| `external-call-in-transaction`        | high     |
+| `http-call-without-timeout`           | high     |
+| `index-missing-filter`                | high     |
+| `index-missing-foreign-key`           | high     |
+| `index-unusable-expression`           | high     |
+| `index-unusable-pattern`              | high     |
+| `migration-breaking-rename`           | high     |
+| `migration-concurrent-in-transaction` | high     |
+| `migration-constraint-not-valid`      | high     |
+| `migration-constraint-without-index`  | high     |
+| `migration-missing-lock-timeout`      | high     |
+| `migration-mysql-lock-unspecified`    | high     |
+| `migration-not-null-without-default`  | high     |
+| `migration-set-not-null-scan`         | high     |
+| `migration-volatile-default`          | high     |
+| `mongo-collection-scan`               | high     |
+| `mongo-collection-scan-observed`      | high     |
+| `mongo-deep-skip`                     | high     |
+| `node-sync-crypto-in-async`           | high     |
+| `node-sync-process-in-async`          | high     |
+| `orm-query-in-loop`                   | high     |
+| `password-hash-sync-in-async`         | high     |
+| `pg-deep-offset`                      | high     |
+| `pg-query-in-loop`                    | high     |
+| `pg-sequential-scan`                  | high     |
+| `prisma-dependent-writes`             | high     |
+| `prisma-query-in-loop`                | high     |
+| `prisma-scope-unverified`             | high     |
+| `queue-add-in-loop`                   | high     |
+| `rebuild-lookup-in-loop`              | high     |
+| `redis-command-in-loop`               | high     |
+| `redis-keys-command`                  | high     |
+| `redis-keys-scan`                     | high     |
+| `repeated-db-span`                    | high     |
+| `service-query-in-loop`               | high     |
+| `typeorm-load-then-save`              | high     |
+| `typeorm-transaction-in-loop`         | high     |
+| `upload-without-size-limit`           | high     |
+| `array-repeated-find`                 | medium   |
+| `array-repeated-membership`           | medium   |
+| `csharp-fixed-regex-in-loop`          | medium   |
+| `duplicate-key-read`                  | medium   |
+| `go-fixed-regexp-in-loop`             | medium   |
+| `guard-query-per-request`             | medium   |
+| `index-missing-order`                 | medium   |
+| `java-fixed-regex-in-loop`            | medium   |
+| `known-reads-awaited-serially`        | medium   |
+| `loop-copy-accumulator`               | medium   |
+| `mongo-disk-sort`                     | medium   |
+| `node-sync-compression-in-async`      | medium   |
+| `node-sync-fs-in-async`               | medium   |
+| `orm-count-materialization`           | medium   |
+| `password-hash-pure-js`               | medium   |
+| `pg-count-materialization`            | medium   |
+| `pg-disk-sort`                        | medium   |
+| `pg-dynamic-query-text`               | medium   |
+| `pg-filter-materialization`           | medium   |
+| `pg-first-materialization`            | medium   |
+| `pg-top-k-materialization`            | medium   |
+| `prisma-count-materialization`        | medium   |
+| `prisma-distinct-in-memory`           | medium   |
+| `prisma-filter-materialization`       | medium   |
+| `prisma-first-materialization`        | medium   |
+| `prisma-relation-count-in-list`       | medium   |
+| `prisma-top-k-materialization`        | medium   |
+| `promise-combinator-serial-await`     | medium   |
+| `python-copy-growing-list`            | medium   |
+| `redis-repeated-read`                 | medium   |
+| `reduce-copy-accumulator`             | medium   |
+| `rust-fixed-regex-in-loop`            | medium   |
+| `serial-awaits-in-literal`            | medium   |
+| `typeorm-existence-materialization`   | medium   |
+| `count-then-page-serial`              | low      |
+| `db-duplicate-index`                  | low      |
+| `db-unused-index`                     | low      |
+| `filter-for-existence`                | low      |
+| `migration-unparsed`                  | low      |
+| `numeric-sort-for-extreme`            | low      |
+| `typeorm-wide-projection`             | low      |
+
 ## Verification and benchmarks
 
 Integration checks used PostgreSQL 18.0 and MongoDB 8.2.3. Each engine examined 20,000 records for one match before an index was added. The corresponding indexed read passed. In both databases a deep page walked 15,010 entries to return ten, and the equivalent keyset query passed. Both engines also produced a disk-sort finding. MongoDB's live test used classic execution stages.
@@ -544,6 +653,22 @@ npx loadwise maint --changed-since <git-ref> .
 `--staged` reports only findings on lines added or changed in `git diff --cached`; `--changed-since <git-ref>` does the same for the working tree against that ref. A function-level finding (`high-branch-complexity`, `deep-control-flow`) is kept when a changed line falls anywhere inside its function. Text output is one block per finding (`path:line [rule-id #id] message`, then a `fix:` command when a rewrite exists and a `dismiss:` comment to paste above the line), ending with `N new finding(s) in changed lines.`. `--json` works too, with the same shape filtered. With no changed JS/TS files it prints nothing and exits 0 before TypeScript loads. In these modes `--fail-on` defaults to `all`, so the exit code is 1 whenever a finding remains.
 
 Only the changed files are analysed, while imports still resolve through the whole project. When as many files changed as the full scan's parallel threshold (600), the full scan runs instead and its findings are filtered to the changed lines, so every rule applies. Otherwise rules that need every file are limited: `duplicate-implementation` is skipped and `dependency-cycle` only sees cycles made of changed files' imports. Boundary and placement rules still run. Analysis reads working-tree files, so a file with unstaged edits can report shifted lines.
+
+## Impact levels
+
+The levels and the `--min-impact` flag work as described under the performance checker's impact levels.
+
+| Rule                       | Impact |
+| -------------------------- | ------ |
+| `dependency-cycle`         | high   |
+| `data-access-boundary`     | medium |
+| `duplicate-implementation` | medium |
+| `folder-boundary`          | medium |
+| `high-branch-complexity`   | medium |
+| `query-mutates-state`      | medium |
+| `syntax-error`             | medium |
+| `deep-control-flow`        | low    |
+| `file-placement`           | low    |
 
 ## Developing locally
 

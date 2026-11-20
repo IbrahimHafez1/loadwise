@@ -124,3 +124,14 @@ test('--help documents check, every checker command and the selection flags', ()
     assert.ok(run.stdout.includes(text), text);
   }
 });
+
+test('--min-impact reaches both checkers: it filters their findings and an invalid level exits 2', (context) => {
+  const root = project(context, { 'tsconfig.json': tsconfig, 'a.ts': slowSource });
+  assert.equal(loadwise(root, 'check').code, 1);
+  const critical = loadwise(root, 'check', '--min-impact', 'critical', '--json');
+  assert.equal(critical.code, 0, critical.stderr);
+  assert.deepEqual(JSON.parse(critical.stdout).performance.findings, []);
+  const invalid = loadwise(root, 'check', '--min-impact', 'severe');
+  assert.equal(invalid.code, 2);
+  assert.match(invalid.stderr, /--min-impact must be one of/);
+});
