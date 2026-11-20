@@ -5,7 +5,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { before, describe, test } = require('node:test');
 
-const { byteOffsetToPosition, createPositionIndex, positionInTemplate } = require('../../lib/performance/sql/locations.cjs');
+const {
+  byteOffsetToPosition,
+  createPositionIndex,
+  positionInTemplate,
+} = require('../../lib/performance/sql/locations.cjs');
 const { ensureLoaded, parseExplainCandidate, parseStatements } = require('../../lib/performance/sql/pg-parser.cjs');
 const { parseMysqlStatements } = require('../../lib/performance/sql/mysql-tokens.cjs');
 
@@ -35,7 +39,10 @@ describe('postgres parser', () => {
   test('throws a clear error when used before loading is awaited', () => {
     const script = "require('./lib/performance/sql/pg-parser.cjs').parseStatements('SELECT 1')";
     const { spawnSync } = require('node:child_process');
-    const result = spawnSync(process.execPath, ['-e', script], { cwd: path.join(__dirname, '..', '..'), encoding: 'utf8' });
+    const result = spawnSync(process.execPath, ['-e', script], {
+      cwd: path.join(__dirname, '..', '..'),
+      encoding: 'utf8',
+    });
     assert.match(result.stderr, /await ensureLoaded/);
   });
 

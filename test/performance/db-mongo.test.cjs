@@ -2,7 +2,12 @@
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { createMongoGateway, validateCommand, MongoRefusal, inspectMongo } = require('../../lib/performance/db/mongo.cjs');
+const {
+  createMongoGateway,
+  validateCommand,
+  MongoRefusal,
+  inspectMongo,
+} = require('../../lib/performance/db/mongo.cjs');
 
 const day = 86_400_000;
 const now = Date.parse('2026-11-20T00:00:00Z');

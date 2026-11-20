@@ -5,7 +5,11 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
-const { parsePrismaSchema, findPrismaSchemaFiles, loadPrismaSchema } = require('../../lib/performance/schema/prisma-schema.cjs');
+const {
+  parsePrismaSchema,
+  findPrismaSchemaFiles,
+  loadPrismaSchema,
+} = require('../../lib/performance/schema/prisma-schema.cjs');
 const { coverage, patternIndex } = require('../../lib/performance/schema/model.cjs');
 
 const shopRoot = path.join(__dirname, 'fixtures', 'schema', 'prisma-shop');

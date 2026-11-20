@@ -6,7 +6,11 @@ const path = require('node:path');
 const { before, describe, test } = require('node:test');
 
 const { extractCodeFile } = require('../../lib/performance/migrations/extract-code.cjs');
-const { extractSqlText, prepareDialect, sqlFileInTransaction } = require('../../lib/performance/migrations/extract-sql.cjs');
+const {
+  extractSqlText,
+  prepareDialect,
+  sqlFileInTransaction,
+} = require('../../lib/performance/migrations/extract-sql.cjs');
 const { annotateUnit } = require('../../lib/performance/migrations/operations.cjs');
 const { checkPostgresUnit, createPostgresRegistry } = require('../../lib/performance/migrations/rules-postgres.cjs');
 

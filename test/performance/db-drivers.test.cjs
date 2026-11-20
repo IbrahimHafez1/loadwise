@@ -6,7 +6,12 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const { createRequire } = require('node:module');
-const { DbUsageError, resolveConnection, loadDriver, findProjectRoot } = require('../../lib/performance/db/drivers.cjs');
+const {
+  DbUsageError,
+  resolveConnection,
+  loadDriver,
+  findProjectRoot,
+} = require('../../lib/performance/db/drivers.cjs');
 
 const sentinelUrl = 'postgresql://sentinel_user:sentinel_password@sentinel-host:5432/shop';
 

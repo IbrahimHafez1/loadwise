@@ -6,7 +6,12 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const { buildPostgresModel } = require('../../lib/performance/db/checks.cjs');
-const { measureRoundTrip, snapshotTables, buildSnapshot, writeSnapshot } = require('../../lib/performance/db/snapshot.cjs');
+const {
+  measureRoundTrip,
+  snapshotTables,
+  buildSnapshot,
+  writeSnapshot,
+} = require('../../lib/performance/db/snapshot.cjs');
 const { loadSnapshot } = require('../../lib/performance/schema/context.cjs');
 
 function catalog() {

@@ -111,7 +111,7 @@ export const carts = mysqlTable('carts', { id: int().primaryKey(), userId: int('
   );
   assert.match(
     findings[0].message,
-    /^`cases.reviewerId` references `users` and no index starts with it, .*Add `index\('cases_reviewer_id_idx'\)\.on\(table\.reviewerId\)` to the indexes of table `cases` \(test\/virtual-project\/main\.ts:4\)/,
+    /^`cases.reviewerId` references `users` and no index starts with it, .*Add `index\('cases_reviewer_id_idx'\)\.on\(table\.reviewerId\)` to the indexes of table `cases` \(test\/performance\/virtual-project\/main\.ts:4\)/,
   );
 });
 

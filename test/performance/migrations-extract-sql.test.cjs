@@ -3,7 +3,11 @@
 const assert = require('node:assert/strict');
 const { before, describe, test } = require('node:test');
 
-const { extractSqlText, prepareDialect, sqlFileInTransaction } = require('../../lib/performance/migrations/extract-sql.cjs');
+const {
+  extractSqlText,
+  prepareDialect,
+  sqlFileInTransaction,
+} = require('../../lib/performance/migrations/extract-sql.cjs');
 
 const postgres = (sql) => extractSqlText(sql, { dialect: 'postgres', file: 'm.sql' }).operations;
 const mysql = (sql) => extractSqlText(sql, { dialect: 'mysql', file: 'm.sql' }).operations;

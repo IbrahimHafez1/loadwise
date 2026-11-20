@@ -8,7 +8,11 @@ const { before, describe, test } = require('node:test');
 const ts = require('typescript');
 
 const { extractCodeFile } = require('../../lib/performance/migrations/extract-code.cjs');
-const { extractSqlText, prepareDialect, sqlFileInTransaction } = require('../../lib/performance/migrations/extract-sql.cjs');
+const {
+  extractSqlText,
+  prepareDialect,
+  sqlFileInTransaction,
+} = require('../../lib/performance/migrations/extract-sql.cjs');
 const { annotateUnit } = require('../../lib/performance/migrations/operations.cjs');
 const { checkMysqlUnit } = require('../../lib/performance/migrations/rules-mysql.cjs');
 const { checkPostgresUnit } = require('../../lib/performance/migrations/rules-postgres.cjs');
