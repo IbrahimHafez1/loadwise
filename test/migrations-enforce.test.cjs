@@ -4,11 +4,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const { describe, test } = require('node:test');
 
 const {
   applyReviewComments,
   baselinePolicy,
+  changedFilesSince,
+  changedSincePolicy,
   hashMigration,
   readBaseline,
   writeBaseline,
@@ -18,6 +21,14 @@ function temporaryDirectory(context) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-enforce-'));
   context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   return directory;
+}
+
+function git(cwd, ...args) {
+  return execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', ...args], {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 }
 
 function write(root, name, text) {
@@ -90,5 +101,52 @@ describe('review comments', () => {
       false,
     );
     assert.equal(code.contextualReason, 'Reviewed in source: Unused since 2.4.');
+  });
+});
+
+describe('--changed-since', () => {
+  test('files added or modified since the merge base, plus untracked files', (context) => {
+    const root = temporaryDirectory(context);
+    git(root, 'init', '-q', '-b', 'main');
+    write(root, 'migrations/001.sql', 'SELECT 1;');
+    write(root, 'migrations/002.sql', 'SELECT 2;');
+    git(root, 'add', '.');
+    git(root, 'commit', '-q', '-m', 'base');
+    git(root, 'checkout', '-q', '-b', 'feature');
+    write(root, 'migrations/002.sql', 'SELECT 22;');
+    write(root, 'migrations/003.sql', 'SELECT 3;');
+    git(root, 'add', 'migrations/003.sql');
+    git(root, 'commit', '-q', '-m', 'feature');
+    write(root, 'migrations/004.sql', 'SELECT 4;');
+
+    const changed = [...changedFilesSince('main', path.join(root, 'migrations'))].map((file) => path.basename(file));
+    assert.deepEqual(changed.sort(), ['002.sql', '003.sql', '004.sql']);
+    const policy = changedSincePolicy('main', root);
+    assert.equal(policy.isEnforced({ path: path.join(root, 'migrations', '001.sql') }), false);
+    assert.equal(policy.isEnforced({ path: path.join(root, 'migrations', '003.sql') }), true);
+    assert.equal(policy.reason, 'Migration is unchanged since main.');
+  });
+
+  test('a ref that looks like an option is rejected before git runs', (context) => {
+    const root = temporaryDirectory(context);
+    const marker = path.join(root, 'injected');
+    assert.throws(() => changedFilesSince('--output=' + marker, root), /refs starting with "-" are rejected/);
+    assert.throws(() => changedFilesSince('', root), /needs a git ref/);
+    assert.equal(fs.existsSync(marker), false);
+  });
+
+  test('an unresolvable ref asks to fetch full history', (context) => {
+    const root = temporaryDirectory(context);
+    git(root, 'init', '-q', '-b', 'main');
+    write(root, 'a.sql', 'SELECT 1;');
+    git(root, 'add', '.');
+    git(root, 'commit', '-q', '-m', 'base');
+    assert.throws(() => changedFilesSince('origin/main', root), /fetch full history/);
+    assert.throws(() => changedFilesSince('main;touch x', root), /fetch full history/);
+  });
+
+  test('outside a repository it is a configuration error', (context) => {
+    const root = temporaryDirectory(context);
+    assert.throws(() => changedFilesSince('main', root), /needs a git repository/);
   });
 });
