@@ -202,7 +202,7 @@ test('membership guidance identifies untransformed copies of existing Sets', () 
     [3, 5, 7],
   );
   assert.deepEqual(
-    findings.map((finding) => finding.message.includes('retain that Set')),
+    findings.map((finding) => finding.message.includes('Keep the original Set')),
     [true, true, false],
   );
 });
