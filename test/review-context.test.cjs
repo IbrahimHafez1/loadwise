@@ -255,6 +255,11 @@ test('seed, script and tooling sources are contextual for every request-path-onl
     'index-missing-order',
     'index-missing-filter',
     'password-hash-pure-js',
+    'service-query-in-loop',
+    'queue-add-in-loop',
+    'typeorm-transaction-in-loop',
+    'external-call-in-transaction',
+    'http-call-without-timeout',
   ];
   for (const ruleId of rules) {
     for (const file of [
@@ -269,4 +274,27 @@ test('seed, script and tooling sources are contextual for every request-path-onl
     }
     assert.equal(reason('src/users.service.ts', ruleId), undefined, ruleId);
   }
+});
+
+test('a standalone entry point or a database run script is operator tooling wherever it lives', (context) => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const directory = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'backend-perf-entry-'));
+  fs.writeFileSync(path.join(directory, 'package.json'), '{}');
+  context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const { repeatedReviewContext } = require('../lib/review-context.cjs');
+  const ts = require('../lib/compiler.cjs').syntax;
+  const reason = (file, text) => {
+    const source = ts.createSourceFile(path.join(directory, file), text, ts.ScriptTarget.Latest, true);
+    return repeatedReviewContext(source, 'service-query-in-loop', undefined, source);
+  };
+  const library = 'export async function run() { return 1; }';
+  const exitingMain = 'async function main() { await work(); }\nmain().catch(() => { process.exitCode = 1; });';
+  const guardedMain = 'async function main() { await work(); }\nif (require.main === module) void main();';
+  assert.match(reason('src/billing/backfill.ts', exitingMain), /standalone entry points/);
+  assert.match(reason('src/billing/backfill.ts', guardedMain), /standalone entry points/);
+  assert.ok(reason('src/database/run-balance-conversion.ts', library));
+  assert.ok(reason('src/database/tools/reindex.cli.ts', library));
+  assert.equal(reason('src/billing/backfill.ts', library), undefined);
+  assert.equal(reason('src/billing/run-report.ts', library), undefined);
 });
