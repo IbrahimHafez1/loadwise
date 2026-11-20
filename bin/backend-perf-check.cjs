@@ -23,7 +23,7 @@ Source checks look for backend-perf.policy.json beside the selected config, or i
 Source checks summarize contextual findings. --include-contextual includes their locations and review reasons.
 Source checks use the TypeScript 7 native compiler when it is installed and accepts the project, otherwise TypeScript 6.
 --engine native requires TypeScript 7 (--native is an alias). --engine js always uses TypeScript 6.
---fail-on contract exits 1 only for pg-transaction-on-pool or data-access-boundary.
+--fail-on contract exits 1 only for data-access-boundary.
 --schema reads a snapshot written by db --schema-snapshot; it refines index checks with table sizes and measured round trips.
 Only the db command connects to a database. Every other command works from files alone.
 The traces command reads one OTLP/JSON export. Its threshold counts sibling DB spans.
@@ -223,12 +223,9 @@ function analyzeSourceCode(options, engine) {
 function selectFindings(result, values) {
   result.findings = result.findings.filter((finding) => !values.ignore.includes(finding.ruleId));
   if (values['include-contextual'] !== undefined) {
-    const classifyTestWrite = require('../lib/review-context.cjs').createTestWriteClassifier();
     let contextualCount = 0;
     result.findings = result.findings.filter((finding) => {
-      const reason = finding.contextualReason || classifyTestWrite(finding.file, finding.ruleId);
-      if (!reason) return true;
-      finding.contextualReason = reason;
+      if (!finding.contextualReason) return true;
       contextualCount++;
       return values['include-contextual'];
     });
@@ -241,9 +238,7 @@ function printResult(result, values) {
   selectFindings(result, values);
   const contractOnly = values['fail-on'] === 'contract';
   if (contractOnly) {
-    result.contractFindingCount = result.findings.filter(
-      ({ ruleId }) => ruleId === 'pg-transaction-on-pool' || ruleId === 'data-access-boundary',
-    ).length;
+    result.contractFindingCount = result.findings.filter(({ ruleId }) => ruleId === 'data-access-boundary').length;
   }
   const { attachExample, findingDetailLines } = require('../lib/finding-text.cjs');
   require('../lib/site-fix.cjs').attachSiteFixes(result.findings);

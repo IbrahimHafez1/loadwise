@@ -22,7 +22,6 @@ test('source fail-on thresholds apply after ignores while JSON keeps all remaini
       "import { readFileSync } from 'node:fs';",
       'const pool = new Pool();',
       'export async function handle() {',
-      "  await pool.query('BEGIN');",
       "  readFileSync('example');",
       '}',
     ].join('\n'),
@@ -39,16 +38,13 @@ test('source fail-on thresholds apply after ignores while JSON keeps all remaini
   }
   const sourceArgs = ['service.ts', '--json', '--policy', 'policy.json'];
   const boundary = 'data-access-boundary',
-    transaction = 'pg-transaction-on-pool',
     advisory = 'node-sync-fs-in-async';
   for (const [threshold, ignored, status, expected] of [
-    ['all', [], 1, [boundary, transaction, advisory]],
-    ['contract', [], 1, [boundary, transaction, advisory]],
-    ['contract', [transaction], 1, [boundary, advisory]],
-    ['contract', [boundary], 1, [transaction, advisory]],
-    ['contract', [boundary, transaction], 0, [advisory]],
-    ['all', [boundary, transaction], 1, [advisory]],
-    ['all', [boundary, transaction, advisory], 0, []],
+    ['all', [], 1, [boundary, advisory]],
+    ['contract', [], 1, [boundary, advisory]],
+    ['contract', [boundary], 0, [advisory]],
+    ['all', [boundary], 1, [advisory]],
+    ['all', [boundary, advisory], 0, []],
   ]) {
     const result = run([...sourceArgs, '--fail-on', threshold, ...ignored.flatMap((rule) => ['--ignore', rule])]);
     assert.equal(result.status, status, result.stderr);
@@ -58,15 +54,12 @@ test('source fail-on thresholds apply after ignores while JSON keeps all remaini
       expected,
     );
     if (threshold === 'contract') {
-      assert.equal(
-        report.contractFindingCount,
-        expected.filter((rule) => rule === boundary || rule === transaction).length,
-      );
+      assert.equal(report.contractFindingCount, expected.filter((rule) => rule === boundary).length);
     } else assert.equal(Object.hasOwn(report, 'contractFindingCount'), false);
   }
   const textReport = run(['service.ts', '--policy', 'policy.json', '--fail-on', 'contract']);
   assert.equal(textReport.status, 1, textReport.stderr);
-  assert.match(textReport.stdout, /3 finding\(s\), 2 enforced by --fail-on contract/);
+  assert.match(textReport.stdout, /2 finding\(s\), 1 enforced by --fail-on contract/);
   for (const [args, error] of [
     [['service.ts', '--fail-on', 'other'], /--fail-on/],
     [['service.ts', '--fail-on', 'contract', '--policy', 'invalid.json'], /dataAccess/],
