@@ -43,6 +43,7 @@ test('placement respects directory boundaries, separator styles and case-sensiti
   );
   assert.match(findings[0].message, /\.controller\.ts/);
   assert.match(findings[0].message, /src\/http/);
+  assert.match(findings[0].message, /Move this file there/);
 });
 
 test('a specific suffix overrides a broad suffix regardless of configuration order', () => {
