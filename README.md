@@ -556,6 +556,7 @@ It accepts the source-check flags of `loadwise perf`: `--policy`, `--json`, `--i
 | `prisma-scope-unverified`  | A Prisma read or write on a model listed in `prismaScopes` does not prove the configured scope in its filter, projection or write data.                             |
 | `drizzle-scope-unverified` | A Drizzle query on a table listed in `drizzleScopes` does not prove the configured predicate, projection or write data.                                             |
 | `open-redirect`            | A redirect target whose site comes from request data. Relative paths, a fixed origin and checked targets are quiet; a Referer target is contextual.                 |
+| `path-traversal`           | A file path built from request data reaches `fs`, `res.sendFile` without `root`, `res.download` or `res.render`. `path.basename` and a containment check clear it.  |
 | `ssrf-request-url`         | An outgoing HTTP request whose URL or host comes from request data. A fixed origin with a request path, a host allowlist or an SSRF-filtering agent is quiet.       |
 
 These rules moved from the performance checker with the same ids, so existing `// loadwise-reviewed` comments and `--ignore` flags keep working; `loadwise perf --ignore` still accepts them.
