@@ -69,3 +69,53 @@ export async function run(queue: Queue, other: Other, ids: string[]) {
   );
   assert.equal(findings.length, 0);
 });
+
+const queueImport = `import { Queue } from 'bullmq';\n`;
+
+test('builds the jobs first when the body has setup statements and a counter', (context) => {
+  const [finding] = scan(
+    context,
+    `${queueImport}export async function run(queue: Queue, rows: { id: string; parents: string[] }[]) {
+  let queued = 0;
+  for (const { id, parents } of rows) {
+    const notify = [id, ...parents];
+    await queue.add('render', { id, notify });
+    queued++;
+  }
+  return queued;
+}
+`,
+  );
+  const { after } = onlyChange(finding);
+  assert.match(after, /const jobs = rows\.map\(\(\{ id, parents \}\) => \{/);
+  assert.match(after, /return \{ name: 'render', data: \{ id, notify \} \};/);
+  assert.match(after, /await queue\.addBulk\(jobs\);\nqueued \+= jobs\.length;/);
+  assert.match(finding.fix.note, /addBulk/);
+});
+
+test('keeps the loop when the body skips items, awaits, or writes outside state before the add', (context) => {
+  const findings = scan(
+    context,
+    `${queueImport}declare function lookup(id: string): Promise<string>;
+export async function run(queue: Queue, ids: string[]) {
+  let seen = 0;
+  for (const id of ids) {
+    if (!id) continue;
+    await queue.add('a', { id });
+    seen++;
+  }
+  for (const id of ids) {
+    const name = await lookup(id);
+    await queue.add('b', { name });
+    seen++;
+  }
+  for (const id of ids) {
+    seen = seen + 1;
+    await queue.add('c', { id });
+  }
+}
+`,
+  );
+  assert.equal(findings.length, 3);
+  for (const finding of findings) assert.equal(finding.fix, undefined);
+});
