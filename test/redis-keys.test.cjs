@@ -84,3 +84,65 @@ export async function run() {
     [7, 8],
   );
 });
+
+const redisHeader = `import { Redis } from 'ioredis';\ndeclare const redis: Redis;\ndeclare const tenant: string;\n`;
+
+test('keys awaited inside an expression are collected on the line above', (context) => {
+  const findings = findingsFor(
+    context,
+    `${redisHeader}export async function check() {
+  expect(await redis.keys(\`a:\${tenant}:*\`)).toEqual([]);
+  expect(await redis.keys('b:*')).toEqual([]);
+}
+declare function expect(value: unknown): { toEqual(expected: unknown): void };`,
+  );
+  const [first, second] = findings.map(onlyChange);
+  assert.equal(
+    first.after,
+    'const matchedKeys: string[] = [];\nfor await (const batch of redis.scanStream({ match: `a:${tenant}:*`, count: 100 })) matchedKeys.push(...batch);\nexpect(matchedKeys).toEqual([]);',
+  );
+  assert.match(second.after, /const matchedKeys2: string\[\] = \[\];/);
+  assert.match(findings[0].fix.note, /SCAN/);
+});
+
+test('two keys in one spread list share one fix with distinct names', (context) => {
+  const [first, second] = findingsFor(
+    context,
+    `${redisHeader}export async function purge() {
+  const all = [...(await redis.keys('a:*')), ...(await redis.keys('b:*'))];
+  return all;
+}`,
+  );
+  assert.deepEqual(first.fix.changes, second.fix.changes);
+  const { after } = onlyChange(first);
+  assert.match(after, /matchedKeys\.push[\s\S]*matchedKeys2\.push/);
+  assert.match(after, /const all = \[\.\.\.matchedKeys, \.\.\.matchedKeys2\];/);
+});
+
+test('a keys call returned from a map callback becomes an async collector', (context) => {
+  const [finding] = findingsFor(
+    context,
+    `${redisHeader}export async function many(patterns: string[]) {
+  return Promise.all(patterns.map((pattern) => redis.keys(pattern)));
+}`,
+  );
+  const { after } = onlyChange(finding);
+  assert.match(after, /patterns\.map\(async \(pattern\) => \{/);
+  assert.match(
+    after,
+    /for await \(const batch of redis\.scanStream\(\{ match: pattern, count: 100 \}\)\) matchedKeys\.push\(\.\.\.batch\);/,
+  );
+  assert.match(after, /return matchedKeys;/);
+});
+
+test('keys that are only reached conditionally are left alone', (context) => {
+  const [finding] = findingsFor(
+    context,
+    `${redisHeader}export async function maybe(on: boolean) {
+  const keys = on && (await redis.keys('a:*'));
+  return keys;
+}`,
+  );
+  assert.ok(finding);
+  assert.equal(finding.fix, undefined);
+});
