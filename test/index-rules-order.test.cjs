@@ -125,3 +125,33 @@ test('Drizzle: three equality filters leave too few rows for the sort to matter'
 }`);
   assert.deepEqual(findings, []);
 });
+
+test('Prisma: an indexed IN list reads only the listed rows, so its sort is not reported', () => {
+  const findings = prisma(`export function listed(ids: string[]) {
+  return prisma.order.findMany({ where: { id: { in: ids } }, orderBy: { paidAt: 'desc' }, take: 20 });
+}`);
+  assert.deepEqual(findings, []);
+});
+
+test('TypeORM: In(ids) on the primary key is not a whole-table sort', () => {
+  const findings = typeormCase(`export class StudentService {
+  constructor(private readonly students: Repository<Student>) {}
+  listed(ids: string[]) {
+    return this.students.find({ where: { id: In(ids) }, order: { gradeLevel: 'ASC' }, take: 10 });
+  }
+}`);
+  assert.deepEqual(findings, []);
+});
+
+test('Prisma: a sort after an indexed foreign-key filter covers one parent and is contextual', () => {
+  const findings = prisma(`export async function feed(storeId: string) {
+  await prisma.order.findMany({ where: { storeId }, orderBy: { totalEGP: 'desc' }, take: 5 });
+  await prisma.order.findMany({ orderBy: { paidAt: 'desc' }, take: 5 });
+}`);
+  assert.deepEqual(lines(findings), [
+    [4, 'index-missing-order'],
+    [5, 'index-missing-order'],
+  ]);
+  assert.match(findings[0].contextualReason, /^An index on the parent reference `storeId` already narrows this read/);
+  assert.equal(findings[1].contextualReason, undefined);
+});

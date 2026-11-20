@@ -66,7 +66,7 @@ test('Prisma: covered conjuncts, keys, booleans, enums, OR and dynamic filters s
 
 const onNativeEngine = process.env.PERF_CHECK_TEST_NATIVE === '1';
 
-test('Prisma: test sources are contextual', { skip: onNativeEngine }, () => {
+test('Prisma: queries in test sources get no index advice', { skip: onNativeEngine }, () => {
   const query = 'export const rows = prisma.order.findMany({ where: { totalEGP: 1 } });';
   const [main] = prisma(query);
   assert.equal(main.contextualReason, undefined, 'main.ts is not a test source');
@@ -84,10 +84,7 @@ ${query}`;
       program.getSourceFiles().find((file) => file.fileName.endsWith(testFile.slice(2))),
     ),
   ).filter((finding) => finding.ruleId === 'index-missing-filter');
-  assert.deepEqual(
-    findings.map((finding) => finding.contextualReason),
-    ['Query in a test source.'],
-  );
+  assert.deepEqual(findings, []);
 });
 
 test('Drizzle: reports unindexed filters with the drizzle fix and stays quiet on covered ones', () => {
@@ -250,4 +247,14 @@ test('the same findings on the TypeScript 7 engine', { skip: onNativeEngine || !
   const result = runOnNativeEngine(__filename);
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /# pass [1-9]\d*/);
+});
+
+test('Prisma: a foreign key in the filter keys the suggested index on the foreign key alone', () => {
+  const [finding, ...rest] = prisma(`export function owned(customerId: string, since: Date) {
+  return prisma.order.findFirst({ where: { customerId, totalEGP: 5, paidAt: { gt: since } } });
+}`);
+  assert.equal(rest.length, 0);
+  assert.equal(finding.ruleId, 'index-missing-filter');
+  assert.equal(finding.suggestion, '@@index([customerId])');
+  assert.match(finding.message, /`Order.customerId`, `Order.totalEGP` and `Order.paidAt` are filtered here/);
 });
