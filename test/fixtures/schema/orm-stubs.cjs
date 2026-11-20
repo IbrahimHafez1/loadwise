@@ -147,4 +147,27 @@ export declare function Index(...args: any[]): any;
 export declare function Unique(...args: any[]): any;`,
 };
 
-module.exports = { drizzle, typeorm, sequelize };
+const mongoose = {
+  'node_modules/mongoose/package.json': '{"name":"mongoose","types":"index.d.ts"}',
+  'node_modules/mongoose/index.d.ts': `export declare class Query<T> extends Promise<T> {
+  sort(spec: object | string): this; limit(count: number): this; skip(count: number): this; lean(): this;
+  select(fields: object | string): this; exec(): Promise<T>;
+}
+export declare class Model<T> {
+  static find(filter?: object): Query<unknown[]>;
+  static findOne(filter?: object): Query<unknown>;
+  static countDocuments(filter?: object): Query<number>;
+  static findById(id: unknown): Query<unknown>;
+}
+export declare namespace Schema { const Types: { ObjectId: unknown; Mixed: unknown } }
+export declare class Schema<T = unknown> {
+  constructor(definition: object, options?: object);
+  index(spec: object, options?: object): this;
+  plugin(plugin: (schema: Schema) => void): this;
+}
+export declare function model<T>(name: string, schema?: Schema<T>, collection?: string): typeof Model;
+declare const mongoose: { model: typeof model; Schema: typeof Schema };
+export default mongoose;`,
+};
+
+module.exports = { drizzle, typeorm, sequelize, mongoose };
