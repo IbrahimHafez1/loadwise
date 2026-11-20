@@ -96,6 +96,26 @@ describe('backend-perf-check migrations', () => {
     assert.ok(result.findings.some((finding) => finding.ruleId === 'migration-not-null-without-default'));
   });
 
+  test('helper modules next to code migrations are neither counted nor baselined', (context) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-migrations-cli-'));
+    context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    write(root, 'package.json', '{"dependencies":{"pg":"8","typeorm":"0.3"}}');
+    write(
+      root,
+      'src/migrations/1700000000001-AddNote.ts',
+      "export class AddNote1700000000001 { async up(queryRunner) { await queryRunner.query(\"SET lock_timeout = '5s'\"); await queryRunner.query('ALTER TABLE orders ADD COLUMN note text'); } }\n",
+    );
+    write(
+      root,
+      'src/migrations/support/lock-timeout.ts',
+      'export async function withLockTimeout(queryRunner) { await queryRunner.query("SET lock_timeout = \'5s\'"); }\n',
+    );
+    const { stdout } = migrations(root, '--json');
+    assert.equal(JSON.parse(stdout).scannedFiles, 1);
+    const written = migrations(root, '--write-baseline');
+    assert.match(written.stdout, /Wrote 1 migration file\(s\)/);
+  });
+
   test('invalid input exits 2', (context) => {
     const root = temporaryProject(context);
     const unknownRule = migrations(root, '--ignore', 'no-such-rule');
