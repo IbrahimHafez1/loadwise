@@ -122,6 +122,19 @@ npx loadwise agent init --mode auto   # auto mode: applies fixes without behavio
 
 `agent init` writes one marked block into `AGENTS.md` at the project root and adds one `@AGENTS.md` line to `CLAUDE.md`, creating either file if needed. Rerunning it replaces the block and leaves your other text alone; blocks written by earlier releases of either checker are replaced by the single loadwise block. The block tells the agent to run `npx loadwise --json` after changing code (or `--only perf` / `--only maint` for one checker), review each finding by id, apply fixes with `--fix --only <id>`, and report a table of what it did. In both modes the agent asks before changing `duplicate-implementation` or `dependency-cycle` findings, which are design decisions. The mode is one line in the block, so you can edit it later.
 
+### Claude Code plugin
+
+`agent init` gives Claude Code instructions; the plugin makes the check automatic. Install it from inside Claude Code:
+
+```
+/plugin marketplace add IbrahimHafez1/loadwise
+/plugin install loadwise@loadwise
+```
+
+After every `Edit`, `Write` or `MultiEdit` on a `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts` or `.cts` file, a hook runs the project's own `node_modules/.bin/loadwise` on that file (`perf` on the file, `maint` on the uncommitted changes, keeping that file's findings) with a 20 second limit. Findings go back to Claude with their ids and `loadwise perf --fix --only <id>` commands; a clean file prints nothing. The hook never downloads anything: without a local install, outside a project, on other file types, on a timeout or on any error it exits silently. The plugin also adds a `/loadwise [args]` command that runs `loadwise check`, summarizes the findings and offers fixes.
+
+To turn the hook off, run `/plugin disable loadwise` (or `/plugin uninstall loadwise`).
+
 ### Git pre-commit hook
 
 ```sh

@@ -1,0 +1,11 @@
+{
+  "name": "loadwise",
+  "owner": { "name": "Ibrahim Hafez" },
+  "plugins": [
+    {
+      "name": "loadwise",
+      "source": "./plugin",
+      "description": "Runs the project's local loadwise checkers on each file Claude edits and sends findings back with their fix commands."
+    }
+  ]
+}
