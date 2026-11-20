@@ -131,6 +131,21 @@ test('nearest inherited aliases and emitted .js imports resolve only to inventor
   assert.equal(resolve('node:fs', primary), undefined);
 });
 
+test('a base config from an uninstalled package keeps local settings while a missing relative base fails', (context) => {
+  const root = fixture(context, {
+    'tsconfig.json':
+      '{"extends":"@workspace/tsconfig/library.json","compilerOptions":{"baseUrl":".","paths":{"@core/*":["src/core/*"]}}}',
+    'src/entry.ts': '',
+    'src/core/item.ts': '',
+  });
+  const resolve = createResolver(root, new Set(listFiles(root)));
+  assert.equal(resolve('@core/item', path.join(root, 'src/entry.ts')), 'src/core/item.ts');
+
+  fs.writeFileSync(path.join(root, 'tsconfig.json'), '{"extends":"./configs/missing.json"}');
+  const broken = createResolver(root, new Set(listFiles(root)));
+  assert.throws(() => broken('./core/item', path.join(root, 'src/entry.ts')), /Invalid compiler configuration/);
+});
+
 test('conditional package imports respect the usage-site resolution mode', (context) => {
   const source = "import '#impl'; import value = require('#impl');";
   const root = fixture(context, {
