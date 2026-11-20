@@ -147,6 +147,21 @@ function contextualReasons(fileName, source, files, ruleIds) {
   );
 }
 
+test('seed and test helper files make blocking calls contextual even inside a loop', () => {
+  const source = `import { readFileSync } from 'node:fs';
+    export async function load(names: string[]) { for (const name of names) readFileSync(name); }`;
+  assert.deepEqual(contextualReasons('service.ts', source, {}, ['node-sync-fs-in-async']), [
+    ['node-sync-fs-in-async', false],
+  ]);
+  for (const fileName of ['rich-account.seed.ts', 'seeder/users.ts', 'tests/helpers/load.ts']) {
+    assert.deepEqual(
+      contextualReasons(fileName, source, {}, ['node-sync-fs-in-async']),
+      [['node-sync-fs-in-async', true]],
+      fileName,
+    );
+  }
+});
+
 test('a project that itself lives under a test directory keeps its sources visible', (context) => {
   const fs = require('node:fs');
   const path = require('node:path');
