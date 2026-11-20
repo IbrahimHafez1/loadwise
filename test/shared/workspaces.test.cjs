@@ -114,7 +114,7 @@ test('--workspace limits the scan to a package name or path and can repeat', (co
   assert.match(both.stdout, /2 file\(s\) checked, 3 finding\(s\)\./);
   const unknown = loadwise(root, 'perf', '-p', '.', '--workspace', 'missing');
   assert.equal(unknown.code, 2);
-  assert.match(unknown.stderr, /--workspace missing matches no package/);
+  assert.match(unknown.stderr, /--workspace missing matches no workspace package/);
 });
 
 test('a file included by two packages is reported once', (context) => {
@@ -145,4 +145,63 @@ test("a root tsconfig keeps today's behaviour even when workspaces are declared"
   const run = loadwise(root, 'check', '--only', 'perf');
   assert.equal(run.code, 0, run.stderr);
   assert.match(run.stdout, /^== Performance ==\n2 file\(s\) checked, 0 finding\(s\)\./);
+});
+
+test('maint --workspace keeps only the chosen packages, by name or path, in check and maint', (context) => {
+  const nested = [
+    'export function pick(items: number[][][][]) {',
+    '  for (const a of items) {',
+    '    for (const b of a) {',
+    '      for (const c of b) {',
+    '        if (c.length) return c;',
+    '      }',
+    '    }',
+    '  }',
+    '}',
+    '',
+  ].join('\n');
+  const root = monorepo(context, {
+    'package.json': { workspaces: ['packages/*'] },
+    'packages/a/package.json': { name: 'a' },
+    'packages/a/index.ts': nested,
+    'packages/b/package.json': { name: 'b' },
+    'packages/b/index.ts': nested,
+    'packages/c/package.json': { name: 'c' },
+    'packages/c/index.ts': quietSource,
+  });
+  const all = JSON.parse(loadwise(root, 'maint', '.', '--json').stdout);
+  const onlyC = JSON.parse(loadwise(root, 'maint', '.', '--json', '--workspace', 'c').stdout);
+  assert.equal(onlyC.scannedFiles, 1);
+  assert.ok(onlyC.findings.every((finding) => finding.file.startsWith('packages/c/')));
+  const aAndB = JSON.parse(
+    loadwise(root, 'maint', '.', '--json', '--workspace', 'packages/a', '--workspace', 'b').stdout,
+  );
+  assert.equal(aAndB.scannedFiles, 2);
+  assert.ok(aAndB.findings.every((finding) => /^packages\/[ab]\//.test(finding.file)));
+  assert.ok(all.findings.length > 0, 'fixture must produce maintainability findings');
+  assert.equal(aAndB.findings.length, all.findings.length);
+  const checked = JSON.parse(loadwise(root, 'check', '--only', 'maint', '--json', '--workspace', 'c').stdout);
+  assert.equal(checked.maintainability.scannedFiles, 1);
+  assert.equal(loadwise(root, 'maint', '.', '--workspace', 'missing').code, 2);
+});
+
+let nativeSkip = false;
+try {
+  require('../../lib/performance/native-runtime.cjs').executable();
+} catch {
+  nativeSkip = 'optional native compiler is absent';
+}
+
+test('two configs on the TypeScript 7 engine report a shared file once', { skip: nativeSkip }, (context) => {
+  const root = monorepo(context, {
+    'package.json': { workspaces: ['packages/*'] },
+    'shared.ts': slowSource,
+    'packages/a/package.json': { name: 'a' },
+    'packages/a/tsconfig.json': JSON.stringify({ include: ['../../shared.ts'] }),
+    'packages/b/package.json': { name: 'b' },
+    'packages/b/tsconfig.json': JSON.stringify({ include: ['../../shared.ts'] }),
+  });
+  const report = JSON.parse(loadwise(root, 'perf', '-p', '.', '--engine', 'native', '--json').stdout);
+  assert.equal(report.scannedFiles, 1);
+  assert.equal(report.findings.length, 3);
 });
