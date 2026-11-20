@@ -112,6 +112,7 @@ for (const [language, [extension, source]] of Object.entries(fixtures)) {
       );
       assert.ok(findings[0].line > 0 && findings[0].column > 0);
       assert.ok(!findings[0].message.includes('score'));
+      assert.match(findings[0].message, /extract one shared function/);
     },
   );
 }

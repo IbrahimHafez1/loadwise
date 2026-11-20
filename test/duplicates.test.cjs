@@ -42,6 +42,7 @@ test('groups exact function bodies across files and methods, ignoring trivia', (
   assert.equal(findings.length, 1);
   const [result] = findings;
   assert.equal(result.ruleId, 'duplicate-implementation');
+  assert.match(result.message, /extract one shared function/);
   assert.deepEqual([result.file, result.line, result.column], ['first.ts', 2, 10]);
   assert.deepEqual(result.related, [
     { file: 'second.ts', line: 1, column: 10 },
