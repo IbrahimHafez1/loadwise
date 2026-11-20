@@ -285,3 +285,24 @@ test('existence checks returned or compared with null on the next statement are 
     source.split('\n').flatMap((line, index) => (line.endsWith('// exists') ? [index + 1] : [])),
   );
 });
+
+test('skips per-item queries over the keys of an enum or a small const object', () => {
+  const source = `import { Repository } from 'typeorm';
+    declare const counters: Repository<{ kind: string }>;
+    declare const kinds: string[];
+    enum Channel { Sms = 'sms', Email = 'email', Push = 'push' }
+    const LIMITS = { daily: 10, weekly: 50 };
+    export async function reset() {
+      for (const channel of Object.values(Channel)) await counters.update({ kind: channel }, { used: 0 });
+      for (const [name] of Object.entries(LIMITS)) await counters.update({ kind: name }, { used: 0 });
+      for (const kind of kinds) await counters.update({ kind }, { used: 0 });
+    }`;
+  const findings = lint(source, {
+    'node_modules/typeorm/index.d.ts':
+      'export class Repository<T> { update(criteria: object, values: object): Promise<object>; }',
+  }).filter((finding) => finding.ruleId === 'orm-query-in-loop');
+  assert.deepEqual(
+    findings.map((finding) => finding.line),
+    [9],
+  );
+});

@@ -240,3 +240,50 @@ test('reports output-list arguments, transaction callees and raw templates, and 
   assert.match(longFlow.message, /makes at least one database call per item/);
   assert.match(longFlow.message, /pays at least one round trip/);
 });
+
+test('words Promise.all fan-out as concurrent and gives per-item transaction steps an ordering or lease context', () => {
+  const ledger = `import { DataSource, EntityManager } from 'typeorm';
+    export class Ledger {
+      constructor(private db: DataSource) {}
+      async settle(id: string, manager: EntityManager) {
+        await this.db.transaction(async () => manager.findOne({ where: { id } }));
+      }
+    }`;
+  const files = {
+    'node_modules/typeorm/index.d.ts': `export class EntityManager { findOne(options: object): Promise<object | null> }
+      export class DataSource { transaction<T>(work: (manager: EntityManager) => Promise<T>): Promise<T> }`,
+    'ledger.ts': ledger,
+  };
+  const source = `import { DataSource, EntityManager } from 'typeorm';
+    import { Ledger } from './ledger.js';
+    declare const db: DataSource, shared: EntityManager;
+    declare class AbortSignal { readonly aborted: boolean }
+    declare const ids: string[];
+    class Payments {
+      constructor(private ledger: Ledger) {}
+      async run(lease: AbortSignal) {
+        await db.transaction(async (manager) => {
+          for (const id of [...ids].sort()) await this.ledger.settle(id, manager); // sorted
+          for (const id of ids) await this.ledger.settle(id, manager); // default
+        });
+        for (const id of ids) {
+          if (lease.aborted) break;
+          await this.ledger.settle(id, shared); // lease
+        }
+        await db.transaction(async (manager) => {
+          await Promise.all(ids.map((id) => this.ledger.settle(id, manager))); // concurrent
+        });
+      }
+    }`;
+  const findings = lint(source, files).filter((finding) => finding.ruleId === RULE_ID);
+  const lines = source.split('\n');
+  const byMarker = Object.fromEntries(
+    findings.map((finding) => [/\/\/ (\S+)$/.exec(lines[finding.line - 1])[1], finding]),
+  );
+  assert.match(byMarker.sorted.contextualReason, /sorted just before it/);
+  assert.equal(byMarker.default.contextualReason, undefined);
+  assert.match(byMarker.lease.contextualReason, /lease is lost/);
+  assert.equal(byMarker.concurrent.contextualReason, undefined);
+  assert.match(byMarker.concurrent.message, /`Promise\.all` starts every item at once, so the waits overlap/);
+  assert.match(byMarker.default.message, /so the loop pays/);
+});
