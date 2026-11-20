@@ -101,6 +101,7 @@ test('Drizzle: reports unindexed filters with the drizzle fix and stays quiet on
   await db.update(cases).set({ head }).where(gte(cases.updatedAt, since));
   await db.select().from(abandonedCarts).where(gt(abandonedCarts.lastUpdated, since));
   await db.select().from(abandonedCarts).where(eq(abandonedCarts.userId, head));
+  await db.select().from(cases).where(and(eq(cases.organizationId, organizationId), isNull(cases.email)));
 }`);
   assert.deepEqual(
     findings.map(({ line, ruleId }) => [line, ruleId]),

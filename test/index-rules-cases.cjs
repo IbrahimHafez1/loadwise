@@ -12,7 +12,7 @@ function prisma(body) {
 const drizzleSchema = `import { pgTable, uuid, text, integer, boolean, timestamp, index, unique } from 'drizzle-orm/pg-core';
 import { mysqlTable, int, varchar, timestamp as mysqlTimestamp, index as mysqlIndex } from 'drizzle-orm/mysql-core';
 import { sql } from 'drizzle-orm';
-export { eq, and, or, gt, gte, like, ilike, inArray, desc, sql } from 'drizzle-orm';
+export { eq, and, or, gt, gte, like, ilike, inArray, isNull, desc, sql } from 'drizzle-orm';
 export type { Database } from 'drizzle-orm/pg-core';
 export const cases = pgTable(
   'cases',
@@ -43,7 +43,7 @@ export const abandonedCarts = mysqlTable(
 `;
 
 function drizzle(body) {
-  const source = `import { cases, abandonedCarts, eq, and, or, gt, gte, like, ilike, inArray, desc, sql, type Database } from '${projects.drizzle}schema';
+  const source = `import { cases, abandonedCarts, eq, and, or, gt, gte, like, ilike, inArray, isNull, desc, sql, type Database } from '${projects.drizzle}schema';
 declare const db: Database;
 ${body}`;
   return indexFindings(source, projectFiles('drizzle', { 'schema.ts': drizzleSchema }));
