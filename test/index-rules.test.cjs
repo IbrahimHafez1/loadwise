@@ -113,7 +113,7 @@ test('Drizzle: reports unindexed filters with the drizzle fix and stays quiet on
   assert.equal(
     findings[0].message,
     '`cases.head` is filtered here and no index starts with it, so this lookup scans the table as it grows. ' +
-      "Add `index('cases_head_idx').on(table.head)` to the indexes of table `cases` (test/fixtures/schema/drizzle-app/schema.ts:5); " +
+      "Add `index('cases_head_idx').on(table.head)` to the indexes of table `cases` (test/fixtures/schema/drizzle-app/schema.ts:6); " +
       'on a live database build it with `CREATE INDEX CONCURRENTLY "cases_head_idx" ON "cases" ("head");`. ' +
       'Table size is unknown; pass `--schema` to gate this rule by row count.',
   );

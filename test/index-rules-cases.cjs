@@ -11,6 +11,7 @@ function prisma(body) {
 
 const drizzleSchema = `import { pgTable, uuid, text, integer, boolean, timestamp, index, unique } from 'drizzle-orm/pg-core';
 import { mysqlTable, int, varchar, timestamp as mysqlTimestamp, index as mysqlIndex } from 'drizzle-orm/mysql-core';
+import { sql } from 'drizzle-orm';
 export { eq, and, or, gt, gte, like, ilike, inArray, desc, sql } from 'drizzle-orm';
 export type { Database } from 'drizzle-orm/pg-core';
 export const cases = pgTable(
@@ -24,7 +25,10 @@ export const cases = pgTable(
     head: integer().notNull(),
     updatedAt: timestamp('updated_at').notNull(),
   },
-  (table) => [index('cases_organization_updated').on(table.organizationId, table.updatedAt.desc())],
+  (table) => [
+    index('cases_organization_updated').on(table.organizationId, table.updatedAt.desc()),
+    index('cases_name_lower_idx').on(sql\`lower(\${table.name})\`),
+  ],
 );
 export const abandonedCarts = mysqlTable(
   'abandoned_carts',
