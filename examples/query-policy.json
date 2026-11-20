@@ -19,19 +19,5 @@
       "from": "@app/reads",
       "exports": ["fetchUser", "fetchPosts"]
     }
-  ],
-  "dataAccess": {
-    "modules": [
-      "@app/db",
-      "@prisma/client",
-      "drizzle-orm",
-      "mongoose",
-      "typeorm",
-      "sequelize",
-      "@sequelize/core",
-      "knex",
-      "kysely"
-    ],
-    "allowIn": ["src/data"]
-  }
+  ]
 }

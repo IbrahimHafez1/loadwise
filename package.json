@@ -1,7 +1,7 @@
 {
   "name": "backend-perf-check",
   "version": "0.3.0",
-  "description": "Check backend query performance, transaction usage and project-defined data-access policies in source code, traces and execution plans.",
+  "description": "Check backend query performance, transaction usage and project-defined query policies in source code, traces and execution plans.",
   "license": "UNLICENSED",
   "bin": {
     "backend-perf-check": "./bin/backend-perf-check.cjs"

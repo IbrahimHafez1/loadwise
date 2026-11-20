@@ -79,7 +79,6 @@ test(
       'drizzle-policy',
       'orm-queries',
       'query-policy',
-      'data-access',
       'awaits',
       'parallel-reads',
       'sort-extreme',

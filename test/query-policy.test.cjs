@@ -202,13 +202,6 @@ test('requires an explicit policy and rejects ambiguous configurations', () => {
       fs.writeFileSync(filename, JSON.stringify({ prismaScopes: { Invoice: { ...scope, field: logical } } }));
       assert.throws(() => loadQueryPolicy(filename), /logical filters/);
     }
-    const dataAccess = { modules: ['mongoose'], allowIn: ['src/data'] };
-    for (const sections of [{ dataAccess }, { ...policy, dataAccess }]) {
-      fs.writeFileSync(filename, JSON.stringify(sections));
-      const loaded = loadQueryPolicy(filename);
-      assert.equal(loaded.dataAccess.modules.has('mongoose'), true);
-      assert.deepEqual(loaded.prismaScopes, sections.prismaScopes);
-    }
     for (const invalid of [
       {},
       { prismaScopes: {} },

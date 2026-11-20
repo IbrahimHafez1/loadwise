@@ -8,13 +8,7 @@ const { locateChange } = require('./apply-fix.cjs');
 const anchors = new WeakMap();
 const polyglotLanguages = new Set(['python', 'go', 'java', 'csharp', 'rust', 'php', 'ruby', 'kotlin', 'c', 'cpp']);
 
-const contracts = new Set([
-  'data-access-boundary',
-  'pg-transaction-on-pool',
-  'folder-boundary',
-  'file-placement',
-  'query-mutates-state',
-]);
+const contracts = new Set(['pg-transaction-on-pool', 'folder-boundary', 'file-placement', 'query-mutates-state']);
 
 const advice = new Map([
   [

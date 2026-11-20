@@ -126,10 +126,6 @@ const examples = {
     'const rows = await db.select().from(invoices).where(\n  and(filter, eq(invoices.organizationId, currentOrganization()))\n);',
     'Read example. Use the actual scoped property and trusted helper declared for your table. Preserve the predicate and ownership on writes.',
   ],
-  'data-access-boundary': [
-    "import { findOrder } from './orders-service.js';\nconst order = await findOrder(orderId, authorizedScope);",
-    'Expose the operation from an approved module and keep driver access inside the folders allowed by your policy.',
-  ],
 };
 
 // Rules whose findings come from SQL files, plans or traces rather than a TypeScript source line, plus the
