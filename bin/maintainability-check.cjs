@@ -23,6 +23,12 @@ function printFixOnce(ruleId, printedRules) {
   for (const line of example.after) console.log('    + ' + line);
 }
 
+// Additive field: existing consumers ignore it.
+function addExample(finding) {
+  const example = exampleFor(finding.ruleId);
+  if (example) finding.example = example;
+}
+
 async function main(args) {
   const { values, positionals } = parseArgs({
     args,
@@ -67,8 +73,10 @@ async function main(args) {
     if (!values['include-contextual'])
       report.findings = report.findings.filter((finding) => !finding.contextualReason || contracts.has(finding.ruleId));
   }
-  if (values.json) console.log(JSON.stringify(report, null, 2));
-  else {
+  if (values.json) {
+    for (const finding of report.findings) addExample(finding);
+    console.log(JSON.stringify(report, null, 2));
+  } else {
     const printedRules = new Set();
     for (const finding of report.findings) {
       console.log(`${finding.file}:${finding.line}:${finding.column} [${finding.ruleId}] ${finding.message}`);

@@ -31,3 +31,14 @@ test('text output prints the Fix block once per rule', (context) => {
   assert.match(result.stdout, /    - \/\*\* @maintainabilityQuery \*\//);
   assert.match(result.stdout, /    \+ current\(\) \{ return this\.count; \}/);
 });
+
+test('JSON findings keep their fields and gain an additive example', (context) => {
+  const result = runInWorkspace(context, twoMutatingQueries, '--json');
+  const { findings } = JSON.parse(result.stdout);
+  assert.equal(findings.length, 2);
+  for (const finding of findings) {
+    assert.equal(finding.ruleId, 'query-mutates-state');
+    assert.match(finding.message, /@maintainabilityQuery/);
+    assert.deepEqual(Object.keys(finding.example), ['before', 'after']);
+  }
+});
