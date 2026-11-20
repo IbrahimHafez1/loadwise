@@ -9,21 +9,63 @@ const { exampleFor } = require('../performance-examples.cjs');
 
 const root = path.resolve(__dirname, '../..');
 
+// Findings built from query plans and traces are not part of the source-rule list.
+const planAndTraceRules = [
+  'duplicate-key-read',
+  'repeated-db-span',
+  'redis-keys-scan',
+  'redis-repeated-read',
+  'pg-sequential-scan',
+  'pg-disk-sort',
+  'pg-deep-offset',
+  'mongo-collection-scan',
+  'mongo-disk-sort',
+  'mongo-deep-skip',
+];
+
+function parsesAsJavaScript(code) {
+  return ts.createSourceFile('snippet.js', code, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS).parseDiagnostics;
+}
+
 test('each CLI source rule has a syntactically valid hover example', () => {
-  const cli = fs.readFileSync(path.join(root, 'bin', 'backend-perf-check.cjs'), 'utf8');
-  const entries = cli.match(/const sourceRules = new Set\(\[([\s\S]*?)\]\)/)[1];
-  const ids = [...entries.matchAll(/'([a-z-]+)'/g)].map((match) => match[1]);
-  assert.ok(ids.length > 0);
-  for (const id of ids) {
+  const { sourceRules } = require('../../lib/rule-ids.cjs');
+  assert.ok(sourceRules.length > 0);
+  for (const id of sourceRules) {
     const { code, language } = exampleFor(id, 'javascript');
     assert.ok(code.length, id);
     if (language === 'sql') continue;
     assert.equal(language, 'javascript', id);
-    assert.deepEqual(
-      ts.createSourceFile('snippet.js', code, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS).parseDiagnostics,
-      [],
-      id,
-    );
+    assert.deepEqual(parsesAsJavaScript(code), [], id);
+  }
+});
+
+test('every known rule and every plan or trace rule has a compact example', () => {
+  const { knownRules } = require('../../lib/rule-ids.cjs');
+  for (const id of [...knownRules, ...planAndTraceRules]) {
+    const example = exampleFor(id, 'typescript');
+    assert.ok(example?.code, id + ' has no example');
+    assert.ok(example.code.split(String.fromCharCode(10)).length <= 6, id + ' example is longer than six lines');
+  }
+});
+
+test('plan, trace, index and migration examples show a before and an after that parse', () => {
+  const { indexRules, migrationRules, databaseRules } = require('../../lib/rule-ids.cjs');
+  const standalone = [
+    ...indexRules,
+    ...migrationRules,
+    ...databaseRules,
+    ...planAndTraceRules,
+    'redis-command-in-loop',
+    'password-hash-sync-in-async',
+  ];
+  for (const id of standalone) {
+    const { before, code, language, note } = exampleFor(id, 'typescript');
+    assert.ok(before.split(String.fromCharCode(10)).length <= 6 && note.length > 0, id);
+    assert.notEqual(before, code, id);
+    if (language === 'javascript') {
+      assert.deepEqual(parsesAsJavaScript(before), [], id + ' before');
+      assert.deepEqual(parsesAsJavaScript(code), [], id);
+    }
   }
 });
 

@@ -95,7 +95,7 @@ const examples = {
     'For a single statement, the pool borrows and returns the client. A multi-statement transaction needs its own checked-out client.',
   ],
   'pg-transaction-on-pool': [
-    "const client = await pool.connect();\ntry {\n  await client.query('BEGIN');\n  await updateOrders(client);\n  await client.query('COMMIT');\n} catch (error) {\n  await client.query('ROLLBACK');\n  throw error;\n} finally {\n  client.release();\n}",
+    "const client = await pool.connect();\ntry {\n  await client.query('BEGIN'); await updateOrders(client); await client.query('COMMIT');\n} catch (error) { await client.query('ROLLBACK'); throw error; }\nfinally { client.release(); }",
     'Send every operation in the transaction through this client; discard an unusable connection if rollback itself fails.',
   ],
   'pg-dynamic-query-text': [
@@ -130,6 +130,210 @@ const examples = {
     "import { findOrder } from './orders-service.js';\nconst order = await findOrder(orderId, authorizedScope);",
     'Expose the operation from an approved module and keep driver access inside the folders allowed by your policy.',
   ],
+};
+
+// Rules whose findings come from SQL files, plans or traces rather than a TypeScript source line, plus the
+// newest source rules. Each entry is a before/after pair that does not depend on the editor language.
+const sqlExample = (before, after, note) => ({ language: 'sql', before, code: after, note });
+const foreignKeyBefore = 'ALTER TABLE orders ADD FOREIGN KEY (customer_id) REFERENCES customers (id);';
+const foreignKeyIndex = 'CREATE INDEX CONCURRENTLY orders_customer_id_idx ON orders (customer_id);';
+const foreignKeyNote = 'PostgreSQL does not index the referencing column; joins and parent deletes scan without it.';
+const collectionScan = {
+  language: 'javascript',
+  before: "await orders.find({ status: 'open' }).toArray(); // COLLSCAN",
+  code: "await orders.createIndex({ status: 1 });\nawait orders.find({ status: 'open' }).toArray(); // IXSCAN",
+  note: 'Index the filtered fields and re-run explain("executionStats") to confirm an index scan.',
+};
+const missingIndex = sqlExample(
+  'SELECT id FROM orders WHERE customer_id = $1;',
+  foreignKeyIndex,
+  'Index the filtered column, then re-run EXPLAIN ANALYZE to confirm an index scan.',
+);
+
+const standaloneExamples = {
+  'duplicate-key-read': {
+    language: 'javascript',
+    before: 'const user = await cache.get(key);\nconst again = await cache.get(key); // same key, same request',
+    code: 'const user = await cache.get(key);\n// reuse `user` for the rest of this request',
+    note: 'Reuse the first result only when freshness, ordering and authorization allow it; otherwise keep the separate read.',
+  },
+  'repeated-db-span': {
+    language: 'javascript',
+    before: "for (const id of ids) await db.query('SELECT * FROM users WHERE id = $1', [id]);",
+    code: "const { rows } = await db.query('SELECT * FROM users WHERE id = ANY($1)', [ids]);",
+    note: 'Batch repeated lookups into one statement and keep the original scope predicates.',
+  },
+  'redis-keys-scan': {
+    language: 'javascript',
+    before: "const keys = await redis.keys('session:*');",
+    code: "for await (const key of redis.scanIterator({ MATCH: 'session:*', COUNT: 100 })) await handle(key);",
+    note: 'KEYS blocks Redis while it walks the whole keyspace; SCAN is incremental. ioredis offers scanStream.',
+  },
+  'redis-repeated-read': {
+    language: 'javascript',
+    before: "for (const id of ids) values.push(await redis.get('user:' + id));",
+    code: "const values = await redis.mGet(ids.map((id) => 'user:' + id));",
+    note: 'One MGET replaces one round trip per key. ioredis spells it mget; use a pipeline for HGET.',
+  },
+  'redis-command-in-loop': {
+    language: 'javascript',
+    before: "for (const id of ids) await redis.get('user:' + id);",
+    code: "const values = await redis.mGet(ids.map((id) => 'user:' + id));",
+    note: 'Use a multi-key command or a pipeline. Ignore if each command depends on the previous reply.',
+  },
+  'password-hash-sync-in-async': {
+    language: 'javascript',
+    before: 'const hash = bcrypt.hashSync(password, 10);',
+    code: 'const hash = await bcrypt.hash(password, 10);\nconst matches = await bcrypt.compare(password, hash);',
+    note: 'The synchronous hash blocks the event loop for every other request. Keep the same cost factor.',
+  },
+  'mongo-collection-scan': collectionScan,
+  'mongo-collection-scan-observed': collectionScan,
+  'mongo-disk-sort': {
+    language: 'javascript',
+    before: "orders.find({ status: 'open' }).sort({ createdAt: -1 });",
+    code: "await orders.createIndex({ status: 1, createdAt: -1 });\norders.find({ status: 'open' }).sort({ createdAt: -1 });",
+    note: 'An index in sort order lets MongoDB skip the in-memory sort. Equality fields come first in the index.',
+  },
+  'mongo-deep-skip': {
+    language: 'javascript',
+    before: 'orders.find(filter).sort({ _id: 1 }).skip(page * size).limit(size);',
+    code: 'orders.find({ ...filter, _id: { $gt: lastSeenId } }).sort({ _id: 1 }).limit(size);',
+    note: 'Keyset pagination: return the last _id with each page. It fits sequential navigation, not random page jumps.',
+  },
+  'pg-sequential-scan': missingIndex,
+  'pg-disk-sort': sqlExample(
+    'SELECT * FROM events ORDER BY created_at DESC LIMIT 50;',
+    'CREATE INDEX CONCURRENTLY events_created_at_idx ON events (created_at DESC);\nSELECT id, created_at FROM events ORDER BY created_at DESC LIMIT 50;',
+    'An index in the requested order removes the sort. Selecting fewer columns also shrinks it.',
+  ),
+  'pg-deep-offset': sqlExample(
+    'SELECT id FROM orders ORDER BY id LIMIT 50 OFFSET 100000;',
+    'SELECT id FROM orders WHERE id > $1 ORDER BY id LIMIT 50;',
+    'Keyset pagination with the last id of the previous page. Needs a unique, indexed sort key.',
+  ),
+  'index-missing-foreign-key': sqlExample(foreignKeyBefore, foreignKeyIndex, foreignKeyNote),
+  'index-missing-filter': sqlExample(
+    'SELECT id FROM orders WHERE status = $1;',
+    'CREATE INDEX CONCURRENTLY orders_status_idx ON orders (status);',
+    'Skip it for a column with very few distinct values unless the query also filters further.',
+  ),
+  'index-missing-order': sqlExample(
+    'SELECT id FROM orders WHERE customer_id = $1 ORDER BY created_at DESC LIMIT 20;',
+    'CREATE INDEX CONCURRENTLY orders_customer_created_idx ON orders (customer_id, created_at DESC);',
+    'Equality columns first, then the sort column, so the index returns rows already ordered.',
+  ),
+  'index-unusable-pattern': sqlExample(
+    "SELECT id FROM users WHERE name LIKE '%smith';",
+    'CREATE INDEX CONCURRENTLY users_name_trgm_idx ON users USING gin (name gin_trgm_ops);',
+    'A leading wildcard defeats a btree index. A trigram index (pg_trgm extension) serves it.',
+  ),
+  'index-unusable-expression': sqlExample(
+    'SELECT id FROM users WHERE lower(email) = $1;',
+    'CREATE INDEX CONCURRENTLY users_email_lower_idx ON users (lower(email));',
+    'Index the exact expression the query uses, or compare the plain column.',
+  ),
+  'migration-index-not-concurrent': sqlExample(
+    'CREATE INDEX orders_status_idx ON orders (status);',
+    'CREATE INDEX CONCURRENTLY orders_status_idx ON orders (status);',
+    'Plain CREATE INDEX blocks writes for the whole build. CONCURRENTLY cannot run inside a transaction.',
+  ),
+  'migration-concurrent-in-transaction': sqlExample(
+    'BEGIN;\nCREATE INDEX CONCURRENTLY orders_status_idx ON orders (status);\nCOMMIT;',
+    'CREATE INDEX CONCURRENTLY orders_status_idx ON orders (status); -- no transaction',
+    'Run it in its own migration with the runner transaction disabled.',
+  ),
+  'migration-not-null-without-default': sqlExample(
+    'ALTER TABLE users ADD COLUMN plan text NOT NULL;',
+    "ALTER TABLE users ADD COLUMN plan text NOT NULL DEFAULT 'free';",
+    'Existing rows need a value. A constant default is cheap on PostgreSQL 11 and later.',
+  ),
+  'migration-volatile-default': sqlExample(
+    'ALTER TABLE users ADD COLUMN token uuid DEFAULT gen_random_uuid();',
+    'ALTER TABLE users ADD COLUMN token uuid;\n-- backfill in batches, then:\nALTER TABLE users ALTER COLUMN token SET DEFAULT gen_random_uuid();',
+    'A volatile default rewrites the whole table under an exclusive lock.',
+  ),
+  'migration-column-type-rewrite': sqlExample(
+    'ALTER TABLE payments ALTER COLUMN amount TYPE bigint;',
+    'ALTER TABLE payments ADD COLUMN amount_big bigint;\n-- backfill in batches, switch reads and writes, then drop amount',
+    'A type change that is not binary compatible rewrites the table under an exclusive lock.',
+  ),
+  'migration-set-not-null-scan': sqlExample(
+    'ALTER TABLE users ALTER COLUMN email SET NOT NULL;',
+    'ALTER TABLE users ADD CONSTRAINT users_email_nn CHECK (email IS NOT NULL) NOT VALID;\nALTER TABLE users VALIDATE CONSTRAINT users_email_nn;\nALTER TABLE users ALTER COLUMN email SET NOT NULL;',
+    'On PostgreSQL 12 and later the validated CHECK lets SET NOT NULL skip its scan. Drop the CHECK afterwards.',
+  ),
+  'migration-constraint-not-valid': sqlExample(
+    'ALTER TABLE orders ADD CONSTRAINT orders_customer_fk FOREIGN KEY (customer_id) REFERENCES customers (id);',
+    'ALTER TABLE orders ADD CONSTRAINT orders_customer_fk FOREIGN KEY (customer_id) REFERENCES customers (id) NOT VALID;\nALTER TABLE orders VALIDATE CONSTRAINT orders_customer_fk;',
+    'NOT VALID skips the blocking scan; VALIDATE CONSTRAINT checks existing rows with a weaker lock.',
+  ),
+  'migration-constraint-without-index': sqlExample(
+    foreignKeyBefore,
+    foreignKeyIndex,
+    'Index the referencing column in the same release so parent deletes and joins do not scan the table.',
+  ),
+  'migration-breaking-drop': sqlExample(
+    'ALTER TABLE users DROP COLUMN legacy_name;',
+    '-- release 1: stop reading and writing legacy_name\n-- release 2:\nALTER TABLE users DROP COLUMN legacy_name;',
+    'Dropping while old application versions still run breaks them. Drop after the code no longer uses it.',
+  ),
+  'migration-breaking-rename': sqlExample(
+    'ALTER TABLE users RENAME COLUMN name TO full_name;',
+    'ALTER TABLE users ADD COLUMN full_name text;\n-- dual-write, backfill, switch reads, then drop name',
+    'A rename breaks every running application version that still uses the old name.',
+  ),
+  'migration-missing-lock-timeout': sqlExample(
+    'ALTER TABLE orders ADD COLUMN note text;',
+    "SET lock_timeout = '5s';\nALTER TABLE orders ADD COLUMN note text;",
+    'Without a timeout the DDL queues behind a long transaction and blocks every later query on the table.',
+  ),
+  'migration-table-rewrite-command': sqlExample(
+    'VACUUM FULL orders;',
+    'VACUUM orders; -- or pg_repack for an online rewrite',
+    'VACUUM FULL and CLUSTER hold an exclusive lock while they rewrite the table.',
+  ),
+  'migration-unparsed': sqlExample(
+    "DO $$ BEGIN EXECUTE format('CREATE INDEX ON %I (id)', tbl); END $$;",
+    'CREATE INDEX CONCURRENTLY orders_id_idx ON orders (id);',
+    'Plain static statements can be analyzed; dynamic SQL cannot, so it is not checked.',
+  ),
+  'migration-mysql-table-copy': sqlExample(
+    'ALTER TABLE orders MODIFY status VARCHAR(20);',
+    'ALTER TABLE orders MODIFY status VARCHAR(20), ALGORITHM=INPLACE, LOCK=NONE;',
+    'MySQL fails instead of copying the table if the change cannot run online; use gh-ost for those.',
+  ),
+  'migration-mysql-lock-unspecified': sqlExample(
+    'ALTER TABLE orders ADD COLUMN note TEXT;',
+    'ALTER TABLE orders ADD COLUMN note TEXT, ALGORITHM=INSTANT;',
+    'State ALGORITHM (and LOCK) so MySQL refuses a statement that would silently lock or copy the table.',
+  ),
+  'db-unindexed-foreign-key': sqlExample(foreignKeyBefore, foreignKeyIndex, foreignKeyNote),
+  'db-unused-index': sqlExample(
+    'SELECT indexrelname FROM pg_stat_user_indexes WHERE idx_scan = 0;',
+    'DROP INDEX CONCURRENTLY orders_legacy_idx;',
+    'Confirm on every replica over a full business cycle, and that no constraint depends on the index.',
+  ),
+  'db-duplicate-index': sqlExample(
+    'CREATE INDEX a_idx ON orders (customer_id);\nCREATE INDEX b_idx ON orders (customer_id);',
+    'DROP INDEX CONCURRENTLY b_idx;',
+    'Keep one of two identical indexes. An index that is a prefix of another is also redundant.',
+  ),
+  'db-seq-scan-heavy-table': sqlExample(
+    'SELECT relname, seq_scan, idx_scan FROM pg_stat_user_tables ORDER BY seq_scan DESC;',
+    foreignKeyIndex,
+    'Find the queries scanning this table (pg_stat_statements) and index their filter columns.',
+  ),
+  'db-slow-query-plan': sqlExample(
+    'EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM orders WHERE customer_id = $1;',
+    foreignKeyIndex,
+    'Add the index the plan lacks, or rewrite the query, then compare the plan.',
+  ),
+  'db-missing-index': sqlExample(
+    'SELECT id FROM orders WHERE customer_id = $1;',
+    foreignKeyIndex,
+    'Check that the write cost of one more index is acceptable for this table.',
+  ),
 };
 
 const polyglot = {
@@ -251,6 +455,7 @@ function ormExample(ruleId, message) {
 }
 
 function exampleFor(ruleId, languageId, message = '') {
+  if (Object.hasOwn(standaloneExamples, ruleId)) return { ...standaloneExamples[ruleId] };
   if (Object.hasOwn(polyglot, ruleId)) {
     const [language, code, note] = polyglot[ruleId];
     return languageId === language ? { language, code, note } : undefined;
