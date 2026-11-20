@@ -550,11 +550,21 @@ It accepts the source-check flags of `loadwise perf`: `--policy`, `--json`, `--i
 
 ## Rules
 
-| Rule                       | What to review                                                                                                                                                      |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pg-dynamic-query-text`    | Runtime fragments enter SQL text directly. Bind data as parameters and verify how any dynamic identifiers are chosen and quoted. A finding is a code-review prompt. |
-| `prisma-scope-unverified`  | A Prisma read or write on a model listed in `prismaScopes` does not prove the configured scope in its filter, projection or write data.                             |
-| `drizzle-scope-unverified` | A Drizzle query on a table listed in `drizzleScopes` does not prove the configured predicate, projection or write data.                                             |
+| Rule                                | What to review                                                                                                                                                          |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pg-dynamic-query-text`             | Runtime fragments enter SQL text directly. Bind data as parameters and verify how any dynamic identifiers are chosen and quoted. A finding is a code-review prompt.     |
+| `prisma-scope-unverified`           | A Prisma read or write on a model listed in `prismaScopes` does not prove the configured scope in its filter, projection or write data.                                 |
+| `drizzle-scope-unverified`          | A Drizzle query on a table listed in `drizzleScopes` does not prove the configured predicate, projection or write data.                                                 |
+| `cookie-missing-security-flags`     | A session, token or auth cookie is set without `httpOnly`, or with `secure: false`. A missing `secure` or `sameSite` is contextual. Non-literal options are not judged. |
+| `cors-credentials-any-origin`       | CORS options allow credentials with origin `*`, `true`, a match-everything regex or a callback that always accepts. Listed or configured origins are clean.             |
+| `error-stack-in-response`           | An error `.stack` is written into a response body. A whole error object is contextual. Code that runs only outside production is clean.                                 |
+| `graphql-introspection-enabled`     | A GraphQL server config turns on `introspection`, `playground` or `graphiql` with a literal `true`. Expressions are not judged.                                         |
+| `mass-assignment`                   | The whole request body reaches a Prisma, TypeORM, Mongoose or Sequelize write. Decorated DTO classes, schema parses and explicit field picks are clean.                 |
+| `nest-validation-without-whitelist` | A NestJS `ValidationPipe` is created without `whitelist: true`, so undeclared properties reach handlers. Without `forbidNonWhitelisted` it is contextual.               |
+| `prototype-pollution`               | A request-controlled key is written through a nested path, or the whole request goes to lodash `merge`, `defaultsDeep`, a path `set` or an unguarded local deep merge.  |
+| `reflected-xss-response`            | Request data is interpolated into an HTML string sent with `res.send`. Contextual only in this version.                                                                 |
+| `secret-in-log`                     | A password, token, key or authorization value is passed to a logger call. Logging a whole request body or headers object is contextual.                                 |
+| `xml-external-entities`             | `libxmljs` is asked to load entities or the DTD with `noent: true` or `dtdload: true`.                                                                                  |
 
 These rules moved from the performance checker with the same ids, so existing `// loadwise-reviewed` comments and `--ignore` flags keep working; `loadwise perf --ignore` still accepts them.
 
