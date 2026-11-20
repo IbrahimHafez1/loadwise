@@ -558,6 +558,7 @@ It accepts the source-check flags of `loadwise perf`: `--policy`, `--json`, `--i
 | `open-redirect`            | A redirect target whose site comes from request data. Relative paths, a fixed origin and checked targets are quiet; a Referer target is contextual.                 |
 | `path-traversal`           | A file path built from request data reaches `fs`, `res.sendFile` without `root`, `res.download` or `res.render`. `path.basename` and a containment check clear it.  |
 | `ssrf-request-url`         | An outgoing HTTP request whose URL or host comes from request data. A fixed origin with a request path, a host allowlist or an SSRF-filtering agent is quiet.       |
+| `upload-client-filename`   | multer disk storage saves uploads under the client's file name, so same-named uploads overwrite each other and the client picks the extension.                      |
 | `zip-slip-extraction`      | An archive entry name (adm-zip, yauzl, unzipper, tar-stream, jszip, node-stream-zip) reaches a file write without a check that it stays in the destination.         |
 
 These rules moved from the performance checker with the same ids, so existing `// loadwise-reviewed` comments and `--ignore` flags keep working; `loadwise perf --ignore` still accepts them.
