@@ -204,3 +204,44 @@ async function example(threshold: number, dynamic: string) {
     ],
   );
 });
+
+test('a migration runner applying raw SQL items in order is not a batchable query loop', () => {
+  const findings = lint(
+    `import type { PoolClient } from 'pg';
+async function migrate(client: PoolClient, migrations: { sql: string[]; hash: string }[]) {
+  for (const migration of migrations) {
+    for (const statement of migration.sql) {
+      await client.query(statement);
+    }
+    await client.query('INSERT INTO journal(hash) VALUES($1)', [migration.hash]);
+  }
+}`,
+    pgFiles,
+  );
+  assert.deepEqual(findings, []);
+});
+
+test('queries that merely use loop values as parameters stay reported next to raw SQL items', () => {
+  const findings = lint(
+    `import type { PoolClient } from 'pg';
+async function load(client: PoolClient, ids: number[], statements: string[]) {
+  for (const id of ids) {
+    await client.query('SELECT * FROM accounts WHERE id = $1', [id]);
+  }
+  for (const statement of statements) {
+    await client.query(statement);
+  }
+  for (const id of ids) {
+    await client.query('SELECT * FROM items WHERE id = $1', [id]);
+  }
+}`,
+    pgFiles,
+  );
+  assert.deepEqual(
+    findings.map(({ ruleId, line }) => [ruleId, line]),
+    [
+      ['pg-query-in-loop', 4],
+      ['pg-query-in-loop', 10],
+    ],
+  );
+});
