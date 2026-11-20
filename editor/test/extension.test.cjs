@@ -60,6 +60,11 @@ function fakeVscode(root, settings) {
     DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3 },
     CodeActionKind: { QuickFix: kind('quickfix'), SourceFixAll: kind('source.fixAll') },
     StatusBarAlignment: { Left: 1 },
+    EventEmitter: class {
+      event = () => ({ dispose() {} });
+      fire() {}
+      dispose() {}
+    },
     RelativePattern: class {},
     Disposable: { from: disposable },
     window: {
@@ -69,6 +74,7 @@ function fakeVscode(root, settings) {
     commands: { registerCommand: disposable },
     languages: {
       registerHoverProvider: disposable,
+      registerCodeLensProvider: disposable,
       registerCodeActionsProvider: disposable,
       createDiagnosticCollection() {
         const byUri = new Map();

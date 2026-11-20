@@ -399,6 +399,54 @@ function registerQuickFixes(vscode, { diagnosticsFor, dismissals, onDismissed })
   return vscode.Disposable.from(applyOne, applyAll, dismiss, provider);
 }
 
+// One-click buttons above each fixable line, so applying a fix does not need the lightbulb menu.
+function registerCodeLenses(vscode, diagnosticsFor) {
+  const changed = new vscode.EventEmitter();
+  const provider = vscode.languages.registerCodeLensProvider(
+    { scheme: 'file' },
+    {
+      onDidChangeCodeLenses: changed.event,
+      provideCodeLenses(document) {
+        if (!vscode.workspace.getConfiguration('backendCheckers', document.uri).get('codeLens', true)) return [];
+        const fixable = [...diagnosticsFor(document.uri)].filter((diagnostic) => anchors.get(diagnostic)?.fix);
+        const lenses = [];
+        if (fixable.length > 1) {
+          lenses.push(
+            new vscode.CodeLens(new vscode.Range(0, 0, 0, 0), {
+              title: '$(wrench) Apply all ' + fixable.length + ' Backend Checkers fixes in this file',
+              command: 'backendCheckers.applyAllFixes',
+              arguments: [document.uri],
+            }),
+          );
+        }
+        for (const diagnostic of fixable) {
+          const { fix, dismissal } = anchors.get(diagnostic);
+          const line = diagnostic.range.start.line;
+          const range = new vscode.Range(line, 0, line, 0);
+          lenses.push(
+            new vscode.CodeLens(range, {
+              title: '$(wrench) Apply fix: ' + diagnostic.code,
+              command: 'backendCheckers.applyFix',
+              arguments: [fix],
+            }),
+            new vscode.CodeLens(range, {
+              title: 'Dismiss',
+              command: 'backendCheckers.dismiss',
+              arguments: [dismissal],
+            }),
+          );
+        }
+        return lenses;
+      },
+    },
+  );
+  return { refresh: () => changed.fire(), disposable: vscode.Disposable.from(provider, changed) };
+}
+
+function commandLink(title, command, argument) {
+  return '[' + title + '](command:' + command + '?' + encodeURIComponent(JSON.stringify([argument])) + ')';
+}
+
 function registerExamples(vscode, diagnosticsFor) {
   return vscode.languages.registerHoverProvider(
     { scheme: 'file' },
@@ -436,6 +484,17 @@ function registerExamples(vscode, diagnosticsFor) {
           }
           const note = comparison ? comparison.note : example?.note;
           if (note) content.appendText(note);
+          if (site.fix) {
+            // Only these two commands may run from the hover links.
+            content.isTrusted = { enabledCommands: ['backendCheckers.applyFix', 'backendCheckers.dismiss'] };
+            content.appendMarkdown(
+              '\n\n' +
+                commandLink('$(wrench) Apply fix', 'backendCheckers.applyFix', site.fix) +
+                ' · ' +
+                commandLink('Dismiss', 'backendCheckers.dismiss', site.dismissal),
+            );
+            content.supportThemeIcons = true;
+          }
           examples.push(content);
           shown.add(issue.code);
           hoverRange ??= range;
@@ -446,4 +505,4 @@ function registerExamples(vscode, diagnosticsFor) {
   );
 }
 
-module.exports = { publish, registerExamples, registerQuickFixes, refreshDocument, workspaceFix };
+module.exports = { publish, registerCodeLenses, registerExamples, registerQuickFixes, refreshDocument, workspaceFix };

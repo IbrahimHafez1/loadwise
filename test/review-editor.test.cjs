@@ -14,6 +14,11 @@ function createVscode(root) {
   const noop = () => ({ dispose() {} });
   const commands = new Map();
   const vscode = {
+    EventEmitter: class {
+      event = () => ({ dispose() {} });
+      fire() {}
+      dispose() {}
+    },
     RelativePattern: class {},
     StatusBarAlignment: { Left: 1 },
     CodeActionKind: { QuickFix: { append: () => ({}) }, SourceFixAll: { append: () => ({}) } },
@@ -36,6 +41,7 @@ function createVscode(root) {
     languages: {
       createDiagnosticCollection: () => ({ clear() {}, dispose() {}, get() {}, set() {}, forEach() {} }),
       registerHoverProvider: noop,
+      registerCodeLensProvider: noop,
       registerCodeActionsProvider: noop,
     },
     window: {

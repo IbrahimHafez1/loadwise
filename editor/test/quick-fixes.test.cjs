@@ -307,3 +307,42 @@ test('a live-database finding without a file shows on package.json with its tabl
   assert.equal(apply.title, 'Apply fix: db-missing-fk-index');
   assert.equal(dismiss.command.arguments[0].lineText, 'public.orders', 'dismissed by table, not by package.json text');
 });
+
+test('code lenses put Apply fix and Dismiss buttons on fixable lines and an apply-all button at the top', () => {
+  const { registerCodeLenses } = require('../diagnostics.cjs');
+  const files = new Map([[ordersFile, 'one();\ntwo();\nthree();']]);
+  const editor = fakeEditor(files);
+  editor.open(ordersFile);
+  let provider;
+  editor.vscode.EventEmitter = class {
+    event = () => ({ dispose() {} });
+    fire() {}
+    dispose() {}
+  };
+  editor.vscode.CodeLens = class {
+    constructor(range, command) {
+      Object.assign(this, { range, command });
+    }
+  };
+  editor.vscode.languages.registerCodeLensProvider = (_selector, registered) => (provider = registered);
+  editor.vscode.workspace.getConfiguration = () => ({ get: (_key, fallback) => fallback });
+  publish(editor.vscode, editor.collection, root, 'backend-perf-check', [
+    fixed(1, 'one();', 'ONE();'),
+    finding(2),
+    fixed(3, 'three();', 'THREE();'),
+  ]);
+  registerCodeLenses(editor.vscode, (uri) => editor.byUri.get(uri) ?? []);
+  const lenses = provider.provideCodeLenses({ uri: ordersFile });
+  assert.deepEqual(
+    lenses.map((lens) => [lens.range.start.line, lens.command.title]),
+    [
+      [0, '$(wrench) Apply all 2 Backend Checkers fixes in this file'],
+      [0, '$(wrench) Apply fix: array-repeated-membership'],
+      [0, 'Dismiss'],
+      [2, '$(wrench) Apply fix: array-repeated-membership'],
+      [2, 'Dismiss'],
+    ],
+  );
+  editor.vscode.workspace.getConfiguration = () => ({ get: () => false });
+  assert.deepEqual(provider.provideCodeLenses({ uri: ordersFile }), [], 'the codeLens setting turns them off');
+});

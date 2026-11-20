@@ -5,7 +5,13 @@ const path = require('node:path');
 const fs = require('node:fs/promises');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
-const { publish, refreshDocument, registerExamples, registerQuickFixes } = require('./diagnostics.cjs');
+const {
+  publish,
+  refreshDocument,
+  registerCodeLenses,
+  registerExamples,
+  registerQuickFixes,
+} = require('./diagnostics.cjs');
 const { createDismissals } = require('./dismissals.cjs');
 const { startPerfWatch } = require('./perf-watch.cjs');
 
@@ -279,8 +285,11 @@ function activate(context) {
   const statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
   statusItem.command = 'backendCheckers.showOutput';
   statusItem.name = 'Backend Checkers';
+  // Every publish ends in a status update, so the buttons above fixable lines refresh with it.
+  const codeLenses = registerCodeLenses(vscode, allDiagnostics);
   function updateStatus() {
     Object.assign(statusItem, statusText(folders.values()));
+    codeLenses.refresh();
   }
   updateStatus();
   statusItem.show();
@@ -340,6 +349,7 @@ function activate(context) {
     watcher,
     configWatcher,
     registerExamples(vscode, allDiagnostics),
+    codeLenses.disposable,
     registerQuickFixes(vscode, { diagnosticsFor: allDiagnostics, dismissals, onDismissed: republishAll }),
     // Changes from git, other editors and code generators arrive here, not through save events.
     watcher.onDidCreate((uri) => changed(uri)),

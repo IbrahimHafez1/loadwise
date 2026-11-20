@@ -98,6 +98,11 @@
           "default": "default",
           "scope": "resource",
           "description": "How Backend Checkers findings appear in the editor and the Problems view."
+        },
+        "backendCheckers.codeLens": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show Apply fix and Dismiss buttons above each line that has a fix."
         }
       }
     },
