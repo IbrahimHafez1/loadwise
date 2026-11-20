@@ -1,0 +1,25 @@
+# Backend Checkers
+
+The npm packages also support inline diagnostics and plain-text hover examples through the editor's built-in task system. To use that option, run `npx backend-perf-check editor init` in the consuming project, then open the trusted folder and allow automatic tasks. It refreshes on saves, terminal source scans, and checker package updates. Choose one integration per workspace to avoid duplicate diagnostics.
+
+See performance and maintainability findings inline in VS Code or Cursor. Open a trusted project folder, save a source file, and hover over an underline to read the recommendation. Hover over the flagged code to compare the current snippet with a syntax-highlighted suggested rewrite. Short comparisons also appear on the first diagnostic line. Rules without a site-specific rewrite can show the flagged line and a labeled illustrative alternative.
+
+Open **View → Problems** to browse both checkers. Each entry identifies its source and rule and links to the reported code. Use **Backend Checkers: Scan Workspace** from the Command Palette to refresh immediately. **Backend Checkers: Show Output** lists scan counts and errors.
+
+## Install
+
+Install the universal VSIX through **Extensions: Install from VSIX…**. The bundle includes both checkers and TypeScript. The native parser covers Windows x86, x64 and Arm64, Intel and Apple silicon Macs, and Linux x64 and Arm64 with glibc or musl. The editor itself must support your OS and architecture. Minimal musl images need the native parser's libgcc runtime. The editor needs Node.js 20 or newer on its PATH to launch the checkers. Source scanning runs locally.
+
+## What gets scanned
+
+The extension scans saved files on opening a supported workspace and refreshes after edits are saved. Rapid saves are grouped. The maintainability checker scans the folder. The performance checker uses its root `tsconfig.json` or `jsconfig.json` and also runs its polyglot source rules if it finds Python, Go, Java, C# or Rust. In a monorepo, open individual packages as workspace folders or set `backendCheckers.project` to the intended config. CLI traces and database plans are separate inputs.
+
+Each folder uses the checkers' default rules and its existing policy files. You can turn off diagnostics for a folder with `backendCheckers.enabled`. Developers using their own checker builds can point the user settings `backendCheckers.performanceCli` and `backendCheckers.maintainabilityCli` at absolute CLI script paths.
+
+## Build the extension
+
+Run the packager from the performance repository with a sibling maintainability checkout, Python 3.10+, Node.js 22+ and npm.
+
+```sh
+python editor/package-vsix.py ../maintainability-check ../../outputs/backend-checkers-0.1.0.vsix
+```

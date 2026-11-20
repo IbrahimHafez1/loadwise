@@ -1,0 +1,69 @@
+{
+  "name": "backend-checkers",
+  "displayName": "Backend Checkers",
+  "description": "See backend performance and maintainability findings and suggested improvements as you edit.",
+  "publisher": "IbrahimHafez1",
+  "version": "0.1.0",
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Linters"
+  ],
+  "main": "./extension.cjs",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "The checkers run local processes and read project configuration."
+    },
+    "virtualWorkspaces": false
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "backendCheckers.scan",
+        "title": "Backend Checkers: Scan Workspace"
+      },
+      {
+        "command": "backendCheckers.showOutput",
+        "title": "Backend Checkers: Show Output"
+      }
+    ],
+    "configuration": {
+      "title": "Backend Checkers",
+      "properties": {
+        "backendCheckers.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Show diagnostics for this workspace folder."
+        },
+        "backendCheckers.project": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "TypeScript or JavaScript project config, relative to the workspace folder. Defaults to tsconfig.json or jsconfig.json at its root."
+        },
+        "backendCheckers.performanceCli": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Optional absolute path to the backend-perf-check CLI script."
+        },
+        "backendCheckers.maintainabilityCli": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Optional absolute path to the maintainability-check CLI script."
+        }
+      }
+    }
+  }
+}
