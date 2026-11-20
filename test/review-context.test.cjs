@@ -81,6 +81,25 @@ test('a review applies to one advisory rule on the next physical line', () => {
   );
 });
 
+test('the warden-reviewed directive and the old backend-perf-reviewed one both apply', () => {
+  const source = [
+    "import { readFileSync as read } from 'node:fs';",
+    'export async function handle() {',
+    '  // warden-reviewed node-sync-fs-in-async -- New directive name.',
+    '  read("one");',
+    '  // backend-perf-reviewed node-sync-fs-in-async -- Old directive name.',
+    '  read("two");',
+    '}',
+  ].join('\n');
+  assert.deepEqual(
+    lint(source).map(({ line, contextualReason }) => [line, contextualReason]),
+    [
+      [4, 'Reviewed in source: New directive name.'],
+      [6, 'Reviewed in source: Old directive name.'],
+    ],
+  );
+});
+
 test('a source review cannot lower a transaction contract', () => {
   const findings = lint(
     [

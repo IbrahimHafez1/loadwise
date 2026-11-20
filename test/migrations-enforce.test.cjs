@@ -88,6 +88,21 @@ describe('review comments', () => {
     assert.equal(findings[1].contextualReason, undefined);
   });
 
+  test('the warden-reviewed directive is accepted in SQL and code files', () => {
+    const [sql] = applyReviewComments(
+      [{ line: 2, ruleId: 'migration-breaking-drop' }],
+      '-- warden-reviewed migration-breaking-drop -- Unused.\nDROP TABLE old;',
+      true,
+    );
+    assert.equal(sql.contextualReason, 'Reviewed in source: Unused.');
+    const [code] = applyReviewComments(
+      [{ line: 2, ruleId: 'migration-breaking-drop' }],
+      '// warden-reviewed migration-breaking-drop -- Unused.\nawait queryRunner.query(`DROP TABLE old`);',
+      false,
+    );
+    assert.equal(code.contextualReason, 'Reviewed in source: Unused.');
+  });
+
   test('the directive must name the exact rule; code files also accept // comments', () => {
     const [other] = applyReviewComments(
       [{ line: 2, ruleId: 'migration-breaking-rename' }],
