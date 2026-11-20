@@ -137,3 +137,9 @@ test('findProjectRoot walks up to the nearest package.json', () => {
   assert.equal(findProjectRoot(path.join(repository, 'lib', 'performance', 'schema')), repository);
   assert.equal(findProjectRoot(path.join(repository, 'lib', 'performance', 'analyze.cjs')), repository);
 });
+
+test('findProjectRoot does not climb out of the temp folder into a package.json above it', (context) => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-root-'));
+  context.after(() => fs.rmSync(project, { recursive: true, force: true }));
+  assert.equal(findProjectRoot(project), project);
+});
