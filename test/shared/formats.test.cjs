@@ -9,6 +9,10 @@ const test = require('node:test');
 const { escapeData, escapeProperty, formatGithub } = require('../../lib/shared/formats/github.cjs');
 const { formatSarif } = require('../../lib/shared/formats/sarif.cjs');
 const { resolveFormat, renderReports } = require('../../lib/shared/formats/index.cjs');
+const performanceRules = require('../../lib/performance/rule-ids.cjs');
+const maintainabilityRules = require('../../lib/maintainability/rule-ids.cjs');
+
+const { descriptionByRule } = performanceRules;
 
 const cli = path.resolve(__dirname, '../../bin/loadwise.cjs');
 const slowSource = fs.readFileSync(path.resolve(__dirname, '../../examples/slow.ts'), 'utf8');
@@ -61,6 +65,21 @@ function loadwise(directory, ...args) {
   return { code: run.status, stdout: run.stdout, stderr: run.stderr };
 }
 
+test('every rule with an impact level has a one-line description', () => {
+  for (const { impactByRule, descriptionByRule: descriptions } of [performanceRules, maintainabilityRules]) {
+    assert.deepEqual(Object.keys(descriptions).sort(), Object.keys(impactByRule).sort());
+    for (const text of Object.values(descriptions)) assert.match(text, /^[^\n]{10,140}\.$/);
+  }
+});
+
+test('a rule without a registered description is summarized by the first sentence of its message', () => {
+  const report = {
+    findings: [{ file: 'a.ts', line: 1, column: 1, ruleId: 'unregistered-rule', message: 'One. Two.' }],
+  };
+  const sarif = JSON.parse(formatSarif([{ pillar: 'performance', root, report }]));
+  assert.equal(sarif.runs[0].tool.driver.rules[0].shortDescription.text, 'One.');
+});
+
 test('github escaping follows the workflow command rules', () => {
   assert.equal(escapeData('100%\r\nnext: a,b'), '100%25%0D%0Anext: a,b');
   assert.equal(escapeProperty('a:b,c%\n'), 'a%3Ab%2Cc%25%0A');
@@ -95,7 +114,7 @@ test('sarif has one run per reported pillar with rules, levels, locations and fi
     ['pg-query-in-loop', 'pg-transaction-on-pool'],
   );
   assert.equal(performance.tool.driver.rules[0].helpUri, 'https://github.com/IbrahimHafez1/loadwise#pg-query-in-loop');
-  assert.equal(performance.tool.driver.rules[0].shortDescription.text, 'Slow.');
+  assert.equal(performance.tool.driver.rules[0].shortDescription.text, descriptionByRule['pg-query-in-loop']);
   assert.deepEqual(
     performance.results.map(({ level }) => level),
     ['warning', 'error', 'note'],
@@ -140,7 +159,10 @@ test('check --format sarif prints one run per checker and keeps the exit code', 
     assert.ok(result.ruleId && result.message.text);
     assert.equal(result.locations[0].physicalLocation.artifactLocation.uri, 'a.ts');
     assert.match(result.partialFingerprints['loadwise/findingId/v1'], /^[0-9a-f]+$/);
+    assert.equal(result.properties.impact, 'medium');
   }
+  for (const rule of sarif.runs[0].tool.driver.rules)
+    assert.equal(rule.shortDescription.text, descriptionByRule[rule.id]);
 });
 
 test('check --format github prints annotations and check --format json matches --json', (context) => {
