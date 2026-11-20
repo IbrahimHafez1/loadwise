@@ -20,7 +20,7 @@ function fixture(contents, boundaries = [], compilerOptions = {}) {
       : specifier.startsWith('.')
         ? path.join(path.dirname(absolute.slice('/repo/'.length)), specifier)
         : '';
-    return [...[prefix, prefix + '.ts', prefix + '.js']].find((candidate) => names.has(candidate));
+    return [prefix, prefix + '.ts', prefix + '.js'].find((candidate) => names.has(candidate));
   }
   return {
     findings: analyzeArchitecture({ files, resolve, boundaries }),
