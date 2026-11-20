@@ -1,0 +1,56 @@
+{
+  "name": "@codewarden/maintainability",
+  "version": "0.2.0",
+  "description": "Codewarden maintainability: review source complexity, duplicate implementations and project-defined architecture across languages.",
+  "license": "UNLICENSED",
+  "author": "Ibrahim Hafez",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IbrahimHafez1/codewarden-maintainability.git"
+  },
+  "bugs": {
+    "url": "https://github.com/IbrahimHafez1/codewarden-maintainability/issues"
+  },
+  "homepage": "https://github.com/IbrahimHafez1/codewarden-maintainability#readme",
+  "keywords": [
+    "codewarden",
+    "maintainability",
+    "code-quality",
+    "duplicate-code",
+    "complexity",
+    "architecture",
+    "dependency-cycle",
+    "static-analysis",
+    "cli",
+    "vscode"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "warden-maint": "bin/warden-maint.cjs"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "polyglot/",
+    "LICENSE"
+  ],
+  "scripts": {
+    "format": "prettier --cache --write .",
+    "format:check": "prettier --cache --check .",
+    "lint": "oxlint --deny-warnings .",
+    "check": "npm run format:check && npm run lint && npm test",
+    "test": "node --test --test-concurrency=2 test/*.test.cjs"
+  },
+  "dependencies": {
+    "typescript": "6.0.3"
+  },
+  "optionalDependencies": {
+    "@ast-grep/cli": "0.51.3"
+  },
+  "devDependencies": {
+    "oxlint": "1.94.0",
+    "prettier": "3.10.1"
+  }
+}
