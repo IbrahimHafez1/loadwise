@@ -28,6 +28,19 @@ test('literals passed to a Promise combinator are left to promise-combinator-ser
   assert.deepEqual(findings('return Promise.allSettled([await a(), await b()]);'), []);
 });
 
+test('awaits that all run on the same transaction client are quiet', () => {
+  const client =
+    'declare const db: { transaction<T>(work: (manager: object) => Promise<T>): Promise<T> };\n' +
+    'declare function c(manager: object): Promise<number>;\ndeclare function d(manager: object): Promise<number>;\n';
+  const run = (body) =>
+    lint(`${header}${client}async function run() { ${body} }`).filter((finding) => finding.ruleId === rule);
+  assert.deepEqual(
+    run('return db.transaction(async (manager) => ({ x: await c(manager), y: await d(manager) }));'),
+    [],
+  );
+  assert.equal(run('return db.transaction(async (manager) => ({ x: await c(manager), y: await a() }));').length, 1);
+});
+
 test('array fix wraps the calls in Promise.all', (context) => {
   const { findings: scanned } = scanWithFixes(context, {
     'a.ts': `${header}export async function run() {\n  const [x, y] = [await a(), await b()];\n  return [x, y];\n}`,
