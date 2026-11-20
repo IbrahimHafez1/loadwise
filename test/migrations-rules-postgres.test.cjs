@@ -266,3 +266,83 @@ describe('Postgres column rules', () => {
     );
   });
 });
+
+describe('Postgres constraint rules', () => {
+  before(() => prepareDialect('postgres'));
+
+  test('FOREIGN KEY and CHECK without NOT VALID on an existing table', () => {
+    const findings = checkSql(
+      withLockTimeout(
+        'ALTER TABLE "Order" ADD CONSTRAINT "Order_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Store"("id");\n' +
+          'ALTER TABLE orders ADD CONSTRAINT positive CHECK (total > 0);',
+      ),
+    );
+    assert.deepEqual(rules(findings), ['migration-constraint-not-valid', 'migration-constraint-not-valid']);
+    assertFindingShape(findings[0]);
+    assert.equal(
+      findings[0].message,
+      '`ADD CONSTRAINT "Order_storeId_fkey" FOREIGN KEY` on existing table `"Order"` checks every row while holding ' +
+        'a SHARE ROW EXCLUSIVE lock on it and on the referenced table, blocking writes to both. Add `NOT VALID`, then ' +
+        'run `ALTER TABLE "Order" VALIDATE CONSTRAINT "Order_storeId_fkey";` in a later migration; validation takes a ' +
+        'lock that allows reads and writes. New and updated rows are checked as soon as the `NOT VALID` constraint exists.',
+    );
+    assert.match(findings[1].message, /ACCESS EXCLUSIVE lock/);
+  });
+
+  test('NOT VALID, constraints on new tables and VALIDATE outside a transaction are silent', () => {
+    const sql = withLockTimeout(
+      'ALTER TABLE orders ADD CONSTRAINT fk FOREIGN KEY (a) REFERENCES u(id) NOT VALID;\n' +
+        'ALTER TABLE orders VALIDATE CONSTRAINT fk;\n' +
+        'CREATE TABLE fresh (a int);\nALTER TABLE fresh ADD CONSTRAINT fk2 FOREIGN KEY (a) REFERENCES u(id);\n' +
+        'ALTER TABLE fresh ADD CONSTRAINT u UNIQUE (a);',
+    );
+    assert.deepEqual(rules(checkSql(sql)), []);
+  });
+
+  test('VALIDATE in the same transaction as its NOT VALID add', () => {
+    const sql = withLockTimeout(
+      'ALTER TABLE orders ADD CONSTRAINT fk FOREIGN KEY (a) REFERENCES u(id) NOT VALID;\n' +
+        'ALTER TABLE orders VALIDATE CONSTRAINT fk;',
+    );
+    const findings = checkSql(sql, 'prisma');
+    assert.deepEqual(rules(findings), ['migration-constraint-not-valid']);
+    assert.equal(findings[0].line, 3);
+    assert.match(findings[0].message, /same transaction as its `NOT VALID` add/);
+  });
+
+  test('UNIQUE and PRIMARY KEY without USING INDEX', () => {
+    const findings = checkSql(
+      withLockTimeout(
+        'ALTER TABLE orders ADD CONSTRAINT orders_code_key UNIQUE (code);\n' +
+          'ALTER TABLE orders ADD PRIMARY KEY (id);\n' +
+          'ALTER TABLE orders ADD CONSTRAINT orders_ref_key UNIQUE USING INDEX orders_ref_idx;',
+      ),
+    );
+    assert.deepEqual(
+      findings.map((finding) => [finding.ruleId, finding.line]),
+      [
+        ['migration-constraint-without-index', 2],
+        ['migration-constraint-without-index', 3],
+      ],
+    );
+    assertFindingShape(findings[0]);
+    assert.match(
+      findings[0].message,
+      /Build the index first with `CREATE UNIQUE INDEX CONCURRENTLY orders_code_key ON orders \(\.\.\.\);`/,
+    );
+    assert.match(findings[1].message, /primary key also needs NOT NULL columns/);
+  });
+
+  test('Knex unique() and TypeORM createForeignKey are builder constraints', () => {
+    const knex = checkCode(
+      "exports.up = async (knex) => { await knex.raw(\"SET lock_timeout = '5s'\"); await knex.schema.alterTable('orders', (t) => { t.unique(['code']); }); };",
+      'm.js',
+    );
+    assert.deepEqual(rules(knex), ['migration-constraint-without-index']);
+    const typeorm = checkCode(
+      "export class F implements MigrationInterface { async up(queryRunner: QueryRunner) { await queryRunner.query(\"SET lock_timeout = '5s'\"); await queryRunner.createForeignKey('orders', new TableForeignKey({})); } }",
+    );
+    assert.deepEqual(rules(typeorm), ['migration-constraint-not-valid']);
+    assert.match(typeorm[0].message, /Add it with a raw query ending in `NOT VALID`/);
+  });
+});
