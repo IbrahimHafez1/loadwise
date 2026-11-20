@@ -206,3 +206,29 @@ export class Registry {
     [],
   );
 });
+
+test('stays silent when the key type is a small literal union, enum or boolean', () => {
+  assert.deepEqual(
+    cacheFindings(`type Mode = 'fast' | 'slow';
+enum Kind { A, B }
+const modeCache = new Map<string, number>();
+export function a(mode: Mode) { const hit = modeCache.get(mode); if (hit) return hit; modeCache.set(mode, 1); return 1; }
+const kindCache = new Map<number, number>();
+export function b(kind: Kind) { const hit = kindCache.get(kind); if (hit) return hit; kindCache.set(kind, 1); return 1; }
+const flagCache = new Map<boolean, number>();
+export function c(flag: boolean) { const hit = flagCache.get(flag); if (hit) return hit; flagCache.set(flag, 1); return 1; }`),
+    [],
+  );
+});
+
+test('a key that does not look request-derived is reported as contextual only', () => {
+  const source = (parameter) => `const scriptCache = new Map<string, string>();
+export function load(${parameter}: string) {
+  const hit = scriptCache.get(${parameter});
+  if (hit) return hit;
+  scriptCache.set(${parameter}, ${parameter});
+  return ${parameter};
+}`;
+  assert.match(cacheFindings(source('script'))[0].contextualReason, /configuration or code/);
+  assert.equal(cacheFindings(source('workspaceId'))[0].contextualReason, undefined);
+});
