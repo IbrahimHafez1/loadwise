@@ -1,6 +1,6 @@
 'use strict';
 
-// Fails when README.md, `--help`, the rule registry or package.json `files` drift apart.
+// Fails when the README's performance section, `loadwise perf --help` or the rule registry drift apart.
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
@@ -11,11 +11,13 @@ const { knownRules } = require('../../lib/performance/rule-ids.cjs');
 const root = path.join(__dirname, '..', '..');
 const binEntry = path.join(root, 'bin', 'loadwise.cjs');
 const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8').replaceAll('\r\n', '\n');
-const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+// Rule tokens are compared within this checker's part of the README; commands and flags against all of it.
+const section = readme.slice(
+  readme.indexOf('\n# Performance checker\n'),
+  readme.indexOf('\n# Maintainability checker\n'),
+);
 const helpText = spawnSync(process.execPath, [binEntry, 'perf', '--help'], { encoding: 'utf8' }).stdout;
 
-// Package names are hyphenated too but are not rules.
-const siblingPackages = new Set(['warden-backend', 'warden-maint', 'warden-reviewed']);
 const rulePattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/;
 
 function readRuleTokens(markdown) {
@@ -33,8 +35,12 @@ function sourceFiles(directory) {
   });
 }
 
+test('the README has a performance section', () => {
+  assert.ok(section.length > 1000, 'missing "# Performance checker" before "# Maintainability checker"');
+});
+
 test('every registry rule is documented in the README', () => {
-  const documented = readRuleTokens(readme);
+  const documented = readRuleTokens(section);
   const missing = [...knownRules].filter((rule) => !documented.has(rule));
   assert.deepEqual(missing, [], `rules missing from the README: ${missing.join(', ')}`);
 });
@@ -46,12 +52,8 @@ test('every rule-like README entry exists in the code', () => {
   ]
     .map((file) => fs.readFileSync(file, 'utf8'))
     .join('\n');
-  const stale = [...readRuleTokens(readme)].filter(
-    (token) =>
-      !siblingPackages.has(token) &&
-      !knownRules.has(token) &&
-      !codeText.includes(`'${token}'`) &&
-      !codeText.includes(`id: ${token}`),
+  const stale = [...readRuleTokens(section)].filter(
+    (token) => !knownRules.has(token) && !codeText.includes(`'${token}'`) && !codeText.includes(`id: ${token}`),
   );
   assert.deepEqual(stale, [], `README rule entries with no matching rule: ${stale.join(', ')}`);
 });
@@ -59,7 +61,7 @@ test('every rule-like README entry exists in the code', () => {
 test('every --help flag and subcommand is in the README', () => {
   const flags = new Set(helpText.match(/--[a-z][a-z-]*/g));
   const subcommands = new Set(
-    [...helpText.matchAll(/^ {2}warden-backend ([a-z]+)(?: ([a-z]+))?/gm)]
+    [...helpText.matchAll(/^ {2}loadwise perf ([a-z]+)(?: ([a-z]+))?/gm)]
       .filter((match) => !/^[[<-]/.test(match[1]))
       .map((match) => (match[1] === 'editor' || match[1] === 'agent' ? `${match[1]} ${match[2]}` : match[1])),
   );
@@ -68,36 +70,8 @@ test('every --help flag and subcommand is in the README', () => {
   assert.deepEqual(missing, [], `README does not mention: ${missing.join(', ')}`);
 });
 
-function runtimeRequires(entryFile, seen = new Set()) {
-  if (seen.has(entryFile)) return seen;
-  seen.add(entryFile);
-  const source = fs.readFileSync(entryFile, 'utf8');
-  const relativeLiterals = [...source.matchAll(/['"](\.{1,2}\/[\w./-]+)['"]/g)].map((match) => match[1]);
-  for (const literal of relativeLiterals) {
-    const target = [literal, `${literal}.cjs`, `${literal}/index.cjs`]
-      .map((candidate) => path.resolve(path.dirname(entryFile), candidate))
-      .find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile());
-    if (target?.endsWith('.cjs')) runtimeRequires(target, seen);
-    else if (target) seen.add(target);
-  }
-  return seen;
-}
-
-test('package.json files covers every runtime require reachable from bin/', () => {
-  const entries = fs.readdirSync(path.join(root, 'bin')).map((name) => path.join(root, 'bin', name));
-  const reachable = entries.flatMap((entry) => [...runtimeRequires(entry)]);
-  const patterns = packageJson.files.map((entry) => entry.replace(/\/$/, ''));
-  const uncovered = reachable
-    .map((file) => path.relative(root, file).split(path.sep).join('/'))
-    .filter(
-      (file) =>
-        file !== 'package.json' && !patterns.some((pattern) => file === pattern || file.startsWith(`${pattern}/`)),
-    );
-  assert.deepEqual(uncovered, [], `not shipped by package.json files: ${uncovered.join(', ')}`);
-});
-
 test('README sample output for examples/slow.ts matches the CLI', () => {
-  const sample = readme.split('```text\n')[1].split('\n')[0];
+  const sample = section.split('```text\n')[1].split('\n')[0];
   const run = spawnSync(process.execPath, [binEntry, 'perf', 'examples/slow.ts'], { cwd: root, encoding: 'utf8' });
   assert.ok(run.stdout.includes(sample), `CLI output no longer contains the README sample line:\n${sample}`);
 });

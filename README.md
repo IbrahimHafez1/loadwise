@@ -1,15 +1,100 @@
-# Codewarden — backend
+# Loadwise
 
-Find repeated backend work before deployment or in a recorded request. The local CLI checks source code, OpenTelemetry traces and executed database plans. Findings include a location or trace identifier, a rule ID, and a suggested change to evaluate.
+Loadwise checks a backend project before it ships. One CLI runs two checkers:
+
+- **Performance** (`loadwise perf`): repeated database work, ORM and query integrity, blocking calls, collection complexity, migration safety, schema-aware indexes, OpenTelemetry traces, executed query plans and an optional read-only database inspection.
+- **Maintainability** (`loadwise maint`): deep nesting, branch complexity, duplicate implementations, dependency cycles and the folder, placement and data-access rules a team declares.
+
+Both report findings with a stable `#id`, a suggested change where one is safe, and a `// loadwise-reviewed <rule-id> -- <reason>` comment to dismiss a false positive. A security checker (`loadwise sec`) is reserved for a later release.
+
+## Install
+
+Use Node.js 22 or later. From your application directory:
+
+```sh
+npm i -D @loadwise/cli
+npx loadwise
+```
+
+`npx loadwise` checks the current folder with every checker and prints one titled report per checker.
+
+## Commands
+
+| Command                                                              | What it does                                                                                                                        |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `loadwise` or `loadwise check [directory]`                           | Runs every checker on the directory (default: the current folder) and prints Performance, then Maintainability.                     |
+| `loadwise check --only perf,maint`                                   | Runs only the listed checkers: a comma-separated list of `perf`, `maint` and `sec`, in any order.                                   |
+| `loadwise check --skip maint`                                        | Runs every checker except the listed ones. `--only` and `--skip` cannot be combined.                                                |
+| `loadwise perf [args...]`                                            | The full performance checker; `loadwise perf --help` lists its commands and flags. See [Performance checker](#performance-checker). |
+| `loadwise maint [args...]`                                           | The full maintainability checker; `loadwise maint --help` lists its flags. See [Maintainability checker](#maintainability-checker). |
+| `loadwise sec`                                                       | Reserved. Until security checks ship, it and `--only sec` print an error and exit 2.                                                |
+| `loadwise agent init [--mode ask\|auto] [--hook [block\|warn\|off]]` | Writes instructions for AI coding agents and installs the git pre-commit hook.                                                      |
+
+`check` accepts these flags and passes them to every selected checker:
+
+- `--json` prints one object with a key per selected checker, `{ "performance": report, "maintainability": report }`. A checker that was skipped or could not run has `null`.
+- `--include-contextual` also shows lower-priority findings, each with its reason.
+- `--staged` or `--changed-since <git-ref>` reports only findings on changed lines.
+- `--fail-on contract|all` sets the exit threshold. Without it the performance checker fails on any displayed finding and the maintainability checker on contract violations only.
+
+The performance checker uses the directory's `tsconfig.json` or `jsconfig.json`; without one, `check` skips it and prints a note. `check` never changes files: each report ends with a `Fix all:` command, such as `npx loadwise perf -p tsconfig.json --fix --only <ids>`, that applies its fixes.
+
+Exit codes: **0** passed, **1** a checker met its exit threshold, **2** invalid input or configuration in any checker.
+
+## Use with AI coding agents
+
+Any agent that runs shell commands and reads an instructions file (Claude Code, Cursor, Codex, Copilot agent, Windsurf, Gemini CLI) can drive both checkers.
+
+```sh
+npx loadwise agent init               # ask mode: the agent waits for approval before changing code
+npx loadwise agent init --mode auto   # auto mode: applies fixes without behaviour caveats, asks about the rest
+```
+
+`agent init` writes one marked block into `AGENTS.md` at the project root and adds one `@AGENTS.md` line to `CLAUDE.md`, creating either file if needed. Rerunning it replaces the block and leaves your other text alone; blocks written by earlier releases of either checker are replaced by the single loadwise block. The block tells the agent to run `npx loadwise --json` after changing code (or `--only perf` / `--only maint` for one checker), review each finding by id, apply fixes with `--fix --only <id>`, and report a table of what it did. In both modes the agent asks before changing `duplicate-implementation` or `dependency-cycle` findings, which are design decisions. The mode is one line in the block, so you can edit it later.
+
+### Git pre-commit hook
+
+```sh
+npx loadwise agent init --hook block   # a commit with new findings fails
+npx loadwise agent init --hook warn    # findings are printed, the commit goes through (also plain --hook)
+npx loadwise agent init --hook off     # removes only this block
+```
+
+The hook runs `loadwise check --staged` from the project folder, so every tool that commits through git sees findings from both checkers on the staged lines. It writes a marked block into the hooks folder (honouring `core.hooksPath`) or into `.husky/pre-commit` when `.husky/` exists, appends to a hook you already have, and rerunning it replaces only its own block, including blocks written by earlier releases. With lefthook it edits nothing and prints the command to add. `git commit --no-verify` skips the hook.
+
+## Editor
+
+Set up the editor task once from the project root.
+
+```sh
+npx loadwise perf editor init
+```
+
+Commit the generated `.vscode/tasks.json`. Open the trusted folder in VS Code or Cursor and allow automatic tasks once; the watcher then starts on every folder open (reopen the folder if it was already open during setup). **Tasks: Manage Automatic Tasks** controls the workspace's choice. Findings from both checkers appear in **View > Problems**. This works across supported source languages, including mixed-language projects, and needs Node.js 22+ on PATH and this package under `node_modules`.
+
+Saving a file or completing a source scan from the project terminal refreshes the running watcher. The editor uses its configured project and rules even when the terminal command uses different flags, and a running watcher picks up package reinstalls. The default scan uses a root `tsconfig.json` or `jsconfig.json`, or explicit JS/TS files discovered by the watcher; append `-p` and a relative path to the task's arguments (it runs `perf editor watch [-p tsconfig.json]`) to use another config.
+
+Hover over an underline to read the finding. The first line shows a source-based rewrite, an illustrative example or a review action. The hover retains the original finding and, where applicable, the code comparison.
+
+The optional [editor extension](editor/README.md) adds syntax-highlighted hover examples, related-location links and fix actions in VS Code or Cursor:
+
+- Each fixable line shows **Apply fix** and **Dismiss** CodeLens buttons, the hover has the same two links, and the Quick Fix menu offers the same actions.
+- The shortcuts are the same on every OS: **Ctrl+Alt+.** applies the fix on the cursor line, **Ctrl+Alt+Shift+.** applies all fixes in the file, and **Ctrl+Alt+,** dismisses the finding on the cursor line.
+- **Loadwise: Apply all fixes in this file** (also on save as `source.fixAll.loadwise`) applies every fix in one undoable edit.
+- A finding, or a rule in one file, can be dismissed and restored with **Show dismissed findings**. `loadwise.severity` shows all findings at one level.
+
+# Performance checker
+
+`loadwise perf` finds repeated backend work before deployment or in a recorded request. It checks source code, OpenTelemetry traces and executed database plans. Findings include a location or trace identifier, a rule ID, and a suggested change to evaluate.
 
 ## What you get
 
 | Capability                | Command                                  | Needs a database |
 | ------------------------- | ---------------------------------------- | ---------------- |
-| Source and ORM checks     | `warden-backend -p tsconfig.json`        | No               |
-| Migration safety          | `warden-backend migrations`              | No               |
-| Schema-aware index checks | `warden-backend --schema snap.json`      | No (snapshot)    |
-| Live database inspection  | `warden-backend db`                      | Yes, read-only   |
+| Source and ORM checks     | `loadwise perf -p tsconfig.json`         | No               |
+| Migration safety          | `loadwise perf migrations`               | No               |
+| Schema-aware index checks | `loadwise perf --schema snap.json`       | No (snapshot)    |
+| Live database inspection  | `loadwise perf db`                       | Yes, read-only   |
 | Traces and executed plans | `traces trace.json`, `plan explain.json` | No               |
 
 Text findings carry a stable `#id`, a **Fix** diff where one applies and, for loops and repeated spans, an **Impact:** line. Impact always says which side is measured and which is estimated.
@@ -31,55 +116,25 @@ The second sample is `examples/repeated-db.otlp.json` with span timings added. A
 
 ## Start here
 
-### Quick start
-
-Use Node.js 22+ and point npm at the downloaded archive. From your application directory, install the package and run the first check.
-
-```sh
-npm install --save-dev --include=optional ./codewarden-backend-0.3.0.tgz
-npx warden-backend -p tsconfig.json
-```
-
 Try the two included implementations of the same order lookup. The first reports three findings. The second preserves the result order, the first matching customer and the fallback for a missing customer.
 
 ```sh
-npx warden-backend node_modules/@codewarden/backend/examples/slow.ts
-npx warden-backend node_modules/@codewarden/backend/examples/indexed.ts
+npx loadwise perf node_modules/@loadwise/cli/examples/slow.ts
+npx loadwise perf node_modules/@loadwise/cli/examples/indexed.ts
 ```
 
 Use the same one-shot commands in CI. Exit **0** means no displayed finding met the fail threshold, **1** means at least one did and **2** means the check could not complete. Add `--json` for structured output.
 
 Source checks summarize contextual findings separately. They include certain one-off blocking calls in CLI startup or unit tests and write advisories in test sources. Use `--include-contextual` to display every candidate and its reason. JSON includes `contextualFindingCount` when any remain after explicit rule exclusions. In the default view this count is additional to the displayed findings. In the expanded view these entries appear in `findings` with a `contextualReason`.
 
-The default `--fail-on all` applies to the displayed findings. For a complete advisory report that only fails CI on a transaction-client or import contract violation, use `npx warden-backend --include-contextual --fail-on contract`. The enforced contract rule is `pg-transaction-on-pool`.
+The default `--fail-on all` applies to the displayed findings. For a complete advisory report that only fails CI on a transaction-client or import contract violation, use `npx loadwise perf --include-contextual --fail-on contract`. The enforced contract rule is `pg-transaction-on-pool`.
 
-| Input                                   | Command after `npx warden-backend`                                 | Coverage                                                                            |
+| Input                                   | Command after `npx loadwise perf`                                  | Coverage                                                                            |
 | --------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
 | JavaScript or TypeScript                | `-p tsconfig.json`, `--watch -p tsconfig.json` or `src/handler.ts` | Typed database calls, collection algorithms, connections and synchronous Node APIs. |
 | Python, Go, Java, C#, Rust              | `polyglot src`                                                     | Five narrowly scoped source patterns powered by a Rust binary.                      |
 | OTLP/JSON from any application language | `traces request.otlp.json --threshold 5`                           | Repeated SQL or NoSQL operations, duplicate lookups and Redis/Valkey commands.      |
 | Executed PostgreSQL or MongoDB plan     | `plan explain.json`                                                | Inefficient scans, disk sorts and deep pagination at individual plan stages.        |
-
-## Editor
-
-Install this package as a project dev dependency, and `@codewarden/maintainability` alongside it to include both checkers. Set up the editor task once from the project root.
-
-```sh
-npx warden-backend editor init
-```
-
-Commit the generated `.vscode/tasks.json`. Open the trusted folder in VS Code or Cursor and allow automatic tasks once; the watcher then starts on every folder open (reopen the folder if it was already open during setup). **Tasks: Manage Automatic Tasks** controls the workspace's choice. This works across supported source languages, including mixed-language projects, and needs Node.js 22+ on PATH and this package under `node_modules`.
-
-Saving a file or completing a source scan from the project terminal refreshes the running watcher. The editor uses its configured project and rules even when the terminal command uses different flags, and a running watcher picks up checker package reinstalls. After upgrading from a version that predates automatic reload, reopen the folder once. The default scan uses a root `tsconfig.json` or `jsconfig.json`, or explicit JS/TS files discovered by the watcher; append `-p` and a relative path to the task's arguments (it runs `editor watch [-p tsconfig.json]`) to use another config.
-
-Open **View > Problems** or hover over an underline. The first line shows a source-based rewrite, an illustrative example or a review action. The hover retains the original finding and, where applicable, the code comparison.
-
-The optional [editor extension](editor/README.md) adds syntax-highlighted hover examples, related-location links and fix actions in VS Code or Cursor:
-
-- Each fixable line shows **Apply fix** and **Dismiss** CodeLens buttons, the hover has the same two links, and the Quick Fix menu offers the same actions.
-- The shortcuts are the same on every OS: **Ctrl+Alt+.** applies the fix on the cursor line, **Ctrl+Alt+Shift+.** applies all fixes in the file, and **Ctrl+Alt+,** dismisses the finding on the cursor line.
-- **Backend Checkers: Apply all fixes in this file** (also on save as `source.fixAll.backendCheckers`) applies every fix in one undoable edit.
-- A finding, or a rule in one file, can be dismissed and restored with **Show dismissed findings**. `backendCheckers.severity` shows all findings at one level.
 
 ## Source checks
 
@@ -112,7 +167,7 @@ Source diagnostics include a one-based line and column. Repeat `--ignore RULE` t
 For an intentionally repeated operation, attach the review to that specific site. The comment must be on its own line immediately before the diagnostic line, name one exact rule and include a reason.
 
 ```ts
-// warden-reviewed pg-query-in-loop -- Each iteration measures a separate query-plan sample.
+// loadwise-reviewed pg-query-in-loop -- Each iteration measures a separate query-plan sample.
 await client.query(statement);
 ```
 
@@ -168,7 +223,7 @@ Drizzle also supports configuring quoted properties such as `"org-id"` and acces
 
 `drizzleScopes` names an exported table, its schema module, its scoped property and the trusted helper. For a direct executed query, `.where(eq(invoices.workspace_id, currentWorkspace()))` establishes the configured predicate in the example. Use the property exposed by the ORM. A project with `organizationId: text('org_id')` would configure `"field": "organizationId"`. Each table can use a different convention. A later `.where()` can replace the earlier condition. The rule checks the effective condition and can report `drizzle-scope-unverified` when a protected table appears in a recognized chain and scope, projection or write data needs review. Stored builders, prepared aliases, raw SQL and arbitrary helper-generated statements can fall outside this check.
 
-The import boundary for database modules (formerly the data-access-boundary rule) now lives in the sibling @codewarden/maintainability package; configure it through that package's `dataAccess` config.
+The import boundary for database modules is a maintainability rule; configure it through the `dataAccess` section of `maintainability.config.json`.
 
 These checks assume the configured helper authenticates the caller and authorizes the returned scope. Middleware, injected or previously obtained clients, raw SQL, unrecognized query shapes and database row-level policies require separate verification. A clean run only describes the covered operations.
 
@@ -200,54 +255,35 @@ The CLI reports review candidates and leaves source files untouched. The schedul
 Where a rule has a safe rewrite for the flagged code, the finding carries a concrete change. With `--json`, it is `fix = { changes: [{ file, line, before, after, create? }], note? }`. Text output prints the change as a diff. A change with `create` holds a whole new file, for example a migration that adds an index. Rules with no safe rewrite fall back to a generic example.
 
 ```sh
-npx warden-backend -p tsconfig.json --fix         # asks y/n/a/q for each fix; needs a terminal
-npx warden-backend -p tsconfig.json --fix --yes   # applies every fix without asking
+npx loadwise perf -p tsconfig.json --fix         # asks y/n/a/q for each fix; needs a terminal
+npx loadwise perf -p tsconfig.json --fix --yes   # applies every fix without asking
 ```
 
 `--fix` answers are **y**es, **n**o, **a**ll remaining and **q**uit. Without a terminal it requires `--yes`. `--fix` cannot be combined with `--watch`, or with `--json` except with `--only`, and `--yes` is valid only with `--fix`. A fix applies only where the original lines still exist, so code that changed since the scan is refused and a change already in the file is reported as already applied. A fix never overwrites an existing file. Review the diff and run your tests afterwards.
 
-## Use with AI coding agents
-
-Any agent that runs shell commands and reads an instructions file (Claude Code, Cursor, Codex, Copilot agent, Windsurf, Gemini CLI) can drive the checker.
-
-```sh
-npx warden-backend agent init               # ask mode: the agent waits for approval before changing code
-npx warden-backend agent init --mode auto   # auto mode: applies fixes without behaviour caveats, asks about the rest
-```
-
-`agent init` writes a marked block into `AGENTS.md` at the project root and adds one `@AGENTS.md` line to `CLAUDE.md`, creating either file if needed. Rerunning it replaces the block and leaves your other text alone. The block tells the agent to run `--json` after backend changes, review each finding, and report a table of what it did. The mode is one line in the block, so you can edit it later.
+## Apply fixes by id
 
 Every finding has a stable `id`, shown as `[rule-id #id]` in text output. It hashes the rule, the file and the flagged line's text, so it survives edits above the finding. JSON findings also carry `fixable` and, when available, `fix`. To apply chosen fixes without a prompt:
 
 ```sh
-npx warden-backend --fix --only a1b2c3d4e5f6,0f9e8d7c6b5a --json   # prints { applied, alreadyApplied, failed }
+npx loadwise perf --fix --only a1b2c3d4e5f6,0f9e8d7c6b5a --json   # prints { applied, alreadyApplied, failed }
 ```
 
-An unknown id, a finding with no fix, or a fix whose code changed since the scan is listed in `failed`, and the exit code is 2. An id whose change an earlier id in the same run already made, such as a shared `Set`, is listed in `alreadyApplied` and is not a failure. To dismiss a false positive, add the `// warden-reviewed <rule-id> -- <reason>` comment described under Source checks.
+An unknown id, a finding with no fix, or a fix whose code changed since the scan is listed in `failed`, and the exit code is 2. An id whose change an earlier id in the same run already made, such as a shared `Set`, is listed in `alreadyApplied` and is not a failure. To dismiss a false positive, add the `// loadwise-reviewed <rule-id> -- <reason>` comment described under Source checks.
 
 ## Check only the lines you changed
 
 ```sh
-npx warden-backend --staged                       # lines added or modified in the git index
-npx warden-backend --changed-since origin/main    # lines changed in the working tree since a ref
-npx warden-backend -p tsconfig.json --staged --json
+npx loadwise perf --staged                       # lines added or modified in the git index
+npx loadwise perf --changed-since origin/main    # lines changed in the working tree since a ref
+npx loadwise perf -p tsconfig.json --staged --json
 ```
 
-Both flags report only findings on changed lines, each with its id, the exact `--fix --only <id>` command when an automatic fix exists, and the `// warden-reviewed <rule-id> -- <reason>` comment that dismisses it. `--json` keeps the usual shape, filtered. The exit code is 1 when findings remain. With no changed JavaScript or TypeScript files the command exits 0 before TypeScript loads. Only the changed files are analyzed as roots, and their imports still resolve through the tsconfig; `schema.prisma` findings are not part of this mode. Files that are untracked count as fully changed with `--changed-since`. Analysis reads the working tree, so a file with unstaged edits can report lines that differ from the staged version. The flags cannot be combined with explicit files, `--watch` or `--fix`.
-
-### Git pre-commit hook
-
-```sh
-npx warden-backend agent init --hook block   # a commit with new findings fails
-npx warden-backend agent init --hook warn    # findings are printed, the commit goes through (also plain --hook)
-npx warden-backend agent init --hook off     # removes only this block
-```
-
-The hook runs `--staged` from the project folder, so every tool that commits through git sees the findings. It writes a marked block into the hooks folder (honouring `core.hooksPath`) or into `.husky/pre-commit` when `.husky/` exists, appends to a hook you already have, and rerunning it replaces only its own block. With lefthook it edits nothing and prints the command to add. `--no-verify` skips the hook.
+Both flags report only findings on changed lines, each with its id, the exact `--fix --only <id>` command when an automatic fix exists, and the `// loadwise-reviewed <rule-id> -- <reason>` comment that dismisses it. `--json` keeps the usual shape, filtered. The exit code is 1 when findings remain. With no changed JavaScript or TypeScript files the command exits 0 before TypeScript loads. Only the changed files are analyzed as roots, and their imports still resolve through the tsconfig; `schema.prisma` findings are not part of this mode. Files that are untracked count as fully changed with `--changed-since`. Analysis reads the working tree, so a file with unstaged edits can report lines that differ from the staged version. The flags cannot be combined with explicit files, `--watch` or `--fix`.
 
 ## Migration safety
 
-`npx warden-backend migrations` reads Prisma, Drizzle, TypeORM, Knex and Sequelize migrations (SQL or code) and flags statements that lock or rewrite a table. It reads files only. `--dialect postgres|mysql` selects the rule set, `--json` for structured output and `--ignore RULE` to skip a rule.
+`npx loadwise perf migrations` reads Prisma, Drizzle, TypeORM, Knex and Sequelize migrations (SQL or code) and flags statements that lock or rewrite a table. It reads files only. `--dialect postgres|mysql` selects the rule set, `--json` for structured output and `--ignore RULE` to skip a rule.
 
 | Rule                                                                                                  | What it flags                                                                                                                               |
 | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -265,14 +301,14 @@ Only new migrations fail the run. Older migrations are contextual: counted, list
 **CI recipe.** Enforce only what the branch adds or changes (files modified since the merge base, plus untracked files). Use a full-history checkout (`fetch-depth: 0`) so the ref resolves.
 
 ```sh
-npx warden-backend migrations --changed-since origin/main
+npx loadwise perf migrations --changed-since origin/main
 ```
 
 **Baseline workflow.** For a project with existing migrations, accept them once and enforce the rest.
 
 ```sh
-npx warden-backend migrations --write-baseline   # writes backend-perf.migrations-baseline.json
-npx warden-backend migrations                    # new migrations fail; baselined ones do not
+npx loadwise perf migrations --write-baseline   # writes backend-perf.migrations-baseline.json
+npx loadwise perf migrations                    # new migrations fail; baselined ones do not
 ```
 
 Commit the baseline. `--baseline FILE` reads or writes another path. Exit codes match the source checks: 0 passed, 1 findings in enforced migrations, 2 invalid input.
@@ -293,7 +329,7 @@ Pass `--schema snapshot.json` (written by `db --schema-snapshot`) to refine them
 
 ## Polyglot source checks
 
-`npx warden-backend polyglot src` accepts directories or individual `.py`, `.go`, `.java`, `.cs` and `.rs` files. It uses the optional ast-grep native binary and its syntax-tree patterns. Language-specific aliases and wrappers can fall outside a pattern. [ast-grep](https://ast-grep.github.io/)
+`npx loadwise perf polyglot src` accepts directories or individual `.py`, `.go`, `.java`, `.cs` and `.rs` files. It uses the optional ast-grep native binary and its syntax-tree patterns. Language-specific aliases and wrappers can fall outside a pattern. [ast-grep](https://ast-grep.github.io/)
 
 | Rule                         | Example in a loop                                                                             |
 | ---------------------------- | --------------------------------------------------------------------------------------------- |
@@ -307,7 +343,7 @@ Pass `--schema snapshot.json` (written by `db --schema-snapshot`) to refine them
 
 Supply a local **OTLP/JSON trace export** with `resourceSpans → scopeSpans → spans`. An OpenTelemetry Collector with a file export can produce this format. The CLI accepts one export object per invocation. For a collector output containing multiple JSON lines, pass the relevant export object for the request. Spans split across separate invocations count independently.
 
-Try `npx warden-backend traces node_modules/@codewarden/backend/examples/repeated-db.otlp.json`. The example reports five similar MongoDB operations under one parent. The trace rules use current and legacy database attributes and deduplicate span IDs.
+Try `npx loadwise perf traces node_modules/@loadwise/cli/examples/repeated-db.otlp.json`. The example reports five similar MongoDB operations under one parent. The trace rules use current and legacy database attributes and deduplicate span IDs.
 
 | Rule                  | Evidence and interpretation                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -320,7 +356,7 @@ Matching keys in two reads are a reason to consider **request-local** reuse when
 
 ## Executed query plans
 
-Feed the CLI a JSON file from PostgreSQL `EXPLAIN (ANALYZE, FORMAT JSON)` or MongoDB `explain("executionStats")`. For example, run `npx warden-backend plan node_modules/@codewarden/backend/examples/postgres-plan.json`. The checker reads the file locally. PostgreSQL's `ANALYZE` option executes the statement when you collect the plan. [PostgreSQL EXPLAIN](https://www.postgresql.org/docs/current/using-explain.html) · [MongoDB explain results](https://www.mongodb.com/docs/manual/reference/explain-results/)
+Feed the CLI a JSON file from PostgreSQL `EXPLAIN (ANALYZE, FORMAT JSON)` or MongoDB `explain("executionStats")`. For example, run `npx loadwise perf plan node_modules/@loadwise/cli/examples/postgres-plan.json`. The checker reads the file locally. PostgreSQL's `ANALYZE` option executes the statement when you collect the plan. [PostgreSQL EXPLAIN](https://www.postgresql.org/docs/current/using-explain.html) · [MongoDB explain results](https://www.mongodb.com/docs/manual/reference/explain-results/)
 
 | Observed work                                 | Threshold and review                                                                                                                                                                                                                                  |
 | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -332,14 +368,14 @@ Results include the stage path and observed counts. PostgreSQL and MongoDB plann
 
 ## Database inspection (optional)
 
-`npx warden-backend db` is the only command that connects to a database. Point it at a staging or read replica database, never a primary you cannot afford to touch. It uses the project's own `pg`, `mysql2` or `mongodb` package.
+`npx loadwise perf db` is the only command that connects to a database. Point it at a staging or read replica database, never a primary you cannot afford to touch. It uses the project's own `pg`, `mysql2` or `mongodb` package.
 
 The connection comes from the environment, never a flag: `DATABASE_URL` (or the variable named by `--url-env`), else `DB_HOST`, `DB_PORT`, `DB_USER` or `DB_USERNAME`, `DB_PASSWORD` and `DB_NAME` or `DB_DATABASE`. `--env-file FILE` reads those variables from a file without loading them into the process environment. `--engine postgres|mysql|mongo` is needed with `DB_HOST` variables when `DB_PORT` is not the engine default.
 
 ```sh
-npx warden-backend db --env-file .env.staging --schema-snapshot snapshot.json
-npx warden-backend db --queries queries.sql --analyze
-npx warden-backend --schema snapshot.json
+npx loadwise perf db --env-file .env.staging --schema-snapshot snapshot.json
+npx loadwise perf db --queries queries.sql --analyze
+npx loadwise perf --schema snapshot.json
 ```
 
 | Flag                                         | Effect                                                                                                          |
@@ -376,7 +412,7 @@ Use Node.js 22.13+ for the full development workflow, including the in-memory SQ
 ```sh
 npm ci
 npm test
-node bin/warden-backend.cjs -p examples
+node bin/loadwise.cjs perf -p examples
 npm run bench:patterns
 npm run bench:scan
 npm run bench:scan -- --large
@@ -401,6 +437,113 @@ Prisma documents per-item queries and batching. Node documents the event-loop ef
 Repeated lookups can benefit from a reusable membership index. Repeated growing copies can become quadratic. Biome already includes a lint rule for accumulating spread. [JavaScript Set](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Set) · [Array.reduce](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/reduce#when_to_not_use_reduce) · [Biome rule](https://biomejs.dev/linter/rules/no-accumulating-spread/javascript/)
 
 Sentry also has an N+1 detector that considers sequential spans and their total duration. This package's local trace check groups similar sibling calls, including concurrent calls. [Sentry N+1 detection](https://docs.sentry.io/product/issues/issue-details/performance-issues/n-one-queries/)
+
+# Maintainability checker
+
+`loadwise maint` finds code that would benefit from a design review and enforces the architectural decisions a team has already made. Run it on a project folder with `npx loadwise maint .`, or `npx loadwise maint . --json` for structured output.
+
+## What gets checked
+
+| Rule                                   | Evidence                                                                                                                                                                                                                                                                                                                                                                                                         |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deep-control-flow`                    | Four nested control structures. JS/TS reports the deepest site in each function. The other parsers report threshold crossings in supported conditional and loop bodies. Independent function scopes start fresh.                                                                                                                                                                                                 |
+| `high-branch-complexity`               | A JS/TS function reaches a score of 15. Start at one and count each conditional, loop, switch, catch or ternary. A flat switch contributes one decision.                                                                                                                                                                                                                                                         |
+| `duplicate-implementation`             | Substantial functions share a verified implementation. The report groups matching sites so a reviewer can compare their contracts before introducing a shared abstraction. JS/TS compares syntax while preserving identifiers, literals and operations. Python, Go, Java, C# and Rust compare exact body text of named functions selected by the parser. This deliberately misses reformatted or renamed copies. |
+| `dependency-cycle`                     | An eager internal dependency path returns to its starting module. One ordered example path is shown per strongly connected component. Deferred loads can still be checked against folder boundaries.                                                                                                                                                                                                             |
+| `folder-boundary` and `file-placement` | An import crosses a boundary declared by the team, or a filename suffix occurs outside its allowed folders. Both policies are opt-in.                                                                                                                                                                                                                                                                            |
+| `data-access-boundary`                 | A JS/TS file outside the approved paths imports a configured database driver or ORM module at runtime. Static imports, re-exports, `import x = require()`, literal dynamic imports and unshadowed `require()` calls are checked. The policy is opt-in via `dataAccess`.                                                                                                                                          |
+| `query-mutates-state`                  | A JS/TS class instance method marked `/** @maintainabilityQuery */` writes directly through `this`. Assignments, increments, deletes and destructuring writes are covered. Mutations through aliases or arbitrary helper calls require review.                                                                                                                                                                   |
+
+JS and TS source checks use the TypeScript parser. The optional ast-grep executable supplies native parsers for Python, Go, Java, C#, Rust, PHP, Ruby, Kotlin, C and C++. The nesting rule recognizes specific grammar constructs. Braceless forms and pattern-matching constructs have different coverage across languages. A `.h` file uses the C grammar. Use a C++ header extension for C++ grammar.
+
+For any language, filename placement works directly on the inventory and module graphs can be supplied by a compiler, build system or dependency extractor. Direct import extraction is provided for JS/TS. It resolves project-local modules and TypeScript paths and ignores explicitly type-only imports. Unresolved aliases, compiler-specific metadata, runtime-generated imports, and some re-exports can change the actual runtime graph. JSON includes per-language parsed-file counts and the number of files eligible for automatic dependency analysis.
+
+## Project rules
+
+Save team decisions in `maintainability.config.json` at the project root, or pass `--config path/to/policy.json`.
+
+```json
+{
+  "boundaries": [{ "from": "src/domain", "disallow": ["src/http"] }],
+  "placement": [{ "suffix": "_adapter.py", "under": ["adapters", "integrations"] }],
+  "dataAccess": { "modules": ["pg", "@prisma/client", "./src/generated"], "allowIn": ["src/data"] },
+  "exclude": ["third_party/legacy"]
+}
+```
+
+`dataAccess` restricts runtime imports of named packages, their subpaths, module aliases (`#models`, `@/db`) or project-local entry points (entries starting with `./`) to the project-relative directories or files in `allowIn`. Local entries match the resolved file, so `./store` and `./store/index.ts` are different targets. `import type`, `export type` and, outside `verbatimModuleSyntax` projects, all-inline-`type` specifier lists are erased and not reported. Both `modules` and `allowIn` are required and nonempty. Findings are contract violations and fail the default `--fail-on contract`. Resolution is syntactic per file, with no type checker, so an ambient `declare module` does not count as a local file.
+
+Paths use project-relative directory or file names. Directory boundaries match complete segments. The longest matching filename suffix wins. With no configuration, each project keeps its own folder conventions. Discovery uses tracked and nonignored untracked Git files where available and a directory walk elsewhere. Dependency and build output directories and minified files are skipped. Use explicit exclusions for checked-in vendor code.
+
+## Inline fixes
+
+Findings with a safe rewrite carry it as `fix = { changes: [{ file, line, before, after }], note? }` in `--json` output, and the text output prints it as a diff.
+
+```sh
+npx loadwise maint . --fix         # asks y/n/a/q for each fix; needs a terminal
+npx loadwise maint . --fix --yes   # applies every fix without asking
+```
+
+`--fix` is refused with `--json` or `--graph`, and `--yes` alone is refused. Without a terminal, `--fix` requires `--yes`. A fix applies only where the original lines still exist. One that an earlier fix made stale is skipped and reappears, rebuilt, on the next run. Review the diff and run your tests afterwards.
+
+| Rule                       | Rewrite                                                                                                                                                                                        |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deep-control-flow`        | Lifts the deepest branch one level with a guard clause, a merged nested `if`, or by dropping an `else` after a branch that exits.                                                              |
+| `high-branch-complexity`   | Removes decisions the score counts: merges nested `if`s, joins adjacent same-exit `if`s with `\|\|`, turns `x ? true : false` into `Boolean(x)`, and `if (!x) x = value` into `x \|\|= value`. |
+| `duplicate-implementation` | Keeps one top-level function and makes each other copy delegate to it, adding an import where needed. Applied only when every name the copies use resolves to the same binding.                |
+| `dependency-cycle`         | Turns an import whose names are used only as types into `import type`, which removes that edge from the runtime cycle.                                                                         |
+
+Other rules have no automatic rewrite.
+
+## A module graph in any language
+
+```json
+{
+  "files": ["src/domain/order.ex", "src/http/handler.ex"],
+  "edges": [
+    { "from": "src/domain/order.ex", "to": "src/http/handler.ex", "line": 3, "column": 1 }
+  ]
+}
+```
+
+```sh
+npx loadwise maint . --graph modules.json --config maintainability.config.json
+```
+
+List each project-relative module once. Edges use one-based source coordinates. Set `"kind": "deferred"` for an edge that loads lazily. Graph mode operates entirely on the supplied inventory and edges.
+
+## CI and design review
+
+Source checks count lower-priority findings separately. Use `--include-contextual` to display them with a reason. The JSON field `contextualFindingCount` is the additional count in the default view and a subset of `findings` in the expanded view. `--fail-on all` applies to displayed findings. Explicit folder and query contracts always remain visible.
+
+Context includes documented independent test oracles, before/after source snapshots with a corresponding live file, marked generated code, certain flat data mappings, and flat lists of optional literal messages selected by simple field checks. Two ordinary implementations still form a default duplicate finding even when an archive or test oracle also contains a copy. A Nest module cycle can receive context when every internal eager edge is used solely in an explicit module `forwardRef` callback. A cycle supplied through graph input has no such source evidence.
+
+The default `--fail-on contract` exits 1 for a declared folder, data-access or query contract violation. Design advisories remain visible and exit 0 on their own. Use `--fail-on all` to fail on any finding. Invalid configurations, source parse failures and missing required parser binaries exit 2.
+
+DRY candidates can represent intentional copies between isolated modules. Deep nesting can accurately reflect a protocol. Use the reported locations to decide whether extracting a function, changing a dependency or retaining the current implementation makes the next change easier. YAGNI, Tell Don't Ask, the Law of Demeter and CUPID depend on domain knowledge. Fluent call chains and unused extension points alone do not establish a violation. [CUPID and the properties of good code](https://dannorth.net/cupid-for-joyful-coding/)
+
+## Apply fixes by id
+
+Every finding in `--json` output has a stable `id` (also shown as `#id` in text output), `fixable`, and `fix` when a rewrite exists. The id hashes the rule, the file and the flagged line's text, so it survives edits above the finding.
+
+```sh
+npx loadwise maint . --fix --only <id>[,<id>...] [--json]
+```
+
+`--only` applies exactly those fixes with no prompt and no terminal. `--json` prints `{ applied, alreadyApplied, failed }`. An id whose change an earlier id in the same run already made is reported in `alreadyApplied`; an unknown id, a finding without a fix or a stale fix is in `failed` and the exit code is 2.
+
+To dismiss a false positive, put `// loadwise-reviewed <rule-id> -- <specific reason>` on the line above it. The finding becomes contextual with that reason. Only a real line comment counts, and declared contracts (`file-placement`, `folder-boundary`, `data-access-boundary`, `query-mutates-state`) cannot be dismissed this way.
+
+## Changed lines
+
+```sh
+npx loadwise maint --staged .
+npx loadwise maint --changed-since <git-ref> .
+```
+
+`--staged` reports only findings on lines added or changed in `git diff --cached`; `--changed-since <git-ref>` does the same for the working tree against that ref. A function-level finding (`high-branch-complexity`, `deep-control-flow`) is kept when a changed line falls anywhere inside its function. Text output is one block per finding (`path:line [rule-id #id] message`, then a `fix:` command when a rewrite exists and a `dismiss:` comment to paste above the line), ending with `N new finding(s) in changed lines.`. `--json` works too, with the same shape filtered. With no changed JS/TS files it prints nothing and exits 0 before TypeScript loads. In these modes `--fail-on` defaults to `all`, so the exit code is 1 whenever a finding remains.
+
+Only the changed files are analysed, while imports still resolve through the whole project. When as many files changed as the full scan's parallel threshold (600), the full scan runs instead and its findings are filtered to the changed lines, so every rule applies. Otherwise rules that need every file are limited: `duplicate-implementation` is skipped and `dependency-cycle` only sees cycles made of changed files' imports. Boundary and placement rules still run. Analysis reads working-tree files, so a file with unstaged edits can report shifted lines.
 
 ## Developing locally
 
