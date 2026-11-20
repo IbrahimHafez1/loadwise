@@ -86,3 +86,12 @@ test('applying a created file writes it once and refuses to overwrite other cont
   assert.match(applyFix(fix, access).error, /already exists with different content/);
   assert.equal(files.get('m.sql'), 'other');
 });
+
+test('a fix that creates a file prints the whole file as added lines', () => {
+  const { findingDetailLines } = require('../lib/finding-text.cjs');
+  const change = { file: 'migrations/1_add.sql', line: 1, before: '', after: 'CREATE INDEX a ON t (b);', create: true };
+  assert.deepEqual(findingDetailLines({ fix: { changes: [change] } }), [
+    '  Fix (migrations/1_add.sql, new file):',
+    '    + CREATE INDEX a ON t (b);',
+  ]);
+});
