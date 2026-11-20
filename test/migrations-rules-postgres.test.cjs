@@ -140,3 +140,129 @@ describe('Postgres locking rules', () => {
     assert.equal(findings[2].example.after, 'REINDEX TABLE CONCURRENTLY orders');
   });
 });
+
+describe('Postgres column rules', () => {
+  before(() => prepareDialect('postgres'));
+
+  test('NOT NULL column without a default on an existing table', () => {
+    const findings = checkSql(withLockTimeout('ALTER TABLE "Order" ADD COLUMN "state" text NOT NULL;'));
+    assert.deepEqual(rules(findings), ['migration-not-null-without-default']);
+    assertFindingShape(findings[0]);
+    assert.match(findings[0].message, /^`ADD COLUMN state \.\.\. NOT NULL` has no default, so it fails on `"Order"`/);
+    assert.match(findings[0].message, /Add it nullable \(or with a constant `DEFAULT`/);
+  });
+
+  test('NOT NULL with a constant default, identity, nullable columns and new tables are silent', () => {
+    const sql = withLockTimeout(
+      "ALTER TABLE orders ADD COLUMN state text NOT NULL DEFAULT 'new';\n" +
+        'ALTER TABLE orders ADD COLUMN note text;\n' +
+        'ALTER TABLE orders ADD COLUMN created timestamptz NOT NULL DEFAULT now();\n' +
+        'ALTER TABLE orders ADD COLUMN stamp timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP;\n' +
+        "ALTER TABLE orders ADD COLUMN tags text[] NOT NULL DEFAULT '{}'::text[];\n" +
+        'CREATE TABLE fresh (id int);\nALTER TABLE fresh ADD COLUMN state text NOT NULL;',
+    );
+    assert.deepEqual(rules(checkSql(sql)), []);
+  });
+
+  test('builder columns use framework wording; Sequelize client-side UUIDV4 is not a database default', () => {
+    const findings = checkCode(
+      "module.exports = { async up(queryInterface, Sequelize) { await queryInterface.sequelize.query(\"SET lock_timeout = '5s'\"); await queryInterface.addColumn('Reports', 'uid', { type: Sequelize.UUID, allowNull: false, defaultValue: Sequelize.UUIDV4 }); } };",
+      'm.cjs',
+    );
+    assert.deepEqual(rules(findings), ['migration-not-null-without-default']);
+    assert.match(findings[0].message, /Add it with `allowNull: true`/);
+  });
+
+  test('volatile defaults, serial and identity columns rewrite the table', () => {
+    const findings = checkSql(
+      withLockTimeout(
+        'ALTER TABLE "Order" ADD COLUMN "publicId" uuid NOT NULL DEFAULT gen_random_uuid();\n' +
+          'ALTER TABLE orders ADD COLUMN seq bigserial;\n' +
+          'ALTER TABLE orders ADD COLUMN n int GENERATED ALWAYS AS IDENTITY;\n' +
+          'ALTER TABLE orders ADD COLUMN r float8 DEFAULT random() * 10;\n' +
+          'ALTER TABLE orders ADD COLUMN c text DEFAULT custom_fn();',
+      ),
+    );
+    assert.deepEqual(
+      findings.map((finding) => [finding.ruleId, finding.line]),
+      [
+        ['migration-volatile-default', 2],
+        ['migration-volatile-default', 3],
+        ['migration-volatile-default', 4],
+        ['migration-volatile-default', 5],
+        ['migration-volatile-default', 6],
+      ],
+    );
+    assertFindingShape(findings[0]);
+    assert.equal(
+      findings[0].message,
+      '`DEFAULT gen_random_uuid()` is volatile, so `ADD COLUMN "publicId"` rewrites the whole `"Order"` table under an ' +
+        'ACCESS EXCLUSIVE lock, blocking reads and writes until it finishes. Add the column without a default, then ' +
+        '`ALTER TABLE "Order" ALTER COLUMN "publicId" SET DEFAULT gen_random_uuid();` so only new rows get it, and ' +
+        'backfill existing rows in batches. A constant or `now()` default would be instant.',
+    );
+  });
+
+  test('a default built from a template hole is not judged', () => {
+    const findings = checkCode(
+      'export class M implements MigrationInterface { async up(queryRunner: QueryRunner) { await queryRunner.query("SET lock_timeout = \'5s\'"); await queryRunner.query(`ALTER TABLE t ADD COLUMN a text DEFAULT ${value}`); } }',
+    );
+    assert.deepEqual(rules(findings), []);
+  });
+
+  test('column type changes rewrite unless they are known safe widenings', () => {
+    const registry = createPostgresRegistry();
+    checkSql(
+      'CREATE TABLE orders (code varchar(20), total numeric(10,2), qty int, name text, label varchar(50));',
+      'sql',
+      registry,
+    );
+    const findings = checkSql(
+      withLockTimeout(
+        'ALTER TABLE orders ALTER COLUMN code TYPE varchar(40);\n' +
+          'ALTER TABLE orders ALTER COLUMN total TYPE numeric(12,2);\n' +
+          'ALTER TABLE orders ALTER COLUMN name TYPE varchar;\n' +
+          'ALTER TABLE orders ALTER COLUMN qty TYPE bigint;\n' +
+          'ALTER TABLE orders ALTER COLUMN label TYPE varchar(10);\n' +
+          'ALTER TABLE orders ALTER COLUMN code TYPE text;',
+      ),
+      'sql',
+      registry,
+    );
+    assert.deepEqual(
+      findings.map((finding) => [finding.ruleId, finding.line]),
+      [
+        ['migration-column-type-rewrite', 5],
+        ['migration-column-type-rewrite', 6],
+      ],
+    );
+    assertFindingShape(findings[0]);
+    assert.match(findings[0].message, /^`ALTER COLUMN qty TYPE bigint` from `integer` to `bigint` rewrites `orders`/);
+  });
+
+  test('a type change with an unknown previous type is reported with the widening caveat', () => {
+    const [finding] = checkSql(withLockTimeout('ALTER TABLE orders ALTER COLUMN code TYPE varchar(64);'));
+    assert.equal(finding.ruleId, 'migration-column-type-rewrite');
+    assert.match(finding.message, /If `code` is currently a shorter `varchar`/);
+    assert.deepEqual(rules(checkSql('CREATE TABLE t (a int);\nALTER TABLE t ALTER COLUMN a TYPE bigint;')), []);
+  });
+
+  test('SET NOT NULL scans unless a validated CHECK (col IS NOT NULL) exists', () => {
+    const findings = checkSql(withLockTimeout('ALTER TABLE "Order" ALTER COLUMN "state" SET NOT NULL;'));
+    assert.deepEqual(rules(findings), ['migration-set-not-null-scan']);
+    assertFindingShape(findings[0]);
+    assert.match(findings[0].message, /CHECK \(state IS NOT NULL\) NOT VALID;`, then in a later migration/);
+
+    const registry = createPostgresRegistry();
+    checkSql('ALTER TABLE orders ADD CONSTRAINT orders_state_nn CHECK (state IS NOT NULL) NOT VALID;', 'sql', registry);
+    assert.deepEqual(
+      rules(checkSql(withLockTimeout('ALTER TABLE orders ALTER COLUMN state SET NOT NULL;'), 'sql', registry)),
+      ['migration-set-not-null-scan'],
+    );
+    checkSql('ALTER TABLE orders VALIDATE CONSTRAINT orders_state_nn;', 'sql', registry);
+    assert.deepEqual(
+      rules(checkSql(withLockTimeout('ALTER TABLE orders ALTER COLUMN state SET NOT NULL;'), 'sql', registry)),
+      [],
+    );
+  });
+});
