@@ -42,8 +42,8 @@ test('source scans never load the migrations or db modules', () => {
 test('usage lists the new commands and the schema flag', () => {
   const help = run(['--help']);
   assert.equal(help.status, 0, help.stderr);
-  assert.match(help.stdout, /warden-backend migrations /);
-  assert.match(help.stdout, /warden-backend db /);
+  assert.match(help.stdout, /loadwise perf migrations /);
+  assert.match(help.stdout, /loadwise perf db /);
   assert.match(help.stdout, /--schema snapshot\.json/);
 });
 

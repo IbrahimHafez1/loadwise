@@ -1,6 +1,6 @@
 'use strict';
 
-// Docker integration for `warden-backend db`. Skipped unless BACKEND_PERF_DOCKER=1.
+// Docker integration for `loadwise perf db`. Skipped unless BACKEND_PERF_DOCKER=1.
 // Drivers come from ./fixture-project (installed there, never in this package), as they would from a user's project.
 const assert = require('node:assert/strict');
 const { execFileSync, spawnSync } = require('node:child_process');

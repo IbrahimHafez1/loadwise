@@ -167,7 +167,7 @@ function assertNoSentinels(...texts) {
 test('--help prints usage and exits 0', async () => {
   const { code, stdout } = await runDb(['--help']);
   assert.equal(code, 0);
-  assert.match(stdout, /^Usage: warden-backend db/);
+  assert.match(stdout, /^Usage: loadwise perf db/);
 });
 
 test('a URL passed as an argument or option is refused without echoing it', async () => {
