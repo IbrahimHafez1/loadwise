@@ -232,6 +232,12 @@ const standaloneExamples = {
     code: "const keys = [];\nfor await (const batch of redis.scanStream({ match: 'session:*', count: 100 })) keys.push(...batch);",
     note: 'KEYS blocks every Redis client while it walks the whole keyspace; SCAN works in small steps.',
   },
+  'unbounded-list-query': {
+    language: 'javascript',
+    before: 'return prisma.order.findMany({ where: { userId } });',
+    code: 'return prisma.order.findMany({ where: { userId }, orderBy: { id: "desc" }, take: 50, cursor });',
+    note: 'The response grows with the table. Page the list with a stable order and cap the page size.',
+  },
   'service-query-in-loop': {
     language: 'javascript',
     before: 'for (const id of ids) await this.approve(id); // approve() runs findOne + save',

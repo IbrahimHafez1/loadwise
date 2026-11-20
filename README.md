@@ -161,6 +161,7 @@ Run in the directory containing `tsconfig.json` or `jsconfig.json`, pass `-p pat
 | `upload-without-size-limit`                                                                                          | A multer or Nest upload interceptor has no `limits.fileSize`, so one large upload can exhaust memory. A global `MulterModule.register({ limits })` set elsewhere is not visible to the check.                    |
 | `password-hash-pure-js`                                                                                              | `bcryptjs` hashes in pure JavaScript and costs tens to hundreds of milliseconds of main-thread CPU per call. Use native `bcrypt`, `@node-rs/bcrypt` or `argon2`. Reported once per file; test files are skipped. |
 | `external-call-in-transaction`                                                                                       | An external call is awaited inside a database transaction callback, holding the connection and locks until it returns. Move it before the transaction or after commit; side effects cannot roll back.            |
+| `unbounded-list-query`                                                                                               | A Prisma, TypeORM, Drizzle or pg list query has no `take` or `limit` and its rows are returned from a request handler. Unique-key lookups are skipped; service-layer queries are not followed.                   |
 
 Source diagnostics include a one-based line and column. Repeat `--ignore RULE` to omit specific JS/TS rules from a run. Keep your project's own type check in CI.
 
