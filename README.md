@@ -225,6 +225,26 @@ npx backend-perf-check --fix --only a1b2c3d4e5f6,0f9e8d7c6b5a --json   # prints 
 
 An unknown id, a finding with no fix, or a fix whose code changed since the scan is listed in `failed`, and the exit code is 2. An id whose change an earlier id in the same run already made, such as a shared `Set`, is listed in `alreadyApplied` and is not a failure. To dismiss a false positive, add the `// backend-perf-reviewed <rule-id> -- <reason>` comment described under Source checks.
 
+## Check only the lines you changed
+
+```sh
+npx backend-perf-check --staged                       # lines added or modified in the git index
+npx backend-perf-check --changed-since origin/main    # lines changed in the working tree since a ref
+npx backend-perf-check -p tsconfig.json --staged --json
+```
+
+Both flags report only findings on changed lines, each with its id, the exact `--fix --only <id>` command when an automatic fix exists, and the `// backend-perf-reviewed <rule-id> -- <reason>` comment that dismisses it. `--json` keeps the usual shape, filtered. The exit code is 1 when findings remain. With no changed JavaScript or TypeScript files the command exits 0 before TypeScript loads. Only the changed files are analyzed as roots, and their imports still resolve through the tsconfig; `schema.prisma` findings are not part of this mode. Files that are untracked count as fully changed with `--changed-since`. Analysis reads the working tree, so a file with unstaged edits can report lines that differ from the staged version. The flags cannot be combined with explicit files, `--watch` or `--fix`.
+
+### Git pre-commit hook
+
+```sh
+npx backend-perf-check agent init --hook block   # a commit with new findings fails
+npx backend-perf-check agent init --hook warn    # findings are printed, the commit goes through (also plain --hook)
+npx backend-perf-check agent init --hook off     # removes only this block
+```
+
+The hook runs `--staged` from the project folder, so every tool that commits through git sees the findings. It writes a marked block into the hooks folder (honouring `core.hooksPath`) or into `.husky/pre-commit` when `.husky/` exists, appends to a hook you already have, and rerunning it replaces only its own block. With lefthook it edits nothing and prints the command to add. `--no-verify` skips the hook.
+
 ## Migration safety
 
 `npx backend-perf-check migrations` reads Prisma, Drizzle, TypeORM, Knex and Sequelize migrations (SQL or code) and flags statements that lock or rewrite a table. It reads files only. `--dialect postgres|mysql` selects the rule set, `--json` for structured output and `--ignore RULE` to skip a rule.

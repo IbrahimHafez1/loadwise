@@ -8,6 +8,7 @@ const { knownRules } = require('../lib/rule-ids.cjs');
 
 const usage = `Usage:
   backend-perf-check [-p tsconfig.json | file.ts file.js ...] [--engine auto|native|js] [--policy policy.json] [--schema snapshot.json] [--json] [--include-contextual] [--ignore rule-id] [--fail-on all|contract] [--fix [--yes | --only id,...]]
+  backend-perf-check [-p tsconfig.json] (--staged | --changed-since git-ref) [--json] [--include-contextual] [--ignore rule-id]
   backend-perf-check --watch [-p tsconfig.json] [--policy policy.json] [--schema snapshot.json] [--include-contextual] [--ignore rule-id]
   backend-perf-check migrations [paths...] [--changed-since git-ref] [--baseline file] [--write-baseline] [--dialect postgres|mysql] [--json] [--include-contextual] [--ignore rule-id]
   backend-perf-check db [--url-env DATABASE_URL] [--env-file .env] [--engine postgres|mysql|mongo] [--schema-snapshot out.json] [--top 20] [--queries file.sql] [--analyze] [--measure --i-understand-this-locks-tables] [--runs 5] [--json] [--ignore rule-id]
@@ -16,13 +17,15 @@ const usage = `Usage:
   backend-perf-check polyglot <file-or-directory> ... [--json]
   backend-perf-check editor init
   backend-perf-check editor watch [-p tsconfig.json]
-  backend-perf-check agent init [--mode ask|auto]
+  backend-perf-check agent init [--mode ask|auto] [--hook [block|warn|off]]
 
 With no arguments, check tsconfig.json or jsconfig.json in the current directory.
 Source checks look for backend-perf.policy.json beside the selected config, or in the working directory for explicit files.
 --fix shows each available code fix and asks before applying it; --fix --yes applies every one without asking.
 --fix --only id1,id2 applies exactly those findings' fixes without asking; with --json it prints { applied, alreadyApplied, failed }.
 Every finding has a stable id (shown as #id); a failed --only id exits 2.
+--staged and --changed-since report only findings on lines changed in the git index or since a ref, with a fix and a dismiss command per finding.
+agent init --hook block|warn installs a git pre-commit hook that runs --staged (block fails the commit, warn only prints); --hook off removes it.
 agent init writes instructions for AI coding agents into AGENTS.md and imports them from CLAUDE.md.
 Source checks summarize contextual findings. --include-contextual includes their locations and review reasons.
 Source checks use the TypeScript 7 native compiler when it is installed and accepts the project, otherwise TypeScript 6.
@@ -126,22 +129,26 @@ function sourcePolicy(explicit, config, files) {
   };
 }
 
-function checkCode(args, report = printResult) {
-  const { values, positionals } = parseCommand(args, {
-    project: { type: 'string', short: 'p' },
-    policy: { type: 'string' },
-    'fail-on': { type: 'string', default: 'all' },
-    'include-contextual': { type: 'boolean', default: false },
-    json: { type: 'boolean' },
-    watch: { type: 'boolean' },
-    native: { type: 'boolean' },
-    engine: { type: 'string' },
-    ignore: { type: 'string', multiple: true, default: [] },
-    schema: { type: 'string' },
-    fix: { type: 'boolean' },
-    yes: { type: 'boolean' },
-    only: { type: 'string', multiple: true, default: [] },
-  });
+const sourceCheckOptions = {
+  project: { type: 'string', short: 'p' },
+  policy: { type: 'string' },
+  'fail-on': { type: 'string', default: 'all' },
+  'include-contextual': { type: 'boolean', default: false },
+  json: { type: 'boolean' },
+  watch: { type: 'boolean' },
+  native: { type: 'boolean' },
+  engine: { type: 'string' },
+  ignore: { type: 'string', multiple: true, default: [] },
+  schema: { type: 'string' },
+  fix: { type: 'boolean' },
+  yes: { type: 'boolean' },
+  only: { type: 'string', multiple: true, default: [] },
+  staged: { type: 'boolean' },
+  'changed-since': { type: 'string' },
+};
+
+function checkCode(args, report = printResult, scope) {
+  const { values, positionals } = parseCommand(args, sourceCheckOptions);
   if (values.help) return showHelp();
   if (values.project && positionals.length) throw new Error('Choose either a project or explicit source files.');
   if (!['all', 'contract'].includes(values['fail-on'])) throw new Error('--fail-on must be all or contract.');
@@ -186,10 +193,10 @@ function checkCode(args, report = printResult) {
   }
   // The editor watcher checks repeatedly in one process, which keeps it on the JS compiler.
   const result = analyzeSourceCode(
-    { project: values.project, files: positionals, policy },
+    { project: values.project, files: positionals, policy, onlyFiles: scope?.isChangedFile },
     report === printResult ? engine : 'js',
   );
-  if (values.project) appendPrismaSchemaFindings(result, values.project);
+  if (values.project && !scope) appendPrismaSchemaFindings(result, values.project);
   if (values.fix && report === printResult) {
     assignFindingIds(result.findings, findingRoot(values.project));
     // Named ids are explicit, so they reach contextual and ignored findings too.
@@ -199,7 +206,7 @@ function checkCode(args, report = printResult) {
     selectFindings(result, values);
     return require('../lib/fix-cli.cjs').applyFixes(result.findings, { all: values.yes });
   }
-  const code = report(result, values);
+  const code = report(result, scope ? { ...values, changedLines: scope.changedLines } : values);
   if (report === printResult) require('../lib/notify-editor.cjs').notifyEditor(values.project ?? process.cwd());
   return code;
 }
@@ -268,6 +275,9 @@ function printResult(result, values) {
   // Ids are assigned before filtering, so collision suffixes do not depend on which findings are shown.
   assignFindingIds(result.findings, findingRoot(values.project));
   selectFindings(result, values);
+  if (values.changedLines) {
+    result.findings = require('../lib/changed-lines.cjs').keepChangedFindings(result.findings, values.changedLines);
+  }
   const contractOnly = values['fail-on'] === 'contract';
   if (contractOnly) {
     result.contractFindingCount = result.findings.filter(({ ruleId }) => ruleId === 'pg-transaction-on-pool').length;
@@ -279,6 +289,7 @@ function printResult(result, values) {
     attachExample(finding);
   }
   if (values.json) console.log(JSON.stringify(result, null, values.watch ? 0 : 2));
+  else if (values.changedLines) printChangedFindings(result.findings);
   else {
     for (const finding of result.findings) {
       const { file, line, column, message, contextualReason } = finding;
@@ -296,6 +307,53 @@ function printResult(result, values) {
     }
   }
   return (contractOnly ? result.contractFindingCount : result.findings.length) ? 1 : 0;
+}
+
+// Terse form for commits: where it is, what it says, then the exact command to fix or dismiss it.
+function printChangedFindings(findings) {
+  const { findingLabel } = require('../lib/finding-text.cjs');
+  for (const finding of findings) {
+    console.log(`${finding.file}:${finding.line} ${findingLabel(finding)} ${finding.message}`);
+    if (finding.fixable) console.log(`  fix:     npx backend-perf-check --fix --only ${finding.id}`);
+    console.log(`  dismiss: // backend-perf-reviewed ${finding.ruleId} -- <reason>`);
+  }
+  const fixableIds = findings.filter((finding) => finding.fixable).map((finding) => finding.id);
+  if (fixableIds.length > 1) console.log(`Fix all: npx backend-perf-check --fix --only ${fixableIds.join(',')}`);
+  console.log(
+    findings.length
+      ? `${findings.length} new finding(s) in changed lines. Apply fixes, then \`git add\` the files and commit again.`
+      : 'No new findings in changed lines.',
+  );
+}
+
+// Reads only the two scope flags, so an empty change set can exit before TypeScript or the SQL parser loads.
+function readChangedScope(args) {
+  const { values, positionals } = parseCommand(args, sourceCheckOptions);
+  if (values.help || (!values.staged && values['changed-since'] === undefined)) return undefined;
+  if (values.staged && values['changed-since'] !== undefined) {
+    throw new Error('Choose either --staged or --changed-since.');
+  }
+  if (positionals.length || values.watch || values.fix) {
+    throw new Error('--staged and --changed-since cannot be combined with explicit files, --watch or --fix.');
+  }
+  const { collectChangedLines, fileKey } = require('../lib/changed-lines.cjs');
+  const changedLines = collectChangedLines({ staged: values.staged, ref: values['changed-since'] });
+  return { changedLines, isChangedFile: (filename) => changedLines.has(fileKey(filename)) };
+}
+
+// `--hook` alone means warn, which parseArgs cannot express for a string option.
+function normalizeHookArgument(args) {
+  return args.flatMap((arg, index) => {
+    const isBareHook = arg === '--hook' && (index === args.length - 1 || args[index + 1].startsWith('-'));
+    return isBareHook ? [arg, 'warn'] : [arg];
+  });
+}
+
+function installHook(hookMode) {
+  const { installHook: writeHook, removeHook } = require('../lib/git-hook.cjs');
+  const result = hookMode === 'off' ? removeHook(process.cwd()) : writeHook(process.cwd(), hookMode);
+  console.log(result.message);
+  return 0;
 }
 
 async function main(args) {
@@ -320,10 +378,15 @@ async function main(args) {
     return 0;
   }
   if (args[0] === 'agent') {
-    if (args[1] !== 'init') throw new Error('Usage: backend-perf-check agent init [--mode ask|auto]');
-    const { values, positionals } = parseCommand(args.slice(2), { mode: { type: 'string', default: 'ask' } });
+    if (args[1] !== 'init')
+      throw new Error('Usage: backend-perf-check agent init [--mode ask|auto] [--hook [block|warn|off]]');
+    const { values, positionals } = parseCommand(normalizeHookArgument(args.slice(2)), {
+      mode: { type: 'string', default: 'ask' },
+      hook: { type: 'string' },
+    });
     if (values.help) return showHelp();
-    if (positionals.length) throw new Error('agent init accepts only --mode ask|auto.');
+    if (positionals.length) throw new Error('agent init accepts only --mode ask|auto and --hook block|warn|off.');
+    if (values.hook !== undefined) return installHook(values.hook);
     const written = require('../lib/agent-init.cjs').initAgent(process.cwd(), values.mode);
     for (const filename of written) console.log('Wrote ' + filename);
     if (!written.length) console.log('AGENTS.md and CLAUDE.md are already up to date.');
@@ -344,8 +407,15 @@ async function main(args) {
     require('../lib/notify-editor.cjs').notifyEditor(positionals.length === 1 ? positionals[0] : process.cwd());
     return code;
   }
+  const scope = readChangedScope(args);
+  if (scope && !scope.changedLines.size) {
+    console.log(
+      args.includes('--json') ? '{"scannedFiles":0,"findings":[]}' : 'No changed JavaScript or TypeScript files.',
+    );
+    return 0;
+  }
   await loadSqlParser();
-  return checkCode(args);
+  return checkCode(args, printResult, scope);
 }
 
 // Raw SQL index rules parse synchronously during the scan, and the WASM parser can only load asynchronously.
