@@ -76,7 +76,7 @@ The site remains available with `--include-contextual`. Source comments cannot l
 
 Watch mode uses TypeScript 6.0.3. Watch a single project while editing. With `--watch --json`, each completed scan writes one JSON line. Ctrl+C stops the watcher. One-shot runs support project references.
 
-On Node.js 22.13+, `npx backend-perf-check --native -p tsconfig.json` runs the JS/TS checks using Microsoft's Go-based TypeScript 7.1 beta compiler. This opt-in backend requires the optional native package for your platform. It reports incompatible configuration as exit 2. If your project uses an option removed in TypeScript 7, such as `moduleResolution: "node10"`, rerun without `--native` to use 6.0.3. [TypeScript native compiler](https://github.com/microsoft/typescript-go)
+One-shot checks pick the compiler automatically. On Node.js 22.13+ with the optional native package for your platform, they use Microsoft's Go-based TypeScript 7.1 beta compiler. It is 2-4 times faster on large projects and reports the same findings. If TypeScript 7 rejects the project configuration, for example `baseUrl` or `moduleResolution: "node10"`, the check uses TypeScript 6.0.3 and prints one note on stderr. `--engine native` (alias `--native`) requires TypeScript 7 and reports incompatible configuration as exit 2. `--engine js` always uses TypeScript 6.0.3. [TypeScript native compiler](https://github.com/microsoft/typescript-go)
 
 Install the application's driver declarations and generate its Prisma client before checking. Result-shape checks target simple literal PostgreSQL reads and supported Prisma model delegates. Unresolved types, wrappers and deferred callbacks can hide findings. Repeated calls can be intentional, for example retries and ordered writes.
 

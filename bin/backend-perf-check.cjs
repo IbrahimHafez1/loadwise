@@ -6,7 +6,7 @@ const path = require('node:path');
 const { parseArgs } = require('node:util');
 
 const usage = `Usage:
-  backend-perf-check [-p tsconfig.json | file.ts file.js ...] [--native] [--policy policy.json] [--json] [--include-contextual] [--ignore rule-id] [--fail-on all|contract]
+  backend-perf-check [-p tsconfig.json | file.ts file.js ...] [--engine auto|native|js] [--policy policy.json] [--json] [--include-contextual] [--ignore rule-id] [--fail-on all|contract]
   backend-perf-check --watch [-p tsconfig.json] [--policy policy.json] [--include-contextual] [--ignore rule-id]
   backend-perf-check traces trace.json [--threshold 5] [--json]
   backend-perf-check plan explain.json [--json]
@@ -17,6 +17,8 @@ const usage = `Usage:
 With no arguments, check tsconfig.json or jsconfig.json in the current directory.
 Source checks look for backend-perf.policy.json beside the selected config, or in the working directory for explicit files.
 Source checks summarize contextual findings. --include-contextual includes their locations and review reasons.
+Source checks use the TypeScript 7 native compiler when it is installed and accepts the project, otherwise TypeScript 6.
+--engine native requires TypeScript 7 (--native is an alias). --engine js always uses TypeScript 6.
 --fail-on contract exits 1 only for pg-transaction-on-pool or data-access-boundary.
 The traces command reads one OTLP/JSON export. Its threshold counts sibling DB spans.
 Exit codes: 0 passed, 1 findings meeting the exit threshold, 2 invalid input or configuration.`;
@@ -163,12 +165,17 @@ function checkCode(args, report = printResult) {
     json: { type: 'boolean' },
     watch: { type: 'boolean' },
     native: { type: 'boolean' },
+    engine: { type: 'string' },
     ignore: { type: 'string', multiple: true, default: [] },
   });
   if (values.help) return showHelp();
   if (values.project && positionals.length) throw new Error('Choose either a project or explicit source files.');
   if (!['all', 'contract'].includes(values['fail-on'])) throw new Error('--fail-on must be all or contract.');
-  if (values.watch && values.native)
+  if (values.native && (values.engine ?? 'native') !== 'native')
+    throw new Error('--native is an alias for --engine native.');
+  const engine = values.native ? 'native' : (values.engine ?? 'auto');
+  if (!['auto', 'native', 'js'].includes(engine)) throw new Error('--engine must be auto, native or js.');
+  if (values.watch && engine === 'native')
     throw new Error('--native supports one-shot checks. Use --watch with the incremental JS compiler.');
   if (values.watch && positionals.length) throw new Error('--watch requires a project config.');
   for (const ruleId of values.ignore) {
@@ -191,13 +198,25 @@ function checkCode(args, report = printResult) {
     });
     return 0;
   }
-  const analyze = values.native
-    ? require('../lib/native.cjs').analyzeNative
-    : require('../lib/projects.cjs').analyzeSources;
-  const result = analyze({ project: values.project, files: positionals, policy });
+  // The editor watcher checks repeatedly in one process, which keeps it on the JS compiler.
+  const result = analyzeSourceCode(
+    { project: values.project, files: positionals, policy },
+    report === printResult ? engine : 'js',
+  );
   const code = report(result, values);
   if (report === printResult) require('../lib/notify-editor.cjs').notifyEditor(values.project ?? process.cwd());
   return code;
+}
+
+// Loading the JS engine binds the shared rules to TypeScript 6, so it is required only once native is ruled out.
+function analyzeSourceCode(options, engine) {
+  const analyzeSources = (sourceOptions) => require('../lib/projects.cjs').analyzeSources(sourceOptions);
+  if (engine === 'js') return analyzeSources(options);
+  const result = require('../lib/native.cjs').analyzeNative({ ...options, fallback: engine === 'auto' });
+  if (!result.fallback) return result;
+  const fallbackResult = analyzeSources(options);
+  if (result.reason) console.error(`TypeScript 7 cannot load this project (${result.reason}); using TypeScript 6.`);
+  return fallbackResult;
 }
 
 function selectFindings(result, values) {
