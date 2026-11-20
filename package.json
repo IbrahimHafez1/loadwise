@@ -3,10 +3,32 @@
   "version": "0.2.0",
   "description": "Review source complexity, duplicate implementations and project-defined architecture across languages.",
   "license": "UNLICENSED",
-  "engines": { "node": ">=20" },
-  "bin": { "maintainability-check": "bin/maintainability-check.cjs" },
-  "files": ["bin/", "lib/", "polyglot/"],
-  "scripts": { "test": "node --test --test-concurrency=2 test/*.test.cjs" },
-  "dependencies": { "typescript": "5.9.3" },
-  "optionalDependencies": { "@ast-grep/cli": "0.51.3" }
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "maintainability-check": "bin/maintainability-check.cjs"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "polyglot/"
+  ],
+  "scripts": {
+    "format": "prettier --cache --write .",
+    "format:check": "prettier --cache --check .",
+    "lint": "oxlint --deny-warnings .",
+    "check": "npm run format:check && npm run lint && npm test",
+    "test": "node --test --test-concurrency=2 test/*.test.cjs"
+  },
+  "dependencies": {
+    "typescript": "5.9.3"
+  },
+  "optionalDependencies": {
+    "@ast-grep/cli": "0.51.3"
+  },
+  "devDependencies": {
+    "oxlint": "1.94.0",
+    "prettier": "3.10.1"
+  }
 }
