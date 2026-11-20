@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { lint } = require('./helpers.cjs');
 const { projects, projectFiles } = require('./index-rules-fixtures.cjs');
+const { scanWithFixes } = require('./site-fix-helpers.cjs');
 
 const rule = 'find-then-create-race';
 
@@ -215,4 +216,24 @@ test('TypeORM: a saved variable the rule cannot read is quiet', () => {
 }`),
     [],
   );
+});
+
+test('TypeORM: a unique expression index added by a migration silences the rule', (context) => {
+  const entity = `${typeormHeader}export async function claim(handle: string) {
+  const found = await accounts.findOneBy({ handle });
+  if (!found) await accounts.save({ handle });
+}`;
+  const migration =
+    'export const up = `CREATE UNIQUE INDEX "ux_account_handle" ON "account" (lower("handle")) WHERE "deleted_at" IS NULL`;';
+  const findingsFor = (extra) => {
+    const { findings } = scanWithFixes(context, {
+      'package.json': '{"name":"fixture"}',
+      'node_modules/typeorm/index.d.ts': typeormStub,
+      'src/account.ts': entity,
+      ...extra,
+    });
+    return findings.filter((finding) => finding.ruleId === rule);
+  };
+  assert.equal(findingsFor({}).length, 1);
+  assert.deepEqual(findingsFor({ 'src/migrations/1700-add-handle.ts': migration }), []);
 });
