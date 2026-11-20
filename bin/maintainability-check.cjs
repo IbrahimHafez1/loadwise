@@ -74,6 +74,7 @@ async function main(args) {
       );
     }
   }
+  if (report.mode === 'source') require('../lib/notify-editor.cjs').notifyEditor(root);
   return (values['fail-on'] === 'all' ? report.findings.length : report.contractFindingCount) ? 1 : 0;
 }
 
