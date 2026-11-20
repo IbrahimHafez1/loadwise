@@ -4,10 +4,13 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { parseArgs } = require('node:util');
+const { knownRules } = require('../lib/rule-ids.cjs');
 
 const usage = `Usage:
-  backend-perf-check [-p tsconfig.json | file.ts file.js ...] [--engine auto|native|js] [--policy policy.json] [--json] [--include-contextual] [--ignore rule-id] [--fail-on all|contract]
-  backend-perf-check --watch [-p tsconfig.json] [--policy policy.json] [--include-contextual] [--ignore rule-id]
+  backend-perf-check [-p tsconfig.json | file.ts file.js ...] [--engine auto|native|js] [--policy policy.json] [--schema snapshot.json] [--json] [--include-contextual] [--ignore rule-id] [--fail-on all|contract]
+  backend-perf-check --watch [-p tsconfig.json] [--policy policy.json] [--schema snapshot.json] [--include-contextual] [--ignore rule-id]
+  backend-perf-check migrations [paths...] [--changed-since git-ref] [--baseline file] [--write-baseline] [--dialect postgres|mysql] [--json] [--include-contextual] [--ignore rule-id]
+  backend-perf-check db [--url-env DATABASE_URL] [--env-file .env] [--engine postgres|mysql|mongo] [--schema-snapshot out.json] [--top 20] [--queries file.sql] [--analyze] [--measure --i-understand-this-locks-tables] [--runs 5] [--json] [--ignore rule-id]
   backend-perf-check traces trace.json [--threshold 5] [--json]
   backend-perf-check plan explain.json [--json]
   backend-perf-check polyglot <file-or-directory> ... [--json]
@@ -20,51 +23,10 @@ Source checks summarize contextual findings. --include-contextual includes their
 Source checks use the TypeScript 7 native compiler when it is installed and accepts the project, otherwise TypeScript 6.
 --engine native requires TypeScript 7 (--native is an alias). --engine js always uses TypeScript 6.
 --fail-on contract exits 1 only for pg-transaction-on-pool or data-access-boundary.
+--schema reads a snapshot written by db --schema-snapshot; it refines index checks with table sizes and measured round trips.
+Only the db command connects to a database. Every other command works from files alone.
 The traces command reads one OTLP/JSON export. Its threshold counts sibling DB spans.
 Exit codes: 0 passed, 1 findings meeting the exit threshold, 2 invalid input or configuration.`;
-
-const sourceRules = new Set([
-  'promise-combinator-serial-await',
-  'numeric-sort-for-extreme',
-  'known-reads-awaited-serially',
-  'array-repeated-membership',
-  'array-repeated-find',
-  'reduce-copy-accumulator',
-  'pg-query-in-loop',
-  'pg-count-materialization',
-  'prisma-query-in-loop',
-  'prisma-count-materialization',
-  'node-sync-fs-in-async',
-  'rebuild-lookup-in-loop',
-  'loop-copy-accumulator',
-  'filter-for-existence',
-  'pg-first-materialization',
-  'prisma-first-materialization',
-  'pg-filter-materialization',
-  'prisma-filter-materialization',
-  'pg-top-k-materialization',
-  'prisma-top-k-materialization',
-  'pool-created-per-request-or-item',
-  'pg-unreleased-checkout',
-  'node-sync-compression-in-async',
-  'node-sync-crypto-in-async',
-  'node-sync-process-in-async',
-  'pg-transaction-on-pool',
-  'pg-dynamic-query-text',
-  'prisma-transaction-client-escape',
-  'prisma-read-modify-write',
-  'prisma-dependent-writes',
-  'drizzle-query-in-loop',
-  'drizzle-unfiltered-write',
-  'orm-query-in-loop',
-  'orm-count-materialization',
-  'typeorm-existence-materialization',
-  'typeorm-wide-projection',
-  'typeorm-transaction-in-loop',
-  'prisma-scope-unverified',
-  'drizzle-scope-unverified',
-  'data-access-boundary',
-]);
 
 function readJsonFile(filename, label) {
   const raw = fs.readFileSync(filename, 'utf8').replace(/^\uFEFF/, '');
@@ -167,6 +129,7 @@ function checkCode(args, report = printResult) {
     native: { type: 'boolean' },
     engine: { type: 'string' },
     ignore: { type: 'string', multiple: true, default: [] },
+    schema: { type: 'string' },
   });
   if (values.help) return showHelp();
   if (values.project && positionals.length) throw new Error('Choose either a project or explicit source files.');
@@ -179,8 +142,9 @@ function checkCode(args, report = printResult) {
     throw new Error('--native supports one-shot checks. Use --watch with the incremental JS compiler.');
   if (values.watch && positionals.length) throw new Error('--watch requires a project config.');
   for (const ruleId of values.ignore) {
-    if (!sourceRules.has(ruleId)) throw new Error('Unknown source rule: ' + ruleId);
+    if (!knownRules.has(ruleId)) throw new Error('Unknown source rule: ' + ruleId);
   }
+  loadSchemaSnapshot(values.schema);
   // Node reuses bytecode for the compiler across invocations. Each run still reads the current project.
   require('node:module').enableCompileCache?.();
   const policySource = sourcePolicy(values.policy, values.project, positionals);
@@ -208,6 +172,17 @@ function checkCode(args, report = printResult) {
   return code;
 }
 
+// The snapshot is optional; without it every rule still reports, using unknown-size wording.
+function loadSchemaSnapshot(filename) {
+  const { loadSnapshot, useSnapshot } = require('../lib/schema/context.cjs');
+  useSnapshot(filename === undefined ? undefined : loadSnapshot(path.resolve(filename)));
+}
+
+// Only the first sentence: the full TypeScript 7 diagnostic list repeats itself and buries the findings.
+function firstReason(reason) {
+  return reason.split(/(?<=\.)\s+/)[0].replace(/\.$/, '');
+}
+
 // Loading the JS engine binds the shared rules to TypeScript 6, so it is required only once native is ruled out.
 function analyzeSourceCode(options, engine) {
   const analyzeSources = (sourceOptions) => require('../lib/projects.cjs').analyzeSources(sourceOptions);
@@ -215,7 +190,12 @@ function analyzeSourceCode(options, engine) {
   const result = require('../lib/native.cjs').analyzeNative({ ...options, fallback: engine === 'auto' });
   if (!result.fallback) return result;
   const fallbackResult = analyzeSources(options);
-  if (result.reason) console.error(`TypeScript 7 cannot load this project (${result.reason}); using TypeScript 6.`);
+  if (result.reason) {
+    const { version } = require('typescript');
+    console.error(
+      `Note: TypeScript 7 cannot load this project (${firstReason(result.reason)}); used TypeScript ${version}.`,
+    );
+  }
   return fallbackResult;
 }
 
@@ -244,12 +224,16 @@ function printResult(result, values) {
       ({ ruleId }) => ruleId === 'pg-transaction-on-pool' || ruleId === 'data-access-boundary',
     ).length;
   }
+  const { attachExample, findingDetailLines } = require('../lib/finding-text.cjs');
+  for (const finding of result.findings) attachExample(finding);
   if (values.json) console.log(JSON.stringify(result, null, values.watch ? 0 : 2));
   else {
-    for (const { file, line, column, ruleId, message, contextualReason } of result.findings) {
+    for (const finding of result.findings) {
+      const { file, line, column, ruleId, message, contextualReason } = finding;
       console.log(
         `${file}:${line}:${column} [${ruleId}] ${message}${contextualReason ? ' (' + contextualReason + ')' : ''}`,
       );
+      for (const detail of findingDetailLines(finding)) console.log(detail);
     }
     const summary = `${result.scannedFiles} file(s) checked, ${result.findings.length} finding(s)`;
     console.log(
@@ -282,6 +266,9 @@ async function main(args) {
     );
     return 0;
   }
+  // Lazy, so source scans and the editor watcher never load migration parsing or database drivers.
+  if (args[0] === 'migrations') return require('../lib/migrations/cli.cjs').run(args.slice(1));
+  if (args[0] === 'db') return require('../lib/db/cli.cjs').run(args.slice(1));
   if (args[0] === 'traces') return checkTraces(args.slice(1));
   if (args[0] === 'plan') return checkPlan(args.slice(1));
   if (args[0] === 'polyglot') {

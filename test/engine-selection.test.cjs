@@ -15,7 +15,7 @@ try {
 } catch {
   nativeSkip = 'optional native compiler is absent';
 }
-const fallbackNote = /^TypeScript 7 cannot load this project \(.*baseUrl.*\); using TypeScript 6\.\n$/;
+const fallbackNote = /^Note: TypeScript 7 cannot load this project \(.*baseUrl.*\); used TypeScript 6\.\d+\.\d+\.\n$/;
 
 function fixture(context) {
   const files = {
