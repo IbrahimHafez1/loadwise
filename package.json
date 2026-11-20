@@ -54,7 +54,7 @@
     "format:check": "prettier --cache --check .",
     "lint": "oxlint --deny-warnings .",
     "check": "npm run format:check && npm run lint && npm test",
-    "test": "node --test --test-concurrency=2 test/performance/*.test.cjs test/maintainability/*.test.cjs editor/test/*.test.cjs",
+    "test": "node --test --test-concurrency=2 test/performance/*.test.cjs test/maintainability/*.test.cjs test/shared/*.test.cjs editor/test/*.test.cjs",
     "bench:patterns": "node bench/patterns.cjs",
     "bench:scan": "node bench/scanner.cjs",
     "bench:traces": "node bench/traces.cjs"

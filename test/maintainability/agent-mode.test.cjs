@@ -99,52 +99,6 @@ test('a loadwise-reviewed comment makes a finding contextual, but not inside a s
   assert.ok(scan().every((row) => !String(row.contextualReason).startsWith('Reviewed in source')));
 });
 
-function initAgent(root, ...args) {
-  return spawnSync(process.execPath, [bin, 'maint', 'agent', 'init', ...args], { cwd: root, encoding: 'utf8' });
-}
-
-test('agent init is idempotent, keeps other text and shares AGENTS.md with another tool block', (context) => {
-  const root = tempRoot(context);
-  const agentsFile = path.join(root, 'AGENTS.md');
-  fs.writeFileSync(
-    agentsFile,
-    '# Team rules\n\n<!-- warden-backend:agent:start -->\nperf\n<!-- warden-backend:agent:end -->\n',
-  );
-  assert.equal(initAgent(root).status, 0);
-  assert.equal(initAgent(root, '--mode', 'auto').status, 0);
-  const text = fs.readFileSync(agentsFile, 'utf8');
-  assert.ok(text.startsWith('# Team rules\n\n<!-- warden-backend:agent:start -->\nperf\n'));
-  assert.equal(text.match(/warden-maint:agent:start/g).length, 1);
-  assert.match(text, /Mode: auto/);
-  assert.match(initAgent(root, '--mode', 'auto').stdout, /already up to date/);
-  assert.equal(initAgent(root, '--mode', 'sometimes').status, 2);
-});
-
-test('agent init imports AGENTS.md from CLAUDE.md exactly once', (context) => {
-  const root = tempRoot(context);
-  const claudeFile = path.join(root, 'CLAUDE.md');
-  initAgent(root);
-  assert.equal(fs.readFileSync(claudeFile, 'utf8'), '@AGENTS.md\n');
-  fs.writeFileSync(claudeFile, '# Project notes\n');
-  initAgent(root);
-  initAgent(root);
-  assert.equal(fs.readFileSync(claudeFile, 'utf8'), '# Project notes\n\n@AGENTS.md\n');
-});
-
-test('an agent block with the old markers is replaced in place', (context) => {
-  const root = tempRoot(context);
-  const agentsFile = path.join(root, 'AGENTS.md');
-  fs.writeFileSync(
-    agentsFile,
-    '# Team rules\n\n<!-- maintainability-check:agent:start -->\nold\n<!-- maintainability-check:agent:end -->\n\nafter\n',
-  );
-  assert.equal(initAgent(root).status, 0);
-  const text = fs.readFileSync(agentsFile, 'utf8');
-  assert.ok(text.startsWith('# Team rules\n\n<!-- warden-maint:agent:start -->'));
-  assert.ok(text.endsWith('<!-- warden-maint:agent:end -->\n\nafter\n'));
-  assert.ok(!text.includes('maintainability-check'));
-});
-
 test('old warden-reviewed, maintainability-reviewed and backend-perf-reviewed comments still dismiss findings', (context) => {
   for (const alias of ['warden-reviewed', 'maintainability-reviewed', 'backend-perf-reviewed']) {
     const { root, scan } = project(context);
