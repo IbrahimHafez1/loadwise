@@ -45,8 +45,8 @@ ${body}`;
   return indexFindings(source, projectFiles('drizzle', { 'schema.ts': drizzleSchema }));
 }
 
-const typeormEntities = `import { Column, Entity, Index, PrimaryGeneratedColumn, Repository, DataSource, In, MoreThan, Raw, IsNull } from 'typeorm';
-export { Repository, DataSource, In, MoreThan, Raw, IsNull };
+const typeormEntities = `import { Column, Entity, Index, PrimaryGeneratedColumn, Repository, DataSource, In, MoreThan, Raw, IsNull, ILike } from 'typeorm';
+export { Repository, DataSource, In, MoreThan, Raw, IsNull, ILike };
 export abstract class TenantBaseEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -72,7 +72,7 @@ export class Student extends TenantBaseEntity {
 `;
 
 function typeormCase(body) {
-  const source = `import { Student, Repository, DataSource, In, MoreThan, Raw, IsNull } from '${projects.typeorm}entities';
+  const source = `import { Student, Repository, DataSource, In, MoreThan, Raw, IsNull, ILike } from '${projects.typeorm}entities';
 declare const dataSource: DataSource;
 ${body}`;
   return indexFindings(source, projectFiles('typeorm', { 'entities.ts': typeormEntities }));
