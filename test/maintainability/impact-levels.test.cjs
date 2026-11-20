@@ -6,21 +6,12 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const test = require('node:test');
-const { impactByRule } = require('../../lib/maintainability/rule-ids.cjs');
+const { impactByRule, knownRules } = require('../../lib/maintainability/rule-ids.cjs');
 const { impactLevels } = require('../../lib/shared/impact-levels.cjs');
 
 const bin = path.resolve(__dirname, '../../bin/loadwise.cjs');
-const maintainabilityRules = [
-  'dependency-cycle',
-  'duplicate-implementation',
-  'high-branch-complexity',
-  'folder-boundary',
-  'data-access-boundary',
-  'query-mutates-state',
-  'syntax-error',
-  'deep-control-flow',
-  'file-placement',
-];
+// syntax-error reports a file the parser rejected; it is not a rule a config can switch off.
+const maintainabilityRules = [...knownRules, 'syntax-error'];
 
 test('every maintainability rule id has a valid impact level and none is invented', () => {
   assert.deepEqual(Object.keys(impactByRule).sort(), [...maintainabilityRules].sort());

@@ -524,6 +524,7 @@ Every finding carries an impact level. `--min-impact <low|medium|high|critical>`
 
 | Rule                                  | Impact   |
 | ------------------------------------- | -------- |
+| `api-removed-operation`               | critical |
 | `drizzle-unfiltered-write`            | critical |
 | `migration-breaking-drop`             | critical |
 | `migration-column-type-rewrite`       | critical |
@@ -536,6 +537,10 @@ Every finding carries an impact level. `--min-impact <low|medium|high|critical>`
 | `prisma-read-modify-write`            | critical |
 | `prisma-transaction-client-escape`    | critical |
 | `typeorm-transaction-client-escape`   | critical |
+| `api-enum-value-removed`              | high     |
+| `api-removed-field`                   | high     |
+| `api-required-input`                  | high     |
+| `api-type-changed`                    | high     |
 | `db-missing-index`                    | high     |
 | `db-seq-scan-heavy-table`             | high     |
 | `db-slow-query-plan`                  | high     |
@@ -543,6 +548,8 @@ Every finding carries an impact level. `--min-impact <low|medium|high|critical>`
 | `drizzle-query-in-loop`               | high     |
 | `drizzle-scope-unverified`            | high     |
 | `external-call-in-transaction`        | high     |
+| `find-then-create-race`               | high     |
+| `floating-promise`                    | high     |
 | `http-call-without-timeout`           | high     |
 | `index-missing-filter`                | high     |
 | `index-missing-foreign-key`           | high     |
@@ -582,6 +589,7 @@ Every finding carries an impact level. `--min-impact <low|medium|high|critical>`
 | `upload-without-size-limit`           | high     |
 | `array-repeated-find`                 | medium   |
 | `array-repeated-membership`           | medium   |
+| `await-before-early-exit`             | medium   |
 | `csharp-fixed-regex-in-loop`          | medium   |
 | `duplicate-key-read`                  | medium   |
 | `go-fixed-regexp-in-loop`             | medium   |
@@ -785,10 +793,16 @@ The levels and the `--min-impact` flag work as described under the performance c
 | `duplicate-implementation` | medium |
 | `folder-boundary`          | medium |
 | `high-branch-complexity`   | medium |
+| `large-class`              | medium |
+| `large-module`             | medium |
 | `query-mutates-state`      | medium |
+| `swallowed-error`          | medium |
 | `syntax-error`             | medium |
 | `deep-control-flow`        | low    |
 | `file-placement`           | low    |
+| `long-parameter-list`      | low    |
+| `unreferenced-file`        | low    |
+| `unused-export`            | low    |
 
 ## Developing locally
 
