@@ -11,7 +11,7 @@ const body = `{
   const pieces = cleaned.split("-");
   return pieces.map(piece => piece.toLowerCase()).join("_");
 }`;
-const implementation = name => `function ${name}(input: string, fallback: string) ${body}`;
+const implementation = (name) => `function ${name}(input: string, fallback: string) ${body}`;
 
 function add(index, file, source) {
   index.add(ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true), file);
@@ -20,7 +20,12 @@ function add(index, file, source) {
 test('keeps documented independent comparison copies contextual only if one ordinary implementation remains', () => {
   const index = createDuplicateIndex();
   add(index, 'src/format.ts', implementation('format'));
-  add(index, 'tests/baseline.ts', "import {} from './harness';\n// The previous algorithm was kept here verbatim so the outputs\n// can be compared independently.\n" + implementation('reference'));
+  add(
+    index,
+    'tests/baseline.ts',
+    "import {} from './harness';\n// The previous algorithm was kept here verbatim so the outputs\n// can be compared independently.\n" +
+      implementation('reference'),
+  );
   assert.match(index.findings()[0].contextualReason, /independent comparison/);
   add(index, 'tests/helper.ts', '// Compares two values with a reference.\n' + implementation('format'));
   const finding = index.findings()[0];
@@ -49,10 +54,14 @@ test('keeps different branches, operators, literals, parameters and async contra
   const index = createDuplicateIndex();
   const source = implementation('first');
   for (const [number, variant] of [
-    source, source.replace('> 20', '>= 20'), source.replace('"-"', '"."'),
+    source,
+    source.replace('> 20', '>= 20'),
+    source.replace('"-"', '"."'),
     source.replace('input: string, fallback: string', 'fallback: string, input: string'),
-    source.replace('return fallback;', 'throw fallback;'), 'async ' + source,
-  ].entries()) add(index, `module-${number}.ts`, variant);
+    source.replace('return fallback;', 'throw fallback;'),
+    'async ' + source,
+  ].entries())
+    add(index, `module-${number}.ts`, variant);
   assert.deepEqual(index.findings(), []);
 });
 
@@ -71,10 +80,14 @@ test('skips data-only functions, wrappers, generated sources and repeated regist
 test('handles named nested copies once and does not treat separate fragments as a function', () => {
   const index = createDuplicateIndex();
   for (const name of ['outerA', 'outerB']) {
-    add(index, name + '.ts', `function ${name}(items: string[]) {
+    add(
+      index,
+      name + '.ts',
+      `function ${name}(items: string[]) {
       const normalize = (input: string, fallback: string) => ${body};
       return items.map(item => normalize(item, 'unknown'));
-    }`);
+    }`,
+    );
   }
   const findings = index.findings();
   assert.equal(findings.length, 1);

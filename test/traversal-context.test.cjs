@@ -3,12 +3,13 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const ts = require('typescript');
-const {analyzeFunctions} = require('../lib/functions.cjs');
+const { analyzeFunctions } = require('../lib/functions.cjs');
 
 function context(leaf) {
-  const text = 'function reduce(values) { for (const a of values) { for (const b of a) { for (const item of b) {' + leaf + '}}}}';
+  const text =
+    'function reduce(values) { for (const a of values) { for (const b of a) { for (const item of b) {' + leaf + '}}}}';
   const source = ts.createSourceFile('data.ts', text, ts.ScriptTarget.Latest, true);
-  const finding = analyzeFunctions(source, 'data.ts').find(row => row.ruleId === 'deep-control-flow');
+  const finding = analyzeFunctions(source, 'data.ts').find((row) => row.ruleId === 'deep-control-flow');
   assert.ok(finding);
   return finding.contextualReason;
 }
@@ -28,5 +29,6 @@ test('additional work, independent decisions and raw guards remain visible', () 
     'if (!seen[item]) { seen[item] = true; pending.push(other); }',
     'if (item > best) best = item; if (active) publish(item);',
     'if (item > best) best = item; else reset();',
-  ]) assert.equal(context(leaf), undefined, leaf);
+  ])
+    assert.equal(context(leaf), undefined, leaf);
 });
