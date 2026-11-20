@@ -2,7 +2,7 @@
 'use strict';
 
 const usage = `Usage:
-  loadwise [check] [directory] [--only perf,maint,sec | --skip perf,maint,sec] [--json | --format text|json|sarif|github] [--include-contextual] [--staged | --changed-since git-ref] [--fail-on contract|all] [--min-impact low|medium|high|critical] [--config loadwise.config.json] [--ignore rule-id] [--baseline [file] | --write-baseline [file]]
+  loadwise [check] [directory] [--only perf,maint,sec | --skip perf,maint,sec] [--json | --format text|json|sarif|github] [--include-contextual] [--staged | --changed-since git-ref] [--fail-on contract|all] [--min-impact low|medium|high|critical] [--config loadwise.config.json] [--ignore rule-id] [--workspace name|path ...] [--baseline [file] | --write-baseline [file]]
   loadwise perf [args...]
   loadwise maint [args...]
   loadwise sec [args...]
@@ -11,7 +11,7 @@ const usage = `Usage:
 check, the default command, runs every checker (perf: performance, maint: maintainability, sec: security) on one directory (default: the current folder) and prints one titled report per checker, in that order.
 --only runs just the listed checkers and --skip runs all but them; both take a comma-separated list, and they cannot be combined.
 loadwise.config.json in the directory (or --config <file>) sets the default checkers, ignored paths, per-rule levels (off, warn, error) and each checker's policy; flags beat it. --ignore drops a rule's findings and can repeat.
-The performance checker uses the directory's tsconfig.json or jsconfig.json; without one it is skipped with a note.
+The performance checker uses the directory's tsconfig.json or jsconfig.json; in a monorepo root without one it checks every workspace package's config in one report (--workspace limits both checkers to named packages or folders); with no config at all it is skipped with a note.
 --json prints one key per selected checker, { "performance": report, "maintainability": report, "security": report }; a skipped or failed checker's report is null.
 --format sarif prints SARIF 2.1.0 with one run per checker for GitHub code scanning; --format github prints workflow annotations (::warning, ::error); --json is --format json.
 --include-contextual, --staged, --changed-since, --fail-on and --min-impact apply to every selected checker; without --fail-on each keeps its own default.
