@@ -28,6 +28,34 @@ function fixture(contents, boundaries = [], compilerOptions = {}) {
   };
 }
 
+test('eager selector loads close cycles while conditional branch loads remain deferred', () => {
+  const selectors = [
+    "if (require('./b')) {}",
+    "switch (require('./b')) {}",
+    "const value = require('./b') || 'fallback';",
+    "const value = require('./b') ? 'one' : 'two';",
+    "for (const value of require('./b')) {}",
+    "while (require('./b')) break;",
+    "require('./b')?.start();",
+  ];
+  for (const source of selectors) {
+    const { findings } = fixture({ 'a.js': source, 'b.js': "require('./a');" });
+    assert.equal(findings[0]?.ruleId, 'dependency-cycle', source);
+  }
+  for (const source of [
+    "if (active) require('./b');",
+    "active && require('./b');",
+    "selected ||= require('./b');",
+    "selected &&= require('./b');",
+    "selected ??= require('./b');",
+    "logger?.log(require('./b'));",
+    "registry?.[require('./b')];",
+    "const use = () => require('./b') || null;",
+  ]) {
+    assert.equal(fixture({ 'a.js': source, 'b.js': "require('./a');" }).findings.length, 0, source);
+  }
+});
+
 test('cycles contain actual edges in deterministic witness order', () => {
   const sources = {
     'a.ts': "export * from './c';",
