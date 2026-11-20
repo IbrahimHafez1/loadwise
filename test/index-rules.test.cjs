@@ -2,19 +2,8 @@
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const {
-  projects,
-  projectFiles,
-  indexFindings,
-  nativeAvailable,
-  runOnNativeEngine,
-} = require('./index-rules-fixtures.cjs');
-
-const prismaImport = `import { PrismaClient } from '${projects.prisma}node_modules/.prisma/client';\ndeclare const prisma: PrismaClient;\n`;
-
-function prisma(body) {
-  return indexFindings(prismaImport + body, projectFiles('prisma', {}));
-}
+const { projects, projectFiles, nativeAvailable, runOnNativeEngine } = require('./index-rules-fixtures.cjs');
+const { prisma, drizzle, typeormCase, sequelize, mongoose } = require('./index-rules-cases.cjs');
 
 test('Prisma: an unindexed equality filter reports the composite fix, schema line and DDL', () => {
   const [finding, ...rest] = prisma(`export async function list(couponCode: string, total: number) {
@@ -101,42 +90,6 @@ ${query}`;
   );
 });
 
-const drizzleSchema = `import { pgTable, uuid, text, integer, boolean, timestamp, index, unique } from 'drizzle-orm/pg-core';
-import { mysqlTable, int, varchar, timestamp as mysqlTimestamp, index as mysqlIndex } from 'drizzle-orm/mysql-core';
-export { eq, and, or, gt, gte, like, ilike, inArray, desc, sql } from 'drizzle-orm';
-export type { Database } from 'drizzle-orm/pg-core';
-export const cases = pgTable(
-  'cases',
-  {
-    id: uuid().primaryKey(),
-    organizationId: uuid('organization_id').notNull(),
-    name: text().notNull(),
-    email: text('email'),
-    archived: boolean('archived'),
-    head: integer().notNull(),
-    updatedAt: timestamp('updated_at').notNull(),
-  },
-  (table) => [index('cases_organization_updated').on(table.organizationId, table.updatedAt.desc())],
-);
-export const abandonedCarts = mysqlTable(
-  'abandoned_carts',
-  {
-    id: int('id').primaryKey(),
-    userId: int('user_id'),
-    guestEmail: varchar('guest_email', { length: 255 }),
-    lastUpdated: mysqlTimestamp('last_updated').notNull(),
-  },
-  (table) => [mysqlIndex('user_last_updated_idx').on(table.userId, table.lastUpdated)],
-);
-`;
-
-function drizzle(body) {
-  const source = `import { cases, abandonedCarts, eq, and, or, gt, gte, like, ilike, inArray, desc, sql, type Database } from '${projects.drizzle}schema';
-declare const db: Database;
-${body}`;
-  return indexFindings(source, projectFiles('drizzle', { 'schema.ts': drizzleSchema }));
-}
-
 test('Drizzle: reports unindexed filters with the drizzle fix and stays quiet on covered ones', () => {
   const findings =
     drizzle(`export async function load(organizationId: string, head: number, since: Date, archived: boolean) {
@@ -173,39 +126,6 @@ test('Drizzle: reports unindexed filters with the drizzle fix and stays quiet on
     /^`abandoned_carts.lastUpdated` is filtered here but is only the 2nd column of `user_last_updated_idx`.*ALGORITHM=INPLACE LOCK=NONE;`\./,
   );
 });
-
-const typeormEntities = `import { Column, Entity, Index, PrimaryGeneratedColumn, Repository, DataSource, In, MoreThan, Raw, IsNull } from 'typeorm';
-export { Repository, DataSource, In, MoreThan, Raw, IsNull };
-export abstract class TenantBaseEntity {
-  @PrimaryGeneratedColumn('uuid')
-  id!: string;
-  @Index()
-  @Column('uuid', { name: 'school_id' })
-  schoolId!: string;
-}
-@Entity('students')
-@Index(['schoolId', 'nationalId'], { unique: true, where: '"deleted_at" IS NULL' })
-@Index(['enrolledAt'], { where: '"deleted_at" IS NULL' })
-export class Student extends TenantBaseEntity {
-  @Column({ name: 'national_id' })
-  nationalId!: string;
-  @Column({ name: 'grade_level' })
-  gradeLevel!: number;
-  @Column({ name: 'guardian_phone' })
-  guardianPhone!: string;
-  @Column({ type: 'boolean' })
-  active!: boolean;
-  @Column({ name: 'enrolled_at' })
-  enrolledAt!: Date;
-}
-`;
-
-function typeormCase(body) {
-  const source = `import { Student, Repository, DataSource, In, MoreThan, Raw, IsNull } from '${projects.typeorm}entities';
-declare const dataSource: DataSource;
-${body}`;
-  return indexFindings(source, projectFiles('typeorm', { 'entities.ts': typeormEntities }));
-}
 
 test('TypeORM: reports through Repository<T>, getRepository and EntityManager; migrations silence', () => {
   const findings = typeormCase(`export class StudentService {
@@ -248,29 +168,6 @@ test('TypeORM: reports through Repository<T>, getRepository and EntityManager; m
   // Line 15 filters `enrolledAt`, led only by a partial index whose predicate is not checked: silent.
 });
 
-const sequelizeModels = `import { Table, Column, Model, DataType, PrimaryKey, Index } from 'sequelize-typescript';
-import { Op } from 'sequelize';
-export { Op };
-@Table({
-  tableName: 'Sales',
-  indexes: [{ name: 'sale_org_date', fields: ['organizationId', 'saleDate'] }],
-})
-export class Sale extends Model<Sale> {
-  @PrimaryKey
-  @Column(DataType.UUID)
-  id!: string;
-  @Column(DataType.UUID)
-  organizationId!: string;
-  @Column(DataType.DATE)
-  saleDate!: Date;
-  @Index
-  @Column(DataType.STRING)
-  invoiceNumber!: string;
-  @Column(DataType.STRING)
-  customerPhone!: string;
-}
-`;
-
 test('Sequelize: reports @Table models and honours the indexes option and Op keys', () => {
   const source = `import { Sale, Op } from '${projects.sequelize}models';
 export async function run(phone: string, organizationId: string, from: Date) {
@@ -280,7 +177,7 @@ export async function run(phone: string, organizationId: string, from: Date) {
   await Sale.findOne({ where: { invoiceNumber: phone } });
   await Sale.findAll({ where: { [Op.or]: [{ customerPhone: phone }] } });
 }`;
-  const findings = indexFindings(source, projectFiles('sequelize', { 'models.ts': sequelizeModels }));
+  const findings = sequelize(source);
   assert.deepEqual(
     findings.map(({ line, ruleId }) => [line, ruleId]),
     [
@@ -292,20 +189,6 @@ export async function run(phone: string, organizationId: string, from: Date) {
   assert.match(findings[1].message, /only the 2nd column of `sale_org_date`/);
 });
 
-const mongooseModels = `import mongoose, { Schema } from 'mongoose';
-const invoiceSchema = new Schema(
-  {
-    tenantId: { type: Schema.Types.ObjectId, required: true, index: true },
-    customerName: String,
-    status: { type: String, enum: ['draft', 'paid'] },
-    total: Number,
-  },
-  { timestamps: true },
-);
-invoiceSchema.index({ tenantId: 1, createdAt: -1 });
-export const Invoice = mongoose.model('Invoice', invoiceSchema);
-`;
-
 test('Mongoose: reports unindexed filters with a schema.index fix and no SQL', () => {
   const source = `import { Invoice } from '${projects.mongoose}models';
 export async function run(tenantId: string, name: string) {
@@ -316,7 +199,7 @@ export async function run(tenantId: string, name: string) {
   await Invoice.find({ $or: [{ customerName: name }] });
   await Invoice.find({ 'items.sku': name });
 }`;
-  const findings = indexFindings(source, projectFiles('mongoose', { 'models.ts': mongooseModels }));
+  const findings = mongoose(source);
   assert.deepEqual(
     findings.map(({ line, ruleId }) => [line, ruleId]),
     [
