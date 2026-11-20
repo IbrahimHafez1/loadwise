@@ -213,6 +213,31 @@ describe('mysql tokenizer and recognizer', () => {
     assert.equal(statements[1].lock, 'NONE');
   });
 
+  test('IF [NOT] EXISTS is skipped before names', () => {
+    const statement = only1(
+      'ALTER TABLE IF EXISTS t DROP COLUMN IF EXISTS a, ADD COLUMN IF NOT EXISTS b INT NOT NULL, ' +
+        'MODIFY COLUMN IF EXISTS c INT, CHANGE IF EXISTS d e INT, DROP INDEX IF EXISTS i, RENAME COLUMN IF EXISTS f TO g',
+    );
+    assert.equal(statement.table, 't');
+    assert.deepEqual(
+      statement.actions.map((action) => [action.type, action.column ?? action.index, action.newName]),
+      [
+        ['drop-column', 'a', undefined],
+        ['add-column', 'b', undefined],
+        ['modify-column', 'c', undefined],
+        ['change-column', 'd', 'e'],
+        ['drop-index', 'i', undefined],
+        ['rename-column', 'f', 'g'],
+      ],
+    );
+    assert.equal(only1('CREATE INDEX IF NOT EXISTS idx ON t (a)').index, 'idx');
+    assert.equal(only1('DROP INDEX IF EXISTS idx ON t').index, 'idx');
+    assert.deepEqual(
+      only1('DROP TABLE IF EXISTS a, b').tables.map((entry) => entry.table),
+      ['a', 'b'],
+    );
+  });
+
   test('unrecognized or incomplete statements are other', () => {
     assert.equal(only1('ALTER VIEW v AS SELECT 1').kind, 'other');
     assert.equal(only1('ALTER TABLE').kind, 'other');
