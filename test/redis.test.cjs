@@ -16,6 +16,8 @@ const ioredisTypes = `
   export class Redis {
     get(key: string): Promise<string | null>;
     set(key: string, value: string): Promise<'OK'>;
+    del(...keys: string[]): Promise<number>;
+    scan(cursor: string, ...args: (string | number)[]): Promise<[string, string[]]>;
     hgetall(key: string): Promise<Record<string, string>>;
     sismember(key: string, member: string): Promise<number>;
     mget(...keys: string[]): Promise<(string | null)[]>;
@@ -43,9 +45,19 @@ const files = {
   'node_modules/local-cache/index.d.ts': unrelatedTypes,
 };
 
-function findRedisFindings(source) {
+// The native compiler's types have no isIntersection() method; only the flags are portable.
+function withoutTypeMethods(checker) {
+  return new Proxy(checker, {
+    get: (target, property) =>
+      property === 'getTypeAtLocation'
+        ? (node) => Object.create(target.getTypeAtLocation(node), { isIntersection: { value: undefined } })
+        : Reflect.get(target, property, target),
+  });
+}
+
+function findRedisFindings(source, { portableTypes = false } = {}) {
   return withProgram(source, files, (program, sourceFile) => {
-    const checker = program.getTypeChecker();
+    const checker = portableTypes ? withoutTypeMethods(program.getTypeChecker()) : program.getTypeChecker();
     const findings = [];
     const context = {
       checker,
@@ -144,4 +156,45 @@ async function sequential(redis: Redis, local: LocalRedis, ids: string[]) {
   for (const id of ids) ({ get: (key: string) => key }).get(id);
 }`);
   assert.deepEqual(findings, []);
+});
+
+test('node-redis clients are recognized without type predicate methods', () => {
+  const findings = findRedisFindings(
+    `import { createClient } from 'redis';
+const client = createClient();
+async function load(ids: string[]) {
+  for (const id of ids) await client.get(id);
+}`,
+    { portableTypes: true },
+  );
+  assert.deepEqual(
+    findings.map((finding) => finding.line),
+    [4],
+  );
+});
+
+test('a SCAN cursor drain and already batched multi-key commands are not per-item commands', () => {
+  const findings = findRedisFindings(`import { Redis } from 'ioredis';
+async function purge(redis: Redis, pattern: string, groups: string[][]) {
+  let cursor = '0';
+  do {
+    const [next, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+    cursor = next;
+    if (keys.length > 0) await redis.del(...keys);
+    await redis.get(next);
+  } while (cursor !== '0');
+  for (const keys of groups) await redis.del(...keys);
+}`);
+  assert.deepEqual(findings, []);
+});
+
+test('a plain single-key delete per item still reports', () => {
+  const findings = findRedisFindings(`import { Redis } from 'ioredis';
+async function purge(redis: Redis, ids: string[]) {
+  for (const id of ids) await redis.del(id);
+}`);
+  assert.deepEqual(
+    findings.map((finding) => finding.line),
+    [3],
+  );
 });
