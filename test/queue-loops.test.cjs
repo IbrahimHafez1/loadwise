@@ -119,3 +119,26 @@ export async function run(queue: Queue, ids: string[]) {
   assert.equal(findings.length, 3);
   for (const finding of findings) assert.equal(finding.fix, undefined);
 });
+
+test('reports a per-item call to a project wrapper around Queue.add without offering the direct rewrite', (context) => {
+  const findings = scan(
+    context,
+    `import { Queue } from 'bullmq';
+export class Jobs {
+  constructor(private queue: Queue) {}
+  private async add(id: string) { await this.queue.add('job', { id }); }
+  private async log(id: string) { return id.length; }
+  async run(ids: string[]) {
+    for (const id of ids) await this.add(id);
+    for (const id of ids) await this.log(id);
+    await this.add('once');
+  }
+}
+`,
+  );
+  assert.deepEqual(
+    findings.map((finding) => [finding.line, finding.fix]),
+    [[7, undefined]],
+  );
+  assert.match(findings[0].message, /^`this\.add\(\)` enqueues one job per item through `queue\.add`/);
+});
