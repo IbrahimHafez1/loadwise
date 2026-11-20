@@ -77,6 +77,8 @@ test('complete flags, other cookie names, non-literal options and script-readabl
   const session =
     "import session from 'express-session';\ndeclare const app: any;\napp.use(session({ secret: 'x', cookie: { httpOnly: true, secure: true, sameSite: 'lax' } }));";
   assert.equal(findingsOf(ruleId, session).length, 0);
+  const emptyRegister = 'declare const app: any;\napp.register(); app.use(); app.get();';
+  assert.equal(findingsOf(ruleId, emptyRegister).length, 0);
   const noCookieOptions =
     "import session from 'express-session';\ndeclare const app: any;\napp.use(session({ secret: 'x' }));";
   assert.equal(findingsOf(ruleId, noCookieOptions).length, 0);
