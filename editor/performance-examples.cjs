@@ -238,6 +238,19 @@ const standaloneExamples = {
     code: 'return prisma.order.findMany({ where: { userId }, orderBy: { id: "desc" }, take: 50, cursor });',
     note: 'The response grows with the table. Page the list with a stable order and cap the page size.',
   },
+  'unbounded-module-cache': {
+    language: 'javascript',
+    before:
+      'const cache = new Map();\nfunction load(id) {\n  if (!cache.has(id)) cache.set(id, read(id));\n  return cache.get(id);\n}',
+    code: 'const cache = new LRUCache({ max: 5000, ttl: 60_000 });\nfunction load(id) {\n  if (!cache.has(id)) cache.set(id, read(id));\n  return cache.get(id);\n}',
+    note: 'A cache keyed by request data with no eviction grows until the process runs out of memory. Cap it by size or age.',
+  },
+  'whole-payload-in-memory': {
+    language: 'javascript',
+    before: 'const body = Buffer.from(await response.arrayBuffer());\nawait writeFile(path, body);',
+    code: 'await pipeline(Readable.fromWeb(response.body), createWriteStream(path));',
+    note: 'Streaming keeps memory flat however large the payload is.',
+  },
   'service-query-in-loop': {
     language: 'javascript',
     before: 'for (const id of ids) await this.approve(id); // approve() runs findOne + save',
