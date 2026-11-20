@@ -6,7 +6,7 @@ const { findingsOf, defaultFindingsOf } = require('./exposure-helpers.cjs');
 
 const ruleId = 'cookie-missing-security-flags';
 const handler = (body) =>
-  `declare const token: string; declare const isProduction: boolean; declare const cookies: any;\nexport function login(req: any, res: any, reply: any, ctx: any) { ${body} }`;
+  `declare const token: string; declare const isProduction: boolean; declare const cookies: any; declare const CSRF_COOKIE: string;\nexport function login(req: any, res: any, reply: any, ctx: any) { ${body} }`;
 
 test('a session or token cookie without httpOnly, or with a false literal, is reported by default', () => {
   const bodies = [
@@ -66,6 +66,7 @@ test('complete flags, other cookie names, non-literal options and script-readabl
     "res.cookie('session', token, options);",
     "res.cookie('session', token, { ...base });",
     "res.cookie('XSRF-TOKEN', token, { secure: true, sameSite: 'lax' });",
+    "res.cookie(CSRF_COOKIE, token, { httpOnly: false, secure: true, sameSite: 'lax' });",
     "res.clearCookie('session');",
     "ctx.cookies.set('session', token, { secure: true, sameSite: 'lax' });",
     "cookies.set('session', token);",

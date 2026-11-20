@@ -174,6 +174,18 @@ test('field picks, a fields option, a schema parse and unrecognised receivers ar
   assert.equal(findingsOf(ruleId, parsed, { ...stubs.express, ...typeormStub }).length, 0);
 });
 
+test('a body parsed by a zod object schema is clean, also through a service call', () => {
+  const schema =
+    "import { z } from 'zod';\nconst Schema = z.object({ name: z.string() });\ndeclare const prisma: any;\n";
+  const direct = expressRoute('const dto = Schema.parse(req.body); await prisma.item.create({ data: dto });', schema);
+  assert.equal(findingsOf(ruleId, direct, stubs.express).length, 0);
+  const viaService = expressRoute(
+    'await save(Schema.parse(req.body));',
+    `${schema}async function save(data: object) { await prisma.item.create({ data }); }`,
+  );
+  assert.equal(findingsOf(ruleId, viaService, stubs.express).length, 0);
+});
+
 test('a tRPC input is clean', () => {
   const source = [
     'declare const t: any; declare const prisma: any; declare const schema: unknown;',
