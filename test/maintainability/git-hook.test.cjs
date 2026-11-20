@@ -7,7 +7,7 @@ const path = require('node:path');
 const test = require('node:test');
 const { spawnSync } = require('node:child_process');
 
-const bin = path.resolve(__dirname, '../../bin/warden-maint.cjs');
+const bin = path.resolve(__dirname, '../../bin/loadwise.cjs');
 const blockStart = '# >>> warden-maint pre-commit';
 const shellAvailable = spawnSync('sh', ['-c', 'exit 0']).status === 0;
 
@@ -28,7 +28,10 @@ function tempRepo(context) {
 }
 
 function initHook(root, ...hookArgs) {
-  const result = spawnSync(process.execPath, [bin, 'agent', 'init', ...hookArgs], { cwd: root, encoding: 'utf8' });
+  const result = spawnSync(process.execPath, [bin, 'maint', 'agent', 'init', ...hookArgs], {
+    cwd: root,
+    encoding: 'utf8',
+  });
   assert.equal(result.status, 0, result.stderr);
   return result.stdout;
 }

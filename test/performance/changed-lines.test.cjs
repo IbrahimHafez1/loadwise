@@ -8,7 +8,7 @@ const path = require('node:path');
 const test = require('node:test');
 const { keepChangedFindings, parseChangedLines, fileKey } = require('../../lib/performance/changed-lines.cjs');
 
-const bin = path.resolve(__dirname, '../../bin/warden-backend.cjs');
+const bin = path.resolve(__dirname, '../../bin/loadwise.cjs');
 const slowExample = fs.readFileSync(path.resolve(__dirname, '../../examples/slow.ts'), 'utf8');
 const directory = path.resolve('project');
 
@@ -82,7 +82,7 @@ function gitRepository(context) {
   fs.writeFileSync(path.join(root, 'slow.ts'), slowExample);
   git('add', '.');
   git('commit', '-q', '-m', 'base');
-  const run = (...args) => spawnSync(process.execPath, [bin, ...args], { cwd: root, encoding: 'utf8' });
+  const run = (...args) => spawnSync(process.execPath, [bin, 'perf', ...args], { cwd: root, encoding: 'utf8' });
   return { root, git, run };
 }
 

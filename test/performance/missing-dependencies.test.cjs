@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const bin = path.resolve(__dirname, '../../bin/warden-backend.cjs');
+const bin = path.resolve(__dirname, '../../bin/loadwise.cjs');
 
 // A project as cloned: sources and config only, no node_modules.
 function uninstalledProject(context, tsconfig) {
@@ -21,7 +21,7 @@ function uninstalledProject(context, tsconfig) {
 }
 
 function runIn(directory, args) {
-  return spawnSync(process.execPath, [bin, '--engine', 'js', ...args], { cwd: directory, encoding: 'utf8' });
+  return spawnSync(process.execPath, [bin, 'perf', '--engine', 'js', ...args], { cwd: directory, encoding: 'utf8' });
 }
 
 test('a missing `types` entry is noted on stderr instead of aborting the scan', (context) => {

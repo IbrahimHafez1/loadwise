@@ -10,7 +10,7 @@ const test = require('node:test');
 const { listenForEditorRefresh, notifyEditor } = require('../../lib/performance/editor-signal.cjs');
 const { signalDirectory } = require('../../lib/performance/notify-editor.cjs');
 
-const cli = path.resolve(__dirname, '../../bin/warden-backend.cjs');
+const cli = path.resolve(__dirname, '../../bin/loadwise.cjs');
 function workspace(context) {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
@@ -29,7 +29,8 @@ function workspace(context) {
 test('a successful terminal source scan refreshes all listeners, re-arms, and leaves JSON and status intact', async (context) => {
   const root = workspace(context);
   const directory = signalDirectory(root);
-  const ordinary = () => spawnSync(process.execPath, [cli, 'sample.ts', '--json'], { cwd: root, encoding: 'utf8' });
+  const ordinary = () =>
+    spawnSync(process.execPath, [cli, 'perf', 'sample.ts', '--json'], { cwd: root, encoding: 'utf8' });
   const baseline = ordinary();
   assert.equal(baseline.status, 0);
   assert.doesNotThrow(() => JSON.parse(baseline.stdout));
@@ -42,14 +43,14 @@ test('a successful terminal source scan refreshes all listeners, re-arms, and le
   const deadline = setTimeout(() => controller.abort(), 10000);
   try {
     assert.equal(fs.readdirSync(directory).length, 2);
-    const silent = spawnSync(process.execPath, [cli, 'sample.ts', '--json'], {
+    const silent = spawnSync(process.execPath, [cli, 'perf', 'sample.ts', '--json'], {
       cwd: root,
       env: { ...process.env, BACKEND_CHECKERS_EDITOR_SCAN: '1' },
       encoding: 'utf8',
     });
     assert.equal(silent.stdout, baseline.stdout);
     assert.equal(fs.readdirSync(directory).length, 2);
-    const invalid = spawnSync(process.execPath, [cli, '--fail-on', 'invalid'], { cwd: root });
+    const invalid = spawnSync(process.execPath, [cli, 'perf', '--fail-on', 'invalid'], { cwd: root });
     assert.equal(invalid.status, 2);
     assert.equal(fs.readdirSync(directory).length, 2);
     const { signal } = controller;

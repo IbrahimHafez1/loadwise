@@ -6,13 +6,13 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const cli = path.join(__dirname, '../../bin/warden-maint.cjs');
+const cli = path.join(__dirname, '../../bin/loadwise.cjs');
 
 function runInWorkspace(context, source, ...args) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'maintainability-text-'));
   context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   fs.writeFileSync(path.join(directory, 'ledger.ts'), source);
-  return spawnSync(process.execPath, [cli, ...args], { cwd: directory, encoding: 'utf8' });
+  return spawnSync(process.execPath, [cli, 'maint', ...args], { cwd: directory, encoding: 'utf8' });
 }
 
 const twoMutatingQueries = [

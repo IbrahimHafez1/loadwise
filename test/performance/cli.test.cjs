@@ -7,10 +7,10 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const ts = require('typescript');
-const bin = path.resolve(__dirname, '../../bin/warden-backend.cjs');
+const bin = path.resolve(__dirname, '../../bin/loadwise.cjs');
 const root = path.resolve(__dirname, '../..');
 function run(args, cwd = root) {
-  return spawnSync(process.execPath, [bin, ...args], { cwd, encoding: 'utf8' });
+  return spawnSync(process.execPath, [bin, 'perf', ...args], { cwd, encoding: 'utf8' });
 }
 
 function fixture(context, files) {

@@ -12,7 +12,7 @@ const groupsPerService = 100;
 const modulesPerGroup = 4;
 const sourceFileCount = serviceCount * groupsPerService * modulesPerGroup;
 const samples = 3;
-const bin = path.resolve(__dirname, '../bin/warden-backend.cjs');
+const bin = path.resolve(__dirname, '../bin/loadwise.cjs');
 
 function makeCorpus() {
   const artifacts = new Map();
@@ -105,7 +105,7 @@ function runCli(root, config, expected, native) {
   const flags = native ? ['--native'] : [];
   const result = spawnSync(
     process.execPath,
-    ['--require', path.join(root, 'peak.cjs'), bin, ...flags, '-p', config, '--json'],
+    ['--require', path.join(root, 'peak.cjs'), bin, 'perf', ...flags, '-p', config, '--json'],
     {
       cwd: root,
       encoding: 'utf8',

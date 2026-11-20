@@ -28,7 +28,7 @@
     "vscode"
   ],
   "bin": {
-    "warden-backend": "./bin/warden-backend.cjs"
+    "loadwise": "./bin/loadwise.cjs"
   },
   "files": [
     "bin/",

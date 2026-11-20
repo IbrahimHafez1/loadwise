@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const bin = path.resolve(__dirname, '../../bin/warden-backend.cjs');
+const bin = path.resolve(__dirname, '../../bin/loadwise.cjs');
 const [major, minor] = process.versions.node.split('.').map(Number);
 let nativeSkip = major < 22 || (major === 22 && minor < 13) ? 'native requires Node 22.13+' : false;
 try {
@@ -29,7 +29,7 @@ function fixture(context) {
     'bad.ts': 'export const broken = ;',
     // Reports at exit whether any native engine module was loaded into the CLI process.
     'probe.cjs':
-      "process.on('exit', () => { if (Object.keys(require.cache).some((name) => /[\\\\/]lib[\\\\/]native/.test(name))) process.stderr.write('native loaded'); });",
+      "process.on('exit', () => { if (Object.keys(require.cache).some((name) => /[\\\\/]lib[\\\\/]performance[\\\\/]native/.test(name))) process.stderr.write('native loaded'); });",
   };
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
@@ -40,7 +40,7 @@ function fixture(context) {
     fs.rmdirSync(directory);
   });
   return (args, nodeOptions = []) =>
-    spawnSync(process.execPath, [...nodeOptions, bin, ...args], { cwd: directory, encoding: 'utf8' });
+    spawnSync(process.execPath, [...nodeOptions, bin, 'perf', ...args], { cwd: directory, encoding: 'utf8' });
 }
 
 test('auto falls back to TypeScript 6 for a config TypeScript 7 rejects', { skip: nativeSkip }, (context) => {

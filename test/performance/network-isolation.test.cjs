@@ -7,7 +7,7 @@ const test = require('node:test');
 const { spawn, spawnSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '../..');
-const bin = path.join(root, 'bin/warden-backend.cjs');
+const bin = path.join(root, 'bin/loadwise.cjs');
 const guard = path.join(__dirname, 'network-guard.cjs');
 const sentinel = 'postgres://sentinel-user:sentinel-pass@sentinel-host.invalid:5432/sentinel';
 const environment = { ...process.env, DATABASE_URL: sentinel, BACKEND_CHECKERS_EDITOR_SCAN: '1' };
@@ -44,14 +44,14 @@ for (const args of [
   ['migrations', 'examples'],
 ]) {
   test('no connection or URL read: ' + args.join(' '), () => {
-    const result = runGuarded([bin, ...args]);
+    const result = runGuarded([bin, 'perf', ...args]);
     assert.notEqual(result.status, null, 'command timed out');
     assertIsolated(result, args.join(' '));
   });
 }
 
 test('no connection or URL read: --watch', async () => {
-  const child = spawn(process.execPath, ['--require', guard, bin, '--watch', '-p', 'examples/tsconfig.json'], {
+  const child = spawn(process.execPath, ['--require', guard, bin, 'perf', '--watch', '-p', 'examples/tsconfig.json'], {
     cwd: root,
     env: environment,
   });

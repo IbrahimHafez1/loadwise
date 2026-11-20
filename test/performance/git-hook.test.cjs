@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const bin = path.resolve(__dirname, '../../bin/warden-backend.cjs');
+const bin = path.resolve(__dirname, '../../bin/loadwise.cjs');
 const blockMarker = '# >>> warden-backend pre-commit';
 const hasSh = spawnSync('sh', ['-c', 'exit 0']).status === 0;
 
@@ -19,7 +19,7 @@ function repository(context) {
   spawnSync('git', ['init', '-q'], { cwd: root });
   fs.writeFileSync(path.join(root, 'package.json'), '{}');
   const installHook = (...args) =>
-    spawnSync(process.execPath, [bin, 'agent', 'init', ...args], { cwd: root, encoding: 'utf8' });
+    spawnSync(process.execPath, [bin, 'perf', 'agent', 'init', ...args], { cwd: root, encoding: 'utf8' });
   const hookFile = path.join(root, '.git', 'hooks', 'pre-commit');
   return { root, installHook, hookFile };
 }
@@ -88,7 +88,7 @@ test('a project below the git root is entered by the hook', (context) => {
   const projectDirectory = path.join(root, 'apps', 'api');
   fs.mkdirSync(projectDirectory, { recursive: true });
   fs.writeFileSync(path.join(projectDirectory, 'package.json'), '{}');
-  const result = spawnSync(process.execPath, [bin, 'agent', 'init', '--hook', 'block'], {
+  const result = spawnSync(process.execPath, [bin, 'perf', 'agent', 'init', '--hook', 'block'], {
     cwd: projectDirectory,
     encoding: 'utf8',
   });

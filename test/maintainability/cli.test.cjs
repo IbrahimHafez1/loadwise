@@ -6,7 +6,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const cli = path.join(__dirname, '../../bin/warden-maint.cjs');
+const cli = path.join(__dirname, '../../bin/loadwise.cjs');
 
 function workspace(context, files) {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
@@ -17,7 +17,8 @@ function workspace(context, files) {
     for (const file of Object.keys(files)) fs.unlinkSync(path.join(directory, file));
     fs.rmdirSync(directory);
   });
-  return (...args) => spawnSync(process.execPath, [cli, ...args, '--json'], { cwd: directory, encoding: 'utf8' });
+  return (...args) =>
+    spawnSync(process.execPath, [cli, 'maint', ...args, '--json'], { cwd: directory, encoding: 'utf8' });
 }
 
 test('generated-source advisories stay retrievable and contract thresholds are independent', (context) => {

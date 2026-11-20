@@ -10,7 +10,7 @@ const { createInterface } = require('node:readline');
 const { PassThrough } = require('node:stream');
 const test = require('node:test');
 
-const bin = path.resolve(__dirname, '../../bin/warden-backend.cjs');
+const bin = path.resolve(__dirname, '../../bin/loadwise.cjs');
 const policyName = 'backend-perf.policy.json';
 const scopeRule = 'prisma-scope-unverified';
 const requirement = { field: 'tenantId', from: '@app/auth', export: 'requireAuthorizedTenantId' };
@@ -67,7 +67,7 @@ function project(context) {
 }
 
 function run(root, args) {
-  return spawnSync(process.execPath, [bin, ...args, '--json'], { cwd: root, encoding: 'utf8' });
+  return spawnSync(process.execPath, [bin, 'perf', ...args, '--json'], { cwd: root, encoding: 'utf8' });
 }
 
 function checked(root, args, expectedExit) {
@@ -137,7 +137,7 @@ async function exerciseWatch(context, explicit) {
   const { root, write } = project(context);
   const filename = explicit ? 'scope.json' : 'app/' + policyName;
   if (explicit) write(filename, policyFor('Ledger'));
-  const args = [bin, '--watch', '--json', '-p', 'app'];
+  const args = [bin, 'perf', '--watch', '--json', '-p', 'app'];
   if (explicit) args.push('--policy', filename);
   const child = spawn(process.execPath, args, { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
   const closed = once(child, 'close');

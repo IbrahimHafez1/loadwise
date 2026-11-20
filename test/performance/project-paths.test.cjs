@@ -87,10 +87,10 @@ test('linked entry paths resolve their imports independently', (context) => {
   } catch {
     return;
   }
-  const bin = path.join(__dirname, '../../bin/warden-backend.cjs');
+  const bin = path.join(__dirname, '../../bin/loadwise.cjs');
   const checked = spawnSync(
     process.execPath,
-    [bin, '--native', '--json', ...links.map((link) => path.join(link, 'check.ts'))],
+    [bin, 'perf', '--native', '--json', ...links.map((link) => path.join(link, 'check.ts'))],
     { encoding: 'utf8' },
   );
   assert.equal(checked.status, 1, checked.stderr);

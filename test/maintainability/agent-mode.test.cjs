@@ -8,7 +8,7 @@ const test = require('node:test');
 const { spawnSync } = require('node:child_process');
 const { assignFindingIds } = require('../../lib/maintainability/finding-ids.cjs');
 const { applyReviewDirectives } = require('../../lib/maintainability/review-directive.cjs');
-const bin = path.resolve(__dirname, '../../bin/warden-maint.cjs');
+const bin = path.resolve(__dirname, '../../bin/loadwise.cjs');
 // Deep control flow with an else after a return, which has a fix.
 const source = [
   'function label(values, mode) {',
@@ -41,7 +41,7 @@ function tempRoot(context) {
 function project(context, text = source) {
   const root = tempRoot(context);
   fs.writeFileSync(path.join(root, 'pick.js'), text);
-  const run = (...args) => spawnSync(process.execPath, [bin, ...args], { cwd: root, encoding: 'utf8' });
+  const run = (...args) => spawnSync(process.execPath, [bin, 'maint', ...args], { cwd: root, encoding: 'utf8' });
   const scan = (...extra) => JSON.parse(run('.', '--json', '--include-contextual', ...extra).stdout).findings;
   return { root, run, scan };
 }
@@ -100,7 +100,7 @@ test('a warden-reviewed comment makes a finding contextual, but not inside a str
 });
 
 function initAgent(root, ...args) {
-  return spawnSync(process.execPath, [bin, 'agent', 'init', ...args], { cwd: root, encoding: 'utf8' });
+  return spawnSync(process.execPath, [bin, 'maint', 'agent', 'init', ...args], { cwd: root, encoding: 'utf8' });
 }
 
 test('agent init is idempotent, keeps other text and shares AGENTS.md with another tool block', (context) => {

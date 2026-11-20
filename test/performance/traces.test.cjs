@@ -620,7 +620,7 @@ test('traces text output prints the Impact line under a finding', () => {
   writeFileSync(file, JSON.stringify({ resourceSpans: [resource(spans)] }));
   const result = spawnSync(
     process.execPath,
-    [join(__dirname, '..', '..', 'bin', 'warden-backend.cjs'), 'traces', file],
+    [join(__dirname, '..', '..', 'bin', 'loadwise.cjs'), 'perf', 'traces', file],
     {
       encoding: 'utf8',
     },

@@ -9,10 +9,10 @@ const { test } = require('node:test');
 const { knownRules } = require('../../lib/performance/rule-ids.cjs');
 
 const root = path.join(__dirname, '..', '..');
-const binEntry = path.join(root, 'bin', 'warden-backend.cjs');
+const binEntry = path.join(root, 'bin', 'loadwise.cjs');
 const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8').replaceAll('\r\n', '\n');
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-const helpText = spawnSync(process.execPath, [binEntry, '--help'], { encoding: 'utf8' }).stdout;
+const helpText = spawnSync(process.execPath, [binEntry, 'perf', '--help'], { encoding: 'utf8' }).stdout;
 
 // Package names are hyphenated too but are not rules.
 const siblingPackages = new Set(['warden-backend', 'warden-maint', 'warden-reviewed']);
@@ -98,6 +98,6 @@ test('package.json files covers every runtime require reachable from bin/', () =
 
 test('README sample output for examples/slow.ts matches the CLI', () => {
   const sample = readme.split('```text\n')[1].split('\n')[0];
-  const run = spawnSync(process.execPath, [binEntry, 'examples/slow.ts'], { cwd: root, encoding: 'utf8' });
+  const run = spawnSync(process.execPath, [binEntry, 'perf', 'examples/slow.ts'], { cwd: root, encoding: 'utf8' });
   assert.ok(run.stdout.includes(sample), `CLI output no longer contains the README sample line:\n${sample}`);
 });

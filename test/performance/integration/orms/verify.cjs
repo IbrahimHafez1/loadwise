@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const packageRoot = path.resolve(__dirname, '../../../..');
-const checker = path.join(packageRoot, 'bin', 'warden-backend.cjs');
+const checker = path.join(packageRoot, 'bin', 'loadwise.cjs');
 const compiler = require.resolve('typescript/bin/tsc', { paths: [packageRoot] });
 const ruleNames = { loop: 'orm-query-in-loop', count: 'orm-count-materialization' };
 
@@ -30,7 +30,7 @@ assert.ok(expected.length > 0);
 run(compiler, ['-p', 'tsconfig.json'], 0);
 
 function verify(flags) {
-  const result = JSON.parse(run(checker, ['-p', 'tsconfig.json', '--json', ...flags], 1));
+  const result = JSON.parse(run(checker, ['perf', '-p', 'tsconfig.json', '--json', ...flags], 1));
   assert.equal(result.scannedFiles, 1);
   // Comparing the complete set catches reports on clean controls as well as missed detections.
   assert.deepEqual(

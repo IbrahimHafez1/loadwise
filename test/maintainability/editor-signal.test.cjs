@@ -9,7 +9,7 @@ const test = require('node:test');
 const { signalDirectory } = require('../../lib/maintainability/notify-editor.cjs');
 
 test('successful source scans consume only active editor registrations, with identical CLI output', () => {
-  const cli = path.resolve(__dirname, '../../bin/warden-maint.cjs');
+  const cli = path.resolve(__dirname, '../../bin/loadwise.cjs');
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
   const root = fs.mkdtempSync(path.join(base, 'maint-editor-refresh-'));
@@ -17,7 +17,8 @@ test('successful source scans consume only active editor registrations, with ide
   const registration = path.join(directory, 'watch-' + '1'.repeat(32));
   const source = path.join(root, 'sample.ts');
   fs.writeFileSync(source, 'export const ok = true;');
-  const scan = (env = process.env) => spawnSync(process.execPath, [cli, root, '--json'], { encoding: 'utf8', env });
+  const scan = (env = process.env) =>
+    spawnSync(process.execPath, [cli, 'maint', root, '--json'], { encoding: 'utf8', env });
   try {
     const baseline = scan();
     assert.equal(baseline.status, 0);

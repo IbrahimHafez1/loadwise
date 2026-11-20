@@ -6,7 +6,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const cli = path.join(__dirname, '../../bin/warden-maint.cjs');
+const cli = path.join(__dirname, '../../bin/loadwise.cjs');
 
 const wideOperandCount = 5000;
 // Within the duplicate detector's 8192-node body cap, so the long chain is still canonicalized.
@@ -62,7 +62,9 @@ test('deeply chained expressions scan without exhausting the call stack', (conte
     'sums.ts': [longSum('first'), longSum('second')].join('\n'),
     'deep.ts': deepControlFlow,
   });
-  const result = spawnSync(process.execPath, [cli, directory, '--json', '--include-contextual'], { encoding: 'utf8' });
+  const result = spawnSync(process.execPath, [cli, 'maint', directory, '--json', '--include-contextual'], {
+    encoding: 'utf8',
+  });
   assert.equal(result.status, 0, result.stderr);
   const report = JSON.parse(result.stdout);
   assert.equal(report.scannedFiles, 4);

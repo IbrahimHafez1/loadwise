@@ -12,10 +12,10 @@ const { examples } = require('../../lib/maintainability/examples.cjs');
 const knownRules = new Set(Object.keys(examples));
 
 const root = path.join(__dirname, '..', '..');
-const binEntry = path.join(root, 'bin', 'warden-maint.cjs');
+const binEntry = path.join(root, 'bin', 'loadwise.cjs');
 const readme = fs.readFileSync(path.join(root, 'maintainability-import', 'README.md'), 'utf8').replaceAll('\r\n', '\n');
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-const helpText = spawnSync(process.execPath, [binEntry, '--help'], { encoding: 'utf8' }).stdout;
+const helpText = spawnSync(process.execPath, [binEntry, 'maint', '--help'], { encoding: 'utf8' }).stdout;
 
 // Package names are hyphenated too but are not rules.
 const siblingPackages = new Set(['warden-backend', 'warden-maint']);

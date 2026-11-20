@@ -7,7 +7,7 @@ const path = require('node:path');
 const test = require('node:test');
 const { spawnSync } = require('node:child_process');
 
-const bin = path.resolve(__dirname, '../../bin/warden-backend.cjs');
+const bin = path.resolve(__dirname, '../../bin/loadwise.cjs');
 const example = fs.readFileSync(path.resolve(__dirname, '../../examples/slow.ts'), 'utf8');
 
 function project(context) {
@@ -16,7 +16,7 @@ function project(context) {
   const root = fs.mkdtempSync(path.join(base, 'backend-perf-fix-cli-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.writeFileSync(path.join(root, 'slow.ts'), example);
-  return (args) => spawnSync(process.execPath, [bin, ...args], { cwd: root, encoding: 'utf8' });
+  return (args) => spawnSync(process.execPath, [bin, 'perf', ...args], { cwd: root, encoding: 'utf8' });
 }
 
 test('--fix --yes rewrites every fixable finding and the rescan comes back clean', (context) => {

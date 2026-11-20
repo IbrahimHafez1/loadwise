@@ -8,7 +8,7 @@ const test = require('node:test');
 const { spawnSync } = require('node:child_process');
 const { parseChangedRanges, filterToChangedLines } = require('../../lib/maintainability/changed-lines.cjs');
 
-const bin = path.resolve(__dirname, '../../bin/warden-maint.cjs');
+const bin = path.resolve(__dirname, '../../bin/loadwise.cjs');
 const deepFunction = [
   'function label(values, mode) {',
   '  if (!values.length) {',
@@ -53,7 +53,7 @@ function tempRepo(context) {
 }
 
 function run(root, ...args) {
-  return spawnSync(process.execPath, [bin, ...args], { cwd: root, encoding: 'utf8' });
+  return spawnSync(process.execPath, [bin, 'maint', ...args], { cwd: root, encoding: 'utf8' });
 }
 
 test('parses added files, modified ranges and renames, and ignores deletions', () => {
@@ -144,7 +144,7 @@ test('the fast path returns before TypeScript loads', (context) => {
       "Module._load = function (request, ...rest) { if (request === 'typescript') throw new Error('typescript loaded'); return load.call(this, request, ...rest); };",
     ].join('\n'),
   );
-  const result = spawnSync(process.execPath, ['--require', guard, bin, '--staged', '.'], {
+  const result = spawnSync(process.execPath, ['--require', guard, bin, 'maint', '--staged', '.'], {
     cwd: root,
     encoding: 'utf8',
   });

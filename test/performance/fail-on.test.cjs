@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const bin = path.resolve(__dirname, '../../bin/warden-backend.cjs');
+const bin = path.resolve(__dirname, '../../bin/loadwise.cjs');
 
 test('source fail-on thresholds apply after ignores while JSON keeps all remaining findings', (context) => {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
@@ -34,7 +34,7 @@ test('source fail-on thresholds apply after ignores while JSON keeps all remaini
     for (const target of [pgDirectory, path.dirname(pgDirectory), directory]) fs.rmdirSync(target);
   });
   function run(args) {
-    return spawnSync(process.execPath, [bin, ...args], { cwd: directory, encoding: 'utf8' });
+    return spawnSync(process.execPath, [bin, 'perf', ...args], { cwd: directory, encoding: 'utf8' });
   }
   const sourceArgs = ['service.ts', '--json'];
   const transaction = 'pg-transaction-on-pool',

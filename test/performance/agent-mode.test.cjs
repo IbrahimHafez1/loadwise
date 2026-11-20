@@ -8,7 +8,7 @@ const test = require('node:test');
 const { spawnSync } = require('node:child_process');
 const { assignFindingIds } = require('../../lib/performance/finding-ids.cjs');
 
-const bin = path.resolve(__dirname, '../../bin/warden-backend.cjs');
+const bin = path.resolve(__dirname, '../../bin/loadwise.cjs');
 const example = fs.readFileSync(path.resolve(__dirname, '../../examples/slow.ts'), 'utf8');
 
 function tempRoot(context) {
@@ -24,7 +24,7 @@ function tempRoot(context) {
 function project(context) {
   const root = tempRoot(context);
   fs.writeFileSync(path.join(root, 'slow.ts'), example);
-  const run = (args) => spawnSync(process.execPath, [bin, ...args], { cwd: root, encoding: 'utf8' });
+  const run = (args) => spawnSync(process.execPath, [bin, 'perf', ...args], { cwd: root, encoding: 'utf8' });
   const scan = () => JSON.parse(run(['slow.ts', '--json', '--engine', 'js']).stdout).findings;
   return { root, run, scan };
 }
@@ -99,7 +99,7 @@ test('--fix --only treats a change made by an earlier id in the run as success',
     ].join('\n'),
   );
   const run = (args) =>
-    spawnSync(process.execPath, [bin, 'shared.ts', '--engine', 'js', ...args], { cwd: root, encoding: 'utf8' });
+    spawnSync(process.execPath, [bin, 'perf', 'shared.ts', '--engine', 'js', ...args], { cwd: root, encoding: 'utf8' });
   const ids = JSON.parse(run(['--json']).stdout).findings.map(({ id }) => id);
   assert.deepEqual(ids, [ids[0], ids[0] + '-2']);
   const result = run(['--fix', '--only', ids.join(','), '--json']);
@@ -117,7 +117,7 @@ test('migration findings carry ids in JSON and text', (context) => {
   fs.mkdirSync(path.dirname(migration));
   fs.writeFileSync(migration, "SET lock_timeout = '5s';\nALTER TABLE orders DROP COLUMN legacy;\n");
   const run = (args) =>
-    spawnSync(process.execPath, [bin, 'migrations', migration, '--dialect', 'postgres', ...args], {
+    spawnSync(process.execPath, [bin, 'perf', 'migrations', migration, '--dialect', 'postgres', ...args], {
       cwd: root,
       encoding: 'utf8',
     });
@@ -127,7 +127,7 @@ test('migration findings carry ids in JSON and text', (context) => {
 });
 
 function initAgent(root, ...args) {
-  return spawnSync(process.execPath, [bin, 'agent', 'init', ...args], { cwd: root, encoding: 'utf8' });
+  return spawnSync(process.execPath, [bin, 'perf', 'agent', 'init', ...args], { cwd: root, encoding: 'utf8' });
 }
 
 test('agent init replaces its own block and keeps the other text', (context) => {

@@ -38,7 +38,7 @@ test('overlapping projects retain the visible advisory in either reference order
   for (const folder of directories) fs.mkdirSync(path.join(root, folder));
   for (const [name, source] of Object.entries(files)) fs.writeFileSync(path.join(root, name), source);
 
-  const bin = path.resolve(__dirname, '../../bin/warden-backend.cjs');
+  const bin = path.resolve(__dirname, '../../bin/loadwise.cjs');
   for (const native of [false, true]) {
     await context.test(native ? 'native compiler' : 'TypeScript compiler', (subtest) => {
       if (native) {
@@ -51,7 +51,7 @@ test('overlapping projects retain the visible advisory in either reference order
         }
       }
       function scan(config, ...options) {
-        const args = [bin, ...(native ? ['--native'] : []), '-p', config, '--json', ...options];
+        const args = [bin, 'perf', ...(native ? ['--native'] : []), '-p', config, '--json', ...options];
         const result = spawnSync(process.execPath, args, { cwd: root, encoding: 'utf8' });
         assert.equal(result.status, 1, result.stderr || result.stdout);
         return JSON.parse(result.stdout);

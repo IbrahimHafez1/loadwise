@@ -8,7 +8,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const root = path.resolve(__dirname, '../..');
-const bin = path.join(root, 'bin/warden-backend.cjs');
+const bin = path.join(root, 'bin/loadwise.cjs');
 const [major, minor] = process.versions.node.split('.').map(Number);
 let skip = major < 22 || (major === 22 && minor < 13) ? 'native requires Node 22.13+' : false;
 try {
@@ -132,7 +132,8 @@ test('native CLI covers clean and flagged files, overlapping configs, and invali
     fs.rmdirSync(directory);
   });
   for (const [name, contents] of Object.entries(inputs)) fs.writeFileSync(path.join(directory, name), contents);
-  const run = (args) => spawnSync(process.execPath, [bin, ...args, '--json'], { cwd: directory, encoding: 'utf8' });
+  const run = (args) =>
+    spawnSync(process.execPath, [bin, 'perf', ...args, '--json'], { cwd: directory, encoding: 'utf8' });
   const native = run(['--native', '-p', '.']);
   assert.equal(native.status, 1, native.stderr);
   assert.deepEqual(JSON.parse(native.stdout), JSON.parse(run(['-p', '.']).stdout));
@@ -171,7 +172,8 @@ test(
       fs.rmdirSync(directory);
     });
     for (const [name, contents] of Object.entries(inputs)) fs.writeFileSync(path.join(directory, name), contents);
-    const run = (args) => spawnSync(process.execPath, [bin, ...args, '--json'], { cwd: directory, encoding: 'utf8' });
+    const run = (args) =>
+      spawnSync(process.execPath, [bin, 'perf', ...args, '--json'], { cwd: directory, encoding: 'utf8' });
     const native = JSON.parse(run(['--native', '-p', '.']).stdout);
     assert.deepEqual(native, JSON.parse(run(['-p', '.']).stdout));
     const fixedRules = native.findings.filter((finding) => finding.fix).map((finding) => finding.ruleId);

@@ -144,8 +144,8 @@ test('the CLI loads dataAccess from the config file and fails the default contra
     path.join(root, 'maintainability.config.json'),
     JSON.stringify({ dataAccess: { modules: ['pg'], allowIn: ['data'] } }),
   );
-  const cli = path.join(__dirname, '..', '..', 'bin', 'warden-maint.cjs');
-  const run = spawnSync(process.execPath, [cli, root, '--json'], { encoding: 'utf8' });
+  const cli = path.join(__dirname, '..', '..', 'bin', 'loadwise.cjs');
+  const run = spawnSync(process.execPath, [cli, 'maint', root, '--json'], { encoding: 'utf8' });
   assert.equal(run.status, 1, run.stderr);
   assert.deepEqual(
     JSON.parse(run.stdout).findings.map((finding) => [finding.file, finding.ruleId]),

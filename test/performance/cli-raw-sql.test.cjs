@@ -7,7 +7,7 @@ const path = require('node:path');
 const test = require('node:test');
 const { spawnSync } = require('node:child_process');
 
-const bin = path.join(__dirname, '../../bin/warden-backend.cjs');
+const bin = path.join(__dirname, '../../bin/loadwise.cjs');
 
 test('a one-shot scan loads the SQL parser, so raw SQL index rules report', (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-raw-sql-'));
@@ -24,7 +24,7 @@ test('a one-shot scan loads the SQL parser, so raw SQL index rules report', (con
     fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
     fs.writeFileSync(path.join(root, name), content);
   }
-  const checked = spawnSync(process.execPath, [bin, '--engine', 'js', '--json', path.join(root, 'query.ts')], {
+  const checked = spawnSync(process.execPath, [bin, 'perf', '--engine', 'js', '--json', path.join(root, 'query.ts')], {
     encoding: 'utf8',
   });
   assert.equal(checked.status, 1, checked.stderr);

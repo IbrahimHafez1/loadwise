@@ -9,11 +9,11 @@ const { spawnSync } = require('node:child_process');
 const { knownRules } = require('../../lib/performance/rule-ids.cjs');
 
 const root = path.resolve(__dirname, '../..');
-const bin = path.join(root, 'bin/warden-backend.cjs');
+const bin = path.join(root, 'bin/loadwise.cjs');
 const fakeSubcommands = path.join(__dirname, 'fake-subcommands.cjs');
 
 function run(args, nodeOptions = []) {
-  return spawnSync(process.execPath, [...nodeOptions, bin, ...args], { cwd: root, encoding: 'utf8' });
+  return spawnSync(process.execPath, [...nodeOptions, bin, 'perf', ...args], { cwd: root, encoding: 'utf8' });
 }
 
 function snapshotFile(context, contents) {
