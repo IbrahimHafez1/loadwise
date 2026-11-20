@@ -1,20 +1,21 @@
 {
-  "name": "@codewarden/backend",
-  "version": "0.3.0",
-  "description": "Check backend query performance, transaction usage and project-defined query policies in source code, traces and execution plans.",
+  "name": "@loadwise/cli",
+  "version": "0.4.0",
+  "description": "Check backend query performance, transaction usage and query policies, and review source complexity, duplicate implementations and project-defined architecture, from one CLI.",
   "license": "UNLICENSED",
   "author": "Ibrahim Hafez",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/IbrahimHafez1/codewarden-backend.git"
+    "url": "git+https://github.com/IbrahimHafez1/loadwise.git"
   },
   "bugs": {
-    "url": "https://github.com/IbrahimHafez1/codewarden-backend/issues"
+    "url": "https://github.com/IbrahimHafez1/loadwise/issues"
   },
-  "homepage": "https://github.com/IbrahimHafez1/codewarden-backend#readme",
+  "homepage": "https://github.com/IbrahimHafez1/loadwise#readme",
   "keywords": [
-    "codewarden",
+    "loadwise",
     "performance",
+    "maintainability",
     "n-plus-one",
     "database",
     "orm",
@@ -23,6 +24,11 @@
     "drizzle",
     "postgresql",
     "opentelemetry",
+    "code-quality",
+    "duplicate-code",
+    "complexity",
+    "architecture",
+    "dependency-cycle",
     "static-analysis",
     "cli",
     "vscode"
