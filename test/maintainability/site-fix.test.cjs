@@ -1,0 +1,660 @@
+'use strict';
+
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { pathToFileURL } = require('node:url');
+const { spawnSync } = require('node:child_process');
+const assert = require('node:assert/strict');
+const test = require('node:test');
+const { applyChangesToText, applyFix } = require('../../lib/maintainability/apply-fix.cjs');
+const cli = path.join(__dirname, '../../bin/warden-maint.cjs');
+
+function project(context, files) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'maintainability-fix-'));
+  context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  for (const [name, content] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(directory, name)), { recursive: true });
+    fs.writeFileSync(path.join(directory, name), content);
+  }
+  return directory;
+}
+
+function run(directory, ...args) {
+  return spawnSync(process.execPath, [cli, ...args], { cwd: directory, encoding: 'utf8' });
+}
+
+function findingsOf(directory) {
+  const result = run(directory, '--json', '--include-contextual');
+  assert.equal(result.status, 0, result.stderr);
+  return JSON.parse(result.stdout).findings;
+}
+
+function fixedFiles(directory, fix) {
+  const files = {};
+  const access = {
+    readFile: (file) => fs.readFileSync(path.join(directory, file), 'utf8'),
+    writeFile: (file, text) => (files[file] = text),
+  };
+  const result = applyFix(fix, access);
+  assert.equal(result.error, undefined);
+  return files;
+}
+
+// Loads CommonJS source text as a module, so the original and rewritten functions can be compared by running them.
+function load(text) {
+  const module = { exports: {} };
+  new Function('module', 'exports', text)(module, module.exports);
+  return module.exports;
+}
+
+const nestedLoops = [
+  'function collect(rows, limit) {',
+  '  const found = [];',
+  '  for (const row of rows) {',
+  '    if (row.active) {',
+  '      for (const tag of row.tags) {',
+  '        if (tag.length > limit) {',
+  '          found.push(tag);',
+  '        }',
+  '      }',
+  '    }',
+  '  }',
+  '  return found;',
+  '}',
+  'module.exports = { collect };',
+  '',
+].join('\n');
+
+test('deep-control-flow fix turns the if that ends a loop body into a continue guard', (context) => {
+  const directory = project(context, { 'collect.cjs': nestedLoops });
+  const [finding] = findingsOf(directory).filter((item) => item.ruleId === 'deep-control-flow');
+  assert.ok(finding.fix, 'expected a fix');
+  const [change] = finding.fix.changes;
+  assert.equal(change.file, 'collect.cjs');
+  assert.match(change.after, /^ {4}if \(!row\.active\) continue;\n {4}for \(const tag of row\.tags\) \{/);
+  const rewritten = load(fixedFiles(directory, finding.fix)['collect.cjs']).collect;
+  const original = load(nestedLoops).collect;
+  const rows = [
+    { active: true, tags: ['a', 'long tag', 'xyz'] },
+    { active: false, tags: ['ignored tag'] },
+    { active: 1, tags: [] },
+  ];
+  for (const limit of [0, 2, 5]) assert.deepEqual(rewritten(rows, limit), original(rows, limit));
+});
+
+test('deep-control-flow fix merges an if whose only statement is another if', (context) => {
+  const source = [
+    'function pick(items, flag) {',
+    '  let total = 0;',
+    '  for (const item of items) {',
+    '    if (item) {',
+    '      if (flag || item.forced) {',
+    '        if (item.value > 1) total += item.value;',
+    '      }',
+    '    }',
+    '    total += 1;',
+    '  }',
+    '  return total;',
+    '}',
+    'module.exports = { pick };',
+  ].join('\n');
+  const directory = project(context, { 'pick.cjs': source });
+  const [finding] = findingsOf(directory).filter((item) => item.ruleId === 'deep-control-flow');
+  assert.match(
+    finding.fix.changes[0].after,
+    /if \(\(flag \|\| item\.forced\) && item\.value > 1\) total \+= item\.value;/,
+  );
+  const rewritten = load(fixedFiles(directory, finding.fix)['pick.cjs']).pick;
+  const original = load(source).pick;
+  const items = [null, { value: 3 }, { value: 1, forced: true }, { value: 5, forced: true }];
+  for (const flag of [true, false]) assert.equal(rewritten(items, flag), original(items, flag));
+});
+
+test('deep-control-flow fix drops an else after a branch that already returns', (context) => {
+  const source = [
+    'function label(values, mode) {',
+    '  if (!values.length) {',
+    '    return "none";',
+    '  } else {',
+    '    let text = "";',
+    '    for (const value of values) {',
+    '      if (mode === "loud") {',
+    '        text += "?";',
+    '        if (value > 0) text += "!";',
+    '      }',
+    '      text += ".";',
+    '    }',
+    '    return text;',
+    '  }',
+    '}',
+    'module.exports = { label };',
+  ].join('\n');
+  const directory = project(context, { 'label.cjs': source });
+  const [finding] = findingsOf(directory).filter((item) => item.ruleId === 'deep-control-flow');
+  const files = fixedFiles(directory, finding.fix);
+  assert.doesNotMatch(files['label.cjs'], /else/);
+  const rewritten = load(files['label.cjs']).label;
+  const original = load(source).label;
+  for (const values of [[], [1, -1, 2], [0]])
+    for (const mode of ['loud', 'quiet']) assert.equal(rewritten(values, mode), original(values, mode));
+});
+
+test('deep-control-flow rewrites no if that would need intent, and extracts the loop instead', (context) => {
+  const source = [
+    'function scan(grid) {',
+    '  let hits = 0;',
+    '  for (const row of grid) {',
+    '    for (const cell of row) {',
+    '      for (const part of cell) {',
+    '        if (part) hits++;',
+    '      }',
+    '    }',
+    '  }',
+    '  return hits;',
+    '}',
+    'module.exports = { scan };',
+  ].join('\n');
+  const directory = project(context, { 'scan.cjs': source });
+  const [finding] = findingsOf(directory).filter((item) => item.ruleId === 'deep-control-flow');
+  assert.match(finding.fix.note, /^Moves the innermost levels into processCell/);
+  const text = fixedFiles(directory, finding.fix)['scan.cjs'];
+  assert.match(text, /\n {6}hits = processCell\(cell, hits\);\n/);
+  const grid = [[[1, 0, 2], []], [[0]]];
+  assert.equal(load(text).scan(grid), load(source).scan(grid));
+});
+
+test('high-branch-complexity fix applies every exact simplification and reports the new complexity', (context) => {
+  const source = [
+    'function score(input) {',
+    '  let points = 0;',
+    '  if (!input.name) input.name = "anonymous";',
+    '  if (input.blocked) return -1;',
+    '  if (input.deleted) return -1;',
+    '  const verified = input.email ? true : false;',
+    ...Array.from({ length: 11 }, (_, index) => `  if (input.level === ${index}) points += ${index};`),
+    '  return points + (verified ? 1 : 0);',
+    '}',
+    'module.exports = { score };',
+  ].join('\n');
+  const directory = project(context, { 'score.cjs': source });
+  const [finding] = findingsOf(directory).filter((item) => item.ruleId === 'high-branch-complexity');
+  assert.match(finding.fix.note, /from 17 to 14\./);
+  const text = fixedFiles(directory, finding.fix)['score.cjs'];
+  assert.match(text, /input\.name \|\|= "anonymous";/);
+  assert.match(text, /if \(input\.blocked \|\| input\.deleted\) return -1;/);
+  assert.match(text, /const verified = Boolean\(input\.email\);/);
+  const rewritten = load(text).score;
+  const original = load(source).score;
+  for (const input of [{ level: 3, email: 'x' }, { blocked: true }, { deleted: 1, name: 'n' }, { level: 10 }]) {
+    const first = { ...input };
+    const second = { ...input };
+    assert.equal(rewritten(first), original(second));
+    assert.deepEqual(first, second);
+  }
+});
+
+test('duplicate-implementation fix makes the copy call the exported function', async (context) => {
+  const shared = [
+    'export function sameDay(first, second) {',
+    '  const left = new Date(first);',
+    '  const right = new Date(second);',
+    '  return left.getUTCFullYear() === right.getUTCFullYear() && left.getUTCDate() === right.getUTCDate();',
+    '}',
+    '',
+  ].join('\n');
+  const service = [
+    "import { strict } from 'node:assert';",
+    '',
+    'export class Usage {',
+    '  sameDay(first, second) {',
+    '    const left = new Date(first);',
+    '    const right = new Date(second);',
+    '    return left.getUTCFullYear() === right.getUTCFullYear() && left.getUTCDate() === right.getUTCDate();',
+    '  }',
+    '  check() {',
+    '    strict.ok(this);',
+    '  }',
+    '}',
+    '',
+  ].join('\n');
+  const directory = project(context, { 'utils/day.mjs': shared, 'usage.mjs': service });
+  const [finding] = findingsOf(directory).filter((item) => item.ruleId === 'duplicate-implementation');
+  assert.ok(finding.fix, 'expected a fix');
+  assert.ok(finding.fix.changes.every((change) => change.file === 'usage.mjs'));
+  const files = fixedFiles(directory, finding.fix);
+  assert.match(files['usage.mjs'], /import \{ sameDay \} from '\.\/utils\/day';/);
+  assert.match(files['usage.mjs'], /sameDay\(first, second\) \{\n {4}return sameDay\(first, second\);\n {2}\}/);
+  // Node needs the extension; the fix follows the file's extensionless import style.
+  fs.writeFileSync(path.join(directory, 'usage.mjs'), files['usage.mjs'].replace("'./utils/day'", "'./utils/day.mjs'"));
+  const { Usage } = await import(pathToFileURL(path.join(directory, 'usage.mjs')));
+  const { sameDay } = await import(pathToFileURL(path.join(directory, 'utils/day.mjs')));
+  for (const [first, second] of [
+    ['2024-01-01T01:00Z', '2024-01-01T23:00Z'],
+    ['2024-01-01T01:00Z', '2024-01-02T01:00Z'],
+  ])
+    assert.equal(new Usage().sameDay(first, second), sameDay(first, second));
+});
+
+test('duplicate-implementation offers no fix when the copies read this', (context) => {
+  const method = [
+    '  total(items) {',
+    '    let sum = this.base;',
+    '    for (const item of items) sum += item.price * item.count;',
+    '    return sum > this.limit ? this.limit : sum;',
+    '  }',
+  ];
+  const directory = project(context, {
+    'a.mjs': ['export class A {', ...method, '}', ''].join('\n'),
+    'b.mjs': ['export class B {', ...method, '}', ''].join('\n'),
+  });
+  const [finding] = findingsOf(directory).filter((item) => item.ruleId === 'duplicate-implementation');
+  assert.equal(finding.fix, undefined);
+});
+
+test('dependency-cycle fix turns a type-only import into import type', (context) => {
+  const directory = project(context, {
+    'tsconfig.json': JSON.stringify({ compilerOptions: { verbatimModuleSyntax: true } }),
+    'a.ts': [
+      "import { Shape } from './b';",
+      'export const unit = 1;',
+      'export const area = (shape: Shape) => shape.size * unit;',
+      '',
+    ].join('\n'),
+    'b.ts': [
+      "import { unit } from './a';",
+      'export interface Shape { size: number }',
+      'export const scale = unit * 2;',
+      '',
+    ].join('\n'),
+  });
+  const [finding] = findingsOf(directory).filter((item) => item.ruleId === 'dependency-cycle');
+  assert.deepEqual(finding.fix.changes, [
+    { file: 'a.ts', line: 1, before: "import { Shape } from './b';", after: "import type { Shape } from './b';" },
+  ]);
+});
+
+test('apply refuses stale code, keeps line endings and never applies a fix twice', () => {
+  const change = { file: 'f.ts', line: 2, before: 'if (a) {\n  b();\n}', after: 'if (!a) return;\nb();' };
+  const text = 'function f(a) {\r\nif (a) {\r\n  b();\r\n}\r\n}';
+  const applied = applyChangesToText(text, [change]);
+  assert.equal(applied.text, 'function f(a) {\r\nif (!a) return;\r\nb();\r\n}');
+  assert.match(applyChangesToText('x\n' + text, [change]).text, /if \(!a\) return;/);
+  assert.match(applyChangesToText(text.replace('b()', 'c()'), [change]).error, /changed since the scan/);
+  const insertion = { file: 'f.ts', line: 1, before: 'one', after: 'zero\none' };
+  const once = applyChangesToText('one\ntwo', [insertion]).text;
+  assert.equal(applyChangesToText(once, [insertion]).error, 'already applied');
+});
+
+test('text output shows the fix diff, and --fix --yes applies it', (context) => {
+  const directory = project(context, { 'collect.cjs': nestedLoops });
+  const text = run(directory);
+  assert.equal(text.status, 0, text.stderr);
+  assert.match(text.stdout, /Fix \(collect\.cjs:4\):/);
+  assert.match(text.stdout, /\+ if \(!row\.active\) continue;/);
+
+  const refused = run(directory, '--fix');
+  assert.equal(refused.status, 2);
+  assert.match(refused.stderr, /--fix --yes/);
+  assert.equal(run(directory, '--yes').status, 2);
+  assert.equal(run(directory, '--fix', '--json').status, 2);
+
+  const fixed = run(directory, '--fix', '--yes');
+  assert.equal(fixed.status, 0, fixed.stderr);
+  assert.match(fixed.stdout, /Applied 1 of 1 automatic fix/);
+  assert.match(fs.readFileSync(path.join(directory, 'collect.cjs'), 'utf8'), /if \(!row\.active\) continue;/);
+  assert.equal(findingsOf(directory).length, 0);
+});
+
+function ruleFindings(directory, ruleId) {
+  return findingsOf(directory).filter((item) => item.ruleId === ruleId);
+}
+
+test('deep-control-flow guard clause drops the jump it would leave unreachable', (context) => {
+  const source = [
+    'function grace(stored, strict) {',
+    '  if (stored) {',
+    '    stored.seen = true;',
+    '    if (stored.active) {',
+    '      if (!strict && stored.expires > 0) {',
+    '        if (stored.user === null) return null;',
+    '        return stored.user;',
+    '      }',
+    '      return null;',
+    '    }',
+    '  }',
+    '  return "none";',
+    '}',
+    'module.exports = { grace };',
+  ].join('\n');
+  const directory = project(context, { 'grace.cjs': source });
+  const [finding] = ruleFindings(directory, 'deep-control-flow');
+  const text = fixedFiles(directory, finding.fix)['grace.cjs'];
+  assert.match(text, /if \(strict \|\| !\(stored\.expires > 0\)\) return null;\n {6}if \(stored\.user === null\)/);
+  assert.match(text, /return stored\.user;\n {4}\}\n {2}\}/, 'the unreachable return null is removed');
+  const rewritten = load(text).grace;
+  const original = load(source).grace;
+  const inputs = [null, { active: false }, { active: true, expires: 1, user: 'u' }, { active: true, expires: 0 }];
+  for (const stored of inputs)
+    for (const strict of [true, false])
+      assert.equal(rewritten(stored && { ...stored }, strict), original(stored && { ...stored }, strict));
+});
+
+test('negated guard conditions use De Morgan instead of a double negation', (context) => {
+  const source = [
+    'function fill(rows, names) {',
+    '  for (const row of rows) {',
+    '    row.seen = true;',
+    '    for (const key of row.keys) {',
+    '      row.count = (row.count ?? 0) + 1;',
+    '      if (!(key in names) && key in row) {',
+    '        row.found = key;',
+    '        if (row[key]) row.truthy = key;',
+    '      }',
+    '    }',
+    '  }',
+    '}',
+    'module.exports = { fill };',
+  ].join('\n');
+  const directory = project(context, { 'fill.cjs': source });
+  const [finding] = ruleFindings(directory, 'deep-control-flow');
+  const text = fixedFiles(directory, finding.fix)['fill.cjs'];
+  assert.doesNotMatch(text, /!\(!/);
+  assert.match(text, /if \(key in names \|\| !\(key in row\)\) continue;/);
+  const rows = () => [{ keys: ['a', 'b', 'c'], b: 1, c: 0 }, { keys: [] }];
+  const names = { a: 1 };
+  const expected = rows();
+  const actual = rows();
+  load(source).fill(expected, names);
+  load(text).fill(actual, names);
+  assert.deepEqual(actual, expected);
+});
+
+test('high-branch-complexity groups && inside || and withholds merged conditions that read worse', (context) => {
+  const long = 'input.someRatherLongPropertyName.anotherFairlyLongPropertyName';
+  const source = [
+    'function check(input) {',
+    '  if (input.kind === 1 && input.flag) return 0;',
+    '  if (input.kind === 2) return 0;',
+    '  input.step = 1;',
+    `  if (${long} === 1) return 1;`,
+    `  if (${long} === 2) return 1;`,
+    ...Array.from({ length: 11 }, (_, index) => `  if (input.level === ${index}) input.step += ${index};`),
+    '  return input.step;',
+    '}',
+    'module.exports = { check };',
+  ].join('\n');
+  const directory = project(context, { 'check.cjs': source });
+  const [finding] = ruleFindings(directory, 'high-branch-complexity');
+  assert.match(finding.fix.note, /from 16 to 15\./);
+  const text = fixedFiles(directory, finding.fix)['check.cjs'];
+  assert.match(text, /if \(\(input\.kind === 1 && input\.flag\) \|\| input\.kind === 2\) return 0;/);
+  assert.match(text, /=== 1\) return 1;\n {2}if \(input\.someRatherLong/, 'the over-long merge is withheld');
+});
+
+const nestedGroups = [
+  'function index(groups, seen) {',
+  '  const result = new Map();',
+  '  for (const group of groups) {',
+  '    if (group.enabled) {',
+  '      for (const member of group.members) {',
+  '        if (!seen.has(member.id)) {',
+  '          result.set(member.id, group.name);',
+  '        }',
+  '      }',
+  '      result.set(group.name, group.members.length);',
+  '    }',
+  '    result.set("last", group.name);',
+  '  }',
+  '  return result;',
+  '}',
+  'module.exports = { index };',
+  '',
+].join('\n');
+
+const groups = [
+  { enabled: true, name: 'a', members: [{ id: 1 }, { id: 2 }] },
+  { enabled: false, name: 'b', members: [{ id: 3 }] },
+  { enabled: true, name: 'c', members: [{ id: 2 }, { id: 4 }] },
+];
+
+test('deep-control-flow moves a self-contained inner loop into a function declared after its own', (context) => {
+  const directory = project(context, { 'index.cjs': nestedGroups });
+  const [finding] = ruleFindings(directory, 'deep-control-flow');
+  assert.match(finding.fix.note, /processMembers/);
+  const text = fixedFiles(directory, finding.fix)['index.cjs'];
+  assert.match(text, /\n {6}processMembers\(group, seen, result\);\n {6}result\.set\(group\.name/);
+  assert.match(
+    text,
+    /\n {2}return result;\n\}\n\nfunction processMembers\(group, seen, result\) \{\n {2}for \(const member of group\.members\) \{\n {4}if/,
+  );
+  assert.match(text, /\n {2}\}\n\}\nmodule\.exports/);
+  const seen = new Set([2]);
+  assert.deepEqual([...load(text).index(groups, seen)], [...load(nestedGroups).index(groups, seen)]);
+  fs.writeFileSync(path.join(directory, 'index.cjs'), text);
+  assert.equal(ruleFindings(directory, 'deep-control-flow').length, 0);
+});
+
+test('the extracted function keeps CRLF line endings and tab indentation', (context) => {
+  const source = nestedGroups.replace(/^( {2})+/gm, (spaces) => '\t'.repeat(spaces.length / 2)).replace(/\n/g, '\r\n');
+  const directory = project(context, { 'index.cjs': source });
+  const [finding] = ruleFindings(directory, 'deep-control-flow');
+  const text = fixedFiles(directory, finding.fix)['index.cjs'];
+  assert.doesNotMatch(text, /[^\r]\n/);
+  assert.match(text, /\r\n\t{3}processMembers\(group, seen, result\);\r\n/);
+  assert.match(text, /\r\n\r\nfunction processMembers\(group, seen, result\) \{\r\n\tfor /);
+  assert.deepEqual([...load(text).index(groups, new Set())], [...load(source).index(groups, new Set())]);
+});
+
+test('a class method gets a private-style method called through this', (context) => {
+  const source = [
+    'class Index {',
+    '  build(groups) {',
+    '    const result = new Map();',
+    '    for (const group of groups) {',
+    '      if (group.enabled) {',
+    '        for (const member of group.members) {',
+    '          if (!this.seen.has(member.id)) {',
+    '            result.set(member.id, group.name);',
+    '          }',
+    '        }',
+    '        result.set(group.name, group.members.length);',
+    '      }',
+    '      result.set("last", group.name);',
+    '    }',
+    '    return result;',
+    '  }',
+    '}',
+    'module.exports = { Index };',
+  ].join('\n');
+  const directory = project(context, { 'index.cjs': source });
+  const [finding] = ruleFindings(directory, 'deep-control-flow');
+  const text = fixedFiles(directory, finding.fix)['index.cjs'];
+  assert.match(text, /\n {8}this\.processMembers\(group, result\);\n/);
+  assert.match(text, /\n {2}\}\n\n {2}processMembers\(group, result\) \{\n {4}for \(const member/);
+  const run = (code) => {
+    const index = new (load(code).Index)();
+    index.seen = new Set([2]);
+    return [...index.build(groups)];
+  };
+  assert.deepEqual(run(text), run(source));
+});
+
+test('no extraction when the block returns, awaits, leaves an outer loop or is one line', (context) => {
+  const variants = {
+    'returns.cjs': nestedGroups.replace('result.set(member.id, group.name);', 'return result;'),
+    'awaits.cjs': nestedGroups
+      .replace('function index', 'async function index')
+      .replace('result.set(member.id, group.name);', 'await result.set(member.id, group.name);'),
+    'outer.cjs': nestedGroups
+      .replace('  for (const group of groups) {', '  outer: for (const group of groups) {')
+      .replace('result.set(member.id, group.name);', 'continue outer;'),
+    'short.cjs': nestedGroups.replace(
+      /for \(const member of group\.members\) \{\n.*\n.*\n.*\n {6}\}/,
+      'for (const member of group.members) if (!seen.has(member.id)) if (member) result.set(member.id, 1);',
+    ),
+  };
+  const directory = project(context, variants);
+  const findings = ruleFindings(directory, 'deep-control-flow');
+  assert.deepEqual(findings.map((finding) => finding.file).sort(), Object.keys(variants).sort());
+  for (const finding of findings) assert.equal(finding.fix, undefined, finding.file);
+});
+
+test('no extraction with more than four parameters, a reassigned parameter or one a closure shares', (context) => {
+  const variants = {
+    'many.cjs': nestedGroups
+      .replace('function index(groups, seen) {', 'function index(groups, seen, first, second) {')
+      .replace('result.set(member.id, group.name);', 'result.set(member.id, [group.name, first, second]);'),
+    'reassigned.cjs': nestedGroups.replace(
+      'result.set(member.id, group.name);',
+      'result.set(member.id, group.name);\n          seen = new Set();',
+    ),
+    'two-lets.cjs': nestedGroups
+      .replace('  const result = new Map();', '  const result = new Map();\n  let count = 0;\n  let last;')
+      .replace('result.set(member.id, group.name);', 'count++;\n          last = member;'),
+    'closure.cjs': nestedGroups
+      .replace(
+        '  const result = new Map();',
+        '  const result = new Map();\n  let count = 0;\n  const bump = () => count++;',
+      )
+      .replace('result.set(member.id, group.name);', 'count += bump();'),
+  };
+  const directory = project(context, variants);
+  const findings = ruleFindings(directory, 'deep-control-flow');
+  assert.deepEqual(findings.map((finding) => finding.file).sort(), Object.keys(variants).sort());
+  for (const finding of findings) assert.equal(finding.fix, undefined, finding.file);
+});
+
+const typedGroups = (guard, use) =>
+  [
+    "import { lookup } from './lookup';",
+    'type Group = { enabled: boolean; members: { id: string }[] };',
+    'export class Tally {',
+    '  current?: { name: string | null };',
+    '  run(groups: Group[], out: Map<string, string>) {',
+    `    ${guard}`,
+    '    for (const group of groups) {',
+    '      if (group.enabled) {',
+    '        for (const member of group.members) {',
+    '          if (member.id) {',
+    `            out.set(member.id, ${use});`,
+    '          }',
+    "          out.set('member', member.id);",
+    '        }',
+    "        out.set('group', 'seen');",
+    '      }',
+    "      out.set('last', 'seen');",
+    '    }',
+    '  }',
+    '}',
+    '',
+  ].join('\n');
+
+const lookupModule = 'export function lookup(key: string): string {\n  return key;\n}\n';
+
+function typeErrors(file, text) {
+  const ts = require('typescript');
+  const host = ts.createCompilerHost({});
+  const readFile = host.readFile;
+  host.readFile = (name) => (path.resolve(name) === path.resolve(file) ? text : readFile(name));
+  const options = { strict: true, noEmit: true, target: ts.ScriptTarget.ES2022 };
+  const program = ts.createProgram({ rootNames: [file], options, host });
+  return ts.getPreEmitDiagnostics(program).map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText));
+}
+
+test('TypeScript extraction makes a private method with the narrowed parameter types', (context) => {
+  const source = typedGroups('const name = this.current?.name;\n    if (!name) return;', 'name');
+  const directory = project(context, { 'tally.ts': source, 'lookup.ts': lookupModule });
+  assert.deepEqual(typeErrors(path.join(directory, 'tally.ts'), source), []);
+  const [finding] = ruleFindings(directory, 'deep-control-flow');
+  const text = fixedFiles(directory, finding.fix)['tally.ts'];
+  assert.match(text, /\n {8}this\.processMembers\(group, out, name\);\n/);
+  assert.match(text, /\n {2}private processMembers\(group: Group, out: Map<string, string>, name: string\) \{\n/);
+  assert.deepEqual(typeErrors(path.join(directory, 'tally.ts'), text), []);
+});
+
+test('no TypeScript extraction when it would lose narrowing or a type cannot be written', (context) => {
+  const variants = {
+    'path.ts': typedGroups('if (!this.current?.name) return;', 'this.current.name'),
+    'unknown.ts': typedGroups('const name = lookup("name") as any;', 'name'),
+  };
+  const directory = project(context, { ...variants, 'lookup.ts': lookupModule });
+  for (const file of Object.keys(variants)) {
+    assert.deepEqual(typeErrors(path.join(directory, file), variants[file]), []);
+    const [finding] = ruleFindings(directory, 'deep-control-flow').filter((item) => item.file === file);
+    assert.equal(finding.fix, undefined, file);
+  }
+});
+
+test('high-branch-complexity returns the one outer let a moved block updates', (context) => {
+  const source = [
+    'function settle(order, rules) {',
+    '  let total = 0;',
+    ...Array.from({ length: 13 }, (_, index) => `  if (order.level === ${index}) total += ${index};`),
+    '  for (const rule of rules) {',
+    '    if (rule.on) {',
+    '      total += rule.value;',
+    '    }',
+    '  }',
+    '  return total;',
+    '}',
+    'module.exports = { settle };',
+  ].join('\n');
+  const directory = project(context, { 'settle.cjs': source });
+  const [finding] = ruleFindings(directory, 'high-branch-complexity');
+  assert.match(finding.fix.note, /from 16 to 14\. Moves a self-contained block into processRules/);
+  const text = fixedFiles(directory, finding.fix)['settle.cjs'];
+  assert.match(text, /\n {2}total = processRules\(rules, total\);\n {2}return total;/);
+  assert.match(text, /\nfunction processRules\(rules, total\) \{\n[^]*\n {2}return total;\n\}/);
+  const rules = [
+    { on: true, value: 5 },
+    { on: false, value: 7 },
+  ];
+  for (const level of [0, 4, 20])
+    assert.equal(load(text).settle({ level }, rules), load(source).settle({ level }, rules));
+  fs.writeFileSync(path.join(directory, 'settle.cjs'), text);
+  assert.equal(ruleFindings(directory, 'high-branch-complexity').length, 0);
+});
+
+test('no TypeScript extraction when a parameter would be typed {} or unknown', () => {
+  const { ts } = require('../../lib/maintainability/site-fixes/helpers.cjs');
+  const { extractionEdit, ownStatements } = require('../../lib/maintainability/site-fixes/extract-block.cjs');
+  const variants = {
+    'empty.ts': [
+      "import { Doc } from './doc';",
+      'export function collect(doc: Doc, out: string[]) {',
+      '  for (const response of Object.values(doc.responses ?? {})) {',
+      "    if (!response || '$ref' in response) continue;",
+      '    for (const media of Object.values(response.content ?? {})) {',
+      '      out.push(media.example);',
+      '      out.push(media.schema);',
+      '      out.push(media.other);',
+      '    }',
+      '  }',
+      '}',
+    ],
+    'caught.ts': [
+      "import { z } from 'zod';",
+      'export function collect(input: string, out: string[]) {',
+      '  try {',
+      '    JSON.parse(input);',
+      '  } catch (error) {',
+      '    if (error instanceof z.ZodError) {',
+      '      for (const issue of error.issues) {',
+      '        out.push(issue.message);',
+      '        out.push(issue.path);',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+    ],
+  };
+  for (const [file, lines] of Object.entries(variants)) {
+    const sourceFile = ts.createSourceFile(file, lines.join('\n'), ts.ScriptTarget.Latest, true);
+    const fn = sourceFile.statements.find(ts.isFunctionDeclaration);
+    for (const statement of ownStatements(fn)) {
+      const extraction = extractionEdit(statement, fn, sourceFile);
+      assert.doesNotMatch(extraction?.edits[1].text ?? '', /\((response|error|media): (\{\}|unknown)/, file);
+    }
+  }
+});
