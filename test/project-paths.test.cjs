@@ -94,8 +94,12 @@ test('linked entry paths resolve their imports independently', (context) => {
     { encoding: 'utf8' },
   );
   assert.equal(checked.status, 1, checked.stderr);
-  // The CLI adds each rule's fix example; everything else must match the library result.
+  // The CLI adds each rule's fix example, id and fixable flag; everything else must match the library result.
   const printed = JSON.parse(checked.stdout);
-  for (const finding of printed.findings) delete finding.example;
+  for (const finding of printed.findings) {
+    delete finding.example;
+    delete finding.id;
+    delete finding.fixable;
+  }
   assert.deepEqual(printed, result);
 });
