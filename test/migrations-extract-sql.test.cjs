@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const { before, describe, test } = require('node:test');
 
-const { extractSqlText, prepareDialect } = require('../lib/migrations/extract-sql.cjs');
+const { extractSqlText, prepareDialect, sqlFileInTransaction } = require('../lib/migrations/extract-sql.cjs');
 
 const postgres = (sql) => extractSqlText(sql, { dialect: 'postgres', file: 'm.sql' }).operations;
 const mysql = (sql) => extractSqlText(sql, { dialect: 'mysql', file: 'm.sql' }).operations;
@@ -189,5 +189,14 @@ describe('MySQL SQL extraction', () => {
     assert.equal(operations[0].table, 'orders');
     assert.equal(operations[1].algorithm, 'COPY');
     assert.equal(operations[4].newName, 'b');
+  });
+});
+
+describe('SQL file transaction context', () => {
+  test('Prisma wraps only multi-statement files, Drizzle wraps every file, plain SQL none', () => {
+    assert.equal(sqlFileInTransaction('prisma', 1), false);
+    assert.equal(sqlFileInTransaction('prisma', 2), true);
+    assert.equal(sqlFileInTransaction('drizzle', 1), true);
+    assert.equal(sqlFileInTransaction('sql', 5), false);
   });
 });
