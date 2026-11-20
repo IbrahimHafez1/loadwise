@@ -18,6 +18,7 @@
     "editor/perf-site-comparison.cjs",
     "editor/maintainability-examples.cjs",
     "editor/source-example.cjs",
+    "editor/apply-fix.cjs",
     "PERFORMANCE.md"
   ],
   "engines": {
