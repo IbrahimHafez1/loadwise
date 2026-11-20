@@ -32,6 +32,11 @@ test('distinct findMany is reported and mentions groupBy', () => {
 test('findMany without distinct, and other receivers, are quiet', () => {
   assert.deepEqual(findings('await db.user.findMany({ where: { id: { in: ids } } });'), []);
   assert.deepEqual(
+    findings("await db.user.findMany({ distinct: ['id', 'tenantId'] });"),
+    [],
+    'the primary key is already unique',
+  );
+  assert.deepEqual(
     findings("const other = { findMany(options: object) { return options; } }; other.findMany({ distinct: ['a'] });"),
     [],
   );
