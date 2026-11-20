@@ -346,3 +346,59 @@ describe('Postgres constraint rules', () => {
     assert.match(typeorm[0].message, /Add it with a raw query ending in `NOT VALID`/);
   });
 });
+
+describe('Postgres compatibility rules', () => {
+  before(() => prepareDialect('postgres'));
+
+  test('DROP COLUMN and DROP TABLE on existing tables', () => {
+    const findings = checkSql(
+      withLockTimeout('ALTER TABLE "Order" DROP COLUMN "legacy";\nDROP TABLE IF EXISTS old_audit;'),
+    );
+    assert.deepEqual(rules(findings), ['migration-breaking-drop', 'migration-breaking-drop']);
+    assertFindingShape(findings[0]);
+    assert.equal(
+      findings[0].message,
+      '`DROP COLUMN legacy` breaks app versions still running during the deploy, because they still read or write ' +
+        '`"Order".legacy`. Remove all reads and writes (and the ORM field), deploy, then drop it in a later release. ' +
+        'If no deployed version uses it any more, mark it reviewed.',
+    );
+    assert.deepEqual(rules(checkSql('CREATE TABLE tmp (a int);\nDROP TABLE tmp;')), []);
+  });
+
+  test('a dropped column named by a template hole is still reported, by table', () => {
+    const findings = checkCode(
+      'export class D implements MigrationInterface { async up(queryRunner: QueryRunner) { await queryRunner.query("SET lock_timeout = \'5s\'"); for (const column of columns) { await queryRunner.query(`ALTER TABLE "admissions" DROP COLUMN "${column}"`); } } }',
+    );
+    assert.deepEqual(rules(findings), ['migration-breaking-drop']);
+    assert.match(findings[0].message, /`DROP COLUMN \$\{\.\.\.\}`/);
+  });
+
+  test('column and table renames; index renames are fine', () => {
+    const findings = checkSql(
+      withLockTimeout(
+        'ALTER TABLE orders RENAME COLUMN total TO amount;\nALTER TABLE orders RENAME TO purchases;\nALTER INDEX i RENAME TO j;',
+      ),
+    );
+    assert.deepEqual(rules(findings), ['migration-breaking-rename', 'migration-breaking-rename']);
+    assertFindingShape(findings[0]);
+    assert.match(findings[0].message, /^`RENAME COLUMN total TO amount` breaks app versions still running/);
+    assert.match(findings[0].message, /Add amount, dual-write both columns, switch reads to amount, then drop total/);
+  });
+
+  test('parser rejections are findings, contextual when the SQL has template holes', () => {
+    const [finding] = checkSql('CREATE INDX i ON t (a);');
+    assert.equal(finding.ruleId, 'migration-unparsed');
+    assert.match(finding.message, /syntax error at or near "INDX"` at line 1/);
+    assert.equal(finding.contextualReason, undefined);
+
+    const dynamic = checkCode(
+      'export class X implements MigrationInterface { async up(queryRunner: QueryRunner) { await queryRunner.query(`CREATE INDEX i ON t (${columns.join(", ")}) WHERE`); } }',
+    );
+    assert.equal(dynamic[0].ruleId, 'migration-unparsed');
+    assert.match(dynamic[0].contextualReason, /interpolated/);
+  });
+
+  test('data statements produce no findings', () => {
+    assert.deepEqual(rules(checkSql('INSERT INTO t VALUES (1);\nUPDATE t SET a = 2;\nDELETE FROM t WHERE a = 3;')), []);
+  });
+});
