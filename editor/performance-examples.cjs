@@ -266,6 +266,12 @@ const standaloneExamples = {
     ].join('\n'),
     note: 'The transaction holds a pool connection and its locks for the whole network call. Make the call after commit, or before the transaction when the write needs its result.',
   },
+  'password-hash-pure-js': {
+    language: 'javascript',
+    before: "import { hash } from 'bcryptjs';",
+    code: "import { hash } from 'bcrypt';",
+    note: 'bcryptjs hashes in pure JavaScript on the main thread and blocks every request for 50-400 ms. Native bcrypt runs on the libuv threadpool with the same API and hash format; install bcrypt and @types/bcrypt.',
+  },
   'mongo-collection-scan': collectionScan,
   'mongo-collection-scan-observed': collectionScan,
   'mongo-disk-sort': {
