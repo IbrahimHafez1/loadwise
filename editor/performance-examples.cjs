@@ -218,6 +218,12 @@ const standaloneExamples = {
     code: "const brands = await prisma.brand.findMany({ take: 20 });\nconst counts = await prisma.product.groupBy({\n  by: ['brandId'],\n  where: { brandId: { in: brands.map((brand) => brand.id) } },\n  _count: { _all: true },\n});",
     note: 'The _count join groups the whole related table, not just the page. Counting only the page ids keeps the cost tied to take.',
   },
+  'guard-query-per-request': {
+    language: 'javascript',
+    before: 'async canActivate(context) {\n  const user = await this.users.findOne({ where: { id } });\n}',
+    code: 'async canActivate(context) {\n  const user = await this.userCache.wrap(id, () => this.users.findOne({ where: { id } }), 60_000);\n}',
+    note: 'A global guard runs this query before every handler. Cache it by id with a short TTL and invalidate it when the user changes.',
+  },
   'mongo-collection-scan': collectionScan,
   'mongo-collection-scan-observed': collectionScan,
   'mongo-disk-sort': {
