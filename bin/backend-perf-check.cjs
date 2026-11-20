@@ -11,6 +11,8 @@ const usage = `Usage:
   backend-perf-check traces trace.json [--threshold 5] [--json]
   backend-perf-check plan explain.json [--json]
   backend-perf-check polyglot <file-or-directory> ... [--json]
+  backend-perf-check editor init
+  backend-perf-check editor watch [-p tsconfig.json]
 
 With no arguments, check tsconfig.json or jsconfig.json in the current directory.
 Source checks look for backend-perf.policy.json beside the selected config, or in the working directory for explicit files.
@@ -152,7 +154,7 @@ function sourcePolicy(explicit, config, files) {
   };
 }
 
-function checkCode(args) {
+function checkCode(args, report = printResult) {
   const { values, positionals } = parseCommand(args, {
     project: { type: 'string', short: 'p' },
     policy: { type: 'string' },
@@ -193,12 +195,12 @@ function checkCode(args) {
     ? require('../lib/native.cjs').analyzeNative
     : require('../lib/projects.cjs').analyzeSources;
   const result = analyze({ project: values.project, files: positionals, policy });
-  const code = printResult(result, values);
-  require('../lib/notify-editor.cjs').notifyEditor(values.project ?? process.cwd());
+  const code = report(result, values);
+  if (report === printResult) require('../lib/notify-editor.cjs').notifyEditor(values.project ?? process.cwd());
   return code;
 }
 
-function printResult(result, values) {
+function selectFindings(result, values) {
   result.findings = result.findings.filter((finding) => !values.ignore.includes(finding.ruleId));
   if (values['include-contextual'] !== undefined) {
     const classifyTestWrite = require('../lib/review-context.cjs').createTestWriteClassifier();
@@ -212,6 +214,11 @@ function printResult(result, values) {
     });
     if (contextualCount) result.contextualFindingCount = contextualCount;
   }
+  return result.findings;
+}
+
+function printResult(result, values) {
+  selectFindings(result, values);
   const contractOnly = values['fail-on'] === 'contract';
   if (contractOnly) {
     result.contractFindingCount = result.findings.filter(
@@ -237,6 +244,25 @@ function printResult(result, values) {
 }
 
 async function main(args) {
+  if (args[0] === 'editor') {
+    if (args[1] === 'init' && args.length === 2) {
+      const setup = require('../lib/editor-setup.cjs').setupEditor(process.cwd());
+      console.log((setup.changed ? 'Configured ' : 'Already configured: ') + setup.filename);
+      console.log(
+        'Open or reopen the trusted folder in VS Code or Cursor and allow automatic tasks once. Terminal source scans refresh the active watcher.',
+      );
+      return 0;
+    }
+    if (args[1] !== 'watch')
+      throw new Error('Usage: backend-perf-check editor init  |  editor watch [-p tsconfig.json]');
+    const { values, positionals } = parseCommand(args.slice(2), { project: { type: 'string', short: 'p' } });
+    if (values.help) return showHelp();
+    if (positionals.length) throw new Error('editor watch accepts only an optional -p project config.');
+    require('../lib/editor-watch.cjs').watchEditor(process.cwd(), values.project, (inputs) =>
+      checkCode(inputs, selectFindings),
+    );
+    return 0;
+  }
   if (args[0] === 'traces') return checkTraces(args.slice(1));
   if (args[0] === 'plan') return checkPlan(args.slice(1));
   if (args[0] === 'polyglot') {
