@@ -74,7 +74,7 @@ test('--schema validates the snapshot before scanning', (context) => {
   assert.equal(run(['examples/indexed.ts', '--schema', path.join(root, 'missing-snapshot.json')]).status, 2);
 });
 
-test('findings carry their fix example in text and JSON', () => {
+test('findings carry a rewrite of the flagged code in text and JSON', () => {
   const json = run(['examples/slow.ts', '--json']);
   assert.equal(json.status, 1, json.stderr);
   const [membership] = JSON.parse(json.stdout).findings;
@@ -83,6 +83,19 @@ test('findings carry their fix example in text and JSON', () => {
   assert.match(membership.example.code, /new Set\(allowedIds\)/);
   assert.equal(typeof membership.example.note, 'string');
   const text = run(['examples/slow.ts']);
-  assert.match(text.stdout, /\[array-repeated-membership\] .*\n {2}Fix:\n {4}const allowed = new Set\(allowedIds\);\n/);
+  assert.deepEqual(membership.fix.changes, [
+    {
+      file: 'examples/slow.ts',
+      line: 5,
+      before: '  const visible = orders.filter(order => allowed.includes(order.customerId));',
+      after:
+        '  const allowedSet = new Set(allowed);\n  const visible = orders.filter(order => allowedSet.has(order.customerId));',
+    },
+  ]);
+  assert.match(
+    text.stdout,
+    /\[array-repeated-membership\] .*\n {2}Fix \(examples\/slow\.ts:5\):\n {4}- const visible = orders\.filter\(order => allowed\.includes\(order\.customerId\)\);\n {4}\+ const allowedSet = new Set\(allowed\);\n/,
+  );
+  assert.doesNotMatch(text.stdout, /Example \(generic/, 'a site fix replaces the generic example');
   assert.doesNotMatch(text.stdout, /Impact:/, 'no impact without a loop rule');
 });

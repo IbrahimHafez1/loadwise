@@ -237,6 +237,7 @@ function printResult(result, values) {
     ).length;
   }
   const { attachExample, findingDetailLines } = require('../lib/finding-text.cjs');
+  require('../lib/site-fix.cjs').attachSiteFixes(result.findings);
   for (const finding of result.findings) attachExample(finding);
   if (values.json) console.log(JSON.stringify(result, null, values.watch ? 0 : 2));
   else {
