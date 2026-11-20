@@ -95,3 +95,93 @@ test('skips calls outside transactions, unawaited reads, and calls that receive 
   );
   assert.equal(findings.length, 0);
 });
+
+const { scanWithFixes, onlyChange } = require('./site-fix-helpers.cjs');
+
+const fixHeader = ["import { DataSource } from 'typeorm';", 'declare const dataSource: DataSource;'];
+
+function fixFor(context, bodyLines, extraLines = []) {
+  const source = [...fixHeader, ...extraLines, 'export async function run(id: number) {', ...bodyLines, '}'].join('\n');
+  const { findings } = scanWithFixes(context, {
+    'globals.d.ts': files['globals.d.ts'],
+    'node_modules/typeorm/index.d.ts': files['node_modules/typeorm/index.d.ts'],
+    'a.ts': source,
+  });
+  return findings.filter((finding) => finding.ruleId === 'external-call-in-transaction');
+}
+
+test('moves a plain awaited call to after the transaction', (context) => {
+  const [finding] = fixFor(context, [
+    '  await dataSource.transaction(async (manager) => {',
+    "    await manager.query('select 1');",
+    '    await fetch(String(id));',
+    '  });',
+  ]);
+  assert.match(finding.fix.note, /after the transaction commits/);
+  assert.equal(onlyChange(finding).after, ['});', 'await fetch(String(id));'].join('\n'));
+});
+
+test('offers no fix when the call is not safe to move', (context) => {
+  const cases = {
+    'uses a callback local': [
+      '  await dataSource.transaction(async (manager) => {',
+      '    const key = String(id);',
+      '    await fetch(key);',
+      '  });',
+    ],
+    'result is used': [
+      '  await dataSource.transaction(async (manager) => {',
+      "    const ok = await fetch('https://example.test');",
+      '    await manager.query(String(ok));',
+      '  });',
+    ],
+    'inside an if': [
+      '  await dataSource.transaction(async (manager) => {',
+      '    if (id) {',
+      '      await fetch(String(id));',
+      '    }',
+      '  });',
+    ],
+    'inside a loop': [
+      '  await dataSource.transaction(async (manager) => {',
+      '    for (const step of [1]) {',
+      '      await fetch(String(id));',
+      '    }',
+      '  });',
+    ],
+    'inside a try': [
+      '  await dataSource.transaction(async (manager) => {',
+      '    try {',
+      '      await fetch(String(id));',
+      '    } catch {}',
+      '  });',
+    ],
+    'later statement mentions its argument': [
+      '  await dataSource.transaction(async (manager) => {',
+      '    await fetch(String(id));',
+      '    await manager.query(String(id));',
+      '  });',
+    ],
+    'later statement calls something else': [
+      '  await dataSource.transaction(async (manager) => {',
+      '    await fetch(String(id));',
+      "    await fetch('https://example.test');",
+      '  });',
+    ],
+  };
+  for (const [name, body] of Object.entries(cases)) {
+    const findings = fixFor(context, body);
+    assert.ok(findings.length >= 1, name);
+    assert.equal(findings[0].fix, undefined, name);
+  }
+});
+
+test('offers no fix when the call is reached through a helper', (context) => {
+  const findings = fixFor(
+    context,
+    ['  await dataSource.transaction(async (manager) => {', '    await send();', '  });'],
+    ["async function send() { await fetch('https://example.test'); }"],
+  );
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].fix, undefined);
+});
