@@ -115,3 +115,13 @@ test('Prisma: an index on the first sort column serves an id tiebreaker through 
 }`);
   assert.deepEqual(findings, []);
 });
+
+test('Drizzle: three equality filters leave too few rows for the sort to matter', () => {
+  const findings = drizzle(`export function latest(organizationId: string, head: number, email: string) {
+  return db.select().from(cases)
+    .where(and(eq(cases.organizationId, organizationId), eq(cases.head, head), eq(cases.email, email)))
+    .orderBy(cases.name)
+    .limit(1);
+}`);
+  assert.deepEqual(findings, []);
+});
