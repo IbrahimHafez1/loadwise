@@ -53,3 +53,18 @@ test('an imported ORM package that cannot be resolved is noted on stderr only', 
   assert.doesNotMatch(result.stdout, /not installed/);
   assert.equal(JSON.parse(result.stdout).scannedFiles, 1);
 });
+
+test('a tsconfig base from an uninstalled package is noted while a missing relative base still fails', (context) => {
+  const packageBase = uninstalledProject(context, {
+    extends: '@workspace/tsconfig/library.json',
+    compilerOptions: { module: 'commonjs' },
+    include: ['index.ts'],
+  });
+  const noted = runIn(packageBase, ['-p', 'tsconfig.json', '--json']);
+  assert.equal(noted.status, 0, noted.stderr);
+  assert.match(noted.stderr, /Note: .*@workspace\/tsconfig\/library\.json.*own settings/);
+  assert.equal(JSON.parse(noted.stdout).scannedFiles, 1);
+
+  const relativeBase = uninstalledProject(context, { extends: './missing.json', include: ['index.ts'] });
+  assert.equal(runIn(relativeBase, ['-p', 'tsconfig.json']).status, 2);
+});
