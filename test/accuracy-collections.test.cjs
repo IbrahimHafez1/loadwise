@@ -19,7 +19,7 @@ function summary(findings, ruleId) {
 }
 
 const membershipSource =
-  'export function pick(rows: string[], ids: string[]) {\n  return rows.filter((row) => ids.includes(row));\n}';
+  'export async function pick(rows: string[], repo: { find(): Promise<string[]> }) { const ids = await repo.find();\n  return rows.filter((row) => ids.includes(row));\n}';
 const findSource =
   'export function link(items: { id: string }[], rows: { id: string }[]) {\n  return rows.map((row) => items.find((item) => item.id === row.id));\n}';
 
@@ -155,4 +155,21 @@ test('only calls before a lookup count as possibly changing a small array', () =
   assert.equal(reported('', 'inspect(wanted);'), 0);
   assert.equal(reported('inspect(wanted);', ''), 1);
   assert.equal(reported('', 'wanted.push("d");'), 1);
+});
+
+test('lookups are default findings over known data sources and contextual when the array size is unknown', () => {
+  const reasonFor = (setup) =>
+    lintAs(
+      'service.ts',
+      `declare const repo: { findMany(): Promise<string[]>; query(): Promise<string[]> };\ndeclare function opaque(): Promise<string[]>;\nexport async function pick(rows: string[], param: string[], request: { body: { ids: string[] } }) {\n  ${setup}\n  return rows.filter((row) => ids.includes(row));\n}`,
+    ).find((finding) => finding.ruleId === 'array-repeated-membership')?.contextualReason;
+  const unknown = 'array size unknown; review if it can hold more than a few dozen items';
+  assert.equal(reasonFor('const ids = await repo.findMany();'), undefined);
+  assert.equal(reasonFor('const ids = (await repo.query()).filter(Boolean);'), undefined);
+  assert.equal(reasonFor('const ids = request.body.ids;'), undefined);
+  assert.equal(reasonFor('const ids = JSON.parse("[]") as string[];'), undefined);
+  assert.equal(reasonFor('const ids = Array.from(new Set((await repo.findMany()).map((id) => id)));'), undefined);
+  assert.equal(reasonFor('const [ids] = await Promise.all([repo.findMany()]);'), undefined);
+  assert.equal(reasonFor('const ids = param;'), unknown);
+  assert.equal(reasonFor('const ids = await opaque();'), unknown);
 });

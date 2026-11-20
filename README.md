@@ -15,7 +15,7 @@ Find repeated backend work before deployment or in a recorded request. The local
 Text findings carry a **Fix:** snippet where one applies and, for loops and repeated spans, an **Impact:** line. Impact always says which side is measured and which is estimated.
 
 ```text
-examples/slow.ts:6:48 [array-repeated-find] Each item can rescan the lookup array with find(), so cost grows with items times rows. Build `const byKey = new Map()` once (first match wins) and call `byKey.get(key)`; keep the original key-equality semantics.
+examples/slow.ts:7:48 [array-repeated-find] Each item can rescan the lookup array with find(), so cost grows with items times rows. Build `const byKey = new Map()` once (first match wins) and call `byKey.get(key)`; keep the original key-equality semantics.
   Fix:
     const firstById = new Map();
     for (const row of rows) {

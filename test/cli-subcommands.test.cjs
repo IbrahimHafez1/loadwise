@@ -86,7 +86,7 @@ test('findings carry a rewrite of the flagged code in text and JSON', () => {
   assert.deepEqual(membership.fix.changes, [
     {
       file: 'examples/slow.ts',
-      line: 5,
+      line: 6,
       before: '  const visible = orders.filter(order => allowed.includes(order.customerId));',
       after:
         '  const allowedSet = new Set(allowed);\n  const visible = orders.filter(order => allowedSet.has(order.customerId));',
@@ -94,7 +94,7 @@ test('findings carry a rewrite of the flagged code in text and JSON', () => {
   ]);
   assert.match(
     text.stdout,
-    /\[array-repeated-membership\] .*\n {2}Fix \(examples\/slow\.ts:5\):\n {4}- const visible = orders\.filter\(order => allowed\.includes\(order\.customerId\)\);\n {4}\+ const allowedSet = new Set\(allowed\);\n/,
+    /\[array-repeated-membership\] .*\n {2}Fix \(examples\/slow\.ts:6\):\n {4}- const visible = orders\.filter\(order => allowed\.includes\(order\.customerId\)\);\n {4}\+ const allowedSet = new Set\(allowed\);\n/,
   );
   assert.doesNotMatch(text.stdout, /Example \(generic/, 'a site fix replaces the generic example');
   assert.doesNotMatch(text.stdout, /Impact:/, 'no impact without a loop rule');

@@ -61,7 +61,7 @@ function project(context) {
   );
   write(
     'app/perf.ts',
-    'export function select(ids: string[], allowed: string[]) { return ids.filter(id => allowed.includes(id)); }',
+    'export async function select(ids: string[], db: { find(): Promise<string[]> }) { const allowed = await db.find(); return ids.filter(id => allowed.includes(id)); }',
   );
   return { root, write };
 }

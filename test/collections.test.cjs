@@ -23,7 +23,8 @@ test('pure probes into typed data properties and caller-sized public predicates 
       .map((finding) => [finding.line, Boolean(finding.contextualReason)]),
     [
       [5, true],
-      [6, false],
+      // Both receivers come from parameters, so neither array size is known.
+      [6, true],
     ],
   );
 });

@@ -60,12 +60,12 @@ test('examples agree on duplicate keys, missing customers, NaN and empty inputs'
     { id: Number.NaN, name: 'skip' },
   ];
   for (const visible of implementations) {
-    assert.deepEqual(visible([], [], []), []);
+    assert.deepEqual(visible([], [], { body: { allowed: [] } }), []);
     assert.deepEqual(
       visible(
         ids.map((customerId, id) => ({ id, customerId })),
         customers,
-        [2, 7, Number.NaN],
+        { body: { allowed: [2, 7, Number.NaN] } },
       ),
       ['first', 'Unknown', 'Unknown', 'first'],
     );
@@ -151,7 +151,7 @@ test('a shared file can resolve to a built-in array in just one referenced proje
     'custom.d.ts': 'export interface Labels { includes(id: string): boolean }',
     'array.d.ts': 'export type Labels = string[];',
     'service.ts':
-      "import type { Labels } from 'models'; export function filter(ids: string[], labels: Labels) { return ids.filter(id => labels.includes(id)); }",
+      "import type { Labels } from 'models'; export async function filter(ids: string[], db: { find(): Promise<Labels> }) { const labels = await db.find(); return ids.filter(id => labels.includes(id)); }",
   });
   const checked = run(['--json'], directory);
   assert.equal(checked.status, 1, checked.stderr);
