@@ -297,4 +297,20 @@ test('a standalone entry point or a database run script is operator tooling wher
   assert.ok(reason('src/database/tools/reindex.cli.ts', library));
   assert.equal(reason('src/billing/backfill.ts', library), undefined);
   assert.equal(reason('src/billing/run-report.ts', library), undefined);
+  // A guarded entry point that also exports, ESM or CommonJS, is imported by other code too.
+  for (const exported of [
+    'export { main };',
+    'module.exports = { main };',
+    'module.exports.main = main;',
+    'exports.main = main;',
+  ])
+    assert.equal(
+      reason(
+        'src/billing/backfill.js',
+        `${guardedMain}
+${exported}`,
+      ),
+      undefined,
+      exported,
+    );
 });
