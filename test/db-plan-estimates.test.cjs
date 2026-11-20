@@ -9,6 +9,7 @@ const {
   planUsesIndex,
   describeQuery,
   planFinding,
+  mysqlFullScans,
 } = require('../lib/db/plan-estimates.cjs');
 
 function tableModel(overrides = {}) {
@@ -124,4 +125,26 @@ test('a HypoPG-validated candidate is a missing-index finding with an estimated 
   });
   assert.equal(unused.ruleId, 'db-slow-query-plan');
   assert.match(unused.message, /did not change the plan/);
+});
+
+test('MySQL full scans of large tables are read from nested FORMAT=JSON plans', () => {
+  const model = tableModel();
+  const plan = {
+    query_block: {
+      cost_info: { query_cost: '24120.50' },
+      ordering_operation: {
+        nested_loop: [
+          { table: { table_name: 'orders', access_type: 'ALL', rows_examined_per_scan: 2_390_000 } },
+          { table: { table_name: 'customers', access_type: 'eq_ref' } },
+        ],
+      },
+    },
+  };
+  const { scans, queryCost } = mysqlFullScans(plan, model);
+  assert.equal(queryCost, 24120.5);
+  assert.deepEqual(
+    scans.map((scan) => [scan.table.name, scan.rowsPerScan]),
+    [['orders', 2_390_000]],
+  );
+  assert.deepEqual(mysqlFullScans(plan, tableModel({ rowEstimate: 50 })).scans, []);
 });

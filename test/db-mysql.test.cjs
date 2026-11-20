@@ -120,3 +120,26 @@ test('MySQL unused and redundant indexes from the sys schema skip unique and pri
   });
   assert.match(young.contextualReason, /run for 1 day, less than 7 days/);
 });
+
+test('MySQL foreign keys are grouped by constraint in column order for the snapshot', () => {
+  const row = (column_name, referenced_column) => ({
+    schema_name: 'school',
+    table_name: 'enrolments',
+    constraint_name: 'enrolments_course_fk',
+    column_name,
+    referenced_schema: 'school',
+    referenced_table: 'courses',
+    referenced_column,
+  });
+  const model = buildMysqlModel({
+    tables: [{ schema_name: 'school', table_name: 'enrolments', row_estimate: 10, size_bytes: 1 }],
+    foreignKeys: [row('course_id', 'id'), row('term', 'term')],
+  });
+  assert.deepEqual(model.get('school.enrolments').foreignKeys, [
+    {
+      name: 'enrolments_course_fk',
+      columns: ['course_id', 'term'],
+      references: { table: 'school.courses', columns: ['id', 'term'] },
+    },
+  ]);
+});
