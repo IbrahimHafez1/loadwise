@@ -224,6 +224,13 @@ const standaloneExamples = {
     code: 'async canActivate(context) {\n  const user = await this.userCache.wrap(id, () => this.users.findOne({ where: { id } }), 60_000);\n}',
     note: 'A global guard runs this query before every handler. Cache it by id with a short TTL and invalidate it when the user changes.',
   },
+  'count-then-page-serial': {
+    language: 'javascript',
+    before: 'const total = await qb.getCount();
+const rows = await qb.skip(offset).take(limit).getMany();',
+    code: 'const [rows, total] = await qb.skip(offset).take(limit).getManyAndCount();',
+    note: 'The page waits for the count, so one list costs two round trips. Prisma has no combined call; run both with Promise.all.',
+  },
   'mongo-collection-scan': collectionScan,
   'mongo-collection-scan-observed': collectionScan,
   'mongo-disk-sort': {

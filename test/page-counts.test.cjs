@@ -1,0 +1,173 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const test = require('node:test');
+const { scanWithFixes, onlyChange } = require('./site-fix-helpers.cjs');
+
+const typeormStub = `export class SelectQueryBuilder<T> {
+  skip(value: number): this;
+  take(value: number): this;
+  where(condition: string): this;
+  getCount(): Promise<number>;
+  getMany(): Promise<T[]>;
+  getManyAndCount(): Promise<[T[], number]>;
+}
+export class Repository<T> {
+  find(options?: object): Promise<T[]>;
+  count(options?: object): Promise<number>;
+  findAndCount(options?: object): Promise<[T[], number]>;
+}`;
+const prismaStub = `export interface UserDelegate {
+  count(args?: object): Promise<number>;
+  findMany(args?: object): Promise<{ id: number }[]>;
+}
+export class PrismaClient {
+  user: UserDelegate;
+  $transaction(callback: (tx: { user: UserDelegate }) => unknown): Promise<unknown>;
+}`;
+
+function findingsFor(context, source) {
+  const { findings } = scanWithFixes(context, {
+    'node_modules/typeorm/index.d.ts': typeormStub,
+    'node_modules/@prisma/client/index.d.ts': prismaStub,
+    'src/service.ts': source,
+  });
+  return findings.filter((finding) => finding.ruleId === 'count-then-page-serial');
+}
+
+const typeormHeader = `import { Repository, SelectQueryBuilder } from 'typeorm';
+declare const qb: SelectQueryBuilder<object>;
+declare const repo: Repository<object>;
+declare const page: number;
+declare const limit: number;
+declare const where: object;
+`;
+
+test('count then rows on one query builder become getManyAndCount in either order', (context) => {
+  const [countFirst, rowsFirst] = findingsFor(
+    context,
+    `${typeormHeader}export async function list() {
+  const total = await qb.getCount();
+  const items = await qb.skip(page).take(limit).getMany();
+  return { items, total };
+}
+export async function listReversed() {
+  const items = await qb.take(limit).getMany();
+  const total = await qb.getCount();
+  return { items, total };
+}`,
+  );
+  assert.deepEqual(onlyChange(countFirst), {
+    before: 'const total = await qb.getCount();\nconst items = await qb.skip(page).take(limit).getMany();',
+    after: 'const [items, total] = await qb.skip(page).take(limit).getManyAndCount();',
+  });
+  assert.equal(onlyChange(rowsFirst).after, 'const [items, total] = await qb.take(limit).getManyAndCount();');
+});
+
+test('repository count and paged find with the same where become findAndCount', (context) => {
+  const [finding] = findingsFor(
+    context,
+    `${typeormHeader}export async function list() {
+  const total = await repo.count({ where });
+  const rows = await repo.find({ where, skip: page, take: limit });
+  return { rows, total };
+}`,
+  );
+  assert.equal(
+    onlyChange(finding).after,
+    'const [rows, total] = await repo.findAndCount({ where, skip: page, take: limit });',
+  );
+});
+
+test('prisma count and paged findMany keep their order inside Promise.all', (context) => {
+  const [finding] = findingsFor(
+    context,
+    `import { PrismaClient } from '@prisma/client';
+declare const prisma: PrismaClient;
+declare const page: number;
+export async function list(tenantId: number) {
+  const total = await prisma.user.count({ where: { tenantId } });
+  const rows = await prisma.user.findMany({ where: { tenantId }, skip: page, take: 10 });
+  return { rows, total };
+}`,
+  );
+  assert.equal(
+    onlyChange(finding).after,
+    [
+      'const [total, rows] = await Promise.all([',
+      '  prisma.user.count({ where: { tenantId } }),',
+      '  prisma.user.findMany({ where: { tenantId }, skip: page, take: 10 }),',
+      ']);',
+    ].join('\n'),
+  );
+});
+
+test('different filters, unpaged reads, dependent statements and non-ORM receivers are left alone', (context) => {
+  const findings = findingsFor(
+    context,
+    `${typeormHeader}declare const other: object;
+declare const cache: { count(options?: object): Promise<number>; find(options?: object): Promise<number[]> };
+export async function mismatched() {
+  const total = await repo.count({ where });
+  const rows = await repo.find({ where: other, skip: page, take: limit });
+  return { rows, total };
+}
+export async function unpaged() {
+  const total = await repo.count({ where });
+  const rows = await repo.find({ where });
+  return { rows, total };
+}
+export async function dependent() {
+  const total = await qb.getCount();
+  const rows = await qb.take(total).getMany();
+  return rows;
+}
+export async function filtered() {
+  const total = await qb.getCount();
+  const rows = await qb.where('x').getMany();
+  return { rows, total };
+}
+export async function notOrm() {
+  const total = await cache.count({ where });
+  const rows = await cache.find({ where, skip: page });
+  return { rows, total };
+}
+export async function apart() {
+  const total = await repo.count({ where });
+  console.log(total);
+  const rows = await repo.find({ where, take: limit });
+  return rows;
+}`,
+  );
+  assert.deepEqual(findings, []);
+});
+
+test('annotated bindings are reported without a rewrite', (context) => {
+  const [finding] = findingsFor(
+    context,
+    `${typeormHeader}export async function list() {
+  const total: number = await qb.getCount();
+  const rows = await qb.getMany();
+  return { rows, total };
+}`,
+  );
+  assert.ok(finding);
+  assert.equal(finding.fix, undefined);
+});
+
+test('paging statements between the count and the rows on the same builder are kept', (context) => {
+  const [finding] = findingsFor(
+    context,
+    `${typeormHeader}export async function list() {
+  const total = await qb.getCount();
+  qb.skip(page).take(limit);
+  const rows = await qb.getMany();
+  return { rows, total };
+}`,
+  );
+  const { before, after } = finding.fix.changes.map(({ before, after }) => ({ before, after }))[0];
+  assert.match(before, /getCount/);
+  assert.match(after, /const \[rows, total\] = await qb\.getManyAndCount\(\);/);
+  assert.doesNotMatch(after, /getCount/);
+  assert.match(after, /qb\.skip\(page\)\.take\(limit\);/);
+});
