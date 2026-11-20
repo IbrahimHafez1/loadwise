@@ -1,0 +1,70 @@
+// Condensed from a Prisma/Postgres marketplace: trigram search indexes, mapped names, composite keys.
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+}
+
+model User {
+  id     String  @id @default(cuid())
+  email  String? @unique // null for phone-only signups
+  name   String
+  role   String  @default("CUSTOMER")
+  active Boolean @default(true)
+  orders Order[] @relation("CustomerOrders")
+
+  // Admin user search (ILIKE %term%): trigram indexes.
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "user_name_trgm_idx")
+  @@index([role])
+  @@map("user")
+}
+
+model Store {
+  id       String    @id @default(cuid())
+  ownerId  String    @unique
+  name     String
+  products Product[]
+  orders   Order[]
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name        String
+  description String
+  sku         String
+  priceEGP    Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([storeId, sku])
+  @@index([storeId, isActive])
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "Product_name_trgm_idx")
+}
+
+model Order {
+  id         String      @id @default(cuid())
+  storeId    String
+  store      Store       @relation(fields: [storeId], references: [id])
+  customerId String
+  customer   User        @relation("CustomerOrders", fields: [customerId], references: [id])
+  status     OrderStatus @default(PENDING)
+  couponCode String?
+  totalEGP   Int
+  createdAt  DateTime    @default(now())
+  paidAt     DateTime?
+
+  @@index([storeId, createdAt(sort: Desc), id])
+  @@index([couponCode], type: Hash)
+  @@map("orders")
+}
+
+view OrderSummary {
+  storeId String @unique
+  total   Int
+}
