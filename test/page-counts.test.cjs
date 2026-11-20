@@ -77,6 +77,9 @@ test('repository count and paged find with the same where become findAndCount', 
     onlyChange(finding).after,
     'const [rows, total] = await repo.findAndCount({ where, skip: page, take: limit });',
   );
+  // TypeORM still counts after a full page, so the note must not promise a single query.
+  assert.match(finding.fix.note, /skips the count query when the page is not full/);
+  assert.match(finding.fix.note, /A full page .* still run the count as a second query/);
 });
 
 test('prisma count and paged findMany keep their order inside Promise.all', (context) => {
@@ -100,6 +103,7 @@ export async function list(tenantId: number) {
       ']);',
     ].join('\n'),
   );
+  assert.equal(finding.fix.note, undefined);
 });
 
 test('different filters, unpaged reads, dependent statements and non-ORM receivers are left alone', (context) => {
@@ -180,8 +184,7 @@ const offsetBuilderStub = typeormStub.replace(
 test('offset/limit paging is left alone unless the builder is visibly join-free', (context) => {
   const { findings } = scanWithFixes(context, {
     'node_modules/typeorm/index.d.ts':
-      offsetBuilderStub +
-      '\nexport class DataSource {\n  createQueryBuilder(): SelectQueryBuilder<object>;\n}',
+      offsetBuilderStub + '\nexport class DataSource {\n  createQueryBuilder(): SelectQueryBuilder<object>;\n}',
     'src/service.ts': `import { DataSource, SelectQueryBuilder } from 'typeorm';
 declare const dataSource: DataSource;
 declare function patientQuery(): SelectQueryBuilder<object>;
