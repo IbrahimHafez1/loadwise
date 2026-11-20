@@ -138,7 +138,10 @@ test('the CLI loads dataAccess from the config file and fails the default contra
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'maintainability-access-cli-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.mkdirSync(path.join(root, 'data'));
-  fs.writeFileSync(path.join(root, 'app.ts'), "import { Pool } from 'pg';\nexport const pool = Pool;\n");
+  fs.writeFileSync(
+    path.join(root, 'app.ts'),
+    "import { Pool } from 'pg';\nimport { pool } from './data/db';\nexport const pools = [Pool, pool];\n",
+  );
   fs.writeFileSync(path.join(root, 'data', 'db.ts'), "import { Pool } from 'pg';\nexport const pool = Pool;\n");
   fs.writeFileSync(
     path.join(root, 'maintainability.config.json'),
