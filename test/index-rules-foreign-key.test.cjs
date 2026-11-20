@@ -22,8 +22,15 @@ test('Prisma: an unindexed relation scalar on PostgreSQL is reported on its sche
   const root = path.join(__dirname, 'fixtures/schema/prisma-shop');
   const findings = checkSchemaFile(root);
   assert.deepEqual(
-    findings.map(({ file, line, column, ruleId }) => ({ file: path.relative(root, file), line, column, ruleId })),
-    [{ file: path.join('prisma', 'schema.prisma'), line: 54, column: 3, ruleId: 'index-missing-foreign-key' }],
+    findings.map(({ file, line, column, ruleId }) => ({ file, line, column, ruleId })),
+    [
+      {
+        file: 'test/fixtures/schema/prisma-shop/prisma/schema.prisma',
+        line: 54,
+        column: 3,
+        ruleId: 'index-missing-foreign-key',
+      },
+    ],
   );
   assert.equal(
     findings[0].message,
