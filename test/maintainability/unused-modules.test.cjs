@@ -112,3 +112,31 @@ test('a dynamic import with a relative prefix only affects that folder', async (
     ],
   );
 });
+
+test('declaration files count as users and are not reported themselves', async () => {
+  const findings = await scanProject({
+    'package.json': '{"main":"src/index.ts"}',
+    'src/index.ts': 'export const entry = 1;',
+    'src/shapes.ts': 'export interface Shape { size: number }\nexport interface Unused { id: number }',
+    'src/globals.d.ts': 'import type { Shape } from "./shapes";\ndeclare global { var shape: Shape }\nexport {};',
+    'src/lazy.ts': 'export const lazy = 1;',
+    'src/lazy-types.d.ts': 'declare const lazyValue: import("./lazy").lazy;\nexport { lazyValue };',
+    'src/augment.ts': 'export interface Options { debug: boolean }',
+    'src/augment.d.ts': 'declare module "./augment" { interface Options { extra: boolean } }',
+    'src/legacy.ts': 'export const legacy = 1;',
+    'src/refs.d.ts': '/// <reference path="./legacy.ts" />',
+  });
+  assert.deepEqual(summary(findings), ['unused-export src/shapes.ts']);
+  assert.match(findings[0].message, /`Unused`/);
+});
+
+test('a package.json exports wildcard publishes every file it matches', async () => {
+  const findings = await scanProject({
+    'package.json': '{"exports":{".":"./src/index.ts","./features/*":"./src/features/*.ts"}}',
+    'src/index.ts': 'export const entry = 1;',
+    'src/features/billing.ts': 'export const billing = 1;',
+    'src/features/auth.ts': 'export const auth = 1;',
+    'src/internal/orphan.ts': 'export const lonely = 1;',
+  });
+  assert.deepEqual(summary(findings), ['unreferenced-file src/internal/orphan.ts']);
+});
