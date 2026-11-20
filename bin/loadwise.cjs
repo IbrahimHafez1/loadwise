@@ -2,7 +2,7 @@
 'use strict';
 
 const usage = `Usage:
-  loadwise [check] [directory] [--only perf,maint,sec | --skip perf,maint,sec] [--json] [--include-contextual] [--staged | --changed-since git-ref] [--fail-on contract|all]
+  loadwise [check] [directory] [--only perf,maint,sec | --skip perf,maint,sec] [--json | --format text|json|sarif|github] [--include-contextual] [--staged | --changed-since git-ref] [--fail-on contract|all]
   loadwise perf [args...]
   loadwise maint [args...]
   loadwise sec [args...]
@@ -12,6 +12,7 @@ check, the default command, runs every checker (perf: performance, maint: mainta
 --only runs just the listed checkers and --skip runs all but them; both take a comma-separated list, and they cannot be combined.
 The performance checker uses the directory's tsconfig.json or jsconfig.json; without one it is skipped with a note.
 --json prints one key per selected checker, { "performance": report, "maintainability": report, "security": report }; a skipped or failed checker's report is null.
+--format sarif prints SARIF 2.1.0 with one run per checker for GitHub code scanning; --format github prints workflow annotations (::warning, ::error); --json is --format json.
 --include-contextual, --staged, --changed-since and --fail-on apply to every selected checker; without --fail-on each keeps its own default.
 Security checks are not available yet: \`loadwise sec\` and --only sec exit with code 2.
 check never changes files: apply fixes with the printed \`loadwise perf --fix --only id\` and \`loadwise maint --fix --only id\` commands.

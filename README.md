@@ -33,6 +33,7 @@ npx loadwise
 `check` accepts these flags and passes them to every selected checker:
 
 - `--json` prints one object with a key per selected checker, `{ "performance": report, "maintainability": report }`. A checker that was skipped or could not run has `null`.
+- `--format text|json|sarif|github` picks the output; `--json` is `--format json`. `sarif` prints SARIF 2.1.0 with one run per checker for GitHub code scanning, and `github` prints `::warning`/`::error`/`::notice` workflow annotations. `loadwise perf` and `loadwise maint` accept it too. Exit codes do not depend on the format.
 - `--include-contextual` also shows lower-priority findings, each with its reason.
 - `--staged` or `--changed-since <git-ref>` reports only findings on changed lines.
 - `--fail-on contract|all` sets the exit threshold. Without it the performance checker fails on any displayed finding and the maintainability checker on contract violations only.
@@ -40,6 +41,40 @@ npx loadwise
 The performance checker uses the directory's `tsconfig.json` or `jsconfig.json`; without one, `check` skips it and prints a note. `check` never changes files: each report ends with a `Fix all:` command, such as `npx loadwise perf -p tsconfig.json --fix --only <ids>`, that applies its fixes.
 
 Exit codes: **0** passed, **1** a checker met its exit threshold, **2** invalid input or configuration in any checker.
+
+## GitHub Action
+
+The repository root is a composite action that runs `loadwise check`, prints annotations on the pull request and uploads SARIF to code scanning.
+
+```yaml
+name: loadwise
+on: pull_request
+permissions:
+  contents: read
+  security-events: write
+jobs:
+  loadwise:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: IbrahimHafez1/loadwise@v0
+        with:
+          changed-only: true
+          fail-on: contract
+```
+
+| Input          | Default         | Meaning                                                                                               |
+| -------------- | --------------- | ----------------------------------------------------------------------------------------------------- |
+| `checkers`     | all             | Passed to `--only`, for example `perf,maint`.                                                         |
+| `path`         | `.`             | Directory to check.                                                                                   |
+| `changed-only` | `false`         | `true` passes `--changed-since` with the pull request base commit.                                    |
+| `fail-on`      | checker default | Passed to `--fail-on` (`contract` or `all`).                                                          |
+| `upload-sarif` | `true`          | Uploads the SARIF report with `github/codeql-action/upload-sarif@v3`; needs `security-events: write`. |
+| `annotations`  | `true`          | Prints findings as workflow annotations.                                                              |
+
+The action runs `npx --yes @loadwise/cli@<version>` with the version in its own `package.json`, and fails the job with the checker's exit code.
 
 ## Use with AI coding agents
 
