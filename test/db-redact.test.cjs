@@ -63,3 +63,11 @@ test('safe errors carry only the code and redacted message, never the stack or c
   assert.equal(describeError(error, redact), 'ECONNREFUSED: connect to [redacted] failed');
   assert.equal(describeError('plain', redact), 'plain');
 });
+
+test('very short values are redacted as whole tokens, not inside other words', () => {
+  const redact = createRedactor({ user: 'u', password: 'p', hosts: ['db'] });
+  assert.equal(
+    redact('password authentication failed for user "u" at db:5432 during production'),
+    'password authentication failed for user "[redacted]" at [redacted]:5432 during production',
+  );
+});
