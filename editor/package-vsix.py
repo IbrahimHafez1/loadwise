@@ -45,6 +45,10 @@ def runtime_files(package, relative):
         return relative == "LICENSE" or (relative.startswith("lib/") and relative.endswith(".js"))
     if package == AST_GREP:
         return relative == "postinstall.js"
+    if package == "libpg-query":
+        return relative in {"LICENSE", "wasm/index.cjs", "wasm/libpg-query.js", "wasm/libpg-query.wasm"}
+    if package == "@pgsql/types":
+        return relative in {"LICENSE", "index.js", "enums.js", "types.js"}
     if package in {"chokidar", "readdirp"}:
         return relative in {"LICENSE", "handler.js", "index.js", "esm/package.json", "esm/index.js", "esm/handler.js"}
     return relative == ("ast-grep.exe" if "-win32-" in package else "ast-grep")
@@ -52,7 +56,7 @@ def runtime_files(package, relative):
 
 def stage_runtime(downloads, stage, lock, other_lock):
     variants = lock[f"node_modules/{AST_GREP}"]["optionalDependencies"]
-    packages = ["typescript", "detect-libc", "chokidar", "readdirp", AST_GREP, *sorted(variants)]
+    packages = ["typescript", "detect-libc", "chokidar", "readdirp", "libpg-query", "@pgsql/types", AST_GREP, *sorted(variants)]
     urls = []
     for name in packages:
         entry = lock[f"node_modules/{name}"]
@@ -92,7 +96,7 @@ def stage_runtime(downloads, stage, lock, other_lock):
             entrypoint = "ast-grep.exe" if "-win32-" in name else "ast-grep"
         else:
             entrypoint = {"typescript": "lib/typescript.js", "detect-libc": "lib/detect-libc.js",
-                          AST_GREP: "postinstall.js"}.get(name, "index.js")
+                          "libpg-query": "wasm/index.cjs", AST_GREP: "postinstall.js"}.get(name, "index.js")
         if not {"package.json", entrypoint}.issubset(staged):
             raise ValueError(f"Missing runtime files in {name}")
 
