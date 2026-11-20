@@ -61,7 +61,8 @@ test('hooks.json runs the hook script after Edit, Write and MultiEdit', () => {
   const { hooks } = readJson('plugin', 'hooks', 'hooks.json');
   const [entry] = hooks.PostToolUse;
   assert.equal(entry.matcher, 'Edit|Write|MultiEdit');
-  assert.match(entry.hooks[0].command, /\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/check-edited-file\.cjs/);
+  assert.equal(entry.hooks[0].command, 'node');
+  assert.deepEqual(entry.hooks[0].args, ['${CLAUDE_PLUGIN_ROOT}/hooks/check-edited-file.cjs']);
 });
 
 test('a non-TS/JS file is skipped silently', () => {

@@ -58,7 +58,7 @@ npx loadwise agent init --mode auto   # auto mode: applies fixes without behavio
 
 ```
 /plugin marketplace add IbrahimHafez1/loadwise
-/plugin install loadwise
+/plugin install loadwise@loadwise
 ```
 
 After every `Edit`, `Write` or `MultiEdit` on a `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts` or `.cts` file, a hook runs the project's own `node_modules/.bin/loadwise` on that file (`perf` on the file, `maint` on the uncommitted changes, keeping that file's findings) with a 20 second limit. Findings go back to Claude with their ids and `loadwise perf --fix --only <id>` commands; a clean file prints nothing. The hook never downloads anything: without a local install, outside a project, on other file types, on a timeout or on any error it exits silently. The plugin also adds a `/loadwise [args]` command that runs `loadwise check`, summarizes the findings and offers fixes.
