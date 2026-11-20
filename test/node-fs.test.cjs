@@ -135,6 +135,23 @@ function classifiedCalls(source) {
     .map(({ line, contextualReason }) => [line, Boolean(contextualReason)]);
 }
 
+test('local CLI exit and positive debug branches reduce priority without suppressing ordinary request I/O', () => {
+  const source = [
+    "import {readFileSync as read} from 'node:fs';",
+    "async function main() { read('out'); process.exit(0); }",
+    'void main();',
+    "export async function report() { if (process.env.REPORT_DEBUG_DIR) read('snapshot'); else read('normal'); }",
+    "async function handler() { read('response'); process.exit(1); }",
+    'server.on("request",handler); handler();',
+  ].join('\n');
+  assert.deepEqual(classifiedCalls(source), [
+    [2, true],
+    [4, true],
+    [4, false],
+    [5, false],
+  ]);
+});
+
 test('only one-off work in a private process entry point gets startup context', () => {
   const source = [
     "import { readFileSync as read } from 'node:fs';",
