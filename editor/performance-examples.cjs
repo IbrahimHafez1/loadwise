@@ -248,6 +248,12 @@ const standaloneExamples = {
     code: "const response = await fetch(url, { method: 'POST', body, signal: AbortSignal.timeout(10_000) });",
     note: 'Without a timeout a hung upstream holds this request and its socket until the OS gives up. Tune the limit per API.',
   },
+  'upload-without-size-limit': {
+    language: 'javascript',
+    before: "FileInterceptor('file')",
+    code: "FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } })",
+    note: 'Without a cap one large upload is buffered in full and can exhaust memory. Tune the limit per endpoint.',
+  },
   'mongo-collection-scan': collectionScan,
   'mongo-collection-scan-observed': collectionScan,
   'mongo-disk-sort': {
