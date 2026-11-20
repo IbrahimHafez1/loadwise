@@ -11,6 +11,8 @@ const libDirectory = path.join(__dirname, '..', 'lib');
 function reportedRuleIds() {
   const ruleIds = new Set();
   for (const name of fs.readdirSync(libDirectory)) {
+    // Subfolders such as site-fixes hold fix builders, which report nothing.
+    if (!name.endsWith('.cjs')) continue;
     const source = fs.readFileSync(path.join(libDirectory, name), 'utf8');
     for (const match of source.matchAll(/ruleId: '([a-z-]+)'/g)) ruleIds.add(match[1]);
     for (const match of source.matchAll(/report\([^']*?'([a-z-]+)'/g)) ruleIds.add(match[1]);

@@ -5,12 +5,16 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { parseArgs } = require('node:util');
 const { exampleFor } = require('../lib/examples.cjs');
+const { fixLines } = require('../lib/fix-text.cjs');
 const help = `Usage:
   maintainability-check [directory] [--config policy.json] [--json] [--include-contextual] [--fail-on contract|all]
+  maintainability-check [directory] [--config policy.json] [--include-contextual] --fix [--yes]
   maintainability-check [directory] --graph modules.json [--config policy.json] [--json]
 
 The default directory is the current folder. Source mode discovers supported files.
 Graph mode accepts project-relative files and dependency edges from any language.
+Findings with a safe rewrite carry it as a diff, and as "fix" in --json output.
+--fix shows each available code fix and asks before applying it; --fix --yes applies every one without asking.
 By default, only declared folder or query contracts fail CI. Exit codes are 0, 1 (threshold met), 2 (invalid input).`;
 
 // Prints each rule's example once so output stays short when many findings share a rule.
@@ -40,6 +44,8 @@ async function main(args) {
       graph: { type: 'string' },
       'include-contextual': { type: 'boolean' },
       'fail-on': { type: 'string', default: 'contract' },
+      fix: { type: 'boolean' },
+      yes: { type: 'boolean' },
     },
   });
   if (values.help) {
@@ -49,6 +55,9 @@ async function main(args) {
   if (positionals.length > 1 || !['all', 'contract'].includes(values['fail-on'])) {
     throw new Error('Pass one directory and --fail-on contract or all.');
   }
+  if (values.fix && (values.json || values.graph !== undefined))
+    throw new Error('--fix cannot be combined with --json or --graph.');
+  if (values.yes && !values.fix) throw new Error('--yes is only valid with --fix.');
   const root = path.resolve(positionals[0] ?? '.');
   if (!fs.statSync(root, { throwIfNoEntry: false })?.isDirectory()) throw new Error('Expected a project directory.');
   require('node:module').enableCompileCache?.();
@@ -73,6 +82,8 @@ async function main(args) {
     if (!values['include-contextual'])
       report.findings = report.findings.filter((finding) => !finding.contextualReason || contracts.has(finding.ruleId));
   }
+  if (report.mode === 'source') require('../lib/site-fix.cjs').attachSiteFixes(report.findings, root);
+  if (values.fix) return require('../lib/fix-cli.cjs').applyFixes(report.findings, root, { all: values.yes });
   if (values.json) {
     for (const finding of report.findings) addExample(finding);
     console.log(JSON.stringify(report, null, 2));
@@ -82,7 +93,8 @@ async function main(args) {
       console.log(`${finding.file}:${finding.line}:${finding.column} [${finding.ruleId}] ${finding.message}`);
       if (finding.contextualReason) console.log('  ' + finding.contextualReason);
       for (const site of finding.related ?? []) console.log(`  ${site.file}:${site.line}:${site.column}`);
-      printFixOnce(finding.ruleId, printedRules);
+      if (finding.fix) for (const line of fixLines(finding.fix)) console.log(line);
+      else printFixOnce(finding.ruleId, printedRules);
     }
     console.log(
       `${report.scannedFiles ?? report.graphFiles} ${report.mode} file(s), ${report.findings.length} finding(s), ${report.contractFindingCount} contract finding(s).`,
