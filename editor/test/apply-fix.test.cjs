@@ -43,6 +43,18 @@ test('an insertion that is already present is not inserted twice', () => {
   assert.equal(applyChangesToText(once, [change]).error, 'already applied');
 });
 
+test('a change shared with an applied fix is skipped while the fix applies its other changes', () => {
+  const helper = {
+    line: 2,
+    before: 'async function ids() {}',
+    after: 'async function ids() {}\nasync function idsMany() {}',
+  };
+  const call = { line: 3, before: 'for (const x of xs) await ids(x);', after: 'await idsMany(xs);' };
+  const applied = ['async function ids() {}', 'async function idsMany() {}', 'for (const x of xs) await ids(x);'];
+  const result = applyChangesToText(applied.join('\n'), [helper, call]);
+  assert.equal(result.text, [...applied.slice(0, 2), 'await idsMany(xs);'].join('\n'));
+});
+
 test('every file of a fix is checked before any file is written', () => {
   const files = new Map([
     ['a.ts', 'const one = 1;'],

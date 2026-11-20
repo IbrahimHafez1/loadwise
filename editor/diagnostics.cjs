@@ -5,7 +5,7 @@ const path = require('node:path');
 const { exampleFor: performanceExample } = require('./performance-examples.cjs');
 const { exampleFor: maintainabilityExample } = require('./maintainability-examples.cjs');
 const { getFindingComparison, inlineComparison } = require('./finding-comparison.cjs');
-const { locateChange } = require('./apply-fix.cjs');
+const { isChangeApplied, locateChange } = require('./apply-fix.cjs');
 const anchors = new WeakMap();
 const severityNames = { error: 'Error', warning: 'Warning', information: 'Information', hint: 'Hint' };
 const staleFixMessage = 'The code changed since the last scan. Save the file to rescan, then try again.';
@@ -233,6 +233,10 @@ async function planFix(vscode, fix, openDocument) {
     const row = locateChange(lines, change);
     // The code moved or changed since the scan; applying the stored rewrite could clobber the new code.
     if (row === -1) return { error: staleFixMessage };
+    if (isChangeApplied(lines, row, change)) {
+      alreadyApplied++;
+      continue;
+    }
     const lastRow = row + change.before.split('\n').length - 1;
     const eol = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
     const range = new vscode.Range(row, 0, lastRow, lines[lastRow].length);

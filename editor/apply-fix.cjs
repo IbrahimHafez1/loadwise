@@ -30,6 +30,12 @@ function blockAround(lines, row, block) {
   return false;
 }
 
+// Two findings can share one change, such as the same missing index or the same batched helper. An insertion keeps
+// the original lines, so the rewritten block around them means this change is already in the file.
+function isChangeApplied(lines, row, change) {
+  return blockAround(lines, row, splitLines(change.after));
+}
+
 // Returns the new text, or { error } when the code no longer matches the scan.
 function applyChangesToText(text, changes) {
   const newline = text.includes('\r\n') ? '\r\n' : '\n';
@@ -38,12 +44,10 @@ function applyChangesToText(text, changes) {
   for (const change of changes) {
     const row = locateChange(lines, change);
     if (row === -1) return { error: `the code at line ${change.line} changed since the scan` };
-    const after = splitLines(change.after);
-    // Two findings can share one fix, such as the same missing index. An insertion keeps the original lines, so
-    // look for the rewritten block around them to avoid inserting it twice.
-    if (blockAround(lines, row, after)) return { error: 'already applied' };
-    located.push({ row, removed: splitLines(change.before).length, added: after });
+    if (isChangeApplied(lines, row, change)) continue;
+    located.push({ row, removed: splitLines(change.before).length, added: splitLines(change.after) });
   }
+  if (!located.length) return { error: 'already applied' };
   located.sort((left, right) => right.row - left.row);
   for (let index = 1; index < located.length; index++) {
     if (located[index].row + located[index].removed > located[index - 1].row) return { error: 'overlapping changes' };
@@ -92,4 +96,4 @@ function applyFix(fix, { readFile, writeFile }) {
   return { files: updates.map(([file]) => file) };
 }
 
-module.exports = { applyChangesToText, applyFix, locateChange };
+module.exports = { applyChangesToText, applyFix, isChangeApplied, locateChange };
