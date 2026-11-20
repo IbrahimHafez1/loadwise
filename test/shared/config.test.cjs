@@ -36,8 +36,11 @@ function perfRun(root, ...args) {
   return { ...run, findings, ruleIds: findings.map((finding) => finding.ruleId) };
 }
 
+// The fixtures are lone modules nothing imports, which unreferenced-file would report in every test.
+const skipUnreferenced = ['--ignore', 'unreferenced-file'];
+
 function maintFindings(root, ...args) {
-  return JSON.parse(loadwise(root, 'maint', '.', '--json', ...args).stdout).findings;
+  return JSON.parse(loadwise(root, 'maint', '.', '--json', ...skipUnreferenced, ...args).stdout).findings;
 }
 
 // Findings in the tests are relative to the config's folder, as they are for a checker run from the project root.
@@ -223,14 +226,15 @@ test('the maintainability section replaces maintainability.config.json and --con
 
 test('maint applies off, warn and --ignore to its findings', (context) => {
   const files = { 'src/a.ts': 'export const one = 1;\n', 'maintainability.config.json': placement };
-  assert.equal(loadwise(project(context, files), 'maint', '.').code, 1);
+  assert.equal(loadwise(project(context, files), 'maint', '.', ...skipUnreferenced).code, 1);
   const warn = project(context, { ...files, 'loadwise.config.json': { rules: { 'file-placement': 'warn' } } });
-  const warned = loadwise(warn, 'maint', '.');
+  const warned = loadwise(warn, 'maint', '.', ...skipUnreferenced);
   assert.equal(warned.code, 0, warned.stderr);
   assert.match(warned.stdout, /1 finding\(s\) are warnings/);
   const off = project(context, { ...files, 'loadwise.config.json': { rules: { 'file-placement': 'off' } } });
-  assert.match(loadwise(off, 'maint', '.').stdout, /0 finding\(s\)/);
-  assert.match(loadwise(project(context, files), 'maint', '.', '--ignore', 'file-placement').stdout, /0 finding\(s\)/);
+  assert.match(loadwise(off, 'maint', '.', ...skipUnreferenced).stdout, /0 finding\(s\)/);
+  const ignored = loadwise(project(context, files), 'maint', '.', '--ignore', 'file-placement', ...skipUnreferenced);
+  assert.match(ignored.stdout, /0 finding\(s\)/);
 });
 
 test('invalid configuration exits 2 and names every bad key', (context) => {
@@ -300,10 +304,10 @@ test('maint leaves ignored files out of discovery, so they are not counted or co
     'copy/b.ts': duplicatedFunction('two'),
     'src/c.ts': 'export const three = 3;\n',
   };
-  const plain = JSON.parse(loadwise(project(context, files), 'maint', '.', '--json').stdout);
+  const plain = JSON.parse(loadwise(project(context, files), 'maint', '.', '--json', ...skipUnreferenced).stdout);
   assert.ok(plain.findings.some((finding) => finding.ruleId === 'duplicate-implementation'));
   const ignored = project(context, { ...files, 'loadwise.config.json': { ignore: ['copy/**'] } });
-  const report = JSON.parse(loadwise(ignored, 'maint', '.', '--json').stdout);
+  const report = JSON.parse(loadwise(ignored, 'maint', '.', '--json', ...skipUnreferenced).stdout);
   assert.deepEqual(report.findings, []);
   assert.equal(report.scannedFiles, plain.scannedFiles - 1);
 });

@@ -63,6 +63,9 @@
           "index-unusable-expression",
           "index-unusable-pattern",
           "known-reads-awaited-serially",
+          "large-class",
+          "large-module",
+          "long-parameter-list",
           "loop-copy-accumulator",
           "migration-breaking-drop",
           "migration-breaking-rename",
@@ -118,11 +121,14 @@
           "reduce-copy-accumulator",
           "serial-awaits-in-literal",
           "service-query-in-loop",
+          "swallowed-error",
           "typeorm-existence-materialization",
           "typeorm-load-then-save",
           "typeorm-transaction-client-escape",
           "typeorm-transaction-in-loop",
           "typeorm-wide-projection",
+          "unreferenced-file",
+          "unused-export",
           "upload-without-size-limit"
         ]
       },
@@ -198,6 +204,9 @@
                 "index-unusable-expression",
                 "index-unusable-pattern",
                 "known-reads-awaited-serially",
+                "large-class",
+                "large-module",
+                "long-parameter-list",
                 "loop-copy-accumulator",
                 "migration-breaking-drop",
                 "migration-breaking-rename",
@@ -253,11 +262,14 @@
                 "reduce-copy-accumulator",
                 "serial-awaits-in-literal",
                 "service-query-in-loop",
+                "swallowed-error",
                 "typeorm-existence-materialization",
                 "typeorm-load-then-save",
                 "typeorm-transaction-client-escape",
                 "typeorm-transaction-in-loop",
                 "typeorm-wide-projection",
+                "unreferenced-file",
+                "unused-export",
                 "upload-without-size-limit"
               ]
             },
@@ -317,6 +329,9 @@
           "type": "array"
         },
         "dataAccess": {
+          "type": "object"
+        },
+        "limits": {
           "type": "object"
         }
       },
