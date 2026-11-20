@@ -190,6 +190,78 @@ test('dependent writes through an alias or on top-level statements get no fix', 
   assert.equal(topLevel.matching.filter((finding) => finding.fix).length, 0);
 });
 
+test('dependent writes with single-line templates still re-indent', (context) => {
+  const { change } = dependent(
+    context,
+    [
+      '  const order = await db.order.create({ data: { slug: `o-${Date.now()}` } });',
+      '  await db.item.create({ data: { orderId: order.id } });',
+    ].join('\n'),
+  );
+  assert.deepEqual(change.after.split('\n'), [
+    'await db.$transaction(async (tx) => {',
+    '  const order = await tx.order.create({ data: { slug: `o-${Date.now()}` } });',
+    '  await tx.item.create({ data: { orderId: order.id } });',
+    '});',
+  ]);
+});
+
+// The in-place form spans two hunks, so it is read from the findings directly.
+function wrappedInPlace(context, body) {
+  const source = [
+    "import { PrismaClient } from '@prisma/client';",
+    'async function run(db: PrismaClient) {',
+    body,
+    '}',
+  ];
+  const { findings } = scanWithFixes(context, { 'src.ts': source.join('\n'), ...prismaStub });
+  return findings.filter((finding) => finding.ruleId === 'prisma-dependent-writes');
+}
+
+test('long dependent writes are wrapped in place without re-indenting', (context) => {
+  const dataLines = Array.from({ length: 12 }, (_, index) => `      field${index}: ${index},`);
+  const matching = wrappedInPlace(
+    context,
+    [
+      '  const order = await db.order.create({ data: {} });',
+      '  const item = await db.item.create({',
+      '    data: {',
+      '      orderId: order.id,',
+      ...dataLines,
+      '    },',
+      '  });',
+      '  return item.id;',
+    ].join('\n'),
+  );
+  const { changes, note } = matching[0].fix;
+  assert.deepEqual(
+    changes.map((change) => change.after.split('\n')),
+    [
+      [
+        '  const item = await db.$transaction(async (tx) => {',
+        '  const order = await tx.order.create({ data: {} });',
+        '  const item = await tx.item.create({',
+      ],
+      ['  });', '    return item;', '  });'],
+    ],
+  );
+  assert.match(note, /formatter/);
+});
+
+test('dependent writes with a multi-line template are wrapped in place', (context) => {
+  const matching = wrappedInPlace(
+    context,
+    [
+      '  const order = await db.order.create({ data: {} });',
+      '  await db.item.create({ data: { orderId: order.id, message: `line one',
+      'line two` } });',
+    ].join('\n'),
+  );
+  const after = matching[0].fix.changes.map((change) => change.after).join('\n');
+  assert.ok(after.includes('message: `line one\nline two` } });'));
+  assert.ok(after.startsWith('  await db.$transaction(async (tx) => {\n  const order = await tx.order.create'));
+});
+
 function readModifyWrite(context, updateLine) {
   return fixFor(
     context,
