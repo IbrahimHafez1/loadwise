@@ -2,6 +2,35 @@
 
 Find repeated backend work before deployment or in a recorded request. The local CLI checks source code, OpenTelemetry traces and executed database plans. Findings include a location or trace identifier, a rule ID, and a suggested change to evaluate.
 
+## What you get
+
+| Capability                | Command                                  | Needs a database |
+| ------------------------- | ---------------------------------------- | ---------------- |
+| Source and ORM checks     | `backend-perf-check -p tsconfig.json`    | No               |
+| Migration safety          | `backend-perf-check migrations`          | No               |
+| Schema-aware index checks | `backend-perf-check --schema snap.json`  | No (snapshot)    |
+| Live database inspection  | `backend-perf-check db`                  | Yes, read-only   |
+| Traces and executed plans | `traces trace.json`, `plan explain.json` | No               |
+
+Text findings carry a **Fix:** snippet where one applies and, for loops and repeated spans, an **Impact:** line. Impact always says which side is measured and which is estimated.
+
+```text
+examples/slow.ts:6:48 [array-repeated-find] Each item can rescan the lookup array with find(), so cost grows with items times rows. Build `const byKey = new Map()` once (first match wins) and call `byKey.get(key)`; keep the original key-equality semantics.
+  Fix:
+    const firstById = new Map();
+    for (const row of rows) {
+      if (!firstById.has(row.id)) firstById.set(row.id, row);
+    }
+    const matches = ids.map(id => firstById.get(id));
+```
+
+```text
+00000000000000000000000000000001 parent 0000000000000010 [repeated-db-span] 5 sibling database calls share one operation signature, one round trip each. Batch them into one statement such as WHERE id = ANY($1), or reuse a shared result, if behavior allows it.
+  Impact: 40 ms measured -> ~8 ms estimated; method: OTLP start/end times; after assumes one batched operation costs as much as the slowest span.
+```
+
+The second sample is `examples/repeated-db.otlp.json` with span timings added. A `~` marks an estimate. Loop findings (`*-query-in-loop`) show a round-trip model, and a measured figure only when `--schema` supplies a snapshot with a measured round trip. An Impact line in milliseconds is never printed without a measurement behind it.
+
 ## Start here
 
 ### Editor findings with the npm packages
@@ -62,6 +91,8 @@ Run in the directory containing `tsconfig.json` or `jsconfig.json`, pass `-p pat
 | `reduce-copy-accumulator`, `loop-copy-accumulator`, `filter-for-existence`                                           | Copying a growing result or allocating a filtered array for a boolean test. Consider a private accumulator or a short-circuiting predicate.                                                                     |
 | `pool-created-per-request-or-item`, `pg-unreleased-checkout`                                                         | A recognized pg, Prisma, MongoDB or Redis client/pool is created on a repeated path, or a chained pg checkout loses the client reference. Scope reuse to the right credentials and release checked-out clients. |
 | `node-sync-fs-in-async`, `node-sync-compression-in-async`, `node-sync-crypto-in-async`, `node-sync-process-in-async` | A recognized synchronous API blocks an async function. Examples include `readFileSync`, `gzipSync`, `scryptSync` and `execFileSync`.                                                                            |
+| `redis-command-in-loop`                                                                                              | A per-key Redis or Valkey command on a repeated path. Use a multi-key command or a bounded pipeline if cluster slots, ordering and error handling permit it. SCAN cursor loops are skipped.                     |
+| `password-hash-sync-in-async`                                                                                        | `hashSync`, `compareSync` or `genSaltSync` from bcrypt or bcryptjs in an async function blocks the event loop for the whole hash. Use the promise form.                                                         |
 
 Source diagnostics include a one-based line and column. Repeat `--ignore RULE` to omit specific JS/TS rules from a run. Keep your project's own type check in CI.
 
