@@ -293,6 +293,26 @@ test('reports password hashing awaited inside a transaction callback', () => {
   assert.match(findings[0].message, /^Awaiting `bcrypt hash` .*password hash/);
 });
 
+test('classifies password hashing behind a project helper as CPU work, not an external call', () => {
+  const findings = findingsFor(
+    [
+      "import { DataSource } from 'typeorm';",
+      "import * as bcrypt from 'bcrypt';",
+      'declare const dataSource: DataSource;',
+      'const verifyCode = (code: string, stored: string) => bcrypt.compare(code, stored);',
+      'export async function unlock(code: string, stored: string) {',
+      '  await dataSource.transaction(async () => {',
+      '    await verifyCode(code, stored);',
+      '  });',
+      '}',
+    ].join('\n'),
+    'external-call-in-transaction',
+  );
+  assert.equal(findings.length, 1);
+  assert.match(findings[0].message, /password hash/);
+  assert.doesNotMatch(findings[0].message, /external call/);
+});
+
 const escapeHeader = [
   "import { DataSource } from 'typeorm';",
   "import { Repository, QueryRunner } from 'typeorm/repository';",
