@@ -288,7 +288,7 @@ test('a finding with a site fix offers a one-click quick fix that edits only the
         Object.assign(this, { title, kind });
       }
     },
-    CodeActionKind: { QuickFix: 'quickfix' },
+    CodeActionKind: { QuickFix: 'quickfix', SourceFixAll: { append: () => ({ intersects: () => false }) } },
     Disposable: { from: (...items) => items },
     EndOfLine: { LF: 1, CRLF: 2 },
     WorkspaceEdit: class {
@@ -316,9 +316,11 @@ test('a finding with a site fix offers a one-click quick fix that edits only the
     { ...finding, fix: { changes: [change] } },
     { ...finding, line: 1, fix: { changes: [{ ...change, file: '../outside.ts' }] } },
   ]);
-  const [, provider] = registerQuickFixes(vscode);
+  const provider = registerQuickFixes(vscode, { diagnosticsFor: (uri) => byUri.get(uri) ?? [] }).at(-1);
   const diagnostics = byUri.get(file);
-  const actions = provider.provideCodeActions({}, diagnostics[0].range, { diagnostics });
+  const actions = provider
+    .provideCodeActions({ uri: file }, diagnostics[0].range, {})
+    .filter((action) => action.title.startsWith('Apply fix'));
   assert.equal(actions.length, 1, 'a fix that leaves the workspace is dropped');
   assert.equal(actions[0].title, 'Apply fix: typeorm-existence-materialization');
   await commands.get(actions[0].command.command)(...actions[0].command.arguments);

@@ -1,11 +1,14 @@
 'use strict';
 
+const fs = require('node:fs');
 const path = require('node:path');
 const { exampleFor: performanceExample } = require('./performance-examples.cjs');
 const { exampleFor: maintainabilityExample } = require('./maintainability-examples.cjs');
 const { getFindingComparison, inlineComparison } = require('./finding-comparison.cjs');
 const { locateChange } = require('./apply-fix.cjs');
 const anchors = new WeakMap();
+const severityNames = { error: 'Error', warning: 'Warning', information: 'Information', hint: 'Hint' };
+const staleFixMessage = 'The code changed since the last scan. Save the file to rescan, then try again.';
 const polyglotLanguages = new Set(['python', 'go', 'java', 'csharp', 'rust', 'php', 'ruby', 'kotlin', 'c', 'cpp']);
 
 const contracts = new Set(['pg-transaction-on-pool', 'folder-boundary', 'file-placement', 'query-mutates-state']);
@@ -50,13 +53,18 @@ function dedent(text) {
 
 // The scanner's rewrite of this exact code; the generic rule example is only a fallback.
 function fixComparison(fix) {
-  const [first] = fix.changes;
-  const more = fix.changes.length > 1 ? ' Also changes ' + (fix.changes.length - 1) + ' more place(s).' : '';
+  const shown = fix.changes.find((change) => !change.create) ?? fix.changes[0];
+  const others = fix.changes.filter((change) => change !== shown);
+  const created = others.filter((change) => change.create).map((change) => change.file);
+  const edited = others.length - created.length;
+  const more =
+    (edited ? ' Also changes ' + edited + ' more place(s).' : '') +
+    (created.length ? ' Also creates ' + created.join(', ') + '.' : '');
   return {
     kind: 'source',
-    before: dedent(first.before),
-    after: dedent(first.after),
-    note: ((fix.note ?? '') + more + ' Press Ctrl+. (Cmd+. on macOS) to apply it.').trim(),
+    before: shown.create ? '(new file ' + shown.file + ')' : dedent(shown.before),
+    after: shown.create ? shown.after.trimEnd() : dedent(shown.after),
+    note: ((fix.note ?? '') + more + ' Press Ctrl+. (Cmd+. on macOS) to apply or dismiss it.').trim(),
   };
 }
 
@@ -118,17 +126,52 @@ function workspaceFix(rootPath, fix) {
   return { changes, note: typeof fix.note === 'string' ? fix.note : undefined };
 }
 
-function publish(vscode, collection, rootPath, source, findings) {
+// Every finding is an optional suggestion: a warning by default, an error for a declared contract, unless the
+// backendCheckers.severity setting picks one level for all of them.
+function severityFor(vscode, ruleId, setting) {
+  const name = severityNames[setting] ?? (contracts.has(ruleId) ? 'Error' : 'Warning');
+  return vscode.DiagnosticSeverity[name];
+}
+
+// The trimmed text of the reported line identifies a dismissed finding, so it is read from the scanned file.
+function flaggedLineText(filename, line, document, fileLines) {
+  if (document && !document.isDirty) return line <= document.lineCount ? document.lineAt(line - 1).text.trim() : '';
+  if (!fileLines.has(filename)) {
+    let lines = [];
+    try {
+      lines = fs.readFileSync(filename, 'utf8').split(/\r?\n/);
+    } catch {
+      // A file deleted since the scan has no line text; its findings disappear on the next scan.
+    }
+    fileLines.set(filename, lines);
+  }
+  return (fileLines.get(filename)[line - 1] ?? '').trim();
+}
+
+// A live-database finding names a table, not a file. It is shown on the first line of the project's package.json,
+// prefixed by the table, and dismissed by table name.
+function databaseFinding(finding) {
+  if (finding.file !== undefined || typeof finding.target !== 'string' || typeof finding.message !== 'string')
+    return finding;
+  return { ...finding, file: 'package.json', line: 1, column: 1, message: finding.target + ': ' + finding.message };
+}
+
+function publish(vscode, collection, rootPath, source, findings, { isDismissed, severity: severitySetting } = {}) {
   const documents = new Map(vscode.workspace.textDocuments.map((document) => [document.uri.toString(), document]));
+  const fileLines = new Map();
   const groups = new Map();
-  for (const finding of findings) {
+  for (const reported of findings) {
+    const finding = databaseFinding(reported);
     const site = location(vscode, rootPath, finding, documents);
     if (!site || typeof finding.message !== 'string' || typeof finding.ruleId !== 'string') continue;
+    const document = documents.get(site.uri.toString());
+    const filename = path.resolve(rootPath, finding.file);
+    const lineText =
+      finding === reported ? flaggedLineText(filename, finding.line, document, fileLines) : finding.target;
+    const dismissal = { file: filename, ruleId: finding.ruleId, lineText };
+    if (isDismissed?.(dismissal)) continue;
     const message = [finding.message, advice.get(finding.ruleId), finding.contextualReason].filter(Boolean).join('\n');
-    const severity = contracts.has(finding.ruleId)
-      ? vscode.DiagnosticSeverity.Error
-      : vscode.DiagnosticSeverity.Warning;
-    const diagnostic = new vscode.Diagnostic(site.range, message, severity);
+    const diagnostic = new vscode.Diagnostic(site.range, message, severityFor(vscode, finding.ruleId, severitySetting));
     const anchor = {
       line: finding.line,
       column: finding.column,
@@ -136,11 +179,11 @@ function publish(vscode, collection, rootPath, source, findings) {
       suggestion: finding.suggestion,
       comparison: finding.comparison,
       fix: workspaceFix(rootPath, finding.fix),
+      dismissal,
     };
     anchors.set(diagnostic, anchor);
     diagnostic.source = source;
     diagnostic.code = finding.ruleId;
-    const document = documents.get(site.uri.toString());
     if (document) updatePreview(document, diagnostic, anchor);
     if (Array.isArray(finding.related)) {
       const label = finding.ruleId === 'dependency-cycle' ? 'Import in this cycle' : 'Matching implementation';
@@ -160,56 +203,196 @@ function publish(vscode, collection, rootPath, source, findings) {
   collection.set(updates);
 }
 
-// One click applies the scanner's rewrite. The edit goes through the editor, so undo restores the original code.
-async function fixEdit(vscode, fix) {
-  const edit = new vscode.WorkspaceEdit();
+// The current text of a file a fix would create, or undefined when it does not exist.
+function existingText(vscode, uri) {
+  return vscode.workspace.fs.readFile(uri).then(
+    (bytes) => new TextDecoder().decode(bytes).replace(/\r\n/g, '\n'),
+    () => undefined,
+  );
+}
+
+// Resolves every change of one fix against the current files. Any stale change or existing file to create rejects
+// the whole fix, so a multi-file fix applies all-or-nothing.
+async function planFix(vscode, fix, openDocument) {
+  const operations = [];
+  let alreadyApplied = 0;
   for (const change of fix.changes) {
     const uri = vscode.Uri.file(change.filename);
-    const document = await vscode.workspace.openTextDocument(uri);
+    const key = uri.toString();
+    if (change.create) {
+      const existing = await existingText(vscode, uri);
+      // Never overwrite: the file may hold work written since the scan. The same content means it is already applied.
+      if (existing === undefined) operations.push({ uri, key, create: true, text: change.after });
+      else if (existing !== change.after)
+        return { error: change.file + ' already exists, so the fix was not applied.' };
+      else alreadyApplied++;
+      continue;
+    }
+    const document = await openDocument(uri);
     const lines = document.getText().split(/\r?\n/);
     const row = locateChange(lines, change);
     // The code moved or changed since the scan; applying the stored rewrite could clobber the new code.
-    if (row === -1) return;
+    if (row === -1) return { error: staleFixMessage };
     const lastRow = row + change.before.split('\n').length - 1;
     const eol = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
     const range = new vscode.Range(row, 0, lastRow, lines[lastRow].length);
-    edit.replace(uri, range, change.after.split('\n').join(eol));
+    operations.push({ uri, key, firstRow: row, lastRow, range, text: change.after.split('\n').join(eol) });
   }
-  return edit;
+  if (!operations.length && alreadyApplied) return { error: 'This fix is already applied.' };
+  return { operations };
 }
 
-function registerQuickFixes(vscode) {
+function addOperations(vscode, edit, operations) {
+  for (const operation of operations) {
+    if (operation.create) {
+      edit.createFile(operation.uri, { ignoreIfExists: false });
+      edit.insert(operation.uri, new vscode.Position(0, 0), operation.text);
+    } else edit.replace(operation.uri, operation.range, operation.text);
+  }
+}
+
+function cachedOpener(vscode) {
+  const documents = new Map();
+  return (uri) => {
+    const key = uri.toString();
+    if (!documents.has(key)) documents.set(key, vscode.workspace.openTextDocument(uri));
+    return documents.get(key);
+  };
+}
+
+// One click applies the scanner's rewrite. The edit goes through the editor, so undo restores the original code.
+async function fixEdit(vscode, fix) {
+  const plan = await planFix(vscode, fix, cachedOpener(vscode));
+  if (plan.error) return plan;
+  const edit = new vscode.WorkspaceEdit();
+  addOperations(vscode, edit, plan.operations);
+  return { edit };
+}
+
+function overlaps(claimed, operation) {
+  const taken = claimed.get(operation.key);
+  if (!taken) return false;
+  if (operation.create || taken.created) return true;
+  return taken.rows.some(([first, last]) => operation.firstRow <= last && first <= operation.lastRow);
+}
+
+function claim(claimed, operation) {
+  if (!claimed.has(operation.key)) claimed.set(operation.key, { created: false, rows: [] });
+  const taken = claimed.get(operation.key);
+  if (operation.create) taken.created = true;
+  else taken.rows.push([operation.firstRow, operation.lastRow]);
+}
+
+// Every applicable fix in one WorkspaceEdit, so one undo reverts them all. Stale fixes, fixes that would create an
+// existing file, and fixes overlapping an earlier one are skipped whole.
+async function fixAllEdit(vscode, fixes) {
+  const openDocument = cachedOpener(vscode);
+  const unique = new Map(fixes.map((fix) => [JSON.stringify(fix.changes), fix]));
+  const edit = new vscode.WorkspaceEdit();
+  const claimed = new Map();
+  let applied = 0;
+  for (const fix of unique.values()) {
+    const plan = await planFix(vscode, fix, openDocument);
+    if (plan.error || plan.operations.some((operation) => overlaps(claimed, operation))) continue;
+    for (const operation of plan.operations) claim(claimed, operation);
+    addOperations(vscode, edit, plan.operations);
+    applied++;
+  }
+  return { edit, applied, skipped: unique.size - applied };
+}
+
+// The lightbulb appears with the cursor anywhere on a flagged line, not only on the reported token.
+function onLines(diagnostic, range) {
+  return diagnostic.range.start.line <= range.end.line && diagnostic.range.end.line >= range.start.line;
+}
+
+function registerQuickFixes(vscode, { diagnosticsFor, dismissals, onDismissed }) {
   const applyCommand = 'backendCheckers.applyFix';
-  const command = vscode.commands.registerCommand(applyCommand, async (fix) => {
-    const edit = await fixEdit(vscode, fix);
-    if (!edit) {
-      vscode.window.showWarningMessage(
-        'The code changed since the last scan. Save the file to rescan, then try again.',
-      );
+  const applyAllCommand = 'backendCheckers.applyAllFixes';
+  const dismissCommand = 'backendCheckers.dismiss';
+  const applyAllTitle = 'Apply all Backend Checkers fixes in this file';
+  const fixAllKind = vscode.CodeActionKind.SourceFixAll.append('backendCheckers');
+  const issuesIn = (uri) => [...diagnosticsFor(uri)].filter((diagnostic) => anchors.has(diagnostic));
+  const fixesIn = (uri) => issuesIn(uri).flatMap((diagnostic) => anchors.get(diagnostic).fix ?? []);
+  const applyOne = vscode.commands.registerCommand(applyCommand, async (fix) => {
+    const result = await fixEdit(vscode, fix);
+    if (result.error) {
+      vscode.window.showWarningMessage(result.error);
       return;
     }
-    await vscode.workspace.applyEdit(edit);
+    await vscode.workspace.applyEdit(result.edit);
   });
+  const applyAll = vscode.commands.registerCommand(applyAllCommand, async (uri) => {
+    const target = uri ?? vscode.window.activeTextEditor?.document.uri;
+    const fixes = target ? fixesIn(target) : [];
+    if (!fixes.length) {
+      vscode.window.showInformationMessage('Backend Checkers has no fixes for this file.');
+      return;
+    }
+    const { edit, applied, skipped } = await fixAllEdit(vscode, fixes);
+    if (applied) await vscode.workspace.applyEdit(edit);
+    const summary = 'Backend Checkers applied ' + applied + ' fix(es)';
+    if (!skipped) vscode.window.showInformationMessage(summary + '.');
+    else
+      vscode.window.showWarningMessage(
+        summary + '; skipped ' + skipped + ' stale, overlapping or existing-file fix(es).',
+      );
+  });
+  const dismiss = vscode.commands.registerCommand(dismissCommand, async (entry) => {
+    await dismissals.add(entry);
+    onDismissed();
+  });
+  function quickFixes(document, range) {
+    const actions = [];
+    const fileWide = new Set();
+    const issues = issuesIn(document.uri);
+    for (const diagnostic of issues.filter((issue) => onLines(issue, range))) {
+      const { fix, dismissal } = anchors.get(diagnostic);
+      const addAction = (title, command, argument, preferred = false) => {
+        const action = new vscode.CodeAction(title, vscode.CodeActionKind.QuickFix);
+        action.diagnostics = [diagnostic];
+        action.isPreferred = preferred;
+        action.command = { command, title, arguments: [argument] };
+        actions.push(action);
+      };
+      if (fix) addAction('Apply fix: ' + diagnostic.code, applyCommand, fix, true);
+      addAction('Dismiss this finding (' + diagnostic.code + ')', dismissCommand, dismissal);
+      if (fileWide.has(diagnostic.code)) continue;
+      fileWide.add(diagnostic.code);
+      addAction('Dismiss ' + diagnostic.code + ' in this file', dismissCommand, {
+        file: dismissal.file,
+        ruleId: dismissal.ruleId,
+      });
+    }
+    if (actions.length && issues.filter((issue) => anchors.get(issue).fix).length > 1) {
+      const action = new vscode.CodeAction(applyAllTitle, vscode.CodeActionKind.QuickFix);
+      action.command = { command: applyAllCommand, title: applyAllTitle, arguments: [document.uri] };
+      actions.push(action);
+    }
+    return actions;
+  }
+  // Runs for "Fix All" and editor.codeActionsOnSave, so it carries the edit itself instead of a command.
+  async function fixAll(document) {
+    const fixes = fixesIn(document.uri);
+    if (!fixes.length) return [];
+    const { edit, applied } = await fixAllEdit(vscode, fixes);
+    if (!applied) return [];
+    const action = new vscode.CodeAction(applyAllTitle, fixAllKind);
+    action.edit = edit;
+    return [action];
+  }
   const provider = vscode.languages.registerCodeActionsProvider(
     { scheme: 'file' },
     {
       provideCodeActions(document, range, context) {
-        const actions = [];
-        for (const diagnostic of context.diagnostics) {
-          const fix = anchors.get(diagnostic)?.fix;
-          if (!fix) continue;
-          const action = new vscode.CodeAction('Apply fix: ' + diagnostic.code, vscode.CodeActionKind.QuickFix);
-          action.diagnostics = [diagnostic];
-          action.isPreferred = true;
-          action.command = { command: applyCommand, title: action.title, arguments: [fix] };
-          actions.push(action);
-        }
-        return actions;
+        // Building the fix-all edit reads files, so it runs only when the editor asks for that kind.
+        if (context.only && fixAllKind.intersects(context.only)) return fixAll(document);
+        return quickFixes(document, range);
       },
     },
-    { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] },
+    { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix, fixAllKind] },
   );
-  return vscode.Disposable.from(command, provider);
+  return vscode.Disposable.from(applyOne, applyAll, dismiss, provider);
 }
 
 function registerExamples(vscode, diagnosticsFor) {
