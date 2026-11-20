@@ -34,6 +34,7 @@
     "bench:traces": "node bench/traces.cjs"
   },
   "dependencies": {
+    "chokidar": "4.0.3",
     "typescript": "5.9.3"
   },
   "optionalDependencies": {
