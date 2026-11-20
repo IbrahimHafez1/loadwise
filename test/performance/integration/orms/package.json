@@ -1,5 +1,5 @@
 {
-  "name": "backend-perf-check-orm-fixture",
+  "name": "loadwise-orm-fixture",
   "private": true,
   "scripts": {
     "verify": "node verify.cjs"
