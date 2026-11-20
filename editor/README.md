@@ -8,7 +8,17 @@ Open **View → Problems** to browse both checkers. Each entry identifies its so
 
 ## Fix or dismiss a finding
 
-Every finding is an optional suggestion. Put the cursor anywhere on an underlined line and press Ctrl+. (Cmd+. on macOS):
+Every finding is an optional suggestion. A line with a fix shows **Apply fix** and **Dismiss** buttons above it, the hover has the same two links, and the first line of a file with several fixes shows **Apply all**. Turn the buttons off with `backendCheckers.codeLens`.
+
+The keyboard shortcuts are the same on Windows, Linux and macOS (on macOS, Ctrl is Control and Alt is Option):
+
+| Keys             | Action                                   |
+| ---------------- | ---------------------------------------- |
+| Ctrl+Alt+.       | Apply the fix on the cursor's line       |
+| Ctrl+Alt+Shift+. | Apply all fixes in the file              |
+| Ctrl+Alt+,       | Dismiss the finding on the cursor's line |
+
+The editor's own Quick Fix menu (Ctrl+. on Windows and Linux, Cmd+. on macOS) offers the same actions:
 
 - **Apply fix: <rule>** applies the checker's rewrite when it has one. Hover first to compare the current code with the rewrite. Fixes that span several files, or create a migration file, apply all-or-nothing. A fix never overwrites an existing file or code that changed since the scan.
 - **Dismiss this finding** hides it until the flagged line changes. **Dismiss <rule> in this file** hides the rule for the whole file. Dismissals are kept per workspace and never written into your code. **Backend Checkers: Show dismissed findings** restores one or all of them.

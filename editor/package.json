@@ -50,6 +50,14 @@
       {
         "command": "backendCheckers.dismiss",
         "title": "Backend Checkers: Dismiss finding"
+      },
+      {
+        "command": "backendCheckers.applyFixAtCursor",
+        "title": "Backend Checkers: Apply fix on this line"
+      },
+      {
+        "command": "backendCheckers.dismissAtCursor",
+        "title": "Backend Checkers: Dismiss finding on this line"
       }
     ],
     "configuration": {
@@ -117,6 +125,23 @@
           "when": "false"
         }
       ]
-    }
+    },
+    "keybindings": [
+      {
+        "command": "backendCheckers.applyFixAtCursor",
+        "key": "ctrl+alt+.",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "backendCheckers.applyAllFixes",
+        "key": "ctrl+alt+shift+.",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "backendCheckers.dismissAtCursor",
+        "key": "ctrl+alt+,",
+        "when": "editorTextFocus"
+      }
+    ]
   }
 }

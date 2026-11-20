@@ -98,7 +98,11 @@ function fixComparison(fix) {
     kind: 'source',
     before: shown.create ? '(new file ' + shown.file + ')' : dedent(shown.before),
     after: shown.create ? shown.after.trimEnd() : dedent(shown.after),
-    note: ((fix.note ?? '') + more + ' Click Apply fix above the line, or press Ctrl+. (Cmd+. on macOS).').trim(),
+    note: (
+      (fix.note ?? '') +
+      more +
+      ' Click Apply fix above the line, or press Ctrl+Alt+. (the same keys on every OS).'
+    ).trim(),
   };
 }
 
@@ -382,6 +386,38 @@ function registerQuickFixes(vscode, { diagnosticsFor, dismissals, onDismissed })
     await dismissals.add(entry);
     onDismissed();
   });
+  // The findings on the cursor's line; one is picked by rule when the line has several.
+  async function pickAtCursor(wantsFix) {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) return;
+    const line = editor.selection.active.line;
+    const here = issuesIn(editor.document.uri).filter(
+      (diagnostic) =>
+        diagnostic.range.start.line <= line &&
+        diagnostic.range.end.line >= line &&
+        (!wantsFix || anchors.get(diagnostic).fix),
+    );
+    if (!here.length) {
+      vscode.window.showInformationMessage(
+        wantsFix ? 'Backend Checkers has no fix on this line.' : 'Backend Checkers has no finding on this line.',
+      );
+      return;
+    }
+    if (here.length === 1) return anchors.get(here[0]);
+    const picked = await vscode.window.showQuickPick(
+      here.map((diagnostic) => ({ label: String(diagnostic.code), anchor: anchors.get(diagnostic) })),
+      { placeHolder: wantsFix ? 'Pick the fix to apply' : 'Pick the finding to dismiss' },
+    );
+    return picked?.anchor;
+  }
+  const applyHere = vscode.commands.registerCommand('backendCheckers.applyFixAtCursor', async () => {
+    const anchor = await pickAtCursor(true);
+    if (anchor) await vscode.commands.executeCommand(applyCommand, anchor.fix);
+  });
+  const dismissHere = vscode.commands.registerCommand('backendCheckers.dismissAtCursor', async () => {
+    const anchor = await pickAtCursor(false);
+    if (anchor) await vscode.commands.executeCommand(dismissCommand, anchor.dismissal);
+  });
   function quickFixes(document, range) {
     const actions = [];
     const fileWide = new Set();
@@ -432,7 +468,7 @@ function registerQuickFixes(vscode, { diagnosticsFor, dismissals, onDismissed })
     },
     { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix, fixAllKind] },
   );
-  return vscode.Disposable.from(applyOne, applyAll, dismiss, provider);
+  return vscode.Disposable.from(applyOne, applyAll, dismiss, applyHere, dismissHere, provider);
 }
 
 // One-click buttons above each fixable line, so applying a fix does not need the lightbulb menu.

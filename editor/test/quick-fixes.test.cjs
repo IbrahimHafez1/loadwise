@@ -360,3 +360,25 @@ test('a finding message shows one sentence per line and keeps code spans and abb
     'Keep it otherwise.',
   ]);
 });
+
+test('the keyboard command applies the fix on the cursor line, and says so when the line has none', async () => {
+  const files = new Map([[ordersFile, 'one();\ntwo();']]);
+  const editor = fakeEditor(files);
+  editor.open(ordersFile);
+  editor.vscode.commands.executeCommand = (id, ...args) => editor.commands.get(id)(...args);
+  publish(editor.vscode, editor.collection, root, 'backend-perf-check', [fixed(1, 'one();', 'ONE();'), finding(2)]);
+  registerQuickFixes(editor.vscode, { diagnosticsFor: (uri) => editor.byUri.get(uri) ?? [] });
+  const cursorOn = (line) => {
+    editor.vscode.window.activeTextEditor = { document: { uri: ordersFile }, selection: { active: { line } } };
+  };
+  cursorOn(0);
+  await editor.commands.get('backendCheckers.applyFixAtCursor')();
+  assert.deepEqual(
+    editor.appliedEdits[0].operations.map(({ type, text }) => [type, text]),
+    [['replace', 'ONE();']],
+  );
+  cursorOn(1);
+  await editor.commands.get('backendCheckers.applyFixAtCursor')();
+  assert.equal(editor.appliedEdits.length, 1);
+  assert.deepEqual(editor.messages.at(-1), ['information', 'Backend Checkers has no fix on this line.']);
+});
