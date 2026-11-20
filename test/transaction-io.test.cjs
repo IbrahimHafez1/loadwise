@@ -131,6 +131,7 @@ test('offers no fix when the call is not safe to move', (context) => {
     ],
     'result is used': [
       '  await dataSource.transaction(async (manager) => {',
+      "    await manager.query('select 1 for update');",
       "    const ok = await fetch('https://example.test');",
       '    await manager.query(String(ok));',
       '  });',
@@ -158,12 +159,14 @@ test('offers no fix when the call is not safe to move', (context) => {
     ],
     'later statement mentions its argument': [
       '  await dataSource.transaction(async (manager) => {',
+      "    await manager.query('select 1 for update');",
       '    await fetch(String(id));',
       '    await manager.query(String(id));',
       '  });',
     ],
     'later statement calls something else': [
       '  await dataSource.transaction(async (manager) => {',
+      "    await manager.query('select 1 for update');",
       '    await fetch(String(id));',
       "    await fetch('https://example.test');",
       '  });',
@@ -176,10 +179,64 @@ test('offers no fix when the call is not safe to move', (context) => {
   }
 });
 
+test('moves a first-step call before the transaction, keeping its result for the callback', (context) => {
+  const [finding] = fixFor(context, [
+    '  await dataSource.transaction(async (manager) => {',
+    '    const limit = 5;',
+    '    const response = await fetch(',
+    '      String(id),',
+    '    );',
+    '    await manager.query(String(response), [limit]);',
+    '  });',
+  ]);
+  assert.match(finding.fix.note, /just before the transaction opens/);
+  assert.deepEqual(onlyChange(finding), {
+    before: [
+      'await dataSource.transaction(async (manager) => {',
+      '  const limit = 5;',
+      '  const response = await fetch(',
+      '    String(id),',
+      '  );',
+    ].join('\n'),
+    after: [
+      'const response = await fetch(',
+      '  String(id),',
+      ');',
+      'await dataSource.transaction(async (manager) => {',
+      '  const limit = 5;',
+    ].join('\n'),
+  });
+});
+
+test('keeps a first-step call in place when the outer function already uses its name or reads a callback value', (context) => {
+  const clash = fixFor(context, [
+    '  const response = 1;',
+    '  await dataSource.transaction(async (manager) => {',
+    '    const response = await fetch(String(id));',
+    '    await manager.query(String(response));',
+    '  });',
+    '  return response;',
+  ]);
+  assert.equal(clash[0].fix, undefined);
+  const local = fixFor(context, [
+    '  await dataSource.transaction(async (manager) => {',
+    '    const url = String(id);',
+    '    const response = await fetch(url);',
+    '    await manager.query(String(response));',
+    '  });',
+  ]);
+  assert.equal(local[0].fix, undefined);
+});
+
 test('offers no fix when the call is reached through a helper', (context) => {
   const findings = fixFor(
     context,
-    ['  await dataSource.transaction(async (manager) => {', '    await send();', '  });'],
+    [
+      '  await dataSource.transaction(async (manager) => {',
+      "    await manager.query('select 1 for update');",
+      '    await send();',
+      '  });',
+    ],
     ["async function send() { await fetch('https://example.test'); }"],
   );
   assert.equal(findings.length, 1);
