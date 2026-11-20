@@ -134,3 +134,74 @@ test('the serial twin of a Promise.all branch gets a deliberate-serial note', (c
   const finding = fixFor(context, '  return flag ? [await a(), await b()] : await Promise.all([a(), b()]);');
   assert.match(finding.fix.note, /other branch already uses Promise\.all/);
 });
+
+const repositoryHeader =
+  'declare const users: { create(name: string): Promise<number>; findMany(): Promise<number[]>; count(): Promise<number> };\n';
+
+function fixIn(context, fileName, body) {
+  const { findings: scanned } = scanWithFixes(context, {
+    [fileName]: `${repositoryHeader}export async function run() {\n${body}\n}`,
+  });
+  const finding = scanned.find((entry) => entry.ruleId === rule);
+  assert.ok(finding, 'rule should report');
+  return finding;
+}
+
+test('reads on the same model are still started together', (context) => {
+  const finding = fixIn(
+    context,
+    'src/report.ts',
+    '  return { rows: await users.findMany(), total: await users.count() };',
+  );
+  assert.match(onlyChange(finding).after, /await Promise\.all\(\[users\.findMany\(\), users\.count\(\)\]\)/);
+});
+
+test('no fix when a write precedes a read it may affect, or in a test file', (context) => {
+  assert.equal(
+    fixIn(context, 'src/seed.ts', '  return [await users.create("a"), await users.findMany()];').fix,
+    undefined,
+  );
+  assert.equal(
+    fixIn(context, 'src/pair.ts', '  return { a: await users.create("a"), b: await users.create("b") };').fix,
+    undefined,
+  );
+  assert.equal(
+    fixIn(context, 'test/report.spec.ts', '  return { rows: await users.findMany(), total: await users.count() };').fix,
+    undefined,
+  );
+  assert.equal(
+    fixIn(context, 'src/report.test.ts', '  return [await users.findMany(), await users.count()];').fix,
+    undefined,
+  );
+});
+
+test('an array literal asserted `as const` keeps the literal and hoists the awaits above it', (context) => {
+  const finding = fixIn(
+    context,
+    'src/pair.ts',
+    '  const pair = [await users.findMany(), await users.count()] as const;\n  return pair;',
+  );
+  const { after } = onlyChange(finding);
+  assert.equal(
+    after,
+    'const [findManyResult, countResult] = await Promise.all([users.findMany(), users.count()]);\n' +
+      'const pair = [findManyResult, countResult] as const;',
+  );
+});
+
+test('a concise arrow body keeps the CRLF line breaks and tab indentation of the file', (context) => {
+  const source = [
+    'declare function a(): Promise<number>;',
+    'declare function b(): Promise<number>;',
+    'export const build = async () => ({ x: await a(), y: await b() });',
+    '',
+  ].join('\r\n');
+  const { findings: scanned } = scanWithFixes(context, { 'src/build.ts': source });
+  const finding = scanned.find((entry) => entry.ruleId === rule);
+  assert.ok(finding?.fix);
+  const fixed = finding.fix.changes[0].after;
+  assert.match(
+    fixed,
+    /=> \{\n {2}const \[xValue, yValue\] = await Promise\.all\(\[a\(\), b\(\)\]\);\n {2}return \{ x: xValue, y: yValue \};\n\};/,
+  );
+});
