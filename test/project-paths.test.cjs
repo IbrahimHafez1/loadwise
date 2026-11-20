@@ -43,7 +43,8 @@ test('linked entry paths resolve their imports independently', (context) => {
   fs.mkdirSync(base, { recursive: true });
   const root = fs.mkdtempSync(path.join(base, 'backend-perf-paths-'));
   const files = {
-    'shared/check.ts': "import {pool} from '../database'; for (const id of [1, 2]) pool.query(String(id));",
+    'shared/check.ts':
+      "import {pool} from '../database'; export function check(ids: number[]) { for (const id of ids) pool.query(String(id)); }",
     'local/database.ts': 'export declare const pool: {query(sql: string): void};',
     'live/database.ts': "import type {Pool} from 'pg'; export declare const pool: Pool;",
     'node_modules/pg/index.d.ts': 'export declare class Pool { query(sql: string): void; }',
