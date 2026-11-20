@@ -100,6 +100,7 @@ test('linked entry paths resolve their imports independently', (context) => {
     delete finding.example;
     delete finding.id;
     delete finding.fixable;
+    delete finding.impactLevel;
   }
   assert.deepEqual(printed, result);
 });
