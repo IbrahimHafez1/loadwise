@@ -185,3 +185,144 @@ test('offers no fix when the call is reached through a helper', (context) => {
   assert.equal(findings.length, 1);
   assert.equal(findings[0].fix, undefined);
 });
+
+const hashingAndRepositoryFiles = {
+  ...files,
+  'node_modules/@types/bcrypt/index.d.ts': `
+    export function hash(data: string, rounds: number): Promise<string>;
+    export function compare(data: string, encrypted: string): Promise<boolean>;
+  `,
+  'node_modules/typeorm/repository.d.ts': `
+    export class Repository<T> {
+      save(entity: T): Promise<T>;
+      findOne(options: object): Promise<T | null>;
+      increment(where: object, column: string, by: number): Promise<unknown>;
+      query(sql: string, parameters?: unknown[]): Promise<unknown>;
+    }
+    export class QueryRunner {
+      manager: { save<T>(entity: T): Promise<T> };
+      startTransaction(): Promise<void>;
+      commitTransaction(): Promise<void>;
+      rollbackTransaction(): Promise<void>;
+      release(): Promise<void>;
+    }
+  `,
+};
+
+function findingsFor(source, ruleId) {
+  return lint(["import '@types/node';", source].join('\n'), hashingAndRepositoryFiles).filter(
+    (finding) => finding.ruleId === ruleId,
+  );
+}
+
+test('reports password hashing awaited inside a transaction callback', () => {
+  const findings = findingsFor(
+    [
+      "import { DataSource } from 'typeorm';",
+      "import * as bcrypt from 'bcrypt';",
+      'declare const dataSource: DataSource;',
+      'export async function register(password: string) {',
+      '  const early = await bcrypt.hash(password, 12);',
+      '  await dataSource.transaction(async (manager) => {',
+      '    const late = await bcrypt.hash(password, 12);',
+      "    await manager.query('insert ' + early + late);",
+      '  });',
+      '}',
+    ].join('\n'),
+    'external-call-in-transaction',
+  );
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].line, 8);
+  assert.match(findings[0].message, /^Awaiting `bcrypt hash` .*password hash/);
+});
+
+const escapeHeader = [
+  "import { DataSource } from 'typeorm';",
+  "import { Repository, QueryRunner } from 'typeorm/repository';",
+  'class Usage { count = 0 }',
+  'class UsageService {',
+  '  constructor(private readonly usage: Repository<Usage>) {}',
+  '  async bump(id: string) { await this.usage.increment({ id }, "count", 1); }',
+  '  async bumpWith(id: string, repository: Repository<Usage>) { await repository.increment({ id }, "count", 1); }',
+  '  async read(id: string) { return this.usage.findOne({ where: { id } }); }',
+  '}',
+];
+
+test('reports TypeORM writes through injected repositories inside a transaction', () => {
+  const findings = findingsFor(
+    [
+      ...escapeHeader,
+      'class Service {',
+      '  constructor(private readonly dataSource: DataSource, private readonly usage: Repository<Usage>,',
+      '    private readonly usageService: UsageService) {}',
+      '  async run(item: Usage) {',
+      '    await this.dataSource.transaction(async (manager) => {',
+      '      await this.usage.save(item);',
+      '      await this.usageService.bump("a");',
+      "      await this.usage.query('UPDATE usage SET count = count + 1');",
+      '    });',
+      '  }',
+      '}',
+    ].join('\n'),
+    'typeorm-transaction-client-escape',
+  );
+  assert.deepEqual(
+    findings.map((finding) => finding.line),
+    [16, 17, 18],
+  );
+  assert.match(findings[0].message, /`manager\.getRepository\(Entity\)`/);
+  assert.match(findings[1].message, /which reaches `this\.usage\.increment\(\)` through `bump\(\)`/);
+});
+
+test('reports injected repository writes between QueryRunner startTransaction and commitTransaction', () => {
+  const findings = findingsFor(
+    [
+      ...escapeHeader,
+      'class Service {',
+      '  constructor(private readonly usage: Repository<Usage>) {}',
+      '  async run(runner: QueryRunner, item: Usage) {',
+      '    await this.usage.save(item);',
+      '    await runner.startTransaction();',
+      '    try {',
+      '      await runner.manager.save(item);',
+      '      await this.usage.save(item);',
+      '      await runner.commitTransaction();',
+      '    } catch (error) {',
+      '      await runner.rollbackTransaction();',
+      '      await this.usage.save(item);',
+      '    } finally {',
+      '      await runner.release();',
+      '    }',
+      '    await this.usage.save(item);',
+      '  }',
+      '}',
+    ].join('\n'),
+    'typeorm-transaction-client-escape',
+  );
+  assert.deepEqual(
+    findings.map((finding) => finding.line),
+    [18],
+  );
+  assert.match(findings[0].message, /`runner\.manager`/);
+});
+
+test('skips transaction-bound repositories, reads, and helpers handed the manager', () => {
+  const findings = findingsFor(
+    [
+      ...escapeHeader,
+      'class Service {',
+      '  constructor(private readonly dataSource: DataSource, private readonly usageService: UsageService) {}',
+      '  async run(item: Usage) {',
+      '    await this.dataSource.transaction(async (manager) => {',
+      '      const repository = (manager as any).getRepository(Usage) as Repository<Usage>;',
+      '      await repository.save(item);',
+      '      await this.usageService.read("a");',
+      '      await this.usageService.bumpWith("a", (manager as any).getRepository(Usage));',
+      '    });',
+      '  }',
+      '}',
+    ].join('\n'),
+    'typeorm-transaction-client-escape',
+  );
+  assert.equal(findings.length, 0);
+});

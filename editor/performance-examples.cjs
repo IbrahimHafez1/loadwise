@@ -266,6 +266,22 @@ const standaloneExamples = {
     ].join('\n'),
     note: 'The transaction holds a pool connection and its locks for the whole network call. Make the call after commit, or before the transaction when the write needs its result.',
   },
+  'typeorm-transaction-client-escape': {
+    language: 'javascript',
+    before: [
+      'await dataSource.transaction(async (manager) => {',
+      '  await manager.save(order);',
+      "  await this.usageRepository.increment({ organizationId }, 'orders', 1);",
+      '});',
+    ].join('\n'),
+    code: [
+      'await dataSource.transaction(async (manager) => {',
+      '  await manager.save(order);',
+      "  await manager.getRepository(Usage).increment({ organizationId }, 'orders', 1);",
+      '});',
+    ].join('\n'),
+    note: 'An injected repository runs on its own pooled connection and autocommits. Use the callback manager, or pass it to helpers that write.',
+  },
   'password-hash-pure-js': {
     language: 'javascript',
     before: "import { hash } from 'bcryptjs';",
