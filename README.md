@@ -90,6 +90,29 @@ The default `--fail-on contract` exits 1 for a declared folder, data-access or q
 
 DRY candidates can represent intentional copies between isolated modules. Deep nesting can accurately reflect a protocol. Use the reported locations to decide whether extracting a function, changing a dependency or retaining the current implementation makes the next change easier. YAGNI, Tell Don't Ask, the Law of Demeter and CUPID depend on domain knowledge. Fluent call chains and unused extension points alone do not establish a violation. [CUPID and the properties of good code](https://dannorth.net/cupid-for-joyful-coding/)
 
+## Use with AI coding agents
+
+Any agent that can run shell commands and read an instructions file can drive the checker.
+
+```sh
+npx maintainability-check agent init [--mode ask|auto]
+```
+
+This writes a short block between `<!-- maintainability-check:agent:start -->` and `...:end -->` markers in `AGENTS.md` at the project root (created if missing, replaced in place on re-runs, other text untouched, and `backend-perf-check`'s block can sit beside it). If `CLAUDE.md` does not already contain `@AGENTS.md`, that line is added once, or the file is created with it.
+
+- `ask` (default): the agent shows a one-line summary per fix and waits for approval.
+- `auto`: the agent applies fixes that carry no behaviour caveat. In both modes it asks before changing `duplicate-implementation` or `dependency-cycle` findings, which are design decisions.
+
+Every finding in `--json` output has a stable `id` (also shown as `#id` in text output), `fixable`, and `fix` when a rewrite exists. The id hashes the rule, the file and the flagged line's text, so it survives edits above the finding.
+
+```sh
+npx maintainability-check . --fix --only <id>[,<id>...] [--json]
+```
+
+`--only` applies exactly those fixes with no prompt and no terminal. `--json` prints `{ applied, alreadyApplied, failed }`. An id whose change an earlier id in the same run already made is reported in `alreadyApplied`; an unknown id, a finding without a fix or a stale fix is in `failed` and the exit code is 2.
+
+To dismiss a false positive, put `// maintainability-reviewed <rule-id> -- <specific reason>` on the line above it. The finding becomes contextual with that reason. Only a real line comment counts, and declared contracts (`file-placement`, `folder-boundary`, `data-access-boundary`, `query-mutates-state`) cannot be dismissed this way.
+
 ## Developing locally
 
 Use Node.js 20.19+ (20.x) or 22.12 and later for the development tools and run `npm ci --include=optional`. Open this repository folder as a trusted workspace in VS Code or Cursor and enable the recommended Prettier extension. Saving a supported file formats it with the repository settings.
