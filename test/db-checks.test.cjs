@@ -167,7 +167,7 @@ test('seq-scan-heavy tables need size, more seq than index scans and repeated fu
   const [finding] = byRule(findingsFor({ tables: [heavy] }), 'db-seq-scan-heavy-table');
   assert.match(
     finding.message,
-    /1,204 sequential scans reading 48,160,000 rows against 3 index scans over 30 days \(measured counters\)/,
+    /1,204 sequential scans reading 48,160,000 rows against 3 index scans in the 30 days since statistics were reset \(measured counters\)/,
   );
   assert.match(finding.message, /about 40,000 live rows \(estimated\)/);
   for (const quiet of [
@@ -182,4 +182,11 @@ test('seq-scan-heavy tables need size, more seq than index scans and repeated fu
 test('reltuples of -1 falls back to the live-tuple estimate', () => {
   const model = buildPostgresModel({ tables: [table('fresh', { row_estimate: '-1', n_live_tup: '12' })] });
   assert.equal(model.get('public.fresh').rowEstimate, 12);
+});
+
+test('periods read naturally for unknown, sub-day and multi-day statistics', () => {
+  const { sinceEvent } = require('../lib/db/checks.cjs');
+  assert.equal(sinceEvent(undefined, 'statistics were reset'), 'since statistics were reset');
+  assert.equal(sinceEvent(0.2, 'statistics were reset'), 'since statistics were reset less than a day ago');
+  assert.equal(sinceEvent(1.5, 'the server started'), 'in the 1 day since the server started');
 });
