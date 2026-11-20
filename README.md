@@ -2,6 +2,8 @@
 
 A local CLI for finding code that would benefit from a design review and for enforcing the architectural decisions a team has already made. It runs on Node.js 20 or later. It can run independently of `backend-perf-check`.
 
+To see both checkers in VS Code or Cursor using the editor's built-in tasks, install `backend-perf-check` alongside this package. Run `npx backend-perf-check editor init` once per project, then open the trusted folder and allow automatic tasks once. The task starts when the folder opens. Completing a source scan from the terminal refreshes the running editor task using its configured rules. Commit the generated task to share it with teammates. Findings appear in Problems and underlined code shows suggestions and plain-text examples on hover.
+
 ```sh
 npm install --save-dev --include=optional ./maintainability-check-0.2.0.tgz
 npx maintainability-check .
@@ -58,7 +60,7 @@ List each project-relative module once. Edges use one-based source coordinates. 
 
 Source checks count lower-priority findings separately. Use `--include-contextual` to display them with a reason. The JSON field `contextualFindingCount` is the additional count in the default view and a subset of `findings` in the expanded view. `--fail-on all` applies to displayed findings. Explicit folder and query contracts always remain visible.
 
-Context includes documented independent test oracles, before/after source snapshots with a corresponding live file, marked generated code, and certain flat data mappings. Two ordinary implementations still form a default duplicate finding even when an archive or test oracle also contains a copy. A Nest module cycle can receive context when every internal eager edge is used solely in an explicit module `forwardRef` callback. A cycle supplied through graph input has no such source evidence.
+Context includes documented independent test oracles, before/after source snapshots with a corresponding live file, marked generated code, certain flat data mappings, and flat lists of optional literal messages selected by simple field checks. Two ordinary implementations still form a default duplicate finding even when an archive or test oracle also contains a copy. A Nest module cycle can receive context when every internal eager edge is used solely in an explicit module `forwardRef` callback. A cycle supplied through graph input has no such source evidence.
 
 The default `--fail-on contract` exits 1 for a declared folder or query contract violation. Design advisories remain visible and exit 0 on their own. Use `--fail-on all` to fail on any finding. Invalid configurations, source parse failures and missing required parser binaries exit 2.
 
