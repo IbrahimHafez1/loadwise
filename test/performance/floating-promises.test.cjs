@@ -1,0 +1,132 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const test = require('node:test');
+const { lint } = require('./helpers.cjs');
+const { loadQueryPolicy } = require('../../lib/performance/query-policy.cjs');
+const { scanWithFixes } = require('./site-fix-helpers.cjs');
+
+const rule = 'floating-promise';
+const header = `declare function sendEmail(to: string): Promise<void>;
+declare function trackEvent(name: string): Promise<void>;
+declare function syncValue(): number;
+declare const items: string[];
+declare const maybe: Promise<void> | undefined;
+interface Thenable { then(onFulfilled: () => void): void }
+declare function thenable(): Thenable;
+`;
+
+function reported(body, policy) {
+  return lint(header + body, {}, policy).filter((finding) => finding.ruleId === rule);
+}
+
+test('a promise-returning call used as a statement in an async function is reported', () => {
+  const [finding] = reported(`export async function signup(email: string) {
+  sendEmail(email);
+}`);
+  assert.equal(finding.line, 9);
+  assert.match(
+    finding.message,
+    /^`sendEmail\(\)` returns a promise that is neither awaited nor given a rejection handler/,
+  );
+});
+
+test('a request handler that is not async is covered by its request parameter', () => {
+  assert.equal(reported(`export function handle(req: object) {\n  sendEmail('a');\n}`).length, 1);
+  assert.equal(reported(`export function helper(value: object) {\n  sendEmail('a');\n}`).length, 0);
+});
+
+test('thenables, unions with undefined and .then without a rejection handler are reported', () => {
+  assert.equal(reported(`export async function run() {\n  thenable();\n}`).length, 1);
+  assert.equal(reported(`export async function run() {\n  maybe;\n}`).length, 0, 'not a call');
+  assert.equal(reported(`export async function run() {\n  sendEmail('a').then(() => 1);\n}`).length, 1);
+  assert.equal(
+    reported(`export async function run() {\n  sendEmail('a').catch(() => 1).finally(() => 1);\n}`).length,
+    0,
+  );
+  assert.equal(reported(`export async function run() {\n  sendEmail('a').finally(() => 1);\n}`).length, 1);
+});
+
+test('await, return, void, assignment, arguments, catch and two-argument then are quiet', () => {
+  const quiet = [
+    "await sendEmail('a');",
+    "return sendEmail('a');",
+    "void sendEmail('a');",
+    "const pending = sendEmail('a'); await pending;",
+    "await Promise.all([sendEmail('a')]);",
+    "sendEmail('a').catch(() => undefined);",
+    "sendEmail('a').then(() => 1, () => 2);",
+    "sendEmail('a').then(() => 1).catch(() => 2);",
+    'syncValue();',
+  ];
+  for (const statement of quiet) {
+    assert.deepEqual(reported(`export async function run() {\n  ${statement}\n}`), [], statement);
+  }
+});
+
+test('a synchronous function, top-level code and a callback of a synchronous function are quiet', () => {
+  assert.deepEqual(reported("export function run() {\n  sendEmail('a');\n}"), []);
+  assert.deepEqual(reported("sendEmail('a');"), []);
+  assert.deepEqual(reported("export function run() {\n  items.map(() => sendEmail('a'));\n}"), []);
+});
+
+test('a helper listed under fireAndForget in the policy is quiet', () => {
+  const body = "export async function run() {\n  trackEvent('x');\n  sendEmail('a');\n}";
+  const policy = { fireAndForget: ['trackEvent'] };
+  assert.deepEqual(
+    reported(body, policy).map((finding) => finding.line),
+    [10],
+  );
+  assert.equal(reported(body).length, 2);
+});
+
+test('test files are quiet', (context) => {
+  const source = `${header}export async function run() {
+  sendEmail('a');
+}`;
+  const { findings } = scanWithFixes(context, { 'service.ts': source, 'service.spec.ts': source });
+  const files = findings.filter((finding) => finding.ruleId === rule).map((finding) => path.basename(finding.file));
+  assert.deepEqual(files, ['service.ts']);
+});
+
+test('forEach with an async callback that awaits is reported', () => {
+  const [finding] = reported(`export async function run() {
+  items.forEach(async (item) => {
+    await sendEmail(item);
+  });
+}`);
+  assert.equal(finding.line, 9);
+  assert.match(finding.message, /^`forEach` ignores the promises its async callback returns/);
+});
+
+test('forEach with a synchronous callback, an async callback without await, or a for-of loop is quiet', () => {
+  assert.deepEqual(reported('export async function run() {\n  items.forEach((item) => syncValue());\n}'), []);
+  assert.deepEqual(reported('export async function run() {\n  items.forEach(async (item) => syncValue());\n}'), []);
+  assert.deepEqual(
+    reported('export async function run() {\n  for (const item of items) await sendEmail(item);\n}'),
+    [],
+  );
+  assert.deepEqual(
+    reported(
+      'declare const lookup: { forEach(callback: (value: number) => void): void };\nexport async function run() {\n  lookup.forEach(async (value) => { await sendEmail(String(value)); });\n}',
+    ),
+    [],
+  );
+});
+
+test('the policy loader accepts a list of helper names and rejects anything else', (context) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-policy-'));
+  context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const load = (policy) => {
+    const filename = path.join(directory, 'policy.json');
+    fs.writeFileSync(filename, JSON.stringify(policy));
+    return loadQueryPolicy(filename);
+  };
+  assert.deepEqual(load({ fireAndForget: ['trackEvent'] }).fireAndForget, ['trackEvent']);
+  assert.throws(() => load({ fireAndForget: [] }), /fireAndForget requires a nonempty array/);
+  assert.throws(() => load({ fireAndForget: ['not a name'] }), /fireAndForget requires a nonempty array/);
+  assert.throws(() => load({ fireAndForget: 'trackEvent' }), /fireAndForget requires a nonempty array/);
+});

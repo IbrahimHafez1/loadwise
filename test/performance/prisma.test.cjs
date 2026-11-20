@@ -189,7 +189,9 @@ test('lazy Prisma builders and concurrent unique lookups stay quiet while sequen
       (await db.user.findMany()).length;
     }`;
   assert.deepEqual(
-    lint(source, legacyFiles).map(({ line, ruleId }) => [line, ruleId]),
+    lint(source, legacyFiles)
+      .filter(({ ruleId }) => ruleId !== 'floating-promise')
+      .map(({ line, ruleId }) => [line, ruleId]),
     [
       [7, 'prisma-query-in-loop'],
       [8, 'prisma-query-in-loop'],
