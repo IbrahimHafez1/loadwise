@@ -75,6 +75,7 @@ function checkTraces(args) {
   }
   const document = readJsonFile(positionals[0], 'Trace');
   const { inspectTraces } = require('../lib/traces.cjs');
+  const { formatImpact } = require('../lib/impact.cjs');
   const result = inspectTraces(document, { threshold });
   const { findings, scannedSpans, eligibleDbSpans } = result;
   if (values.json) console.log(JSON.stringify(result, null, 2));
@@ -83,6 +84,8 @@ function checkTraces(args) {
       console.log(
         `${finding.traceId} parent ${finding.parentSpanId || '(root)'} [${finding.ruleId}] ${finding.message}`,
       );
+      const impact = formatImpact(finding.impact);
+      if (impact) console.log(`  ${impact}`);
     }
     console.log(
       `${eligibleDbSpans} distinct eligible DB span(s) across ${scannedSpans} input span(s), ${findings.length} finding(s).`,
