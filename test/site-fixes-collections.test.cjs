@@ -141,12 +141,59 @@ test('a property chain receiver is hoisted only when nothing in the statement gu
     "const result = keys.includes('*') || !keys.every((key) => permissionsSet.has(key));",
   ]);
   assert.match(note, /`actor\.permissions` is now read even when the iteration does not run/);
-  assertNoFix(
+});
+
+test('a chain root that the statement only tests is read with optional chaining', (context) => {
+  const { change, note } = changeFor(
     context,
     membership,
     `export function covered(existing: { names: string[] } | undefined, names: string[]) {
   if (existing && names.every((name) => existing.names.includes(name))) return true;
   return false;
+}`,
+  );
+  assert.deepEqual(change.after.split('\n').slice(0, 2), [
+    'const namesSet = new Set(existing?.names);',
+    'if (existing && names.every((name) => namesSet.has(name))) return true;',
+  ]);
+  assert.match(note, /empty when `existing` is not set/);
+  assertNoFix(
+    context,
+    membership,
+    `declare function touch(value: object | undefined): boolean;
+export function covered(existing: { names: string[] } | undefined, names: string[]) {
+  if (existing && touch(existing) && names.every((name) => existing.names.includes(name))) return true;
+  return false;
+}`,
+  );
+});
+
+test('lookups on one array in sibling statements share one Set, with the same fix for each finding', (context) => {
+  const findings = findingsFor(
+    context,
+    membership,
+    `export function blocked(tokens: string[], targets: string[], rules: { a: string; b: string }[]) {
+  if (targets.some((target) => tokens.includes(target))) return true;
+  return rules.some(
+    (rule) =>
+      tokens.includes(rule.a) || tokens.includes(rule.b),
+  );
+}`,
+  );
+  assert.equal(findings.length, 3);
+  const [first, ...others] = findings.map((finding) => finding.fix?.changes);
+  assert.ok(first);
+  for (const changes of others) assert.deepEqual(changes, first);
+  assert.equal(first.length, 1);
+  assert.equal(first[0].after.match(/const tokensSet = new Set\(tokens\);/g).length, 1);
+  assert.equal(first[0].after.match(/tokensSet\.has/g).length, 3);
+  assertNoFix(
+    context,
+    membership,
+    `export function blocked(tokens: string[], targets: string[], rules: string[]) {
+  if (targets.some((target) => tokens.includes(target))) return true;
+  tokens.push('extra');
+  return rules.some((rule) => tokens.includes(rule));
 }`,
   );
 });
