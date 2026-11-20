@@ -66,12 +66,12 @@ function project(context) {
   return { root, write };
 }
 
-function run(root, args) {
-  return spawnSync(process.execPath, [bin, 'perf', ...args, '--json'], { cwd: root, encoding: 'utf8' });
+function run(root, args, command = 'perf') {
+  return spawnSync(process.execPath, [bin, command, ...args, '--json'], { cwd: root, encoding: 'utf8' });
 }
 
-function checked(root, args, expectedExit) {
-  const result = run(root, args);
+function checked(root, args, expectedExit, command) {
+  const result = run(root, args, command);
   assert.equal(result.status, expectedExit, result.stderr || result.stdout);
   return JSON.parse(result.stdout);
 }
@@ -85,15 +85,17 @@ const expectedProject = [
   ['reads.ts', 4, scopeRule],
 ];
 
+// The scope rules are security rules; the performance checker reads the same policy file for its own sections.
 test('query policy discovery follows project configuration or the explicit-file working directory', (context) => {
   const { root, write } = project(context);
   write('app/' + policyName, policyFor('Invoice'));
   write(policyName, policyFor('Ledger'));
-  assert.deepEqual(locations(checked(root, ['-p', 'app/tsconfig.json'], 1)), expectedProject);
-  assert.deepEqual(checked(root, ['app/reads.ts'], 0).findings, []);
-  const explicitFile = checked(root, ['app/reads.ts', '--policy', 'app/' + policyName], 1);
+  assert.deepEqual(locations(checked(root, ['-p', 'app/tsconfig.json'], 1)), [expectedProject[0]]);
+  assert.deepEqual(locations(checked(root, ['-p', 'app/tsconfig.json'], 1, 'sec')), [expectedProject[1]]);
+  assert.deepEqual(checked(root, ['app/reads.ts'], 0, 'sec').findings, []);
+  const explicitFile = checked(root, ['app/reads.ts', '--policy', 'app/' + policyName], 1, 'sec');
   assert.deepEqual(locations(explicitFile), [expectedProject[1]]);
-  assert.deepEqual(locations(checked(root, ['-p', 'app', '--policy', policyName], 1)), [expectedProject[0]]);
+  assert.deepEqual(checked(root, ['-p', 'app', '--policy', policyName], 0, 'sec').findings, []);
 });
 
 test('opting out preserves existing performance checks and malformed policy files stop analysis', (context) => {
@@ -112,25 +114,6 @@ test('opting out preserves existing performance checks and malformed policy file
   const invalidAuto = run(root, ['-p', 'app']);
   assert.equal(invalidAuto.status, 2, invalidAuto.stdout || invalidAuto.stderr);
   assert.equal(invalidAuto.stdout.trim(), '');
-});
-
-const [major, minor] = process.versions.node.split('.').map(Number);
-let nativeSkip = major < 22 || (major === 22 && minor < 13) ? 'native requires Node 22.13+' : false;
-try {
-  if (!nativeSkip) require('../../lib/performance/native-runtime.cjs').executable();
-} catch {
-  nativeSkip = 'optional native compiler is absent';
-}
-
-test('the native CLI agrees with the default engine on opted-in scope findings', { skip: nativeSkip }, (context) => {
-  const { root, write } = project(context);
-  write('app/' + policyName, policyFor('Invoice'));
-  const args = ['-p', 'app'];
-  const stable = checked(root, args, 1);
-  assert.deepEqual(locations(stable), expectedProject);
-  assert.deepEqual(checked(root, ['--native', ...args], 1), stable);
-  const missing = run(root, ['--native', ...args, '--policy', 'missing.json']);
-  assert.equal(missing.status, 2, missing.stdout || missing.stderr);
 });
 
 async function exerciseWatch(context, explicit) {
@@ -172,7 +155,7 @@ async function exerciseWatch(context, explicit) {
   try {
     await expectSnapshot([expectedProject[0]], 'initial startup');
     write(filename, policyFor('Invoice'));
-    await expectSnapshot(expectedProject, 'enabling the Invoice policy');
+    await expectSnapshot([expectedProject[0]], 'enabling the Invoice policy');
     write(filename, '{');
     const invalid = await nextLine('invalid JSON');
     assert.ok(invalid.trim() && !invalid.startsWith('{'), invalid);
@@ -182,7 +165,7 @@ async function exerciseWatch(context, explicit) {
     const deleted = await nextLine('deleting the existing policy');
     assert.ok(deleted.trim() && !deleted.startsWith('{'), deleted);
     write(filename, policyFor('Invoice'));
-    await expectSnapshot(expectedProject, 'restoring the deleted policy');
+    await expectSnapshot([expectedProject[0]], 'restoring the deleted policy');
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill();
     await closed;
