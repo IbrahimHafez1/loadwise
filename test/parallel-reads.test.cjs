@@ -121,5 +121,7 @@ async function dependent(id: UserId) {
   for (const from of ['#reads', '@/queries']) {
     assert.ok(validateParallelReads([{ from, exports: ['first', 'second'] }]).has(from));
   }
-  assert.throws(() => validateParallelReads([{ from: 'reads', exports: ['one', ,] }]), /parallelReads/);
+  const sparseExports = ['one'];
+  sparseExports.length = 2;
+  assert.throws(() => validateParallelReads([{ from: 'reads', exports: sparseExports }]), /parallelReads/);
 });
