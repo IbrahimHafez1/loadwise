@@ -81,12 +81,14 @@ test('a review applies to one advisory rule on the next physical line', () => {
   );
 });
 
-test('the warden-reviewed directive and the old backend-perf-reviewed one both apply', () => {
+test('the loadwise-reviewed directive and the old warden-reviewed and backend-perf-reviewed ones all apply', () => {
   const source = [
     "import { readFileSync as read } from 'node:fs';",
     'export async function handle() {',
-    '  // warden-reviewed node-sync-fs-in-async -- New directive name.',
+    '  // loadwise-reviewed node-sync-fs-in-async -- New directive name.',
     '  read("one");',
+    '  // warden-reviewed node-sync-fs-in-async -- Previous directive name.',
+    '  read("three");',
     '  // backend-perf-reviewed node-sync-fs-in-async -- Old directive name.',
     '  read("two");',
     '}',
@@ -95,7 +97,8 @@ test('the warden-reviewed directive and the old backend-perf-reviewed one both a
     lint(source).map(({ line, contextualReason }) => [line, contextualReason]),
     [
       [4, 'Reviewed in source: New directive name.'],
-      [6, 'Reviewed in source: Old directive name.'],
+      [6, 'Reviewed in source: Previous directive name.'],
+      [8, 'Reviewed in source: Old directive name.'],
     ],
   );
 });

@@ -310,7 +310,7 @@ describe('breaking changes', () => {
       fixed,
       '-- Deferred to a later release (expand/contract), once no running app version uses it:\n-- ALTER TABLE users DROP COLUMN legacy;\n',
     );
-    assert.match(result.note, /warden-reviewed migration-breaking-drop/);
+    assert.match(result.note, /loadwise-reviewed migration-breaking-drop/);
     assert.deepEqual(ruleIds(checkSql(fixed)), []);
   });
 

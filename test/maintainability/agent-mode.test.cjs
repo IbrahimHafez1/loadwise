@@ -84,11 +84,11 @@ test('--fix --only applies one fix without a terminal; unknown ids exit 2', (con
   assert.deepEqual(JSON.parse(unknown.stdout).failed, [{ id: '000000000000', reason: 'unknown id' }]);
 });
 
-test('a warden-reviewed comment makes a finding contextual, but not inside a string', (context) => {
+test('a loadwise-reviewed comment makes a finding contextual, but not inside a string', (context) => {
   const { root, scan } = project(context);
   const [finding] = scan();
   const lines = source.split('\n');
-  const marker = (ruleId) => `// warden-reviewed ${ruleId} -- intended: two outcomes only`;
+  const marker = (ruleId) => `// loadwise-reviewed ${ruleId} -- intended: two outcomes only`;
   lines.splice(finding.line - 1, 0, marker(finding.ruleId));
   fs.writeFileSync(path.join(root, 'pick.js'), lines.join('\n'));
   const [reviewed] = scan();
@@ -145,8 +145,8 @@ test('an agent block with the old markers is replaced in place', (context) => {
   assert.ok(!text.includes('maintainability-check'));
 });
 
-test('old maintainability-reviewed and backend-perf-reviewed comments still dismiss findings', (context) => {
-  for (const alias of ['maintainability-reviewed', 'backend-perf-reviewed']) {
+test('old warden-reviewed, maintainability-reviewed and backend-perf-reviewed comments still dismiss findings', (context) => {
+  for (const alias of ['warden-reviewed', 'maintainability-reviewed', 'backend-perf-reviewed']) {
     const { root, scan } = project(context);
     const [finding] = scan();
     const lines = source.split('\n');
@@ -158,7 +158,7 @@ test('old maintainability-reviewed and backend-perf-reviewed comments still dism
 
 test('contract rules stay non-dismissable under every review comment spelling', (context) => {
   const root = tempRoot(context);
-  for (const alias of ['warden-reviewed', 'maintainability-reviewed', 'backend-perf-reviewed']) {
+  for (const alias of ['loadwise-reviewed', 'warden-reviewed', 'maintainability-reviewed', 'backend-perf-reviewed']) {
     fs.writeFileSync(path.join(root, 'a.js'), `// ${alias} file-placement -- nope\nconst value = 1;\n`);
     const findings = [{ ruleId: 'file-placement', file: 'a.js', line: 2 }];
     applyReviewDirectives(findings, root);

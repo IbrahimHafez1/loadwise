@@ -107,7 +107,7 @@ test('--staged reports a function finding for an edit inside it and exits 1', (c
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout, /^app\.js:\d+ \[deep-control-flow #[0-9a-f]+\]/m);
   assert.match(result.stdout, /^ {2}fix: {5}npx warden-maint --fix --only [0-9a-f]+$/m);
-  assert.match(result.stdout, /^ {2}dismiss: \/\/ warden-reviewed deep-control-flow -- <reason>$/m);
+  assert.match(result.stdout, /^ {2}dismiss: \/\/ loadwise-reviewed deep-control-flow -- <reason>$/m);
   assert.match(result.stdout, /^1 new finding\(s\) in changed lines\. Apply fixes, then `git add`/m);
 });
 

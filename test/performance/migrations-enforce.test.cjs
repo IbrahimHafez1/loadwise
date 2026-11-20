@@ -88,10 +88,10 @@ describe('review comments', () => {
     assert.equal(findings[1].contextualReason, undefined);
   });
 
-  test('the warden-reviewed directive is accepted in SQL and code files', () => {
+  test('the loadwise-reviewed and warden-reviewed directives are accepted in SQL and code files', () => {
     const [sql] = applyReviewComments(
       [{ line: 2, ruleId: 'migration-breaking-drop' }],
-      '-- warden-reviewed migration-breaking-drop -- Unused.\nDROP TABLE old;',
+      '-- loadwise-reviewed migration-breaking-drop -- Unused.\nDROP TABLE old;',
       true,
     );
     assert.equal(sql.contextualReason, 'Reviewed in source: Unused.');
