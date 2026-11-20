@@ -237,7 +237,11 @@ export async function looseNull() {
   const rewritten = findings.map((finding) => finding.fix.changes.map((change) => change.after).join('\n'));
   assert.match(rewritten[0], /existsBy\(\{ id: 1 \}\)/);
   assert.match(rewritten[1], /existsBy\(\{ id: 2 \}\)/);
-  for (const [index, id] of [[2, 3], [3, 4], [4, 5]]) {
+  for (const [index, id] of [
+    [2, 3],
+    [3, 4],
+    [4, 5],
+  ]) {
     assert.ok(rewritten[index].includes(`existsBy({ id: ${id} })`));
     assert.match(rewritten[index], /return found;/);
     assert.doesNotMatch(rewritten[index], /null|undefined/);
