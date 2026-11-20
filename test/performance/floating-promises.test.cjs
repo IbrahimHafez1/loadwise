@@ -130,3 +130,10 @@ test('the policy loader accepts a list of helper names and rejects anything else
   assert.throws(() => load({ fireAndForget: ['not a name'] }), /fireAndForget requires a nonempty array/);
   assert.throws(() => load({ fireAndForget: 'trackEvent' }), /fireAndForget requires a nonempty array/);
 });
+
+test('a builder method that returns its own receiver type is quiet', () => {
+  const builder = `interface Builder extends PromiseLike<void> { set(name: string): Builder; send(): Promise<void> }
+declare const builder: Builder;\n`;
+  assert.deepEqual(reported(`${builder}export async function run() {\n  builder.set('a');\n}`), []);
+  assert.equal(reported(`${builder}export async function run() {\n  builder.send();\n}`).length, 1);
+});
