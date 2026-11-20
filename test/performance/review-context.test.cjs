@@ -173,11 +173,15 @@ const perItemSource = `import { Pool } from 'pg';
     await pool.query('SELECT ' + column + ' FROM t');
   }`;
 
+// Performance and security rules both, since pg-dynamic-query-text moved to security with its review reasons.
 function contextualReasons(fileName, source, files, ruleIds) {
-  const { analyzeFile } = require('../../lib/performance/analyze.cjs');
+  const analyzers = [require('../../lib/performance/analyze.cjs'), require('../../lib/security/analyze.cjs')];
   const path = require('node:path');
   return contextHelpers.withProgram('export {};', { [fileName]: source, ...files }, (program) =>
-    analyzeFile(program, program.getSourceFile(path.join(__dirname, 'virtual-project', fileName)))
+    analyzers
+      .flatMap(({ analyzeFile }) =>
+        analyzeFile(program, program.getSourceFile(path.join(__dirname, 'virtual-project', fileName))),
+      )
       .filter((finding) => ruleIds.includes(finding.ruleId))
       .map((finding) => [finding.ruleId, Boolean(finding.contextualReason)]),
   );

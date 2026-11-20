@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const { scanWithFixes, onlyChange } = require('./site-fix-helpers.cjs');
+const { scanWithFixes, onlyChange, withSecurity } = require('./site-fix-helpers.cjs');
 
 const prismaStub = {
   'node_modules/@prisma/client/index.d.ts': `
@@ -38,8 +38,8 @@ export class Client {query(statement: Input, values?: unknown[]): Promise<unknow
 export interface PoolClient extends Client {release(): void}`,
 };
 
-function fixFor(context, ruleId, source, stub) {
-  const { findings } = scanWithFixes(context, { 'src.ts': source, ...stub });
+function fixFor(context, ruleId, source, stub, analyzers) {
+  const { findings } = scanWithFixes(context, { 'src.ts': source, ...stub }, { analyzers });
   const matching = findings.filter((finding) => finding.ruleId === ruleId);
   return { matching, change: matching.length === 1 ? onlyChange(matching[0]) : undefined };
 }
@@ -331,6 +331,7 @@ function pgQuery(context, queryLine) {
       '}',
     ].join('\n'),
     pgStub,
+    withSecurity,
   );
 }
 

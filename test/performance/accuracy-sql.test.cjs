@@ -203,32 +203,3 @@ test('pg regenerate-until-free loop depends on the previous result', () => {
     }`;
   assert.deepEqual(linesOf(source, pgFiles, 'pg-query-in-loop'), markedLines(source));
 });
-
-test('pg dynamic text built only from code-owned constants, config objects and random hex is not reported', () => {
-  const source = `import { randomBytes, randomUUID } from 'node:crypto';
-    import type { Pool } from 'pg';
-    declare const pool: Pool, runtimeName: string, row: { table: string };
-    const SIZES = { S: { users: 1_000, name: 'small' }, L: { users: 20_000 } };
-    const size = SIZES.L;
-    const schema = \`bench_\${randomBytes(8).toString('hex')}\`;
-    const run = \`run_\${randomUUID()}\`;
-    declare function configure(config: object): void;
-    const leaked = { name: 'x' };
-    configure(leaked);
-    const rewritten = { name: 'x' };
-    rewritten.name = runtimeName;
-    const uuidOf = (kind: string, n: string) => \`md5('\${kind}-'||\${n})::uuid\`;
-    async function setup() {
-      await pool.query(\`CREATE SCHEMA "\${schema}"\`);
-      await pool.query(\`DROP SCHEMA "\${run}" CASCADE\`);
-      await pool.query(\`INSERT INTO t SELECT \${uuidOf('user', 'n')} FROM generate_series(1, \${size.users}) n\`);
-      await pool.query(\`SELECT * FROM \${SIZES.S.name}\`);
-      await pool.query(\`SELECT * FROM \${runtimeName}\`); // report
-      await pool.query(\`SELECT * FROM \${row.table}\`); // report
-      await pool.query(\`SELECT * FROM \${randomBytes(8).toString('base64')}\`); // report
-      await pool.query(\`SELECT * FROM \${schema.toUpperCase()}\`); // report
-      await pool.query(\`SELECT * FROM \${leaked.name}\`); // report
-      await pool.query(\`SELECT * FROM \${rewritten.name}\`); // report
-    }`;
-  assert.deepEqual(linesOf(source, pgFiles, 'pg-dynamic-query-text'), markedLines(source));
-});
