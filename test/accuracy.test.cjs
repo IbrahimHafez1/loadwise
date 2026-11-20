@@ -100,14 +100,26 @@ test('test-local setup closures nested in test callbacks are not duplicate imple
   assert.equal(duplicateFindings({ 'a.ts': production('one'), 'b.ts': production('two') }).length, 1);
 });
 
-test('standalone sample, fixture and migration directories are not duplicate implementations', () => {
-  for (const directory of ['sample/app', 'examples/app', 'integration/app', 'src/migrations', 'test/fixtures']) {
+test('standalone sample, fixture, seed, migration and per-release directories are not duplicate implementations', () => {
+  for (const directory of [
+    'sample/app',
+    'examples/app',
+    'integration/app',
+    'src/migrations',
+    'test/fixtures',
+    'src/dev-seeder/data',
+    'src/seeds',
+    'src/upgrade-commands/2-34',
+    'src/upgrades/v1.2.0',
+  ]) {
     const files = { [directory + '/a.ts']: declaration('one'), 'src/b.ts': declaration('two') };
     assert.equal(duplicateFindings(files).length, 0, directory);
     const both = { [directory + '/a.ts']: declaration('one'), [directory + '/b.ts']: declaration('two') };
     assert.equal(duplicateFindings(both).length, 0, directory);
   }
   assert.equal(duplicateFindings({ 'src/a.ts': declaration('one'), 'src/b.ts': declaration('two') }).length, 1);
+  // Live API versions are maintained side by side, so copies between them still count.
+  assert.equal(duplicateFindings({ 'src/v1/a.ts': declaration('one'), 'src/v2/b.ts': declaration('two') }).length, 1);
 });
 
 test('scanning on worker threads gives the same result and the same first error as a single thread', async () => {
