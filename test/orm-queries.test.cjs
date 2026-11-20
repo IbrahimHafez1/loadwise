@@ -211,3 +211,77 @@ test('recognizes consumed Knex builders and Kysely select execution while leavin
       const limited = (await knex('people').limit(1).select('id')).length;
     }`);
 });
+
+test('TypeORM repository and manager writes and row-changing raw queries in loops are reported', () => {
+  const source = `import { Repository, EntityManager, DataSource } from 'typeorm';
+    declare const repo: Repository<{ id: number }>, manager: EntityManager, db: DataSource;
+    declare const rows: { id: number }[], chunks: { id: number }[][];
+    async function run() {
+      for (const row of rows) await repo.save(row); // loop
+      for (const row of rows) await repo.update({ id: row.id }, { id: row.id }); // loop
+      for (const row of rows) await repo.increment({ id: row.id }, 'id', 1); // loop
+      for (const row of rows) await manager.save(row); // loop
+      for (const row of rows) await manager.query('UPDATE item SET seen = true WHERE id = $1', [row.id]); // loop
+      for (const row of rows) await db.query(\`DELETE FROM item WHERE id = \${row.id}\`); // loop
+      for (const row of rows) await db.query('SELECT 1 WHERE $1 > 0', [row.id]);
+      for (const chunk of chunks) await repo.insert(chunk);
+      for (const chunk of chunks) await repo.save(chunk.map((row) => ({ id: row.id + 1 })));
+      for (const row of rows) {
+        for (let attempt = 0; ; attempt++) {
+          try {
+            await repo.save(row); // loop
+            break;
+          } catch (error) {
+            if (attempt > 2) throw error;
+          }
+        }
+      }
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await repo.save(rows[0]);
+        } catch (error) {
+          if (attempt > 2) throw error;
+        }
+      }
+      for (const flag of [true, false]) await repo.delete({ id: Number(flag) });
+      await repo.save(rows);
+    }`;
+  const declarations = `export class Repository<T> {
+      save(entity: T | T[]): Promise<T>; insert(entity: T | T[]): Promise<object>; update(where: object, values: object): Promise<object>;
+      delete(where: object): Promise<object>; increment(where: object, column: string, by: number): Promise<object>;
+    }
+    export class EntityManager { save<T>(entity: T): Promise<T>; query(sql: string, parameters?: unknown[]): Promise<unknown>; }
+    export class DataSource { query(sql: string, parameters?: unknown[]): Promise<unknown>; }`;
+  const findings = lint(source, { 'node_modules/typeorm/index.d.ts': declarations }).filter(
+    (finding) => finding.ruleId === 'orm-query-in-loop',
+  );
+  assert.deepEqual(
+    findings.map((finding) => finding.line),
+    source.split('\n').flatMap((line, index) => (line.endsWith('// loop') ? [index + 1] : [])),
+  );
+  assert.match(findings[0].message, /^TypeORM\.save\(\) runs one write per item/);
+  assert.match(findings[3].message, /^TypeORM EntityManager\.save\(\)/);
+  assert.match(findings[5].message, /^TypeORM DataSource\.query\(\)/);
+});
+
+test('existence checks returned or compared with null on the next statement are recognized', () => {
+  const source = `import { Repository } from 'typeorm';
+    declare const repo: Repository<object>;
+    async function doubleNot() { const found = await repo.findOne({ where: { id: 1 } }); return !!found; } // exists
+    async function boolean() { const found = await repo.findOneBy({ id: 1 }); return Boolean(found); } // exists
+    async function looseNull() { const found = await repo.findOneBy({ id: 1 }); return found != null; } // exists
+    async function strictNull() { const found = await repo.findOneBy({ id: 1 }); if (found !== null) throw Error(); } // exists
+    async function notUndefined() { const found = await repo.findOneBy({ id: 1 }); if (found !== undefined) throw Error(); } // exists
+    async function returnsRow() { const found = await repo.findOneBy({ id: 1 }); return found; }
+    async function isNull() { const found = await repo.findOneBy({ id: 1 }); return found === null; }`;
+  const declarations = `export class Repository<T> {
+    findOne(options: object): Promise<T | null>; findOneBy(filter: object): Promise<T | null>;
+    exists(options: object): Promise<boolean>; existsBy(filter: object): Promise<boolean>;
+  }`;
+  assert.deepEqual(
+    lint(source, { 'node_modules/typeorm/index.d.ts': declarations })
+      .filter((finding) => finding.ruleId === 'typeorm-existence-materialization')
+      .map((finding) => finding.line),
+    source.split('\n').flatMap((line, index) => (line.endsWith('// exists') ? [index + 1] : [])),
+  );
+});

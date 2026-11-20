@@ -133,3 +133,54 @@ test('a query whose input is the previous iteration result walks a chain and can
     }`;
   assert.deepEqual(loopLines(source), markedLines(source));
 });
+
+test('closed value domains, failure paths, memoised loads and first-miss probes are not per-item queries', () => {
+  const source = `import { Repository } from 'typeorm';
+    declare const repo: Repository<{ id: number }>, ids: number[];
+    enum Channel { InApp = 'in_app', Push = 'push', Email = 'email' }
+    declare const channels: Channel[];
+    async function undo(created: number[]) {
+      for (const id of created) await repo.findOne({ where: { id } });
+    }
+    async function cleanup(created: number[]) {
+      for (const id of created) await repo.findOne({ where: { id } }); // loop
+    }
+    async function run() {
+      try { await cleanup(ids); } catch { await undo(ids); }
+      for (const channel of channels) await repo.findOne({ where: { channel } });
+      for (const channel of channels) if (channel === Channel.Push) await repo.find({ where: { channel } });
+      for (const id of ids) if (id === 7) await repo.findOne({ where: { id } });
+      for (const id of ids) {
+        try { JSON.parse(String(id)); } catch { await repo.findOne({ where: { id } }); }
+      }
+      let first: object | null | undefined;
+      for (const id of ids) first ??= await repo.findOne({ where: { id } });
+      const seen = new Map<number, object | null>();
+      for (const id of ids) {
+        let row = seen.get(id);
+        if (!row) {
+          row = await repo.findOne({ where: { id } });
+          seen.set(id, row);
+        }
+      }
+      const loaded: { id: number }[] = [];
+      for (const id of ids) {
+        let row = loaded.find((item) => item.id === id);
+        if (!row) {
+          row = (await repo.findOne({ where: { id } })) ?? { id };
+          loaded.push(row);
+        }
+      }
+      for (const id of ids) if (id > 7) await repo.findOne({ where: { id } }); // loop
+      for (const id of ids) {
+        const row = await repo.findOne({ where: { id } }); // loop
+        if (!row) return id;
+      }
+      for (let sequence = 1; sequence <= 50; sequence++) {
+        const taken = await repo.findOne({ where: { id: sequence } });
+        if (!taken) return sequence;
+      }
+      return first;
+    }`;
+  assert.deepEqual(loopLines(source), markedLines(source));
+});

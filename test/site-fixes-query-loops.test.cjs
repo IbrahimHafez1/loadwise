@@ -512,15 +512,21 @@ const typeormHeader = `import { DataSource, IsNull, Repository } from 'typeorm';
 type Role = { id: number, name: string, clinicId: number | null };
 `;
 
+// The loop writes in these fixtures are reported too, but only the reads get a site fix.
+function readFindings(findings) {
+  return findings.filter((finding) => !/runs one write per item/.test(finding.message));
+}
+
 function afterTexts(finding) {
   return finding.fix?.changes.map((change) => change.after);
 }
 
 test('a TypeORM findOne in a seed loop over a fixed list becomes one find with In', (context) => {
-  const findings = fixesFor(
-    context,
-    typeormFiles,
-    `${typeormHeader}declare const ROLES: { name: string }[];
+  const findings = readFindings(
+    fixesFor(
+      context,
+      typeormFiles,
+      `${typeormHeader}declare const ROLES: { name: string }[];
 declare const roleRepo: Repository<Role>;
 export async function seed() {
   for (const roleData of ROLES) {
@@ -528,7 +534,8 @@ export async function seed() {
     if (!existing) await roleRepo.save({ id: 0, name: roleData.name, clinicId: null });
   }
 }`,
-    'orm-query-in-loop',
+      'orm-query-in-loop',
+    ),
   );
   assert.equal(findings.length, 1);
   assert.deepEqual(afterTexts(findings[0]), [
@@ -543,10 +550,11 @@ export async function seed() {
 });
 
 test('TypeORM lookups in a try, with a lock, after a same-repository write or over repeatable keys stay', (context) => {
-  const findings = fixesFor(
-    context,
-    typeormFiles,
-    `${typeormHeader}declare const repo: Repository<Role>;
+  const findings = readFindings(
+    fixesFor(
+      context,
+      typeormFiles,
+      `${typeormHeader}declare const repo: Repository<Role>;
 declare const other: Repository<Role>;
 type Entry = { id: number, roleId: number, name: string };
 export async function run(entries: Entry[]) {
@@ -571,7 +579,8 @@ export async function run(entries: Entry[]) {
     console.log(await repo.findOne({ where: { id: entry.id } }));
   }
 }`,
-    'orm-query-in-loop',
+      'orm-query-in-loop',
+    ),
   );
   assert.equal(findings.length, 5);
   assert.deepEqual(
@@ -908,10 +917,11 @@ test('list reads that page, pick distinct rows, filter on a relation or run in a
   );
   assert.equal(prismaFindings.length, 4);
   for (const finding of prismaFindings) assert.equal(finding.fix, undefined);
-  const typeormFindings = fixesFor(
-    context,
-    typeormFiles,
-    `${typeormHeader}declare const repo: Repository<Role>;
+  const typeormFindings = readFindings(
+    fixesFor(
+      context,
+      typeormFiles,
+      `${typeormHeader}declare const repo: Repository<Role>;
 export async function load(entries: { id: number }[]) {
   for (const entry of entries) console.log(await repo.find({ where: { clinicId: entry.id }, skip: 10 }));
   for (const entry of entries) {
@@ -919,7 +929,8 @@ export async function load(entries: { id: number }[]) {
     console.log(await repo.find({ where: { clinicId: entry.id } }));
   }
 }`,
-    'orm-query-in-loop',
+      'orm-query-in-loop',
+    ),
   );
   assert.equal(typeormFindings.length, 2);
   for (const finding of typeormFindings) assert.equal(finding.fix, undefined);
