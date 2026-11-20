@@ -500,7 +500,7 @@ test('redacted Redis keys and incomplete, volatile or more complex SQL produce n
   ]) {
     cases.push({ ...sqlKeyRead, 'db.query.text': query });
   }
-  const { 'db.query.parameter.0': omitted, ...withoutBind } = sqlKeyRead;
+  const { 'db.query.parameter.0': _omitted, ...withoutBind } = sqlKeyRead;
   cases.push(
     withoutBind,
     { ...sqlKeyRead, 'db.query.parameter.0': 'user:***' },
