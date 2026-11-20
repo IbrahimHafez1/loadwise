@@ -146,7 +146,7 @@ function rulesFor(language) {
     utils,
     rule: { matches: 'level4', not: { matches: 'level5' } },
     message:
-      'Four nested conditionals or loops share this execution scope. Consider a guard clause or extracting a named operation if it makes this path easier to follow.',
+      'Four nested conditionals or loops share this execution scope. Deep nesting hides which conditions lead to the code. Invert the outer condition into an early `continue` or `return` (a guard clause), or extract the inner block into a named function. Keep side effects and cleanup on both paths.',
   };
   const parseError = {
     id: 'syntax-error',

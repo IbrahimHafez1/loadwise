@@ -36,6 +36,7 @@ test('reports the deepest nested decision once for a function, including an ordi
     ['src/example.ts', 6, 11, 'deep-control-flow'],
   );
   assert.match(findings[0].message, /4 nested levels/);
+  assert.match(findings[0].message, /early `continue` or `return`/);
   assert.deepEqual(analyze('function f() { if (a) for (;;) while (b) act(); }'), []);
 });
 
@@ -46,6 +47,7 @@ test('counts an else-if chain at the exact complexity boundary without increasin
   assert.equal(findings.length, 1);
   assert.deepEqual([findings[0].ruleId, findings[0].line, findings[0].column], ['high-branch-complexity', 1, 7]);
   assert.match(findings[0].message, /complexity of 15/);
+  assert.match(findings[0].message, /lookup table of handlers/);
 });
 
 test('counts explicit decisions including ternaries and catches while flat dispatch and defaults stay small', () => {
