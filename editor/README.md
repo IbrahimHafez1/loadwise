@@ -1,8 +1,8 @@
 # Backend Checkers
 
-The npm packages also support inline diagnostics and plain-text hover examples through the editor's built-in task system. To use that option, run `npx backend-perf-check editor init` in the consuming project, then open the trusted folder and allow automatic tasks. It refreshes on saves, terminal source scans, and checker package updates. Choose one integration per workspace to avoid duplicate diagnostics.
+Without this extension, `npx backend-perf-check editor init` in the consuming project gives inline diagnostics and plain-text hovers through the editor's built-in task system (open the trusted folder and allow automatic tasks). It refreshes on saves, terminal source scans and checker package updates. Choose one integration per workspace to avoid duplicate diagnostics.
 
-See performance and maintainability findings inline in VS Code or Cursor. Open a trusted project folder, save a source file, and hover over an underline to read the recommendation. Hover over the flagged code to compare the current snippet with a syntax-highlighted suggested rewrite. Short comparisons also appear on the first diagnostic line. Rules without a site-specific rewrite can show the flagged line and a labeled illustrative alternative.
+This extension shows performance and maintainability findings inline in VS Code or Cursor. Save a source file and hover over an underline to read the recommendation. Hover over the flagged code to compare the current snippet with a syntax-highlighted suggested rewrite; short comparisons also appear on the first diagnostic line. Rules without a site-specific rewrite show the flagged line and a labeled illustrative alternative.
 
 Open **View → Problems** to browse both checkers. Each entry identifies its source and rule and links to the reported code. Use **Backend Checkers: Scan Workspace** from the Command Palette to refresh immediately. **Backend Checkers: Show Output** lists scan counts and errors. The status bar shows when a scan is running, the number of findings and the time of the last scan; click it to open the output.
 
@@ -28,7 +28,7 @@ Findings appear as warnings and declared contract violations as errors. Set `bac
 
 ## Install
 
-Install the universal VSIX through **Extensions: Install from VSIX…**. The bundle includes both checkers and TypeScript. The native parser covers Windows x86, x64 and Arm64, Intel and Apple silicon Macs, and Linux x64 and Arm64 with glibc or musl. The editor itself must support your OS and architecture. Minimal musl images need the native parser's libgcc runtime. The editor needs Node.js 20 or newer on its PATH to launch the checkers. Source scanning runs locally.
+Install the universal VSIX through **Extensions: Install from VSIX…**. The bundle includes both checkers and TypeScript. The native parser covers Windows x86, x64 and Arm64, Intel and Apple silicon Macs, and Linux x64 and Arm64 with glibc or musl. The editor itself must support your OS and architecture. Minimal musl images need the native parser's libgcc runtime. The editor needs Node.js 22 or newer on its PATH to launch the checkers. Source scanning runs locally.
 
 ## What gets scanned
 

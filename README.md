@@ -12,16 +12,14 @@ Find repeated backend work before deployment or in a recorded request. The local
 | Live database inspection  | `backend-perf-check db`                  | Yes, read-only   |
 | Traces and executed plans | `traces trace.json`, `plan explain.json` | No               |
 
-Text findings carry a **Fix:** snippet where one applies and, for loops and repeated spans, an **Impact:** line. Impact always says which side is measured and which is estimated.
+Text findings carry a stable `#id`, a **Fix** diff where one applies and, for loops and repeated spans, an **Impact:** line. Impact always says which side is measured and which is estimated.
 
 ```text
-examples/slow.ts:7:48 [array-repeated-find] Each item can rescan the lookup array with find(), so cost grows with items times rows. Build `const byKey = new Map()` once (first match wins) and call `byKey.get(key)`; keep the original key-equality semantics.
-  Fix:
-    const firstById = new Map();
-    for (const row of rows) {
-      if (!firstById.has(row.id)) firstById.set(row.id, row);
-    }
-    const matches = ids.map(id => firstById.get(id));
+examples/slow.ts:7:48 [array-repeated-find #9ab891a8b8f7] Each item can rescan the lookup array with find(), so cost grows with items times rows. Build `const byKey = new Map()` once (first match wins) and call `byKey.get(key)`; keep the original key-equality semantics.
+  Fix (examples/slow.ts:7):
+    - const names = visible.map(order => customers.find(customer => customer.id === order.customerId)?.name ?? 'Unknown');
+    + const customersById = new Map(customers.map((customer) => [customer.id, customer] as const).reverse());
+    + const names = visible.map(order => customersById.get(order.customerId)?.name ?? 'Unknown');
 ```
 
 ```text
@@ -33,25 +31,9 @@ The second sample is `examples/repeated-db.otlp.json` with span timings added. A
 
 ## Start here
 
-### Editor findings with the npm packages
+### Quick start
 
-Install this package as a project dev dependency. Install `maintainability-check` alongside it to include both checkers. Set up the editor task once from the project root.
-
-```sh
-npx backend-perf-check editor init
-```
-
-Commit the generated `.vscode/tasks.json` with your project. Open the trusted folder in VS Code or Cursor and allow automatic tasks once. The watcher starts on subsequent folder opens. If the folder was already open during setup, reopen it. **Tasks: Manage Automatic Tasks** controls the workspace's choice.
-
-Saving a file or completing an ordinary source scan from the project terminal refreshes the active editor watcher. The editor uses its configured project and rules even when the terminal command uses different flags. A running watcher picks up checker package reinstalls. When upgrading from a version that predates automatic reload, reopen the folder once to load the new watcher.
-
-Open **View > Problems** or hover over an underline. The first line shows a source-based rewrite, an illustrative example or a review action. The hover retains the original finding and, where applicable, the code comparison. The editor controls whether diagnostic text appears beside the code.
-
-In the optional [editor extension](editor/README.md), each fixable line shows **Apply fix** and **Dismiss** buttons, **Ctrl+Alt+.** applies the fix on the cursor line with the same keys on every OS, and the Quick Fix menu offers the same actions; and **Backend Checkers: Apply all fixes in this file** (also available on save as `source.fixAll.backendCheckers`) applies every fix in one undoable edit. A finding, or a rule in one file, can be dismissed and restored with **Show dismissed findings**. The `backendCheckers.severity` setting shows all findings at one level. The extension rescans when files change, however they change, and the status bar shows the finding count and last scan time.
-
-This uses built-in tasks across supported source languages, including mixed-language projects. It needs Node.js 20+ on PATH. The default performance scan uses a root `tsconfig.json` or `jsconfig.json`, or explicit JS/TS files discovered by the watcher. To use a particular config, append `-p` and its relative path to the task's arguments. Start the task from a folder with the performance package installed under `node_modules`. Other editors can still run the CLI directly. For syntax-highlighted hover examples and related-location links in VS Code or Cursor, an optional [editor extension](editor/README.md) is also available.
-
-Use Node.js 20+ and point npm at the downloaded archive. From your application directory, install the package and run the first check.
+Use Node.js 22+ and point npm at the downloaded archive. From your application directory, install the package and run the first check.
 
 ```sh
 npm install --save-dev --include=optional ./backend-perf-check-0.3.0.tgz
@@ -77,6 +59,27 @@ The default `--fail-on all` applies to the displayed findings. For a complete ad
 | Python, Go, Java, C#, Rust              | `polyglot src`                                                     | Five narrowly scoped source patterns powered by a Rust binary.                      |
 | OTLP/JSON from any application language | `traces request.otlp.json --threshold 5`                           | Repeated SQL or NoSQL operations, duplicate lookups and Redis/Valkey commands.      |
 | Executed PostgreSQL or MongoDB plan     | `plan explain.json`                                                | Inefficient scans, disk sorts and deep pagination at individual plan stages.        |
+
+## Editor
+
+Install this package as a project dev dependency, and `maintainability-check` alongside it to include both checkers. Set up the editor task once from the project root.
+
+```sh
+npx backend-perf-check editor init
+```
+
+Commit the generated `.vscode/tasks.json`. Open the trusted folder in VS Code or Cursor and allow automatic tasks once; the watcher then starts on every folder open (reopen the folder if it was already open during setup). **Tasks: Manage Automatic Tasks** controls the workspace's choice. This works across supported source languages, including mixed-language projects, and needs Node.js 22+ on PATH and this package under `node_modules`.
+
+Saving a file or completing a source scan from the project terminal refreshes the running watcher. The editor uses its configured project and rules even when the terminal command uses different flags, and a running watcher picks up checker package reinstalls. After upgrading from a version that predates automatic reload, reopen the folder once. The default scan uses a root `tsconfig.json` or `jsconfig.json`, or explicit JS/TS files discovered by the watcher; append `-p` and a relative path to the task's arguments (it runs `editor watch [-p tsconfig.json]`) to use another config.
+
+Open **View > Problems** or hover over an underline. The first line shows a source-based rewrite, an illustrative example or a review action. The hover retains the original finding and, where applicable, the code comparison.
+
+The optional [editor extension](editor/README.md) adds syntax-highlighted hover examples, related-location links and fix actions in VS Code or Cursor:
+
+- Each fixable line shows **Apply fix** and **Dismiss** CodeLens buttons, the hover has the same two links, and the Quick Fix menu offers the same actions.
+- The shortcuts are the same on every OS: **Ctrl+Alt+.** applies the fix on the cursor line, **Ctrl+Alt+Shift+.** applies all fixes in the file, and **Ctrl+Alt+,** dismisses the finding on the cursor line.
+- **Backend Checkers: Apply all fixes in this file** (also on save as `source.fixAll.backendCheckers`) applies every fix in one undoable edit.
+- A finding, or a rule in one file, can be dismissed and restored with **Show dismissed findings**. `backendCheckers.severity` shows all findings at one level.
 
 ## Source checks
 
@@ -137,18 +140,19 @@ The JS/TS checker resolves declarations from installed drivers and generated cli
 
 `orm-query-in-loop`, `drizzle-query-in-loop` and `orm-count-materialization` preserve the distinction between building a lazy statement and executing it. Counts with pagination, grouping, joins, hooks or scopes need particular care. TypeORM checks also identify entity reads used only for existence (`typeorm-existence-materialization`), unused wide columns in a direct DTO projection (`typeorm-wide-projection`), and a loop calling a local private helper that starts a transaction (`typeorm-transaction-in-loop`). Before changing a projection or an existence check, verify entity-load side effects. For per-row transactions, check rollback, ordering and error reporting before batching. The adapters recognize specific typed APIs. Custom methods with the same name, raw queries and wrappers often have different semantics.
 
-| Integrity rule                     | What to review                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pg-transaction-on-pool`           | A standalone transaction-control statement is sent to a typed pool. Use the same checked-out client for the whole transaction and release it in `finally`.                                                                                                                                                                                                                                                                                  |
-| `pg-dynamic-query-text`            | Runtime fragments enter SQL text directly. Bind data as parameters and verify how any dynamic identifiers are chosen and quoted. A finding is a code-review prompt.                                                                                                                                                                                                                                                                         |
-| `prisma-transaction-client-escape` | A direct model operation uses the same outer client that opened an interactive transaction. Verify that the operation belongs inside that transaction.                                                                                                                                                                                                                                                                                      |
-| `prisma-dependent-writes`          | Adjacent creates pass a value from the first record into the next write. Explicit single-key nested `connect` can use a custom unique field when generated types confirm a relation. Direct scalar assignments currently recognize `parent.id` going into a field ending in `Id` or `_id`. Other scalar foreign-key conventions can be missed. If both writes must succeed together, consider a nested write or an appropriate transaction. |
-| `prisma-read-modify-write`         | A direct read of one row feeds a numeric update of the same field and key. Review atomic arithmetic, an optimistic version check or serializable execution with retries.                                                                                                                                                                                                                                                                    |
-| `prisma-distinct-in-memory`        | `findMany({ distinct })` reads every matching row and de-duplicates in Prisma's query engine, not with SQL `DISTINCT`. Use `groupBy` or a raw `SELECT DISTINCT`. Quiet when the `nativeDistinct` preview feature is enabled.                                                                                                                                                                                                                |
-| `prisma-relation-count-in-list`    | A paged `findMany` selects `_count` of a relation, which Prisma computes over the whole related table. Fetch the page, then `groupBy` for the page ids and merge the counts.                                                                                                                                                                                                                                                                |
-| `typeorm-load-then-save`           | A repository entity is loaded only to change a few fields and then `save()`d, costing a SELECT, an UPDATE and a transaction. Use `update()` or `increment()`; entity listeners and subscribers for update will not run.                                                                                                                                                                                                                     |
-| `guard-query-per-request`          | A guard or similar per-request hook runs a database query before every handler. Cache the lookup with a short TTL and explicit invalidation, or carry the claims in the token.                                                                                                                                                                                                                                                              |
-| `drizzle-unfiltered-write`         | An executed update/delete has no effective predicate in a recognized direct chain. An intentional whole-table maintenance operation can legitimately match.                                                                                                                                                                                                                                                                                 |
+| Integrity rule                      | What to review                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pg-transaction-on-pool`            | A standalone transaction-control statement is sent to a typed pool. Use the same checked-out client for the whole transaction and release it in `finally`.                                                                                                                                                                                                                                                                                  |
+| `pg-dynamic-query-text`             | Runtime fragments enter SQL text directly. Bind data as parameters and verify how any dynamic identifiers are chosen and quoted. A finding is a code-review prompt.                                                                                                                                                                                                                                                                         |
+| `prisma-transaction-client-escape`  | A direct model operation uses the same outer client that opened an interactive transaction. Verify that the operation belongs inside that transaction.                                                                                                                                                                                                                                                                                      |
+| `typeorm-transaction-client-escape` | An awaited write inside a TypeORM transaction goes through a repository or manager that is not bound to it, so it autocommits on another pooled connection, is not rolled back with the transaction and can block on its locks. Use the transaction's manager (`manager.getRepository(Entity)`).                                                                                                                                            |
+| `prisma-dependent-writes`           | Adjacent creates pass a value from the first record into the next write. Explicit single-key nested `connect` can use a custom unique field when generated types confirm a relation. Direct scalar assignments currently recognize `parent.id` going into a field ending in `Id` or `_id`. Other scalar foreign-key conventions can be missed. If both writes must succeed together, consider a nested write or an appropriate transaction. |
+| `prisma-read-modify-write`          | A direct read of one row feeds a numeric update of the same field and key. Review atomic arithmetic, an optimistic version check or serializable execution with retries.                                                                                                                                                                                                                                                                    |
+| `prisma-distinct-in-memory`         | `findMany({ distinct })` reads every matching row and de-duplicates in Prisma's query engine, not with SQL `DISTINCT`. Use `groupBy` or a raw `SELECT DISTINCT`. Quiet when the `nativeDistinct` preview feature is enabled.                                                                                                                                                                                                                |
+| `prisma-relation-count-in-list`     | A paged `findMany` selects `_count` of a relation, which Prisma computes over the whole related table. Fetch the page, then `groupBy` for the page ids and merge the counts.                                                                                                                                                                                                                                                                |
+| `typeorm-load-then-save`            | A repository entity is loaded only to change a few fields and then `save()`d, costing a SELECT, an UPDATE and a transaction. Use `update()` or `increment()`; entity listeners and subscribers for update will not run.                                                                                                                                                                                                                     |
+| `guard-query-per-request`           | A guard or similar per-request hook runs a database query before every handler. Cache the lookup with a short TTL and explicit invalidation, or carry the claims in the token.                                                                                                                                                                                                                                                              |
+| `drizzle-unfiltered-write`          | An executed update/delete has no effective predicate in a recognized direct chain. An intentional whole-table maintenance operation can legitimately match.                                                                                                                                                                                                                                                                                 |
 
 For Prisma, building an array of lazy queries alone is quiet. A sequential `await` inside a loop can trigger the rule. Same-tick `findUnique` callbacks can use Prisma's own batching, so these are left to runtime traces. [Prisma Client reference](https://www.prisma.io/docs/orm/reference/prisma-client-reference#prismapromise-behavior) · [Prisma transactions](https://www.prisma.io/docs/orm/prisma-client/queries/transactions) · [node-postgres transactions](https://node-postgres.com/features/transactions) · [Drizzle conditional filters](https://orm.drizzle.team/docs/guides/conditional-filters-in-query)
 
@@ -164,7 +168,7 @@ Drizzle also supports configuring quoted properties such as `"org-id"` and acces
 
 `drizzleScopes` names an exported table, its schema module, its scoped property and the trusted helper. For a direct executed query, `.where(eq(invoices.workspace_id, currentWorkspace()))` establishes the configured predicate in the example. Use the property exposed by the ORM. A project with `organizationId: text('org_id')` would configure `"field": "organizationId"`. Each table can use a different convention. A later `.where()` can replace the earlier condition. The rule checks the effective condition and can report `drizzle-scope-unverified` when a protected table appears in a recognized chain and scope, projection or write data needs review. Stored builders, prepared aliases, raw SQL and arbitrary helper-generated statements can fall outside this check.
 
-The import boundary for database modules (previously the `data-access-boundary` rule) now lives in the sibling maintainability-check package; configure it through that package's `dataAccess` config.
+The import boundary for database modules (formerly the data-access-boundary rule) now lives in the sibling maintainability-check package; configure it through that package's `dataAccess` config.
 
 These checks assume the configured helper authenticates the caller and authorizes the returned scope. Middleware, injected or previously obtained clients, raw SQL, unrecognized query shapes and database row-level policies require separate verification. A clean run only describes the covered operations.
 
@@ -219,7 +223,7 @@ Every finding has a stable `id`, shown as `[rule-id #id]` in text output. It has
 npx backend-perf-check --fix --only a1b2c3d4e5f6,0f9e8d7c6b5a --json   # prints { applied, alreadyApplied, failed }
 ```
 
-An unknown id, a finding with no fix, or a fix whose code changed since the scan is listed in `failed`, and the exit code is 2. An id whose change an earlier id in the same run already made, such as a shared `Set`, is listed in `alreadyApplied` and is not a failure. To dismiss a false positive, add a review comment with a specific reason on the line above: `// backend-perf-reviewed <rule-id> -- <reason>`.
+An unknown id, a finding with no fix, or a fix whose code changed since the scan is listed in `failed`, and the exit code is 2. An id whose change an earlier id in the same run already made, such as a shared `Set`, is listed in `alreadyApplied` and is not a failure. To dismiss a false positive, add the `// backend-perf-reviewed <rule-id> -- <reason>` comment described under Source checks.
 
 ## Migration safety
 
@@ -380,6 +384,10 @@ Sentry also has an N+1 detector that considers sequential spans and their total 
 
 ## Developing locally
 
-Use Node.js 20.19+ (20.x) or 22.12 and later for the development tools and run `npm ci --include=optional`. Open this repository folder as a trusted workspace in VS Code or Cursor and enable the recommended Prettier extension. Saving a supported file formats it with the repository settings.
+Use Node.js 22.12+ for the development tools and run `npm ci --include=optional`. Open this repository folder as a trusted workspace in VS Code or Cursor and enable the recommended Prettier extension. Saving a supported file formats it with the repository settings.
 
 Run `npm run format` to format files, `npm run lint` for correctness checks, or `npm run check` to verify formatting, lint and tests together.
+
+## License
+
+Copyright © 2026 Ibrahim Hafez. All rights reserved. See LICENSE.
