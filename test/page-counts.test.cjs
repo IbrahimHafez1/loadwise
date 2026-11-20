@@ -171,3 +171,47 @@ test('paging statements between the count and the rows on the same builder are k
   assert.doesNotMatch(after, /getCount/);
   assert.match(after, /qb\.skip\(page\)\.take\(limit\);/);
 });
+
+const offsetBuilderStub = typeormStub.replace(
+  '  getCount(): Promise<number>;',
+  '  offset(value: number): this;\n  limit(value: number): this;\n  leftJoinAndSelect(relation: string, alias: string): this;\n  getCount(): Promise<number>;',
+);
+
+test('offset/limit paging is left alone unless the builder is visibly join-free', (context) => {
+  const { findings } = scanWithFixes(context, {
+    'node_modules/typeorm/index.d.ts':
+      offsetBuilderStub +
+      '\nexport class DataSource {\n  createQueryBuilder(): SelectQueryBuilder<object>;\n}',
+    'src/service.ts': `import { DataSource, SelectQueryBuilder } from 'typeorm';
+declare const dataSource: DataSource;
+declare function patientQuery(): SelectQueryBuilder<object>;
+export async function joined(page: number, limit: number) {
+  const query = dataSource.createQueryBuilder().leftJoinAndSelect('a.b', 'b');
+  const total = await query.getCount();
+  query.offset(page).limit(limit);
+  const rows = await query.getMany();
+  return { rows, total };
+}
+export async function fromHelper(page: number, limit: number) {
+  const query = patientQuery();
+  const total = await query.getCount();
+  query.offset(page).limit(limit);
+  const rows = await query.getMany();
+  return { rows, total };
+}
+export async function plain(page: number, limit: number) {
+  const query = dataSource.createQueryBuilder();
+  const total = await query.getCount();
+  query.offset(page).limit(limit);
+  const rows = await query.getMany();
+  return { rows, total };
+}`,
+  });
+  const reported = findings.filter((finding) => finding.ruleId === 'count-then-page-serial');
+  assert.deepEqual(
+    reported.map((finding) => finding.line),
+    [20],
+  );
+  assert.match(reported[0].message, /a full page still runs it serially after the rows/);
+  assert.doesNotMatch(reported[0].message, /one call|two round trips/);
+});
