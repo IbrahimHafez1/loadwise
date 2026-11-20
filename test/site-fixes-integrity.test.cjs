@@ -468,3 +468,97 @@ test('Drizzle unfiltered writes with no implied filter get no fix', (context) =>
   assert.equal(findings.length, 2);
   assert.equal(findings.filter((finding) => finding.fix).length, 0);
 });
+
+const notNullSchemaStub = {
+  'schema.ts': `
+    interface ColumnBuilder { notNull(): ColumnBuilder; default(value: boolean): ColumnBuilder }
+    declare function pgTable<Columns>(name: string, columns: Columns): Columns;
+    declare function boolean(name: string): ColumnBuilder;
+    export const packages = pgTable('packages', {
+      mostPopular: boolean('most_popular').default(false).notNull(),
+      featured: boolean('featured').default(false),
+    });`,
+};
+
+function repeatedBooleanUpdates(column) {
+  return [
+    "import type { Database } from 'drizzle-orm/pg-core/db';",
+    "import { eq } from 'drizzle-orm';",
+    "import { packages } from './schema';",
+    "import { other } from './other';",
+    '',
+    '',
+    '',
+    '',
+    'export async function run(db: Database) {',
+    `  await db.update(packages).set({ ${column}: false });`,
+    '',
+    '',
+    '',
+    '',
+    `  await db.update(packages).set({ ${column}: false });`,
+    '',
+    '',
+    '',
+    '',
+    `  await db.update(packages).set({ ${column}: false });`,
+    '}',
+  ].join('\n');
+}
+
+// Applies fixes one after another the way the CLI does, through the real change applier.
+function applyEachFix(source, findings) {
+  const { applyFix } = require('../editor/apply-fix.cjs');
+  let text = source;
+  const results = [];
+  for (const finding of findings) {
+    results.push(
+      applyFix(finding.fix, {
+        readFile: () => text,
+        writeFile: (_file, updated) => {
+          text = updated;
+        },
+      }),
+    );
+  }
+  return { text, results };
+}
+
+test('Drizzle same-boolean fixes in one file compose: the shared import is added once in any order', (context) => {
+  const source = repeatedBooleanUpdates('featured');
+  const findings = findingsFor(context, 'drizzle-unfiltered-write', source, { ...drizzleStubs, ...notNullSchemaStub });
+  assert.equal(findings.length, 3);
+  for (const order of [findings, [...findings].reverse(), [findings[1], findings[2], findings[0]]]) {
+    const { text, results } = applyEachFix(source, order);
+    assert.ok(
+      results.every((result) => !result.error),
+      JSON.stringify(results),
+    );
+    const drizzleImports = text.match(/import \{[^}]*\} from 'drizzle-orm'/g);
+    assert.equal(drizzleImports.length, 1);
+    const importedNames = drizzleImports[0]
+      .replace(/^import \{|\}.*$/g, '')
+      .split(',')
+      .map((name) => name.trim());
+    assert.deepEqual(
+      ['or', 'ne', 'isNull'].filter((name) => !importedNames.includes(name)),
+      [],
+    );
+    assert.equal(text.match(/\.where\(or\(ne\(packages\.featured, false\)/g).length, 3);
+  }
+});
+
+test('Drizzle same-boolean update on a NOT NULL column omits the isNull guard', (context) => {
+  const source = repeatedBooleanUpdates('mostPopular');
+  const findings = findingsFor(context, 'drizzle-unfiltered-write', source, { ...drizzleStubs, ...notNullSchemaStub });
+  assert.equal(findings.length, 3);
+  assert.match(findings[0].message, /declared NOT NULL/);
+  const { text, results } = applyEachFix(source, findings);
+  assert.ok(
+    results.every((result) => !result.error),
+    JSON.stringify(results),
+  );
+  assert.equal(text.match(/import \{[^}]*\bne\b[^}]*\} from 'drizzle-orm'/g).length, 1);
+  assert.equal(text.match(/\.where\(ne\(packages\.mostPopular, false\)\)/g).length, 3);
+  assert.doesNotMatch(text, /isNull|or\(/);
+});
