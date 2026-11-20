@@ -131,3 +131,28 @@ test('synchronous calls in test sources and operator tooling are contextual unle
   assert.deepEqual(summary(lintAs('src/key.ts', crypto), 'node-sync-crypto-in-async'), [[3, false]]);
   assert.deepEqual(summary(lintAs('src/key.itest.ts', crypto), 'node-sync-crypto-in-async'), [[3, true]]);
 });
+
+test('iterating a short imported constant list, lookup table or decorator metadata is bounded', () => {
+  const members = Array.from({ length: 18 }, (_, index) => `'item${index}'`).join(', ');
+  const files = {
+    'catalog.ts': `export const CATALOG = [${members}];\nexport const TABLE: Record<string, string[]> = { a: ['x', 'y'], b: ['z'] };\n`,
+  };
+  const membership = (setup, input) =>
+    `import { CATALOG, TABLE } from './catalog.js';\ndeclare const reflector: { getAllAndOverride<T>(key: string, targets: unknown[]): T };\nexport function check(held: string[], name: string) {\n  ${setup}\n  return ${input}.every((key) => held.includes(key));\n}`;
+  const reported = (setup, input) =>
+    summary(lintAs('service.ts', membership(setup, input), files), 'array-repeated-membership').length;
+  assert.equal(reported('', 'CATALOG'), 0);
+  assert.equal(reported('', 'TABLE[name]'), 0);
+  assert.equal(reported('const required = reflector.getAllAndOverride<string[]>("keys", []) ?? [];', 'required'), 0);
+  assert.equal(reported('', 'held.slice(1)'), 1);
+});
+
+test('only calls before a lookup count as possibly changing a small array', () => {
+  const source = (before, after) =>
+    `declare function inspect(list: string[]): void;\nexport function check(known: string[]) {\n  const wanted = ['a', 'b', 'c'];\n  ${before}\n  const found = wanted.filter((item) => known.includes(item));\n  ${after}\n  return found;\n}`;
+  const reported = (before, after) =>
+    summary(lintAs('service.ts', source(before, after)), 'array-repeated-membership').length;
+  assert.equal(reported('', 'inspect(wanted);'), 0);
+  assert.equal(reported('inspect(wanted);', ''), 1);
+  assert.equal(reported('', 'wanted.push("d");'), 1);
+});
