@@ -13,7 +13,7 @@ test('reports one-hop per-item TypeORM transactions while preserving chunk, retr
       async run(rows: number[], pages: number[][]) {
         for (let index = 0; index < rows.length; index++) {
           const row = rows[index];
-          try { await this.saveRow(row); } catch { continue; } // per-item isolation, nothing cheaper keeps it
+          try { await this.saveRow(row); } catch { continue; } // report
           try { await this.saveRow(row); } catch (error) { throw error; } // report
         }
         for (const row of rows) await this.#insert(row); // report
@@ -47,5 +47,8 @@ test('reports one-hop per-item TypeORM transactions while preserving chunk, retr
   assert.deepEqual(
     findings.map((item) => item.line),
     reported,
-  );
+  ); // Per-item isolation is still one transaction per item, but merging the loop into one would change behavior.
+  assert.match(findings[0].message, /opens a TypeORM transaction for every item/);
+  assert.match(findings[0].message, /do not just wrap the loop in one transaction/);
+  assert.match(findings[1].message, /Open one transaction around the loop/);
 });
