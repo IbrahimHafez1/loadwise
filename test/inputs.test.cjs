@@ -41,6 +41,7 @@ test('Git inventory includes tracked and new files and drops missing, excluded, 
     'dist/output.ts': '',
     'assets/bundle.min.js': '',
     'assets/bundle.js.map': '',
+    '.yarn/releases/yarn-4.9.2.cjs': '',
     'src/deep/keep.py': '',
     'src/deeper/other.py': '',
   });
