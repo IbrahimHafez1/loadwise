@@ -99,7 +99,7 @@ DRY candidates can represent intentional copies between isolated modules. Deep n
 Any agent that can run shell commands and read an instructions file can drive the checker.
 
 ```sh
-npx maintainability-check agent init [--mode ask|auto]
+npx maintainability-check agent init [--mode ask|auto] [--hook block|warn|off]
 ```
 
 This writes a short block between `<!-- maintainability-check:agent:start -->` and `...:end -->` markers in `AGENTS.md` at the project root (created if missing, replaced in place on re-runs, other text untouched, and `backend-perf-check`'s block can sit beside it). If `CLAUDE.md` does not already contain `@AGENTS.md`, that line is added once, or the file is created with it.
@@ -116,6 +116,20 @@ npx maintainability-check . --fix --only <id>[,<id>...] [--json]
 `--only` applies exactly those fixes with no prompt and no terminal. `--json` prints `{ applied, alreadyApplied, failed }`. An id whose change an earlier id in the same run already made is reported in `alreadyApplied`; an unknown id, a finding without a fix or a stale fix is in `failed` and the exit code is 2.
 
 To dismiss a false positive, put `// maintainability-reviewed <rule-id> -- <specific reason>` on the line above it. The finding becomes contextual with that reason. Only a real line comment counts, and declared contracts (`file-placement`, `folder-boundary`, `data-access-boundary`, `query-mutates-state`) cannot be dismissed this way.
+
+## Changed lines and the git pre-commit hook
+
+```sh
+npx maintainability-check --staged .
+npx maintainability-check --changed-since <git-ref> .
+npx maintainability-check agent init --hook block|warn|off
+```
+
+`--staged` reports only findings on lines added or changed in `git diff --cached`; `--changed-since <git-ref>` does the same for the working tree against that ref. A function-level finding (`high-branch-complexity`, `deep-control-flow`) is kept when a changed line falls anywhere inside its function. Text output is one block per finding (`path:line [rule-id #id] message`, then a `fix:` command when a rewrite exists and a `dismiss:` comment to paste above the line), ending with `N new finding(s) in changed lines.`. `--json` works too, with the same shape filtered. With no changed JS/TS files it prints nothing and exits 0 before TypeScript loads. In these modes `--fail-on` defaults to `all`, so the exit code is 1 whenever a finding remains.
+
+Only the changed files are analysed, while imports still resolve through the whole project. When as many files changed as the full scan's parallel threshold (600), the full scan runs instead and its findings are filtered to the changed lines, so every rule applies. Otherwise rules that need every file are limited: `duplicate-implementation` is skipped and `dependency-cycle` only sees cycles made of changed files' imports. Boundary and placement rules still run. Analysis reads working-tree files, so a file with unstaged edits can report shifted lines.
+
+`agent init --hook block|warn` writes a marked block into `.git/hooks/pre-commit` (the `core.hooksPath` directory, or `.husky/pre-commit` when `.husky/` exists). `block` stops the commit while findings remain; `warn` (the default for a bare `--hook`) only prints them. Re-running replaces only its own block, an existing hook's other content is kept, and `--hook off` removes the block. If `lefthook.yml` exists it is not edited; the command to add is printed instead. `git commit --no-verify` skips the hook.
 
 ## Developing locally
 
