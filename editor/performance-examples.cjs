@@ -242,6 +242,12 @@ const standaloneExamples = {
     code: 'await this.approveMany(ids); // one In(ids) read and one bulk save',
     note: 'The helper hides queries that run once per item. Add a batch variant and keep per-item validation and transaction needs.',
   },
+  'http-call-without-timeout': {
+    language: 'javascript',
+    before: "const response = await fetch(url, { method: 'POST', body });",
+    code: "const response = await fetch(url, { method: 'POST', body, signal: AbortSignal.timeout(10_000) });",
+    note: 'Without a timeout a hung upstream holds this request and its socket until the OS gives up. Tune the limit per API.',
+  },
   'mongo-collection-scan': collectionScan,
   'mongo-collection-scan-observed': collectionScan,
   'mongo-disk-sort': {
