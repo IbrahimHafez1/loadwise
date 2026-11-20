@@ -84,12 +84,74 @@ export function keep(rows: string[]) {
   assert.equal(change.after.split('\n')[0], 'const blockedSet = new Set(blocked);');
 });
 
-test('membership fix is skipped for expression-bodied callers, loop variables and non-identifier receivers', (context) => {
-  assertNoFix(
+test('an expression-bodied arrow function gets a block body that builds the Set first', (context) => {
+  const { change } = changeFor(
     context,
     membership,
     `export const pick = (rows: { id: number }[], ids: number[]) => rows.filter((row) => ids.includes(row.id));`,
   );
+  assert.equal(
+    change.after,
+    `export const pick = (rows: { id: number }[], ids: number[]) => {
+  const idsSet = new Set(ids);
+  return rows.filter((row) => idsSet.has(row.id));
+};`,
+  );
+  const { change: ownLine } = changeFor(
+    context,
+    membership,
+    `export const shares = (left: string[], right: string[]): boolean =>
+  left.some((value) => value !== '' && right.includes(value));`,
+  );
+  assert.equal(
+    ownLine.after,
+    `export const shares = (left: string[], right: string[]): boolean => {
+  const rightSet = new Set(right);
+  return left.some((value) => value !== '' && rightSet.has(value));
+};`,
+  );
+});
+
+test('nested iteration callbacks hoist the Set before the outer statement', (context) => {
+  const { change } = changeFor(
+    context,
+    membership,
+    `export function shares(classes: string[], drugs: { parts: string[] }[], table: Record<string, string[]>) {
+  const wanted = classes.slice();
+  return drugs.some((drug) => drug.parts.some((part) => (table[part] ?? []).some((cls) => wanted.includes(cls))));
+}`,
+  );
+  assert.deepEqual(change.after.split('\n'), [
+    'const wantedSet = new Set(wanted);',
+    'return drugs.some((drug) => drug.parts.some((part) => (table[part] ?? []).some((cls) => wantedSet.has(cls))));',
+  ]);
+});
+
+test('a property chain receiver is hoisted only when nothing in the statement guards it', (context) => {
+  const { change, note } = changeFor(
+    context,
+    membership,
+    `export function escalates(actor: { permissions: string[] }, keys: string[]) {
+  const result = keys.includes('*') || !keys.every((key) => actor.permissions.includes(key));
+  return result;
+}`,
+  );
+  assert.deepEqual(change.after.split('\n').slice(0, 2), [
+    'const permissionsSet = new Set(actor.permissions);',
+    "const result = keys.includes('*') || !keys.every((key) => permissionsSet.has(key));",
+  ]);
+  assert.match(note, /`actor\.permissions` is now read even when the iteration does not run/);
+  assertNoFix(
+    context,
+    membership,
+    `export function covered(existing: { names: string[] } | undefined, names: string[]) {
+  if (existing && names.every((name) => existing.names.includes(name))) return true;
+  return false;
+}`,
+  );
+});
+
+test('membership fix is skipped for loop variables', (context) => {
   assertNoFix(
     context,
     membership,
