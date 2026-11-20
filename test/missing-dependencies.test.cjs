@@ -44,3 +44,12 @@ test('other compiler option errors stay fatal', (context) => {
   assert.equal(result.status, 2, result.stderr);
   assert.doesNotMatch(result.stderr, /type libraries not installed/);
 });
+
+test('an imported ORM package that cannot be resolved is noted on stderr only', (context) => {
+  const directory = uninstalledProject(context, { compilerOptions: { module: 'commonjs' }, include: ['index.ts'] });
+  const result = runIn(directory, ['-p', 'tsconfig.json', '--json']);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /Note: @prisma\/client is imported but not installed .*prisma generate/);
+  assert.doesNotMatch(result.stdout, /not installed/);
+  assert.equal(JSON.parse(result.stdout).scannedFiles, 1);
+});
