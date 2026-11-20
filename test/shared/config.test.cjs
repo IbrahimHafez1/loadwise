@@ -324,6 +324,21 @@ test('perf leaves ignored files out of the scan, so they are not counted', (cont
   );
 });
 
+test('perf notes when the ignore globs leave no files to check', (context) => {
+  const root = project(context, {
+    'tsconfig.json': tsconfig,
+    'src/a.ts': slowSource,
+    'loadwise.config.json': { ignore: ['src'] },
+  });
+  const run = perfRun(root);
+  assert.equal(run.code, 0, run.stderr);
+  assert.deepEqual(run.findings, []);
+  assert.match(
+    run.stderr,
+    /every source file matches "ignore" in .*loadwise\.config\.json; no files were left to check/,
+  );
+});
+
 test('a repeated key in the config exits 2, including inside the performance section', (context) => {
   const text = '{"performance":{"parallelReads":[],"parallelReads":[]}}';
   const run = loadwise(project(context, { 'loadwise.config.json': text }), 'check');
