@@ -1,0 +1,10 @@
+{
+  "name": "backend-perf-check-db-fixture",
+  "private": true,
+  "description": "Project whose own drivers the db integration tests resolve, as a user's project would.",
+  "dependencies": {
+    "mongodb": "7.8.0",
+    "mysql2": "3.24.6",
+    "pg": "8.23.1"
+  }
+}
