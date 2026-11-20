@@ -3,16 +3,32 @@
   "version": "0.3.0",
   "description": "Check backend query performance, transaction usage and project-defined data-access policies in source code, traces and execution plans.",
   "license": "UNLICENSED",
-  "bin": { "backend-perf-check": "./bin/backend-perf-check.cjs" },
-  "files": ["bin/", "lib/", "polyglot/", "examples/", "PERFORMANCE.md"],
-  "engines": { "node": ">=20" },
+  "bin": {
+    "backend-perf-check": "./bin/backend-perf-check.cjs"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "polyglot/",
+    "examples/",
+    "PERFORMANCE.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
+    "format": "prettier --cache --write .",
+    "format:check": "prettier --cache --check .",
+    "lint": "oxlint --deny-warnings .",
+    "check": "npm run format:check && npm run lint && npm test",
     "test": "node --test --test-concurrency=2 test/*.test.cjs",
     "bench:patterns": "node bench/patterns.cjs",
     "bench:scan": "node bench/scanner.cjs",
     "bench:traces": "node bench/traces.cjs"
   },
-  "dependencies": { "typescript": "5.9.3" },
+  "dependencies": {
+    "typescript": "5.9.3"
+  },
   "optionalDependencies": {
     "@ast-grep/cli": "0.51.3",
     "@typescript/typescript-aix-ppc64": "7.1.0-beta",
@@ -36,5 +52,9 @@
     "@typescript/typescript-sunos-x64": "7.1.0-beta",
     "@typescript/typescript-win32-arm64": "7.1.0-beta",
     "@typescript/typescript-win32-x64": "7.1.0-beta"
+  },
+  "devDependencies": {
+    "oxlint": "1.94.0",
+    "prettier": "3.10.1"
   }
 }
