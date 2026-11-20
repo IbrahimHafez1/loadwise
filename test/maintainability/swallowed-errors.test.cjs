@@ -22,7 +22,7 @@ test('a catch that only logs is reported when the code carries on afterwards', (
   const sources = [
     'function run() { try { work(); } catch (error) { console.error(error); } done(); }',
     'function run() { try { work(); } catch (error) { this.logger.warn("failed", error); } done(); }',
-    'function run(items) { for (const item of items) { try { work(item); } catch (error) { logger.error(error); } } }',
+    'function run(items) { for (const item of items) { try { work(item); } catch (error) { logger.error(error); } total += 1; } }',
   ];
   for (const source of sources) {
     const findings = check(source);
@@ -31,8 +31,14 @@ test('a catch that only logs is reported when the code carries on afterwards', (
   }
 });
 
-test('a logging catch at the end of a function is not reported', () => {
+test('a logging catch that ends its block, such as a per-item log in a loop, is not reported', () => {
   assert.deepEqual(check('function run() { try { work(); } catch (error) { console.error(error); } }'), []);
+  assert.deepEqual(
+    check(
+      'function run(items) { for (const item of items) { try { work(item); } catch (error) { logger.error(error); } } }',
+    ),
+    [],
+  );
 });
 
 test('a catch that explains itself with a comment is accepted', () => {
