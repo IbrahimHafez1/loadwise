@@ -5,6 +5,29 @@ const assert = require('node:assert/strict');
 const ts = require('typescript');
 const { lint, withProgram } = require('./helpers.cjs');
 
+test('pure probes into typed data properties and caller-sized public predicates receive distinct advice', () => {
+  const source = `interface Holder { keys: string[] }
+    interface Custom { keys: { includes(value: string): boolean } }
+    class Dynamic { get keys(): string[] { return []; } }
+    class Policy {
+      matches(held:string[], keys:string[]) { return keys.every(key => held.includes(key)); }
+      private grants(holder:Holder, keys:string[]) { return keys.every(key => holder.keys.includes(key)); }
+      private invokes(holder:Holder, keys:string[]) { return keys.every(key => { holder.keys = []; return holder.keys.includes(key); }); }
+      private getter(holder:Dynamic, keys:string[]) { return keys.every(key => holder.keys.includes(key)); }
+      private custom(holder:Custom, keys:string[]) { return keys.every(key => holder.keys.includes(key)); }
+      private tiny(holder:Holder) { return ['a','b'].every(key=>holder.keys.includes(key)); }
+    }`;
+  assert.deepEqual(
+    lint(source)
+      .filter((finding) => finding.ruleId === 'array-repeated-membership')
+      .map((finding) => [finding.line, Boolean(finding.contextualReason)]),
+    [
+      [5, true],
+      [6, false],
+    ],
+  );
+});
+
 test('membership checks identify reusable array scans in loops and built-in callbacks', () => {
   const findings = lint(
     [
