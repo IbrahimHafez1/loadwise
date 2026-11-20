@@ -157,6 +157,7 @@ function checkCode(args, report = printResult) {
     watchProject(values.project ?? '.', {
       policySource,
       onResult(result) {
+        appendPrismaSchemaFindings(result, values.project ?? '.');
         printResult(result, values);
       },
       onError(error) {
