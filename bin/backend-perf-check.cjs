@@ -193,7 +193,9 @@ function checkCode(args) {
     ? require('../lib/native.cjs').analyzeNative
     : require('../lib/projects.cjs').analyzeSources;
   const result = analyze({ project: values.project, files: positionals, policy });
-  return printResult(result, values);
+  const code = printResult(result, values);
+  require('../lib/notify-editor.cjs').notifyEditor(values.project ?? process.cwd());
+  return code;
 }
 
 function printResult(result, values) {
@@ -243,7 +245,9 @@ async function main(args) {
     if (!positionals.length) throw new Error('Pass at least one file or directory to polyglot.');
     const { checkPolyglot } = require('../lib/polyglot.cjs');
     const result = await checkPolyglot(positionals);
-    return printResult(result, { ...values, ignore: [] });
+    const code = printResult(result, { ...values, ignore: [] });
+    require('../lib/notify-editor.cjs').notifyEditor(positionals.length === 1 ? positionals[0] : process.cwd());
+    return code;
   }
   return checkCode(args);
 }
