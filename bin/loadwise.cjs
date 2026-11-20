@@ -2,7 +2,7 @@
 'use strict';
 
 const usage = `Usage:
-  loadwise [check] [directory] [--only perf,maint,sec | --skip perf,maint,sec] [--json] [--include-contextual] [--staged | --changed-since git-ref] [--fail-on contract|all]
+  loadwise [check] [directory] [--only perf,maint,sec | --skip perf,maint,sec] [--json] [--include-contextual] [--staged | --changed-since git-ref] [--fail-on contract|all] [--workspace name|path ...]
   loadwise perf [args...]
   loadwise maint [args...]
   loadwise sec [args...]
@@ -10,7 +10,7 @@ const usage = `Usage:
 
 check, the default command, runs every checker (perf: performance, maint: maintainability, sec: security) on one directory (default: the current folder) and prints one titled report per checker, in that order.
 --only runs just the listed checkers and --skip runs all but them; both take a comma-separated list, and they cannot be combined.
-The performance checker uses the directory's tsconfig.json or jsconfig.json; without one it is skipped with a note.
+The performance checker uses the directory's tsconfig.json or jsconfig.json; in a monorepo root without one it checks every workspace package's config in one report (--workspace limits it to named packages or folders); with no config at all it is skipped with a note.
 --json prints one key per selected checker, { "performance": report, "maintainability": report, "security": report }; a skipped or failed checker's report is null.
 --include-contextual, --staged, --changed-since and --fail-on apply to every selected checker; without --fail-on each keeps its own default.
 Security checks are not available yet: \`loadwise sec\` and --only sec exit with code 2.
