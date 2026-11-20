@@ -52,3 +52,38 @@ test('reports one-hop per-item TypeORM transactions while preserving chunk, retr
   assert.match(findings[0].message, /do not just wrap the loop in one transaction/);
   assert.match(findings[1].message, /Open one transaction around the loop/);
 });
+
+test('a per-item manager.transaction() inside an outer transaction is worded as a savepoint', () => {
+  const source = `import { DataSource, EntityManager } from 'typeorm';
+    declare const db: DataSource;
+    class Importer {
+      async run(rows: number[], errors: unknown[]) {
+        await db.transaction(async (manager) => {
+          for (const row of rows) {
+            try { await this.saveRow(manager, row); } catch (error) { errors.push(error); } // isolated
+          }
+          for (const row of rows) await this.saveRow(manager, row); // plain
+        });
+        for (const row of rows) await this.openRow(row); // fresh
+      }
+      private saveRow(manager: EntityManager, row: number) { return manager.transaction(async () => row); }
+      private openRow(row: number) { return db.transaction(async () => row); }
+    }`;
+  const declarations = {
+    'node_modules/typeorm/index.d.ts':
+      'export class EntityManager { transaction<T>(work: (manager: EntityManager) => Promise<T>): Promise<T> }\n' +
+      'export class DataSource { transaction<T>(work: (manager: EntityManager) => Promise<T>): Promise<T> }',
+  };
+  const lines = source.split('\n');
+  const byMarker = Object.fromEntries(
+    lint(source, declarations)
+      .filter((item) => item.ruleId === 'typeorm-transaction-in-loop')
+      .map((item) => [/\/\/ (\S+)$/.exec(lines[item.line - 1])[1], item]),
+  );
+  assert.match(byMarker.isolated.message, /SAVEPOINT and RELEASE SAVEPOINT round trip pair per item/);
+  assert.match(byMarker.isolated.message, /keep them where rows can fail/);
+  assert.ok(byMarker.isolated.contextualReason);
+  assert.match(byMarker.plain.message, /the savepoint isolates nothing/);
+  assert.equal(byMarker.plain.contextualReason, undefined);
+  assert.match(byMarker.fresh.message, /costing a BEGIN and COMMIT round trip per item/);
+});
