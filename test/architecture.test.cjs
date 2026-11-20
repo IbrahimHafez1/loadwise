@@ -65,7 +65,8 @@ test('cycles contain actual edges in deterministic witness order', () => {
   const { findings } = fixture(sources);
   assert.equal(findings.length, 1);
   assert.equal(findings[0].ruleId, 'dependency-cycle');
-  assert.equal(findings[0].message, 'Dependency cycle: a.ts → c.ts → b.ts → a.ts');
+  assert.match(findings[0].message, /^Dependency cycle: a\.ts → c\.ts → b\.ts → a\.ts\. /);
+  assert.match(findings[0].message, /new module that imports neither/);
   assert.deepEqual(
     [findings[0], ...findings[0].related].map(({ file, line }) => [file, line]),
     [
