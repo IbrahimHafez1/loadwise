@@ -205,3 +205,57 @@ export async function total() { return (await users.find({ active: true })).leng
   assert.equal(counting.length, 1);
   assert.equal(counting[0].fix, undefined);
 });
+
+test('existence read tested by a next-statement return is rewritten, nullish comparisons collapse to the boolean', (context) => {
+  const findings = fixesFor(
+    context,
+    `import { Repository } from 'typeorm';
+declare const repo: Repository<object>;
+export async function negated() {
+  const found = await repo.findOneBy({ id: 1 });
+  return !!found;
+}
+export async function wrapped() {
+  const found = await repo.findOneBy({ id: 2 });
+  return Boolean(found);
+}
+export async function notNull() {
+  const found = await repo.findOneBy({ id: 3 });
+  return found !== null;
+}
+export async function notUndefined() {
+  const found = await repo.findOneBy({ id: 4 });
+  return found !== undefined;
+}
+export async function looseNull() {
+  const found = await repo.findOneBy({ id: 5 });
+  return found != null;
+}`,
+    'typeorm-existence-materialization',
+  );
+  assert.equal(findings.length, 5);
+  const rewritten = findings.map((finding) => finding.fix.changes.map((change) => change.after).join('\n'));
+  assert.match(rewritten[0], /existsBy\(\{ id: 1 \}\)/);
+  assert.match(rewritten[1], /existsBy\(\{ id: 2 \}\)/);
+  for (const [index, id] of [[2, 3], [3, 4], [4, 5]]) {
+    assert.ok(rewritten[index].includes(`existsBy({ id: ${id} })`));
+    assert.match(rewritten[index], /return found;/);
+    assert.doesNotMatch(rewritten[index], /null|undefined/);
+  }
+});
+
+test('existence read whose entity is used after the next-statement return test gets no site fix', (context) => {
+  const findings = fixesFor(
+    context,
+    `import { Repository } from 'typeorm';
+declare const repo: Repository<object>;
+export async function check() {
+  const found = await repo.findOneBy({ id: 5 });
+  if (found !== null) log(found);
+  return found != null;
+}
+declare function log(value: unknown): void;`,
+    'typeorm-existence-materialization',
+  );
+  assert.deepEqual(findings, []);
+});
