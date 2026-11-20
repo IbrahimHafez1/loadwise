@@ -3,8 +3,28 @@
   "version": "0.2.0",
   "description": "Review source complexity, duplicate implementations and project-defined architecture across languages.",
   "license": "UNLICENSED",
+  "author": "Ibrahim Hafez",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IbrahimHafez1/maintainability-check.git"
+  },
+  "bugs": {
+    "url": "https://github.com/IbrahimHafez1/maintainability-check/issues"
+  },
+  "homepage": "https://github.com/IbrahimHafez1/maintainability-check#readme",
+  "keywords": [
+    "maintainability",
+    "code-quality",
+    "duplicate-code",
+    "complexity",
+    "architecture",
+    "dependency-cycle",
+    "static-analysis",
+    "cli",
+    "vscode"
+  ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "bin": {
     "maintainability-check": "bin/maintainability-check.cjs"
@@ -12,7 +32,8 @@
   "files": [
     "bin/",
     "lib/",
-    "polyglot/"
+    "polyglot/",
+    "LICENSE"
   ],
   "scripts": {
     "format": "prettier --cache --write .",
