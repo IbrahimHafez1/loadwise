@@ -2,7 +2,7 @@
 'use strict';
 
 const usage = `Usage:
-  loadwise [check] [directory] [--only perf,maint,sec | --skip perf,maint,sec] [--json] [--include-contextual] [--staged | --changed-since git-ref] [--fail-on contract|all]
+  loadwise [check] [directory] [--only perf,maint,sec | --skip perf,maint,sec] [--json] [--include-contextual] [--staged | --changed-since git-ref] [--fail-on contract|all] [--baseline [file] | --write-baseline [file]]
   loadwise perf [args...]
   loadwise maint [args...]
   loadwise sec [args...]
@@ -14,7 +14,8 @@ The performance checker uses the directory's tsconfig.json or jsconfig.json; wit
 --json prints one key per selected checker, { "performance": report, "maintainability": report, "security": report }; a skipped or failed checker's report is null.
 --include-contextual, --staged, --changed-since and --fail-on apply to every selected checker; without --fail-on each keeps its own default.
 Security checks are not available yet: \`loadwise sec\` and --only sec exit with code 2.
-check never changes files: apply fixes with the printed \`loadwise perf --fix --only id\` and \`loadwise maint --fix --only id\` commands.
+--write-baseline records every selected checker's current findings in one file (default loadwise-baseline.json in the checked directory, a section per checker); --baseline reports only findings not in it and prints how many were hidden ("baselineHidden" in --json). Fixed findings leave the file on the next --write-baseline.
+check never changes source files: apply fixes with the printed \`loadwise perf --fix --only id\` and \`loadwise maint --fix --only id\` commands.
 perf, maint and sec run one checker with its full command set; \`loadwise perf --help\` and \`loadwise maint --help\` list their commands and flags.
 agent init writes one block of instructions for AI coding agents, covering both checkers, into AGENTS.md and imports it from CLAUDE.md.
 agent init --hook installs one git pre-commit hook that runs \`loadwise check --staged\`: block fails the commit on findings, warn only prints them, off removes the hook. --hook alone means warn.
