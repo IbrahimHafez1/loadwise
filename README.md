@@ -1,14 +1,18 @@
 # maintainability-check
 
-A local CLI for finding code that would benefit from a design review and for enforcing the architectural decisions a team has already made. It runs on Node.js 20 or later. It can run independently of `backend-perf-check`.
+A local CLI for finding code that would benefit from a design review and for enforcing the architectural decisions a team has already made. It runs on Node.js 22 or later. It can run independently of `backend-perf-check`.
 
-To see both checkers in VS Code or Cursor using the editor's built-in tasks, install `backend-perf-check` alongside this package. Run `npx backend-perf-check editor init` once per project, then open the trusted folder and allow automatic tasks once. The task starts when the folder opens. Completing a source scan from the terminal refreshes the running editor task using its configured rules. Commit the generated task to share it with teammates. Findings appear in Problems and underlined code shows suggestions and plain-text examples on hover.
+Install it, then run it on a project folder. It reports findings with a stable `#id`, a rewrite where one is safe, and a `// maintainability-reviewed` comment to dismiss false positives.
 
 ```sh
 npm install --save-dev --include=optional ./maintainability-check-0.2.0.tgz
 npx maintainability-check .
 npx maintainability-check . --json
 ```
+
+## Editor
+
+Install `backend-perf-check` alongside this package and run `npx backend-perf-check editor init` once per project. Open the trusted folder in VS Code or Cursor and allow automatic tasks once. Findings from both checkers appear in Problems, with suggestions and plain-text examples on hover, and a terminal scan refreshes the running task. Commit the generated task to share it. The optional editor extension adds **Apply fix** and **Dismiss** buttons, hover links and the same shortcuts on every OS (Ctrl+Alt+. apply, Ctrl+Alt+Shift+. apply all, Ctrl+Alt+, dismiss); see its README in `backend-perf-check`.
 
 ## What gets checked
 
@@ -115,6 +119,10 @@ To dismiss a false positive, put `// maintainability-reviewed <rule-id> -- <spec
 
 ## Developing locally
 
-Use Node.js 20.19+ (20.x) or 22.12 and later for the development tools and run `npm ci --include=optional`. Open this repository folder as a trusted workspace in VS Code or Cursor and enable the recommended Prettier extension. Saving a supported file formats it with the repository settings.
+Use Node.js 22.12+ for the development tools and run `npm ci --include=optional`. Open this repository folder as a trusted workspace in VS Code or Cursor and enable the recommended Prettier extension. Saving a supported file formats it with the repository settings.
 
 Run `npm run format` to format files, `npm run lint` for correctness checks, or `npm run check` to verify formatting, lint and tests together.
+
+## License
+
+Copyright © 2026 Ibrahim Hafez. All rights reserved. See LICENSE.
