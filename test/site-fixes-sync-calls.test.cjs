@@ -391,3 +391,52 @@ export async function register(password: string) {
 }`,
   );
 });
+
+test('bcrypt inside a map callback of an async function hashes in parallel under Promise.all', (context) => {
+  const { change, note } = changeFor(
+    context,
+    bcryptRule,
+    `import * as bcrypt from 'bcrypt';
+export async function seed(keys: string[], roleId: string | null) {
+  const owners = keys.map((key) => ({
+    id: key,
+    password: bcrypt.hashSync(key, 10),
+    roleId: roleId ?? null,
+  }));
+  return owners;
+}`,
+  );
+  assert.deepEqual(change, {
+    before: `const owners = keys.map((key) => ({
+  id: key,
+  password: bcrypt.hashSync(key, 10),
+  roleId: roleId ?? null,
+}));`,
+    after: `const owners = await Promise.all(keys.map(async (key) => ({
+  id: key,
+  password: await bcrypt.hash(key, 10),
+  roleId: roleId ?? null,
+})));`,
+  });
+  assert.match(note, /Promise\.all/);
+});
+
+test('no bcrypt map fix when the callback has effects after the hash or the map is not in the async function', (context) => {
+  assertNoFix(
+    context,
+    bcryptRule,
+    `import * as bcrypt from 'bcrypt';
+export async function seed(keys: string[], log: (key: string) => void) {
+  return keys.map((key) => ({ password: bcrypt.hashSync(key, 10), logged: log(key) }));
+}`,
+  );
+  assertNoFix(
+    context,
+    bcryptRule,
+    `import * as bcrypt from 'bcrypt';
+export async function seed(keys: string[]) {
+  const build = () => keys.map((key) => bcrypt.hashSync(key, 10));
+  return build();
+}`,
+  );
+});
