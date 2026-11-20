@@ -26,6 +26,11 @@
       "type": "object",
       "propertyNames": {
         "enum": [
+          "api-enum-value-removed",
+          "api-removed-field",
+          "api-removed-operation",
+          "api-required-input",
+          "api-type-changed",
           "array-repeated-find",
           "array-repeated-membership",
           "count-then-page-serial",
@@ -153,6 +158,11 @@
             "type": "object",
             "propertyNames": {
               "enum": [
+                "api-enum-value-removed",
+                "api-removed-field",
+                "api-removed-operation",
+                "api-required-input",
+                "api-type-changed",
                 "array-repeated-find",
                 "array-repeated-membership",
                 "count-then-page-serial",
