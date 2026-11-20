@@ -7,8 +7,8 @@ const path = require('node:path');
 const test = require('node:test');
 const { spawnSync } = require('node:child_process');
 
-const bin = path.resolve(__dirname, '../bin/maintainability-check.cjs');
-const blockStart = '# >>> maintainability-check pre-commit';
+const bin = path.resolve(__dirname, '../bin/warden-maint.cjs');
+const blockStart = '# >>> warden-maint pre-commit';
 const shellAvailable = spawnSync('sh', ['-c', 'exit 0']).status === 0;
 
 function git(root, ...args) {
@@ -91,7 +91,7 @@ test('lefthook is never edited; the command to add is printed', (context) => {
   const root = tempRepo(context);
   fs.writeFileSync(path.join(root, 'lefthook.yml'), 'pre-commit:\n');
   const output = initHook(root, '--hook', 'block');
-  assert.match(output, /node_modules\/\.bin\/maintainability-check --staged \. \|\| exit 1/);
+  assert.match(output, /node_modules\/\.bin\/warden-maint --staged \. \|\| exit 1/);
   assert.match(initHook(root, '--hook', 'warn'), /--staged \. \|\| true/);
   assert.equal(fs.readFileSync(path.join(root, 'lefthook.yml'), 'utf8'), 'pre-commit:\n');
   assert.equal(fs.existsSync(hookPath(root)), false);
@@ -116,7 +116,7 @@ test('agent init without --hook leaves git hooks alone and mentions commits in A
 function installFakeChecker(root, exitCode) {
   const binFolder = path.join(root, 'node_modules', '.bin');
   fs.mkdirSync(binFolder, { recursive: true });
-  const script = path.join(binFolder, 'maintainability-check');
+  const script = path.join(binFolder, 'warden-maint');
   fs.writeFileSync(script, `#!/bin/sh\necho "checker ran: $*"\nexit ${exitCode}\n`);
   fs.chmodSync(script, 0o755);
 }
@@ -142,4 +142,27 @@ test('the hook skips quietly when the package is not installed', { skip: !shellA
   const result = runHook(root);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /not installed here, skipped/);
+});
+
+const legacyHook =
+  '#!/bin/sh\necho before\n\n# >>> maintainability-check pre-commit (managed by `maintainability-check agent init --hook`)\n' +
+  'node_modules/.bin/maintainability-check --staged .\n# <<< maintainability-check pre-commit\n';
+
+test('re-running init replaces a block with the old markers instead of duplicating it', (context) => {
+  const root = tempRepo(context);
+  fs.mkdirSync(path.dirname(hookPath(root)), { recursive: true });
+  fs.writeFileSync(hookPath(root), legacyHook);
+  initHook(root, '--hook', 'warn');
+  const text = fs.readFileSync(hookPath(root), 'utf8');
+  assert.ok(text.startsWith('#!/bin/sh\necho before\n'));
+  assert.ok(!text.includes('maintainability-check'));
+  assert.equal(text.split(blockStart).length, 2);
+});
+
+test('--hook off removes a block with the old markers', (context) => {
+  const root = tempRepo(context);
+  fs.mkdirSync(path.dirname(hookPath(root)), { recursive: true });
+  fs.writeFileSync(hookPath(root), legacyHook);
+  initHook(root, '--hook', 'off');
+  assert.equal(fs.readFileSync(hookPath(root), 'utf8'), '#!/bin/sh\necho before\n');
 });
