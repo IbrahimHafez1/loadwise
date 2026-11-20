@@ -236,6 +236,12 @@ const standaloneExamples = {
     code: "const keys = [];\nfor await (const batch of redis.scanStream({ match: 'session:*', count: 100 })) keys.push(...batch);",
     note: 'KEYS blocks every Redis client while it walks the whole keyspace; SCAN works in small steps.',
   },
+  'service-query-in-loop': {
+    language: 'javascript',
+    before: 'for (const id of ids) await this.approve(id); // approve() runs findOne + save',
+    code: 'await this.approveMany(ids); // one In(ids) read and one bulk save',
+    note: 'The helper hides queries that run once per item. Add a batch variant and keep per-item validation and transaction needs.',
+  },
   'mongo-collection-scan': collectionScan,
   'mongo-collection-scan-observed': collectionScan,
   'mongo-disk-sort': {
