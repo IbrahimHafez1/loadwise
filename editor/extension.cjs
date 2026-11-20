@@ -18,8 +18,8 @@ const { startPerfWatch } = require('./perf-watch.cjs');
 const run = promisify(execFile);
 const debounceMs = 650;
 const maxReportBytes = 64 * 1024 * 1024;
-const perf = 'backend-perf-check';
-const maint = 'maintainability-check';
+const perf = 'warden-backend';
+const maint = 'warden-maint';
 const polyglotGlob = '**/*.{py,go,java,cs,rs}';
 const sourceSuffixes = new Set(
   'js jsx ts tsx mjs mts cjs cts py go java cs rs rb php kt kts c h cc cpp cxx hpp hh hxx'.split(' '),

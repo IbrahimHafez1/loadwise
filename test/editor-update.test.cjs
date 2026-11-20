@@ -19,10 +19,10 @@ test(
     const root = fs.mkdtempSync(path.join(base, 'editor-package-update-'));
     const registrations = signalDirectory(root);
     const dependencies = path.join(root, 'node_modules');
-    const backend = path.join(dependencies, 'backend-perf-check'),
-      companion = path.join(dependencies, 'maintainability-check');
-    const cli = path.join(backend, 'bin', 'backend-perf-check.cjs');
-    const companionCli = path.join(companion, 'bin', 'maintainability-check.cjs');
+    const backend = path.join(dependencies, '@codewarden', 'backend'),
+      companion = path.join(dependencies, '@codewarden', 'maintainability');
+    const cli = path.join(backend, 'bin', 'warden-backend.cjs');
+    const companionCli = path.join(companion, 'bin', 'warden-maint.cjs');
     const watchModule = JSON.stringify(require.resolve('../lib/editor-watch.cjs'));
     function backendEntry(message) {
       return `const { watchEditor } = require(${watchModule});
@@ -34,7 +34,7 @@ test(
     const manifest = path.join(backend, 'package.json'),
       companionManifest = path.join(companion, 'package.json');
     fs.writeFileSync(source, 'const ready = true;');
-    fs.writeFileSync(manifest, '{"name":"backend-perf-check","version":"1.0.0"}');
+    fs.writeFileSync(manifest, '{"name":"@codewarden/backend","version":"1.0.0"}');
     fs.writeFileSync(cli, backendEntry('old rules'));
     const child = spawn(process.execPath, [cli, 'editor', 'watch'], {
       cwd: root,
@@ -86,7 +86,15 @@ test(
       notifyEditor(root);
       if (fs.existsSync(registrations)) fs.rmdirSync(registrations);
       for (const file of [source, cli, manifest, companionCli, companionManifest]) fs.rmSync(file, { force: true });
-      for (const directory of [path.dirname(companionCli), companion, path.dirname(cli), backend, dependencies, root]) {
+      for (const directory of [
+        path.dirname(companionCli),
+        companion,
+        path.dirname(cli),
+        backend,
+        path.dirname(backend),
+        dependencies,
+        root,
+      ]) {
         if (fs.existsSync(directory)) fs.rmdirSync(directory);
       }
     });
@@ -101,7 +109,7 @@ test(
     await updated;
     const joined = until((rows) => rows.some((row) => row.endsWith('companion installed')));
     fs.mkdirSync(path.dirname(companionCli), { recursive: true });
-    fs.writeFileSync(companionManifest, '{"name":"maintainability-check","version":"1.0.0"}');
+    fs.writeFileSync(companionManifest, '{"name":"@codewarden/maintainability","version":"1.0.0"}');
     fs.writeFileSync(
       companionCli,
       `if (process.env.BACKEND_CHECKERS_EDITOR_SCAN !== '1') process.exit(2);

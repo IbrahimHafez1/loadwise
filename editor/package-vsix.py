@@ -20,16 +20,16 @@ VSCE = "@vscode/vsce@4.1.1"
 AST_GREP = "@ast-grep/cli"
 
 
-def stage_checker(source, stage, name):
+def stage_checker(source, stage, package_name, tool_name):
     inventory = subprocess.check_output([NPM, "pack", "--dry-run", "--json", "--ignore-scripts"], cwd=source)
     package, = json.loads(inventory)
-    if package["name"] != name:
-        raise ValueError(f"Expected {name} in {source}")
+    if package["name"] != package_name:
+        raise ValueError(f"Expected {package_name} in {source}")
     for entry in package["files"]:
         relative = PurePosixPath(entry["path"])
         editor_module = len(relative.parts) == 2 and relative.parts[0] == "editor" and relative.suffix == ".cjs"
         if relative.parts[0] in {"bin", "lib", "polyglot", "package.json"} or editor_module:
-            target = stage / "tools" / name / relative
+            target = stage / "tools" / tool_name / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source / relative, target)
 
@@ -113,8 +113,8 @@ def build(maintainability, output):
         for source in [*EDITOR.glob("*.cjs"), EDITOR / "package.json", EDITOR / "README.md"]:
             shutil.copyfile(source, stage / source.name)
         shutil.copytree(EDITOR / "licenses", stage / "licenses")
-        stage_checker(PERFORMANCE, stage, "backend-perf-check")
-        stage_checker(maintainability, stage, "maintainability-check")
+        stage_checker(PERFORMANCE, stage, "@codewarden/backend", "warden-backend")
+        stage_checker(maintainability, stage, "@codewarden/maintainability", "warden-maint")
         locks = [json.loads((repo / "package-lock.json").read_bytes())["packages"] for repo in (PERFORMANCE, maintainability)]
         executables = stage_runtime(root, stage, *locks)
         output.parent.mkdir(parents=True, exist_ok=True)

@@ -56,7 +56,7 @@ function fixture() {
 test('snapshots replace stale markers and discard traversal paths and invalid source locations', () => {
   const { vscode, collection, root, uri, byUri } = fixture();
   const finding = { file: 'app.py', line: 3, column: 2, ruleId: 'file-placement', message: 'Declared policy.' };
-  publish(vscode, collection, root, 'maintainability-check', [
+  publish(vscode, collection, root, 'warden-maint', [
     finding,
     { ...finding, file: '../private.py' },
     { ...finding, column: 0 },
@@ -68,7 +68,7 @@ test('snapshots replace stale markers and discard traversal paths and invalid so
   assert.equal(issue.code, finding.ruleId);
   assert.match(issue.message, /Move the file/);
   assert.deepEqual(issue.range.start, { line: 2, character: 1 });
-  publish(vscode, collection, root, 'maintainability-check', []);
+  publish(vscode, collection, root, 'warden-maint', []);
   assert.equal(byUri.size, 0);
 });
 
@@ -111,7 +111,7 @@ test('opening a saved file shows the actual before and suggested after in its ho
     ruleId: 'array-repeated-membership',
     message: 'Membership checks repeatedly scan the same array.',
   };
-  publish(vscode, collection, root, 'backend-perf-check', [finding]);
+  publish(vscode, collection, root, 'warden-backend', [finding]);
   refreshDocument(vscode, collection, document);
   const [diagnostic] = collection.get(document.uri);
   assert.ok(diagnostic.message.endsWith(finding.message));
@@ -142,7 +142,7 @@ test('a short nested-control-flow rewrite appears before the explanation on the 
   };
   vscode.workspace.textDocuments.push(document);
   const message = 'Control flow reaches 4 nested levels.';
-  publish(vscode, collection, root, 'maintainability-check', [
+  publish(vscode, collection, root, 'warden-maint', [
     { file: 'pipeline.ts', line: 1, column: 5, ruleId: 'deep-control-flow', message },
   ]);
   const [diagnostic] = collection.get(uri);
@@ -167,7 +167,7 @@ test('an advisory without a verified rewrite labels the reported line and illust
     getWordRangeAtPosition: () => undefined,
   };
   vscode.workspace.textDocuments.push(document);
-  publish(vscode, collection, root, 'maintainability-check', [
+  publish(vscode, collection, root, 'warden-maint', [
     {
       file: 'app.py',
       line: 1,
@@ -191,7 +191,7 @@ test('opening a polyglot file converts columns after astral characters to editor
   const line = 'label = "😀"; process()';
   const character = line.indexOf('process');
   const column = Array.from(line.slice(0, character)).length + 1;
-  publish(vscode, collection, root, 'backend-perf-check', [
+  publish(vscode, collection, root, 'warden-backend', [
     { file: 'app.py', ruleId: 'an-example-rule', message: 'Example message.', line: 1, column },
   ]);
   refreshDocument(vscode, collection, {
@@ -217,7 +217,7 @@ test('scanner review advice survives reopening and provides a single flagged sni
     getWordRangeAtPosition: () => undefined,
   };
   const suggestion = 'Extract the shared input checks after comparing both callers.';
-  publish(vscode, collection, root, 'maintainability-check', [
+  publish(vscode, collection, root, 'warden-maint', [
     {
       file: 'service.ts',
       line: 1,
@@ -257,7 +257,7 @@ test('hover retains the scanner-proven edit when the diagnostic is reopened from
     validateRange: (range) => range,
     getWordRangeAtPosition: () => undefined,
   };
-  publish(vscode, collection, root, 'maintainability-check', [
+  publish(vscode, collection, root, 'warden-maint', [
     {
       file: 'loop.ts',
       line: 2,
@@ -312,7 +312,7 @@ test('a finding with a site fix offers a one-click quick fix that edits only the
     after: 'const found = await repo.exists(where);',
   };
   const finding = { file: 'orders.ts', line: 2, column: 21, ruleId: 'typeorm-existence-materialization', message: 'm' };
-  publish(vscode, collection, root, 'backend-perf-check', [
+  publish(vscode, collection, root, 'warden-backend', [
     { ...finding, fix: { changes: [change] } },
     { ...finding, line: 1, fix: { changes: [{ ...change, file: '../outside.ts' }] } },
   ]);

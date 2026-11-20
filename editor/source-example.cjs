@@ -8,8 +8,7 @@ const membershipExpression =
   /^\s*(return\s+)?(!?)\s*([$A-Z_a-z][$\w]*)\.(every|some)\(\s*(\()?([$A-Z_a-z][$\w]*)(\))?\s*=>\s*([$A-Z_a-z][$\w]*(?:\.[$A-Z_a-z][$\w]*)?)\.includes\(\s*([$A-Z_a-z][$\w]*)\s*\)\s*\);\s*$/;
 
 function sourceExampleFor(document, diagnostic) {
-  if (diagnostic.source !== 'backend-perf-check' || !scriptLanguages.has(document.languageId) || document.isDirty)
-    return;
+  if (diagnostic.source !== 'warden-backend' || !scriptLanguages.has(document.languageId) || document.isDirty) return;
 
   const position = diagnostic.range.start;
   if (position.line < 0 || position.line >= document.lineCount) return;

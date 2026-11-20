@@ -13,7 +13,7 @@ function issueFor(line) {
     lineAt: () => ({ text: line }),
   };
   const diagnostic = {
-    source: 'backend-perf-check',
+    source: 'warden-backend',
     code: 'array-repeated-membership',
     range: { start: { line: 0, character: line.indexOf('.includes(') + 1 } },
   };
@@ -100,7 +100,7 @@ test('unrecognized shape, scope collision, copied sets and stale or unrelated fi
   const { document, diagnostic } = issueFor('return required.every(key => held.includes(key));');
   for (const overrides of [
     { code: 'deep-control-flow' },
-    { source: 'maintainability-check' },
+    { source: 'warden-maint' },
     { range: { start: { line: 0, character: 0 } } },
     { message: 'This array was copied from a Set and is searched repeatedly.' },
   ])

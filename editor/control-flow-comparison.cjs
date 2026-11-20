@@ -64,7 +64,7 @@ function mergeGuards(document, row) {
 // Source-backed replacements only. The caller can show a separate illustrative example for other shapes.
 function controlFlowComparison(document, diagnostic) {
   if (
-    diagnostic.source !== 'maintainability-check' ||
+    diagnostic.source !== 'warden-maint' ||
     diagnostic.code !== 'deep-control-flow' ||
     !scriptLanguages.has(document.languageId) ||
     document.isDirty

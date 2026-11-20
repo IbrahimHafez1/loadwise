@@ -100,7 +100,7 @@ test('editor report formats .sql and .prisma findings', (context) => {
   const root = migrationProject(context);
   for (const file of [MIGRATION, 'prisma/schema.prisma']) {
     write(root, file, 'ALTER TABLE orders DROP COLUMN legacy;\n');
-    const report = formatFinding(root, 'backend-perf-check', {
+    const report = formatFinding(root, 'warden-backend', {
       file,
       line: 1,
       column: 1,

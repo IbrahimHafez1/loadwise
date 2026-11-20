@@ -2,7 +2,7 @@
 
 const { spawn } = require('node:child_process');
 
-// Runs `backend-perf-check -p <config> --watch --json`. The TypeScript watch compiler re-analyzes only what changed,
+// Runs `warden-backend -p <config> --watch --json`. The TypeScript watch compiler re-analyzes only what changed,
 // including edits from git, other editors or code generators, and prints one compact JSON report per line.
 function startPerfWatch({ script, project, cwd, env, onFindings, onError, onExit }) {
   const child = spawn('node', [script, '-p', project, '--watch', '--json'], {

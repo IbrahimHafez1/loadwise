@@ -10,7 +10,7 @@ const test = require('node:test');
 const { listenForEditorRefresh, notifyEditor } = require('../lib/editor-signal.cjs');
 const { signalDirectory } = require('../lib/notify-editor.cjs');
 
-const cli = path.resolve(__dirname, '../bin/backend-perf-check.cjs');
+const cli = path.resolve(__dirname, '../bin/warden-backend.cjs');
 function workspace(context) {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });

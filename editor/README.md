@@ -1,6 +1,6 @@
 # Backend Checkers
 
-Without this extension, `npx backend-perf-check editor init` in the consuming project gives inline diagnostics and plain-text hovers through the editor's built-in task system (open the trusted folder and allow automatic tasks). It refreshes on saves, terminal source scans and checker package updates. Choose one integration per workspace to avoid duplicate diagnostics.
+Without this extension, `npx warden-backend editor init` in the consuming project gives inline diagnostics and plain-text hovers through the editor's built-in task system (open the trusted folder and allow automatic tasks). It refreshes on saves, terminal source scans and checker package updates. Choose one integration per workspace to avoid duplicate diagnostics.
 
 This extension shows performance and maintainability findings inline in VS Code or Cursor. Save a source file and hover over an underline to read the recommendation. Hover over the flagged code to compare the current snippet with a syntax-highlighted suggested rewrite; short comparisons also appear on the first diagnostic line. Rules without a site-specific rewrite show the flagged line and a labeled illustrative alternative.
 

@@ -107,7 +107,7 @@ function fixComparison(fix) {
 }
 
 function examplesFor(document, diagnostic, site) {
-  const lookup = diagnostic.source === 'backend-perf-check' ? performanceExample : maintainabilityExample;
+  const lookup = diagnostic.source === 'warden-backend' ? performanceExample : maintainabilityExample;
   const example = lookup(diagnostic.code, document.languageId, site.message);
   if (site.fix) return { example, comparison: fixComparison(site.fix) };
   const { source, code, range } = diagnostic;

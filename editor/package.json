@@ -79,13 +79,13 @@
           "type": "string",
           "default": "",
           "scope": "machine",
-          "description": "Optional absolute path to the backend-perf-check CLI script."
+          "description": "Optional absolute path to the warden-backend CLI script."
         },
         "backendCheckers.maintainabilityCli": {
           "type": "string",
           "default": "",
           "scope": "machine",
-          "description": "Optional absolute path to the maintainability-check CLI script."
+          "description": "Optional absolute path to the warden-maint CLI script."
         },
         "backendCheckers.severity": {
           "type": "string",

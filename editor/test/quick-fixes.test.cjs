@@ -131,12 +131,12 @@ test('the severity setting applies to every finding; by default contracts are er
   const editor = fakeEditor(files);
   editor.open(ordersFile);
   const findings = [finding(1), finding(2, 'pg-transaction-on-pool')];
-  publish(editor.vscode, editor.collection, root, 'backend-perf-check', findings);
+  publish(editor.vscode, editor.collection, root, 'warden-backend', findings);
   assert.deepEqual(
     editor.byUri.get(ordersFile).map((diagnostic) => diagnostic.severity),
     [editor.vscode.DiagnosticSeverity.Warning, editor.vscode.DiagnosticSeverity.Error],
   );
-  publish(editor.vscode, editor.collection, root, 'backend-perf-check', findings, { severity: 'hint' });
+  publish(editor.vscode, editor.collection, root, 'warden-backend', findings, { severity: 'hint' });
   assert.deepEqual(
     editor.byUri.get(ordersFile).map((diagnostic) => diagnostic.severity),
     [editor.vscode.DiagnosticSeverity.Hint, editor.vscode.DiagnosticSeverity.Hint],
@@ -150,7 +150,7 @@ test('a dismissed finding stays hidden across rescans and line shifts and return
   const dismissals = createDismissals(memento());
   let findings = [finding(2), finding(1, 'sync-io')];
   const republish = () =>
-    publish(editor.vscode, editor.collection, root, 'backend-perf-check', findings, {
+    publish(editor.vscode, editor.collection, root, 'warden-backend', findings, {
       isDismissed: (site) => dismissals.has(site),
     });
   republish();
@@ -204,7 +204,7 @@ test('apply all fixes builds one edit and skips stale and overlapping fixes', as
   const files = new Map([[ordersFile, 'one();\ntwo();\nthree();\nfour();']]);
   const editor = fakeEditor(files);
   editor.open(ordersFile);
-  publish(editor.vscode, editor.collection, root, 'backend-perf-check', [
+  publish(editor.vscode, editor.collection, root, 'warden-backend', [
     fixed(1, 'one();', 'ONE();'),
     fixed(2, 'two();\nthree();', 'TWO_THREE();'),
     fixed(3, 'three();', 'THREE();'),
@@ -252,7 +252,7 @@ test('a fix that creates a file applies with its other changes, and never overwr
     before: files.get(ordersFile),
     after: '// indexed\n' + files.get(ordersFile),
   };
-  publish(editor.vscode, editor.collection, root, 'backend-perf-check', [
+  publish(editor.vscode, editor.collection, root, 'warden-backend', [
     { ...finding(1), fix: { changes: [create, replace], note: 'Adds the missing index.' } },
   ]);
   const provider = registerQuickFixes(editor.vscode, { diagnosticsFor: (uri) => editor.byUri.get(uri) ?? [] }).at(-1);
@@ -288,7 +288,7 @@ test('a live-database finding without a file shows on package.json with its tabl
   const editor = fakeEditor(new Map([[packageFile, '{\n  "name": "example"\n}']]));
   editor.open(packageFile);
   const migration = { file: 'migrations/002.sql', line: 1, before: '', after: 'CREATE INDEX ...;\n', create: true };
-  publish(editor.vscode, editor.collection, root, 'backend-perf-check', [
+  publish(editor.vscode, editor.collection, root, 'warden-backend', [
     {
       ruleId: 'db-missing-fk-index',
       target: 'public.orders',
@@ -326,7 +326,7 @@ test('code lenses put Apply fix and Dismiss buttons on fixable lines and an appl
   };
   editor.vscode.languages.registerCodeLensProvider = (_selector, registered) => (provider = registered);
   editor.vscode.workspace.getConfiguration = () => ({ get: (_key, fallback) => fallback });
-  publish(editor.vscode, editor.collection, root, 'backend-perf-check', [
+  publish(editor.vscode, editor.collection, root, 'warden-backend', [
     fixed(1, 'one();', 'ONE();'),
     finding(2),
     fixed(3, 'three();', 'THREE();'),
@@ -352,7 +352,7 @@ test('a finding message shows one sentence per line and keeps code spans and abb
   const editor = fakeEditor(files);
   editor.open(ordersFile);
   const message = 'Each call is slow. Use `a.b(). Then` instead, e.g. a batch. Keep it otherwise.';
-  publish(editor.vscode, editor.collection, root, 'backend-perf-check', [{ ...finding(1), message }]);
+  publish(editor.vscode, editor.collection, root, 'warden-backend', [{ ...finding(1), message }]);
   // The first line is the code preview of the open document.
   assert.deepEqual(editor.byUri.get(ordersFile)[0].message.split('\n').slice(1), [
     'Each call is slow.',
@@ -366,7 +366,7 @@ test('the keyboard command applies the fix on the cursor line, and says so when 
   const editor = fakeEditor(files);
   editor.open(ordersFile);
   editor.vscode.commands.executeCommand = (id, ...args) => editor.commands.get(id)(...args);
-  publish(editor.vscode, editor.collection, root, 'backend-perf-check', [fixed(1, 'one();', 'ONE();'), finding(2)]);
+  publish(editor.vscode, editor.collection, root, 'warden-backend', [fixed(1, 'one();', 'ONE();'), finding(2)]);
   registerQuickFixes(editor.vscode, { diagnosticsFor: (uri) => editor.byUri.get(uri) ?? [] });
   const cursorOn = (line) => {
     editor.vscode.window.activeTextEditor = { document: { uri: ordersFile }, selection: { active: { line } } };

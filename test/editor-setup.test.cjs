@@ -34,7 +34,7 @@ test('setup creates one background process task whose matcher captures paths, se
   assert.equal(task.type, 'process');
   assert.equal(task.command, 'node');
   assert.deepEqual(task.args, [
-    '${workspaceFolder}/node_modules/backend-perf-check/bin/backend-perf-check.cjs',
+    '${workspaceFolder}/node_modules/@codewarden/backend/bin/warden-backend.cjs',
     'editor',
     'watch',
   ]);
