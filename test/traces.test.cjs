@@ -541,3 +541,88 @@ test('single SQL binds match the driver placeholder and OTLP index or name', () 
     );
   }
 });
+
+const MILLISECOND_NANOSECONDS = 1e6;
+
+function timed(index, startMs, endMs, values = postgres) {
+  return span(index, values, {
+    startTimeUnixNano: String(startMs * MILLISECOND_NANOSECONDS),
+    endTimeUnixNano: String(endMs * MILLISECOND_NANOSECONDS),
+  });
+}
+
+test('repeated-span impact is the union of overlapping and disjoint intervals against the slowest span', () => {
+  const [finding] = analyzeTraces(
+    {
+      resourceSpans: [
+        resource([timed(1, 0, 10), timed(2, 5, 12), timed(3, 20, 25), timed(4, 21, 22), timed(5, 30, 31)]),
+      ],
+    },
+    { threshold: 5 },
+  );
+  assert.deepEqual(finding.impact, {
+    kind: 'estimated',
+    measured: ['before'],
+    before: 12 + 5 + 1,
+    after: 10,
+    unit: 'ms',
+    method: 'OTLP start/end times; after assumes one batched operation costs as much as the slowest span',
+  });
+});
+
+test('groups with missing or invalid timestamps get no impact', () => {
+  const spans = [1, 2, 3, 4].map((index) => timed(index, index, index + 1));
+  for (const broken of [
+    span(5, postgres),
+    timed(5, 9, 8),
+    span(5, postgres, { startTimeUnixNano: 'abc', endTimeUnixNano: '5' }),
+  ]) {
+    const [finding] = analyzeTraces({ resourceSpans: [resource([...spans, broken])] }, { threshold: 5 });
+    assert.equal(finding.ruleId, 'repeated-db-span');
+    assert.equal('impact' in finding, false);
+  }
+});
+
+test('Redis repeated reads, namespace reads and duplicate key reads carry impact', () => {
+  const reads = [1, 2, 3, 4, 5].map((index) => timed(index, 0, index, { ...mongo, 'db.collection.name': '' }));
+  const findings = analyzeTraces({ resourceSpans: [resource(reads)] }, { threshold: 5 });
+  assert.equal(findings[0].impact.before, 5);
+  assert.equal(findings[0].impact.after, 5);
+  const redis = [1, 2].map((index) => timed(index, 10 * index, 10 * index + 4, redisKeyRead));
+  const duplicate = analyzeTraces({ resourceSpans: [resource(redis)] }, { threshold: 5 }).find(
+    (finding) => finding.ruleId === 'duplicate-key-read',
+  );
+  assert.equal(duplicate.impact.before, 8);
+  assert.equal(duplicate.impact.after, 4);
+  const redisReads = [1, 2, 3, 4, 5].map((index) =>
+    timed(index, 0, index, { ...redisKeyRead, 'db.query.text': `GET private:key:${index}` }),
+  );
+  const [redisFinding] = analyzeTraces({ resourceSpans: [resource(redisReads)] }, { threshold: 5 });
+  assert.equal(redisFinding.ruleId, 'redis-repeated-read');
+  assert.equal(redisFinding.impact.before, 5);
+});
+
+test('a large timed trace keeps one finding per group with correct impact', () => {
+  const spans = Array.from({ length: 50000 }, (_, index) => timed(index + 1, index * 2, index * 2 + 1));
+  const [finding] = analyzeTraces({ resourceSpans: [resource(spans)] }, { threshold: 5 });
+  assert.equal(finding.count, 50000);
+  assert.equal(finding.impact.before, 50000);
+  assert.equal(finding.impact.after, 1);
+});
+
+test('traces text output prints the Impact line under a finding', () => {
+  const { spawnSync } = require('node:child_process');
+  const { mkdtempSync, writeFileSync } = require('node:fs');
+  const { join } = require('node:path');
+  const { tmpdir } = require('node:os');
+  const file = join(mkdtempSync(join(tmpdir(), 'traces-impact-')), 'trace.json');
+  const spans = [1, 2, 3, 4, 5].map((index) => timed(index, 0, 10));
+  writeFileSync(file, JSON.stringify({ resourceSpans: [resource(spans)] }));
+  const result = spawnSync(process.execPath, [join(__dirname, '..', 'bin', 'backend-perf-check.cjs'), 'traces', file], {
+    encoding: 'utf8',
+  });
+  assert.match(
+    result.stdout,
+    /\[repeated-db-span\][^\n]*\n {2}Impact: ~?10 ms measured -> ~?10 ms estimated; method: OTLP start\/end times/,
+  );
+});
