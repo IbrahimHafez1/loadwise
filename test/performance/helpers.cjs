@@ -1,7 +1,7 @@
 const path = require('node:path');
 const ts = require('typescript');
 
-function withProgram(source, files, callback) {
+function withProgram(source, files, callback, compilerOptions = {}) {
   const root = path.resolve(__dirname, 'virtual-project');
   const mainPath = path.join(root, 'main.ts');
   const options = {
@@ -13,6 +13,7 @@ function withProgram(source, files, callback) {
     skipLibCheck: true,
     types: [],
     lib: ['lib.es2022.d.ts'],
+    ...compilerOptions,
   };
   const entries = Object.entries({ 'main.ts': source, ...files });
   const normalize = (name) => path.normalize(path.resolve(name));
