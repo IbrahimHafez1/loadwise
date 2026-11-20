@@ -212,6 +212,8 @@ function monitor(folder, extensionPath, output, { publishOptions, onStatus }) {
     revision++;
     clearTimeout(timer);
     abortStaleScan();
+    // A config change makes the running watcher stale too; the debounced follow-up starts a fresh one.
+    if (restart) stopWatch();
     timer = setTimeout(start, debounceMs);
   }
   return {
