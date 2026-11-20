@@ -4,6 +4,45 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { lint } = require('./helpers.cjs');
 
+test('context requires bounded seed data, timed polling or an actual benchmark entry', () => {
+  const { withProgram } = require('./helpers.cjs');
+  const { analyzeFile } = require('../lib/analyze.cjs');
+  const fixtures = {
+    'node_modules/typeorm/index.d.ts': 'export class Repository<T> { findBy(where: object): Promise<T[]>; }',
+    'models.ts': 'export const catalogue = [{id:1},{id:2}];',
+    'seeds/setup.ts': `import {Repository} from 'typeorm'; import {catalogue} from '../models';
+       declare const repo: Repository<object>, input: {id:number}[];
+       async function load() {
+         for (const record of catalogue) await repo.findBy({id:record.id});
+         for (const record of input) await repo.findBy({id:record.id});
+       }`,
+    'service.spec.ts': `async function check(keys: number[], id: number) {
+       for(let index=0;index<30;index++){if(keys.includes(id))return;await new Promise((done)=>setTimeout(done,500));}
+       for(let index=0;index<30;index++){if(keys.includes(id))return;}
+     }`,
+    'model-benchmark.ts': `declare const keys:number[], list:number[];
+       function benchmark() { const filtered=list.filter(id=>keys.includes(id)); process.exit(0); }
+       void benchmark();
+       export function runtime() { return list.filter(id=>keys.includes(id)); }`,
+  };
+  withProgram('', fixtures, (program) => {
+    for (const [filename, expected] of [
+      ['seeds/setup.ts', [true, false]],
+      ['service.spec.ts', [true, false]],
+      ['model-benchmark.ts', [true, false]],
+    ]) {
+      const file = program
+        .getSourceFiles()
+        .find((item) => item.fileName.replaceAll('\\', '/').endsWith('/' + filename));
+      assert.deepEqual(
+        analyzeFile(program, file).map((finding) => Boolean(finding.contextualReason)),
+        expected,
+        filename,
+      );
+    }
+  });
+});
+
 test('a review applies to one advisory rule on the next physical line', () => {
   const source = [
     "import { readFileSync as read } from 'node:fs';",
