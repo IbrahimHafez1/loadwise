@@ -37,6 +37,40 @@ function isChangeApplied(lines, row, change) {
   return blockAround(lines, row, splitLines(change.after));
 }
 
+// `import { a, b } from 'module';` on one line: the text before the names, the names, and the rest.
+const namedImportPattern = /^(\s*import\s+(?:type\s+)?\{)([^}]*)(\}\s*from\s*(['"])([^'"]+)\4.*)$/;
+
+function parseNamedImport(line) {
+  const match = namedImportPattern.exec(line);
+  if (!match) return;
+  const names = match[2]
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean);
+  return { head: match[1], namesText: match[2], tail: match[3], module: match[5], names };
+}
+
+// Several fixes in one file often add names to the same import line. Once one has, the line no longer matches the
+// others' original text, so a one-line named-import change is merged into that module's current import instead.
+// Returns the row and merged line, { applied: true } when every name is already imported, or undefined.
+function mergeNamedImport(lines, change) {
+  const [before, after] = [change.before, change.after].map(splitLines);
+  if (before.length !== 1 || after.length !== 1) return;
+  const original = parseNamedImport(before[0]);
+  const wanted = parseNamedImport(after[0]);
+  if (!original || !wanted || original.module !== wanted.module || original.head.trim() !== wanted.head.trim()) return;
+  for (const [row, line] of lines.entries()) {
+    const current = parseNamedImport(line);
+    if (current?.module !== wanted.module || current.head.trim() !== wanted.head.trim()) continue;
+    if (!original.names.every((name) => current.names.includes(name))) continue;
+    const added = wanted.names.filter((name) => !current.names.includes(name));
+    if (!added.length) return { applied: true };
+    const trailingSpace = /\s*$/.exec(current.namesText)[0];
+    const keptNames = current.namesText.trimEnd().replace(/,$/, '');
+    return { row, line: `${current.head}${keptNames}, ${added.join(', ')}${trailingSpace}${current.tail}` };
+  }
+}
+
 // Returns the new text, or { error } when the code no longer matches the scan.
 function applyChangesToText(text, changes) {
   const newline = text.includes('\r\n') ? '\r\n' : '\n';
@@ -44,7 +78,15 @@ function applyChangesToText(text, changes) {
   const located = [];
   for (const change of changes) {
     const row = locateChange(lines, change);
-    if (row === -1) return { error: `the code at line ${change.line} changed since the scan` };
+    if (row === -1) {
+      const merged = mergeNamedImport(lines, change);
+      if (merged?.applied) continue;
+      if (merged) {
+        located.push({ row: merged.row, removed: 1, added: [merged.line] });
+        continue;
+      }
+      return { error: `the code at line ${change.line} changed since the scan` };
+    }
     if (isChangeApplied(lines, row, change)) continue;
     located.push({ row, removed: splitLines(change.before).length, added: splitLines(change.after) });
   }

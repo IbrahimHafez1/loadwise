@@ -96,3 +96,21 @@ test('a file that another fix already changed is skipped while the rest of the f
   assert.deepEqual(result.files, ['caller.ts']);
   assert.equal(writes.get('caller.ts'), 'await idsMany(xs);');
 });
+
+test('fixes that each add names to one import line compose in any order', () => {
+  const original = "import { eq, sql } from 'drizzle-orm';";
+  const file = [original, '', 'db.update(a);', 'db.update(b);'].join('\n');
+  const addOrNe = { line: 1, before: original, after: "import { eq, sql, or, ne } from 'drizzle-orm';" };
+  const addNe = { line: 1, before: original, after: "import { eq, sql, ne } from 'drizzle-orm';" };
+  const first = applyChangesToText(file, [addOrNe]).text;
+  assert.equal(applyChangesToText(first, [addNe]).error, 'already applied');
+  const reversed = applyChangesToText(applyChangesToText(file, [addNe]).text, [addOrNe]).text;
+  assert.equal(reversed.split('\n')[0], "import { eq, sql, ne, or } from 'drizzle-orm';");
+});
+
+test('an import merge never targets another module or an import missing the original names', () => {
+  const original = "import { eq } from 'drizzle-orm';";
+  const change = { line: 1, before: original, after: "import { eq, ne } from 'drizzle-orm';" };
+  assert.match(applyChangesToText("import { eq } from 'other';", [change]).error, /changed since the scan/);
+  assert.match(applyChangesToText("import { sql } from 'drizzle-orm';", [change]).error, /changed since the scan/);
+});
