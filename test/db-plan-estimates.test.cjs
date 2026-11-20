@@ -134,6 +134,14 @@ test('MySQL full scans of large tables are read from nested FORMAT=JSON plans', 
       cost_info: { query_cost: '24120.50' },
       ordering_operation: {
         nested_loop: [
+          {
+            table: {
+              table_name: 'orders',
+              access_type: 'ALL',
+              rows_examined_per_scan: 2_390_000,
+              attached_condition: "(`shop`.`orders`.`status` = 'paid')",
+            },
+          },
           { table: { table_name: 'orders', access_type: 'ALL', rows_examined_per_scan: 2_390_000 } },
           { table: { table_name: 'customers', access_type: 'eq_ref' } },
         ],
