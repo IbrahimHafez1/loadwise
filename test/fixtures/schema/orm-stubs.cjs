@@ -61,4 +61,63 @@ export declare function asc(column: unknown): SQL;`,
   'node_modules/drizzle-orm/mysql-core/index.d.ts': drizzleCore('mysql'),
 };
 
-module.exports = { drizzle };
+function decorators(names) {
+  return names.map((name) => `export declare function ${name}(...args: any[]): (...args: any[]) => any;`).join('\n');
+}
+
+const typeorm = {
+  'node_modules/typeorm/package.json': '{"name":"typeorm","types":"index.d.ts"}',
+  'node_modules/typeorm/index.d.ts': `${decorators([
+    'Entity',
+    'ViewEntity',
+    'Column',
+    'PrimaryColumn',
+    'PrimaryGeneratedColumn',
+    'CreateDateColumn',
+    'UpdateDateColumn',
+    'DeleteDateColumn',
+    'Index',
+    'Unique',
+    'ManyToOne',
+    'OneToOne',
+    'OneToMany',
+    'JoinColumn',
+  ])}
+export declare class FindOperator<T> { readonly value: T }
+export declare function In<T>(values: T[]): FindOperator<T>;
+export declare function MoreThan<T>(value: T): FindOperator<T>;
+export declare function MoreThanOrEqual<T>(value: T): FindOperator<T>;
+export declare function LessThan<T>(value: T): FindOperator<T>;
+export declare function Between<T>(from: T, to: T): FindOperator<T>;
+export declare function Like(value: string): FindOperator<string>;
+export declare function ILike(value: string): FindOperator<string>;
+export declare function IsNull(): FindOperator<null>;
+export declare function Not<T>(value: T): FindOperator<T>;
+export declare function Raw(sql: string): FindOperator<unknown>;
+export interface FindManyOptions<T> { where?: object | object[]; order?: object; take?: number; skip?: number; select?: object }
+export declare class Repository<T> {
+  find(options?: FindManyOptions<T>): Promise<T[]>;
+  findOne(options: FindManyOptions<T>): Promise<T | null>;
+  findBy(where: object): Promise<T[]>;
+  findOneBy(where: object): Promise<T | null>;
+  findAndCount(options?: FindManyOptions<T>): Promise<[T[], number]>;
+  count(options?: FindManyOptions<T>): Promise<number>;
+  countBy(where: object): Promise<number>;
+  query(sql: string, parameters?: unknown[]): Promise<any>;
+}
+export declare class EntityManager {
+  find<T>(entity: new () => T, options?: FindManyOptions<T>): Promise<T[]>;
+  findOne<T>(entity: new () => T, options: FindManyOptions<T>): Promise<T | null>;
+  getRepository<T>(entity: new () => T): Repository<T>;
+  query(sql: string, parameters?: unknown[]): Promise<any>;
+}
+export declare class DataSource {
+  manager: EntityManager;
+  getRepository<T>(entity: new () => T): Repository<T>;
+  query(sql: string, parameters?: unknown[]): Promise<any>;
+}
+export interface QueryRunner { query(sql: string, parameters?: unknown[]): Promise<any> }
+export declare class BaseEntity { static find<T>(this: new () => T, options?: FindManyOptions<T>): Promise<T[]> }`,
+};
+
+module.exports = { drizzle, typeorm };
