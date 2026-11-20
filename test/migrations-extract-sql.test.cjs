@@ -200,3 +200,22 @@ describe('SQL file transaction context', () => {
     assert.equal(sqlFileInTransaction('sql', 5), false);
   });
 });
+
+describe('sub-command positions', () => {
+  before(() => prepareDialect('postgres'));
+
+  test('DROP COLUMN, SET NOT NULL and VALIDATE are placed at their names', () => {
+    const operations = postgres(
+      'ALTER TABLE "a" DROP COLUMN "a",\n  DROP COLUMN b,\n  ALTER COLUMN "C" SET NOT NULL,\n  VALIDATE CONSTRAINT c;',
+    );
+    assert.deepEqual(
+      operations.map((operation) => [operation.kind, operation.line, operation.column]),
+      [
+        ['drop-column', 1, 29],
+        ['drop-column', 2, 15],
+        ['set-not-null', 3, 16],
+        ['validate-constraint', 4, 23],
+      ],
+    );
+  });
+});
