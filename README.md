@@ -550,17 +550,18 @@ It accepts the source-check flags of `loadwise perf`: `--policy`, `--json`, `--i
 
 ## Rules
 
-| Rule                           | What to review                                                                                                                                                      |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pg-dynamic-query-text`        | Runtime fragments enter SQL text directly. Bind data as parameters and verify how any dynamic identifiers are chosen and quoted. A finding is a code-review prompt. |
-| `prisma-scope-unverified`      | A Prisma read or write on a model listed in `prismaScopes` does not prove the configured scope in its filter, projection or write data.                             |
-| `drizzle-scope-unverified`     | A Drizzle query on a table listed in `drizzleScopes` does not prove the configured predicate, projection or write data.                                             |
-| `drizzle-sql-raw-dynamic`      | `sql.raw` from drizzle-orm receives text built from a runtime value.                                                                                                |
-| `knex-raw-dynamic-text`        | A Knex `*Raw` fragment or `knex.raw` receives text built from a runtime value instead of `?`/`??` bindings.                                                         |
-| `mysql-dynamic-query-text`     | A `mysql`/`mysql2` `query` or `execute` receives SQL text built from a runtime value instead of `?` placeholders.                                                   |
-| `prisma-raw-unsafe-dynamic`    | `$queryRawUnsafe`, `$executeRawUnsafe` or `Prisma.raw` receives SQL text built from a runtime value.                                                                |
-| `sequelize-dynamic-query-text` | `sequelize.query` or `literal` receives SQL text built from a runtime value instead of `replacements` or `bind`.                                                    |
-| `typeorm-dynamic-query-text`   | A TypeORM `query` or a query-builder condition, order, group, select or join receives SQL text built from a runtime value.                                          |
+| Rule                           | What to review                                                                                                                                                                                                   |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pg-dynamic-query-text`        | Runtime fragments enter SQL text directly. Bind data as parameters and verify how any dynamic identifiers are chosen and quoted. A finding is a code-review prompt.                                              |
+| `prisma-scope-unverified`      | A Prisma read or write on a model listed in `prismaScopes` does not prove the configured scope in its filter, projection or write data.                                                                          |
+| `drizzle-scope-unverified`     | A Drizzle query on a table listed in `drizzleScopes` does not prove the configured predicate, projection or write data.                                                                                          |
+| `drizzle-sql-raw-dynamic`      | `sql.raw` from drizzle-orm receives text built from a runtime value.                                                                                                                                             |
+| `knex-raw-dynamic-text`        | A Knex `*Raw` fragment or `knex.raw` receives text built from a runtime value instead of `?`/`??` bindings.                                                                                                      |
+| `mysql-dynamic-query-text`     | A `mysql`/`mysql2` `query` or `execute` receives SQL text built from a runtime value instead of `?` placeholders.                                                                                                |
+| `nosql-operator-injection`     | Request data that can arrive as an object is a Mongoose or MongoDB filter, a filter value or a `$where` expression. Contextual when the project depends on express-mongo-sanitize. Fix: wrap the value in `$eq`. |
+| `prisma-raw-unsafe-dynamic`    | `$queryRawUnsafe`, `$executeRawUnsafe` or `Prisma.raw` receives SQL text built from a runtime value.                                                                                                             |
+| `sequelize-dynamic-query-text` | `sequelize.query` or `literal` receives SQL text built from a runtime value instead of `replacements` or `bind`.                                                                                                 |
+| `typeorm-dynamic-query-text`   | A TypeORM `query` or a query-builder condition, order, group, select or join receives SQL text built from a runtime value.                                                                                       |
 
 The SQL rules report text assembled from a runtime value. When a part of that text traces to request data the finding is default and names the source; when no part does, it is contextual, because the value is usually an internal schema or table name. Every injection rule other than the SQL rules reports only values traced to request data.
 
