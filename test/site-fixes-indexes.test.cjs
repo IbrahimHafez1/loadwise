@@ -173,7 +173,7 @@ test('TypeORM: a property-level index goes above the property decorators', (cont
     result.changes.map(({ line, after }) => ({ line, after })),
     [
       { line: 1, after: "import { Column, Entity, Index } from 'typeorm';" },
-      { line: 8, after: '  @Index()\n  @Column()' },
+      { line: 8, after: '  @Index()\n  @Column()\n  enrolledAt!: Date;' },
     ],
   );
 });
@@ -260,7 +260,10 @@ export class Lesson {
     result.changes.map(({ line, after }) => ({ line, after })),
     [
       { line: 1, after: "import { Entity, JoinColumn, ManyToOne, Index } from 'typeorm';" },
-      { line: 5, after: '  @Index()\n  @ManyToOne(() => Student)' },
+      {
+        line: 5,
+        after: "  @Index()\n  @ManyToOne(() => Student)\n  @JoinColumn({ name: 'student_id' })\n  student!: Student;",
+      },
     ],
   );
   assert.equal(fixOf({ ...base, message: base.message.replace('`student`', '`other`') }), undefined);
@@ -292,7 +295,13 @@ export class Report {
   const relation = fixOf({ ...base, line: 12, suggestion: '@Index()', message: message('ownerId') });
   assert.deepEqual(
     relation.changes.map(({ line, after }) => ({ line, after })),
-    [{ line: 10, after: '  @Index()\n  @ManyToOne(() => User)' }],
+    [
+      {
+        line: 10,
+        after:
+          "  @Index()\n  @ManyToOne(() => User)\n  @JoinColumn({ name: 'ownerId', foreignKeyConstraintName: 'fk_owner' })\n  owner?: User | null;",
+      },
+    ],
   );
   assert.match(relation.note, /join column `ownerId`/);
   assert.equal(fixOf({ ...base, line: 12, suggestion: '@Index()', message: message('creatorId') }), undefined);
@@ -331,4 +340,92 @@ export class Client extends BaseEntity {
     ],
   );
   assert.match(result.note, /declared on the base class/);
+});
+
+const ticketSource = `import { Column, Entity } from 'typeorm';
+
+@Entity('tickets')
+export class Ticket {
+  @Column({ type: 'uuid' })
+  ownerId!: string;
+
+  @Column({ type: 'uuid' })
+  queueId!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  description!: string;
+
+  @Column('text')
+  summaryText!: string;
+
+  @Column({ type: 'varchar', length: 64 })
+  status!: string;
+}
+`;
+const ticketDeclared = {
+  declarationFile: 'entities.ts',
+  declarationLine: 4,
+  declarationColumn: 14,
+  declarationMessage: 'Entity `Ticket` is declared here.',
+};
+
+test('TypeORM: free-text columns are left out of a suggested index, which is withheld when nothing is left', (context) => {
+  const root = project(context, { 'entities.ts': ticketSource });
+  const trimmed = fixOf(
+    finding(root, { ...ticketDeclared, suggestion: "@Index(['ownerId', 'description', 'status'])" }),
+  );
+  assert.match(trimmed.changes.at(-1).after, /\n@Index\(\['ownerId', 'status'\]\)\n@Entity\('tickets'\)$/);
+  assert.match(trimmed.note, /`description` is left out of the index/);
+  assert.equal(fixOf(finding(root, { ...ticketDeclared, suggestion: "@Index(['summaryText'])" })), undefined);
+  const property = (name) => ({
+    ...ticketDeclared,
+    suggestion: '@Index()',
+    message: `Add \`@Index()\` to the \`${name}\` property of entity \`Ticket\` (entities.ts:4).`,
+  });
+  assert.equal(fixOf(finding(root, property('description'))), undefined);
+  assert.ok(fixOf(finding(root, property('status'))));
+});
+
+test('TypeORM: the property hunk ends at the property name, so lookalike decorators stay distinct', (context) => {
+  const root = project(context, { 'entities.ts': ticketSource });
+  const property = (name) =>
+    fixOf(
+      finding(root, {
+        ...ticketDeclared,
+        suggestion: '@Index()',
+        message: `Add \`@Index()\` to the \`${name}\` property of entity \`Ticket\` (entities.ts:4).`,
+      }),
+    );
+  const [ownerImport, owner] = property('ownerId').changes;
+  const [queueImport, queue] = property('queueId').changes;
+  assert.deepEqual(ownerImport, queueImport);
+  assert.equal(owner.before, "  @Column({ type: 'uuid' })\n  ownerId!: string;");
+  assert.equal(queue.before, "  @Column({ type: 'uuid' })\n  queueId!: string;");
+  const indexed = project(context, {
+    'entities.ts': ticketSource
+      .replace('Column, Entity', 'Column, Entity, Index')
+      .replace("@Entity('tickets')", "@Index(['queueId'])\n@Entity('tickets')")
+      .replace("  @Column({ type: 'uuid' })\n  ownerId", "  @Index()\n  @Column({ type: 'uuid' })\n  ownerId"),
+  });
+  const again = (overrides) => fixOf(finding(indexed, { ...ticketDeclared, declarationLine: 5, ...overrides }));
+  assert.equal(again({ suggestion: "@Index(['queueId'])" }), undefined);
+  assert.equal(
+    again({
+      suggestion: '@Index()',
+      message: 'Add `@Index()` to the `ownerId` property of entity `Ticket` (entities.ts:5).',
+    }),
+    undefined,
+  );
+});
+
+test('Prisma: free-text fields are left out of a B-tree index but kept in a trigram index', (context) => {
+  const schema = prismaSchema.replace('  @@map', '  body     String @db.Text\n  @@map');
+  const root = project(context, { 'schema.prisma': schema });
+  const base = { ...prismaOrder, declarationMessage: orderDeclared };
+  const trimmed = fixOf(finding(root, { ...base, suggestion: '@@index([storeId, body])' }));
+  assert.equal(trimmed.changes[0].after, '  @@index([storeId])\n}');
+  assert.match(trimmed.note, /`body` is left out/);
+  assert.equal(fixOf(finding(root, { ...base, suggestion: '@@index([body])' })), undefined);
+  const trigram = '@@index([body(ops: raw("gin_trgm_ops"))], type: Gin)';
+  assert.equal(fixOf(finding(root, { ...base, suggestion: trigram })).changes[0].after, `  ${trigram}\n}`);
 });
