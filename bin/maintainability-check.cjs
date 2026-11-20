@@ -4,6 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { parseArgs } = require('node:util');
+const { exampleFor } = require('../lib/examples.cjs');
 const help = `Usage:
   maintainability-check [directory] [--config policy.json] [--json] [--include-contextual] [--fail-on contract|all]
   maintainability-check [directory] --graph modules.json [--config policy.json] [--json]
@@ -11,6 +12,16 @@ const help = `Usage:
 The default directory is the current folder. Source mode discovers supported files.
 Graph mode accepts project-relative files and dependency edges from any language.
 By default, only declared folder or query contracts fail CI. Exit codes are 0, 1 (threshold met), 2 (invalid input).`;
+
+// Prints each rule's example once so output stays short when many findings share a rule.
+function printFixOnce(ruleId, printedRules) {
+  const example = exampleFor(ruleId);
+  if (!example || printedRules.has(ruleId)) return;
+  printedRules.add(ruleId);
+  console.log('  Fix:');
+  for (const line of example.before) console.log('    - ' + line);
+  for (const line of example.after) console.log('    + ' + line);
+}
 
 async function main(args) {
   const { values, positionals } = parseArgs({
@@ -58,10 +69,12 @@ async function main(args) {
   }
   if (values.json) console.log(JSON.stringify(report, null, 2));
   else {
+    const printedRules = new Set();
     for (const finding of report.findings) {
       console.log(`${finding.file}:${finding.line}:${finding.column} [${finding.ruleId}] ${finding.message}`);
       if (finding.contextualReason) console.log('  ' + finding.contextualReason);
       for (const site of finding.related ?? []) console.log(`  ${site.file}:${site.line}:${site.column}`);
+      printFixOnce(finding.ruleId, printedRules);
     }
     console.log(
       `${report.scannedFiles ?? report.graphFiles} ${report.mode} file(s), ${report.findings.length} finding(s), ${report.contractFindingCount} contract finding(s).`,
