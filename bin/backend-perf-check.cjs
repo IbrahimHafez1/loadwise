@@ -7,7 +7,7 @@ const { parseArgs } = require('node:util');
 const { knownRules } = require('../lib/rule-ids.cjs');
 
 const usage = `Usage:
-  backend-perf-check [-p tsconfig.json | file.ts file.js ...] [--engine auto|native|js] [--policy policy.json] [--schema snapshot.json] [--json] [--include-contextual] [--ignore rule-id] [--fail-on all|contract]
+  backend-perf-check [-p tsconfig.json | file.ts file.js ...] [--engine auto|native|js] [--policy policy.json] [--schema snapshot.json] [--json] [--include-contextual] [--ignore rule-id] [--fail-on all|contract] [--fix [--yes]]
   backend-perf-check --watch [-p tsconfig.json] [--policy policy.json] [--schema snapshot.json] [--include-contextual] [--ignore rule-id]
   backend-perf-check migrations [paths...] [--changed-since git-ref] [--baseline file] [--write-baseline] [--dialect postgres|mysql] [--json] [--include-contextual] [--ignore rule-id]
   backend-perf-check db [--url-env DATABASE_URL] [--env-file .env] [--engine postgres|mysql|mongo] [--schema-snapshot out.json] [--top 20] [--queries file.sql] [--analyze] [--measure --i-understand-this-locks-tables] [--runs 5] [--json] [--ignore rule-id]
@@ -19,6 +19,7 @@ const usage = `Usage:
 
 With no arguments, check tsconfig.json or jsconfig.json in the current directory.
 Source checks look for backend-perf.policy.json beside the selected config, or in the working directory for explicit files.
+--fix shows each available code fix and asks before applying it; --fix --yes applies every one without asking.
 Source checks summarize contextual findings. --include-contextual includes their locations and review reasons.
 Source checks use the TypeScript 7 native compiler when it is installed and accepts the project, otherwise TypeScript 6.
 --engine native requires TypeScript 7 (--native is an alias). --engine js always uses TypeScript 6.
@@ -133,6 +134,8 @@ function checkCode(args, report = printResult) {
     engine: { type: 'string' },
     ignore: { type: 'string', multiple: true, default: [] },
     schema: { type: 'string' },
+    fix: { type: 'boolean' },
+    yes: { type: 'boolean' },
   });
   if (values.help) return showHelp();
   if (values.project && positionals.length) throw new Error('Choose either a project or explicit source files.');
@@ -144,6 +147,8 @@ function checkCode(args, report = printResult) {
   if (values.watch && engine === 'native')
     throw new Error('--native supports one-shot checks. Use --watch with the incremental JS compiler.');
   if (values.watch && positionals.length) throw new Error('--watch requires a project config.');
+  if (values.fix && (values.watch || values.json)) throw new Error('--fix cannot be combined with --watch or --json.');
+  if (values.yes && !values.fix) throw new Error('--yes is only valid with --fix.');
   for (const ruleId of values.ignore) {
     if (!knownRules.has(ruleId)) throw new Error('Unknown source rule: ' + ruleId);
   }
@@ -172,6 +177,10 @@ function checkCode(args, report = printResult) {
     report === printResult ? engine : 'js',
   );
   if (values.project) appendPrismaSchemaFindings(result, values.project);
+  if (values.fix && report === printResult) {
+    selectFindings(result, values);
+    return require('../lib/fix-cli.cjs').applyFixes(result.findings, { all: values.yes });
+  }
   const code = report(result, values);
   if (report === printResult) require('../lib/notify-editor.cjs').notifyEditor(values.project ?? process.cwd());
   return code;
