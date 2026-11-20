@@ -22,7 +22,12 @@ test('native candidate walk visits the same syntax nodes in compiler order', { s
   const { forEachSourceCandidate } = require('../lib/native-checker.cjs');
   const { SyntaxKind } = requireNative('typescript/ast');
   const { API } = requireNative('typescript/sync');
-  const kinds = new Set([SyntaxKind.CallExpression, SyntaxKind.NewExpression, SyntaxKind.BinaryExpression]);
+  const kinds = new Set([
+    SyntaxKind.CallExpression,
+    SyntaxKind.NewExpression,
+    SyntaxKind.TaggedTemplateExpression,
+    SyntaxKind.BinaryExpression,
+  ]);
   const cases = {
     'component.tsx': `@decorate(factory())
       class Widget {
@@ -112,7 +117,8 @@ test('native CLI covers clean and flagged files, overlapping configs, and invali
   fs.mkdirSync(base, { recursive: true });
   const directory = fs.mkdtempSync(path.join(base, 'backend-perf-native-test-'));
   const inputs = {
-    'flag.ts': 'export function check(keys: string[], ids: string[]) { return keys.map(key => ids.includes(key)); }',
+    'flag.ts':
+      'export function check(keys: string[], payload: string) { const ids: string[] = JSON.parse(payload); return keys.map(key => ids.includes(key)); }',
     'clean.ts': 'export const message = "ok";',
     'types.d.ts': 'export declare const label: string;',
     'bad.ts': 'export const broken = ;',
