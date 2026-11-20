@@ -1,0 +1,46 @@
+id: csharp-fixed-regex-in-loop
+language: CSharp
+severity: warning
+labels:
+  PAT:
+    style: primary
+message: This loop constructs a Regex from the same pattern each time. Reuse the instance when its options and timeout are unchanged.
+rule:
+  all:
+    - any:
+        - pattern: new System.Text.RegularExpressions.Regex($PAT)
+        - all:
+            - pattern: new Regex($PAT)
+            - inside:
+                kind: compilation_unit
+                stopBy: end
+                has:
+                  pattern: using System.Text.RegularExpressions;
+                  stopBy: end
+                not:
+                  has:
+                    stopBy: end
+                    any:
+                      - any: [{kind: class_declaration}, {kind: struct_declaration}, {kind: record_declaration}]
+                        has: {field: name, regex: '^Regex$'}
+                      - kind: using_directive
+                        regex: '\busing\s+Regex\s*='
+    - inside:
+        any:
+          - kind: for_statement
+          - kind: foreach_statement
+          - kind: while_statement
+          - kind: do_statement
+        field: body
+        stopBy:
+          any:
+            - kind: lambda_expression
+            - kind: local_function_statement
+            - kind: anonymous_method_expression
+constraints:
+  PAT:
+    kind: argument
+    has:
+      any:
+        - kind: string_literal
+        - kind: verbatim_string_literal

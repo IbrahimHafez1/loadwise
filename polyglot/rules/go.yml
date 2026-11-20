@@ -1,0 +1,47 @@
+id: go-fixed-regexp-in-loop
+language: Go
+severity: warning
+labels:
+  PAT:
+    style: primary
+message: This loop recompiles a fixed regexp pattern. Compile it once and reuse the result while preserving error handling.
+rule:
+  all:
+    - any:
+        - pattern:
+            context: 'func check() { _ = regexp.Compile($PAT) }'
+            selector: call_expression
+        - pattern:
+            context: 'func check() { _ = regexp.MustCompile($PAT) }'
+            selector: call_expression
+    - inside:
+        kind: for_statement
+        field: body
+        stopBy:
+          kind: func_literal
+    - inside:
+        kind: source_file
+        stopBy: end
+        has:
+          kind: import_spec
+          regex: '^"regexp"$'
+          stopBy: end
+    - not:
+        inside:
+          any: [{kind: function_declaration}, {kind: method_declaration}, {kind: func_literal}]
+          stopBy: end
+          has:
+            stopBy: end
+            any:
+              - any: [{kind: parameter_declaration}, {kind: var_spec}]
+                has: {field: name, regex: '^regexp$'}
+              - any: [{kind: short_var_declaration}, {kind: range_clause}]
+                has:
+                  field: left
+                  kind: expression_list
+                  has: {kind: identifier, regex: '^regexp$'}
+constraints:
+  PAT:
+    any:
+      - kind: interpreted_string_literal
+      - kind: raw_string_literal

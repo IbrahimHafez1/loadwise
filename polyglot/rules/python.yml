@@ -1,0 +1,40 @@
+id: python-copy-growing-list
+language: Python
+severity: warning
+labels:
+  ACC:
+    style: primary
+message: Rebuilding this list for each item can copy a growing prefix each time. Use append when earlier list identities do not need to be preserved.
+rule:
+  all:
+    - pattern: $ACC = $ACC + [$VALUE]
+    - inside:
+        stopBy:
+          kind: function_definition
+        all:
+          - pattern: |
+              for $ITEM in $ITER:
+                  $ACC = $ACC + [$VALUE]
+          - not:
+              pattern: |
+                for $ACC in $ITER:
+                    $ACC = $ACC + [$VALUE]
+          - follows:
+              pattern:
+                context: $ACC = []
+                selector: expression_statement
+constraints:
+  ACC:
+    kind: identifier
+  ITEM:
+    kind: identifier
+  ITER:
+    not:
+      all:
+        - any:
+            - pattern: '[]'
+            - pattern: '[$ONLY]'
+            - pattern: '()'
+            - pattern: '($ONLY,)'
+        - not:
+            has: {kind: list_splat}

@@ -1,0 +1,15 @@
+{
+  "name": "backend-perf-check-orm-fixture",
+  "private": true,
+  "scripts": {
+    "verify": "node verify.cjs"
+  },
+  "dependencies": {
+    "@sequelize/core": "7.0.0-alpha.47",
+    "knex": "3.1.0",
+    "kysely": "0.28.8",
+    "mongoose": "8.19.1",
+    "sequelize": "6.37.7",
+    "typeorm": "0.3.28"
+  }
+}

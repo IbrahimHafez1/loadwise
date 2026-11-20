@@ -1,0 +1,50 @@
+id: rust-fixed-regex-in-loop
+language: Rust
+severity: warning
+labels:
+  PAT:
+    style: primary
+message: This loop builds the same regex repeatedly. Compile it once and reuse it while preserving error handling.
+rule:
+  all:
+    - any:
+        - pattern: regex::Regex::new($PAT)
+        - all:
+            - pattern: Regex::new($PAT)
+            - inside:
+                kind: source_file
+                stopBy: end
+                has:
+                  pattern: use regex::Regex;
+                  stopBy: end
+                not:
+                  has:
+                    stopBy: end
+                    any: [{kind: struct_item}, {kind: enum_item}, {kind: type_item}]
+                    has: {field: name, regex: '^Regex$'}
+    - inside:
+        any:
+          - kind: for_expression
+          - kind: while_expression
+          - kind: loop_expression
+        field: body
+        stopBy:
+          any:
+            - kind: closure_expression
+            - kind: function_item
+    - not:
+        inside:
+          kind: source_file
+          stopBy: end
+          has:
+            stopBy: end
+            any:
+              - kind: mod_item
+                has: {field: name, regex: '^regex$'}
+              - kind: use_as_clause
+                has: {field: alias, regex: '^regex$'}
+constraints:
+  PAT:
+    any:
+      - kind: string_literal
+      - kind: raw_string_literal

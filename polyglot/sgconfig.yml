@@ -1,0 +1,8 @@
+ruleDirs:
+  - rules
+languageGlobs:
+  Python: ['*.[pP][yY]']
+  Go: ['*.[gG][oO]']
+  Java: ['*.[jJ][aA][vV][aA]']
+  CSharp: ['*.[cC][sS]']
+  Rust: ['*.[rR][sS]']

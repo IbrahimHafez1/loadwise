@@ -1,0 +1,9 @@
+{
+  "executionStats": {
+    "executionSuccess": true,
+    "nReturned": 1,
+    "totalDocsExamined": 20000,
+    "executionStages": { "stage": "COLLSCAN", "docsExamined": 20000, "nReturned": 1 }
+  }
+}
+

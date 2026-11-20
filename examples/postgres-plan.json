@@ -1,0 +1,11 @@
+[
+  {
+    "Plan": {
+      "Node Type": "Seq Scan",
+      "Actual Loops": 1,
+      "Actual Rows": 1,
+      "Rows Removed by Filter": 19999
+    }
+  }
+]
+

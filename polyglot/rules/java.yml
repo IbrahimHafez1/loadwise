@@ -1,0 +1,39 @@
+id: java-fixed-regex-in-loop
+language: Java
+severity: warning
+labels:
+  PAT:
+    style: primary
+message: This loop compiles a fixed regex for each iteration. Reuse a compiled Pattern and create matchers as needed.
+rule:
+  all:
+    - any:
+        - pattern: java.util.regex.Pattern.compile($PAT)
+        - all:
+            - pattern: Pattern.compile($PAT)
+            - inside:
+                kind: program
+                stopBy: end
+                has:
+                  pattern: import java.util.regex.Pattern;
+                  stopBy: end
+                not:
+                  has:
+                    stopBy: end
+                    any: [{kind: class_declaration}, {kind: interface_declaration}, {kind: record_declaration}, {kind: variable_declarator}, {kind: formal_parameter}, {kind: enhanced_for_statement}]
+                    has: {field: name, regex: '^Pattern$'}
+    - inside:
+        any:
+          - kind: for_statement
+          - kind: enhanced_for_statement
+          - kind: while_statement
+          - kind: do_statement
+        field: body
+        stopBy:
+          any:
+            - kind: lambda_expression
+            - kind: class_body
+            - kind: method_declaration
+constraints:
+  PAT:
+    kind: string_literal
