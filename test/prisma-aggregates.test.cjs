@@ -177,10 +177,54 @@ test('named relations resolve their foreign key; batch transactions and missing 
     context,
     '  return (db as any).$transaction([db.user.findMany({ take: 5, include: { _count: { select: { posts: true } } } })]);',
   );
-  assert.equal(batched.fix, undefined);
+  assert.equal(batched.fix, undefined, 'a batch whose page is not bound to a name has nowhere to merge the counts');
   const [unknown] = relationCountFindings(
     context,
     '  return db.user.findMany({ take: 5, include: { _count: { select: { likes: true } } } });',
   );
   assert.equal(unknown.fix, undefined);
+});
+
+test('a page bound from a batch transaction gets its counts merged right after the batch', (context) => {
+  const [finding] = relationCountFindings(
+    context,
+    [
+      '  const [rows, total] = await db.$transaction([',
+      '    db.user.findMany({ take: 20, include: { _count: { select: { posts: true } } } }),',
+      '    db.user.count(),',
+      '  ]);',
+      '  return { rows, total };',
+    ].join('\n'),
+  );
+  assert.deepEqual(onlyChange(finding), {
+    before: [
+      'const [rows, total] = await db.$transaction([',
+      '  db.user.findMany({ take: 20, include: { _count: { select: { posts: true } } } }),',
+      '  db.user.count(),',
+      ']);',
+    ].join('\n'),
+    after: [
+      'const [pageRows, total] = await db.$transaction([',
+      '  db.user.findMany({ take: 20, include: {  } }),',
+      '  db.user.count(),',
+      ']);',
+      'const pageIds = pageRows.map((row) => row.id);',
+      'const postsGroups = await db.post.groupBy({ by: ["authorId"], where: { authorId: { in: pageIds } }, _count: { _all: true } });',
+      'const postsCountById = new Map(postsGroups.map((group) => [group.authorId, group._count._all]));',
+      'const rows = pageRows.map((row) => ({ ...row, _count: { posts: postsCountById.get(row.id) ?? 0 } }));',
+    ].join('\n'),
+  });
+  assert.match(finding.fix.note, /outside the batch transaction/);
+  const [secondElement] = relationCountFindings(
+    context,
+    [
+      '  const [, rest] = await db.$transaction([',
+      '    db.user.count(),',
+      '    db.user.findMany({ take: 20, include: { _count: { select: { posts: true } } } }),',
+      '  ]);',
+      '  const [first] = await db.$transaction([db.user.findMany({ take: 2, include: { _count: { select: { posts: true } } } })]);',
+      '  return [rest, first];',
+    ].join('\n'),
+  );
+  assert.ok(secondElement.fix, 'a named binding at the matching position is enough');
 });
