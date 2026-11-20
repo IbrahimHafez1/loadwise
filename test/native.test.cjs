@@ -140,3 +140,35 @@ test('native CLI covers clean and flagged files, overlapping configs, and invali
     assert.ok(result.stderr.trim());
   }
 });
+
+test(
+  'native CLI attaches the same site fixes as the JS compiler, including builders that reuse rule helpers',
+  { skip },
+  (context) => {
+    const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
+    fs.mkdirSync(base, { recursive: true });
+    const directory = fs.mkdtempSync(path.join(base, 'backend-perf-native-fix-'));
+    const inputs = {
+      'serial.ts': [
+        'declare function first(): Promise<number>;',
+        'declare function second(): Promise<number>;',
+        'export async function load() {',
+        '  const [left, right] = [await first(), await second()];',
+        "  const response = await fetch('https://example.test/data');",
+        '  return [left, right, response];',
+        '}',
+      ].join('\n'),
+      'tsconfig.json': '{"compilerOptions":{"target":"ES2022","lib":["ES2022","DOM"]},"files":["serial.ts"]}',
+    };
+    context.after(() => {
+      for (const name of Object.keys(inputs)) fs.unlinkSync(path.join(directory, name));
+      fs.rmdirSync(directory);
+    });
+    for (const [name, contents] of Object.entries(inputs)) fs.writeFileSync(path.join(directory, name), contents);
+    const run = (args) => spawnSync(process.execPath, [bin, ...args, '--json'], { cwd: directory, encoding: 'utf8' });
+    const native = JSON.parse(run(['--native', '-p', '.']).stdout);
+    assert.deepEqual(native, JSON.parse(run(['-p', '.']).stdout));
+    const fixedRules = native.findings.filter((finding) => finding.fix).map((finding) => finding.ruleId);
+    assert.deepEqual(fixedRules.sort(), ['http-call-without-timeout', 'serial-awaits-in-literal']);
+  },
+);
