@@ -346,3 +346,17 @@ test('code lenses put Apply fix and Dismiss buttons on fixable lines and an appl
   editor.vscode.workspace.getConfiguration = () => ({ get: () => false });
   assert.deepEqual(provider.provideCodeLenses({ uri: ordersFile }), [], 'the codeLens setting turns them off');
 });
+
+test('a finding message shows one sentence per line and keeps code spans and abbreviations whole', () => {
+  const files = new Map([[ordersFile, 'one();']]);
+  const editor = fakeEditor(files);
+  editor.open(ordersFile);
+  const message = 'Each call is slow. Use `a.b(). Then` instead, e.g. a batch. Keep it otherwise.';
+  publish(editor.vscode, editor.collection, root, 'backend-perf-check', [{ ...finding(1), message }]);
+  // The first line is the code preview of the open document.
+  assert.deepEqual(editor.byUri.get(ordersFile)[0].message.split('\n').slice(1), [
+    'Each call is slow.',
+    'Use `a.b(). Then` instead, e.g. a batch.',
+    'Keep it otherwise.',
+  ]);
+});

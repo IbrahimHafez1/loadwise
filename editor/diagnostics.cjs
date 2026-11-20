@@ -45,6 +45,40 @@ function sourceRange(vscode, site, document) {
   return word?.start.isEqual(range.start) ? word : range;
 }
 
+const sentenceEnds = '.!?';
+
+// Findings are written as short paragraphs; one sentence per line is easier to read in a tooltip. Code spans are
+// kept whole, and a break needs a capital, backtick or parenthesis after the space, so "e.g. x" stays together.
+function sentenceLines(text) {
+  const lines = [];
+  let start = 0;
+  let inCode = false;
+  for (let index = 0; index < text.length; index++) {
+    const character = text[index];
+    if (character === '`') inCode = !inCode;
+    else if (
+      !inCode &&
+      sentenceEnds.includes(character) &&
+      text[index + 1] === ' ' &&
+      /[A-Z`(]/.test(text[index + 2] ?? '')
+    ) {
+      lines.push(text.slice(start, index + 1));
+      start = index + 2;
+    }
+  }
+  lines.push(text.slice(start));
+  return lines.map((line) => line.trim()).filter(Boolean);
+}
+
+function readable(text) {
+  return text.split('\n').flatMap(sentenceLines).join('\n');
+}
+
+// Markdown joins single line breaks, so each sentence becomes its own paragraph.
+function appendParagraphs(content, text) {
+  content.appendText(readable(text).split('\n').join('\n\n'));
+}
+
 function dedent(text) {
   const lines = text.split('\n');
   const width = Math.min(...lines.filter((line) => line.trim()).map((line) => /^[ \t]*/.exec(line)[0].length));
@@ -64,7 +98,7 @@ function fixComparison(fix) {
     kind: 'source',
     before: shown.create ? '(new file ' + shown.file + ')' : dedent(shown.before),
     after: shown.create ? shown.after.trimEnd() : dedent(shown.after),
-    note: ((fix.note ?? '') + more + ' Press Ctrl+. (Cmd+. on macOS) to apply or dismiss it.').trim(),
+    note: ((fix.note ?? '') + more + ' Click Apply fix above the line, or press Ctrl+. (Cmd+. on macOS).').trim(),
   };
 }
 
@@ -170,7 +204,9 @@ function publish(vscode, collection, rootPath, source, findings, { isDismissed, 
       finding === reported ? flaggedLineText(filename, finding.line, document, fileLines) : finding.target;
     const dismissal = { file: filename, ruleId: finding.ruleId, lineText };
     if (isDismissed?.(dismissal)) continue;
-    const message = [finding.message, advice.get(finding.ruleId), finding.contextualReason].filter(Boolean).join('\n');
+    const message = readable(
+      [finding.message, advice.get(finding.ruleId), finding.contextualReason].filter(Boolean).join('\n'),
+    );
     const diagnostic = new vscode.Diagnostic(site.range, message, severityFor(vscode, finding.ruleId, severitySetting));
     const anchor = {
       line: finding.line,
@@ -464,7 +500,10 @@ function registerExamples(vscode, diagnosticsFor) {
           const { example, comparison } = examplesFor(document, issue, site);
           if (!comparison && !example) continue;
           const content = new vscode.MarkdownString();
-          if (!issue.range.contains(position)) content.appendText(site.message + '\n\n');
+          if (!issue.range.contains(position)) {
+            appendParagraphs(content, site.message);
+            content.appendText('\n\n');
+          }
           if (comparison) {
             content.appendText(
               (comparison.kind === 'source' ? 'Current code' : 'Flagged line') + ' (' + issue.code + ')',
@@ -483,7 +522,7 @@ function registerExamples(vscode, diagnosticsFor) {
             content.appendCodeblock(example.code, example.language);
           }
           const note = comparison ? comparison.note : example?.note;
-          if (note) content.appendText(note);
+          if (note) appendParagraphs(content, note);
           if (site.fix) {
             // Only these two commands may run from the hover links.
             content.isTrusted = { enabledCommands: ['backendCheckers.applyFix', 'backendCheckers.dismiss'] };
