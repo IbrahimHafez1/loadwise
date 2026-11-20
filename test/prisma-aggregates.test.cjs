@@ -92,3 +92,95 @@ test('select limited to distinct fields becomes groupBy', (context) => {
   );
   for (const unfixable of distinct.slice(1)) assert.equal(unfixable.fix, undefined);
 });
+
+test('a distinct page becomes groupBy ordered by the distinct field', (context) => {
+  const { findings: scanned } = scanWithFixes(context, {
+    ...files,
+    'package.json': '{}',
+    'main.ts': `${header}async function run(db: PrismaClient) {
+  await db.user.findMany({ select: { tenantId: true }, distinct: ['tenantId'], take: 10 });
+}`,
+  });
+  const [finding] = scanned.filter((candidate) => candidate.ruleId === 'prisma-distinct-in-memory');
+  assert.match(
+    onlyChange(finding).after,
+    /db\.user\.groupBy\(\{ by: \['tenantId'\], orderBy: \{ tenantId: 'asc' \}, take: 10 \}\)/,
+  );
+  assert.match(finding.fix.note, /ascending order/);
+});
+
+const relationSchema = `model User {
+  id    Int    @id
+  posts Post[]
+  notes Note[] @relation("authored")
+}
+model Post {
+  id       Int  @id
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id])
+}
+model Note {
+  id       Int  @id
+  writerId Int
+  writer   User @relation("authored", fields: [writerId], references: [id])
+}
+`;
+
+function relationCountFindings(context, body) {
+  const { findings: scanned } = scanWithFixes(context, {
+    ...files,
+    'package.json': '{}',
+    'prisma/schema.prisma': relationSchema,
+    'main.ts': `${header}async function run(db: PrismaClient, active: boolean) {\n${body}\n}`,
+  });
+  return scanned.filter((finding) => finding.ruleId === 'prisma-relation-count-in-list');
+}
+
+test('a paged relation _count becomes one groupBy over the page ids, merged back as _count', (context) => {
+  const [finding] = relationCountFindings(
+    context,
+    [
+      '  const rows = await db.user.findMany({',
+      '    take: 20,',
+      '    select: { id: true, _count: { select: { posts: { where: { published: active } } } } },',
+      '  });',
+      '  return rows;',
+    ].join('\n'),
+  );
+  assert.deepEqual(onlyChange(finding), {
+    before: ['  select: { id: true, _count: { select: { posts: { where: { published: active } } } } },', '});'].join(
+      '\n',
+    ),
+    after: [
+      '  select: { id: true },',
+      '}).then(async (pageRows) => {',
+      '  const pageIds = pageRows.map((row) => row.id);',
+      '  const postsGroups = await db.post.groupBy({ by: ["authorId"], where: { AND: [{ authorId: { in: pageIds } }, { published: active }] }, _count: { _all: true } });',
+      '  const postsCountById = new Map(postsGroups.map((group) => [group.authorId, group._count._all]));',
+      '  return pageRows.map((row) => ({ ...row, _count: { posts: postsCountById.get(row.id) ?? 0 } }));',
+      '});',
+    ].join('\n'),
+  });
+  assert.match(finding.fix.note, /separate query/);
+});
+
+test('named relations resolve their foreign key; batch transactions and missing schemas get no fix', (context) => {
+  const [named] = relationCountFindings(
+    context,
+    '  return db.user.findMany({ take: 5, include: { _count: { select: { notes: true } } } });',
+  );
+  assert.match(
+    named.fix.changes.at(-1).after,
+    /db\.note\.groupBy\(\{ by: \["writerId"\], where: \{ writerId: \{ in: pageIds \} \}/,
+  );
+  const [batched] = relationCountFindings(
+    context,
+    '  return (db as any).$transaction([db.user.findMany({ take: 5, include: { _count: { select: { posts: true } } } })]);',
+  );
+  assert.equal(batched.fix, undefined);
+  const [unknown] = relationCountFindings(
+    context,
+    '  return db.user.findMany({ take: 5, include: { _count: { select: { likes: true } } } });',
+  );
+  assert.equal(unknown.fix, undefined);
+});
