@@ -49,10 +49,11 @@ test('every known rule and every plan or trace rule has a compact example', () =
 });
 
 test('plan, trace, index and migration examples show a before and an after that parse', () => {
-  const { indexRules, migrationRules, databaseRules } = require('../../lib/performance/rule-ids.cjs');
+  const { indexRules, migrationRules, contractRules, databaseRules } = require('../../lib/performance/rule-ids.cjs');
   const standalone = [
     ...indexRules,
     ...migrationRules,
+    ...contractRules,
     ...databaseRules,
     ...planAndTraceRules,
     'redis-command-in-loop',
