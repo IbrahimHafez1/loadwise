@@ -147,3 +147,45 @@ export class Notes {
     [7],
   );
 });
+
+const hopHeader = `class Service {
+  all() { return prisma.user.findMany(); }
+  pagedBy(page: number) { return prisma.user.findMany({ where: { id: page } }); }
+  limited(take?: number) { return prisma.user.findMany(); }
+  fixed() { return prisma.user.findMany({ take: 10 }); }
+  counted() { return prisma.user.findMany().then((rows) => rows.length); }
+  inner() { return this.all(); }
+}
+declare const svc: Service;
+`;
+
+function hopFindings(body) {
+  const lines = (header + hopHeader).split('\n').length - 1;
+  return findings(hopHeader + body).map((finding) => ({ ...finding, line: finding.line - lines }));
+}
+
+test('follows one hop from a handler into the method whose result it returns', () => {
+  const found = hopFindings(`export class Users {
+  @Get('a') a() { return svc.all(); }
+  @Get('b') async b() { return await svc.all(); }
+  @Get('c') async c() { const rows = await svc.all(); response.json(rows); }
+}`);
+  assert.equal(found.length, 1);
+  assert.equal(found[0].line, -7, 'the finding sits on the query inside the service');
+  assert.match(found[0].message, /request handler a\(\)/);
+  assert.match(found[0].contextualReason, /service method a handler returns/);
+});
+
+test('one-hop findings stay quiet for paged methods, bounded queries and unreturned results', () => {
+  assert.deepEqual(
+    hopFindings(`export class Users {
+  @Get('a') a() { return svc.pagedBy(1); }
+  @Get('b') b() { return svc.limited(5); }
+  @Get('c') c() { return svc.fixed(); }
+  @Get('d') d() { return svc.counted(); }
+  @Get('e') async e() { await svc.all(); return 'ok'; }
+  @Get('f') f() { return svc.inner(); }
+}`),
+    [],
+  );
+});
