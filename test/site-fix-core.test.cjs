@@ -81,7 +81,8 @@ test('applying a created file writes it once and refuses to overwrite other cont
   const fix = { changes: [{ file: 'm.sql', line: 1, before: '', after: 'CREATE INDEX;\n', create: true }] };
   assert.deepEqual(applyFix(fix, access), { files: ['m.sql'] });
   assert.equal(files.get('m.sql'), 'CREATE INDEX;\n');
-  assert.equal(applyFix(fix, access).error, 'm.sql: already applied');
+  // A fix whose every file is already applied reports the bare message, so callers can treat it as done.
+  assert.equal(applyFix(fix, access).error, 'already applied');
   files.set('m.sql', 'other');
   assert.match(applyFix(fix, access).error, /already exists with different content/);
   assert.equal(files.get('m.sql'), 'other');

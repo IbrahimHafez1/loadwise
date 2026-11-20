@@ -19,7 +19,9 @@ const fallbackNote = /^Note: TypeScript 7 cannot load this project \(.*baseUrl.*
 
 function fixture(context) {
   const files = {
-    'flag.ts': 'export function check(keys: string[], ids: string[]) { return keys.map(key => ids.includes(key)); }',
+    // A parsed array has an unknown, possibly large size, so the includes() finding is enforced, not contextual.
+    'flag.ts':
+      'export function check(keys: string[], raw: string) { const ids: string[] = JSON.parse(raw); return keys.map(key => ids.includes(key)); }',
     'clean.ts': 'export const message = "ok";',
     'tsconfig.json': '{"compilerOptions":{"target":"ES2022","strict":true},"files":["flag.ts","clean.ts"]}',
     'base.json':
