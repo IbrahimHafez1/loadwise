@@ -185,6 +185,7 @@ export abstract class TenantBaseEntity {
 }
 @Entity('students')
 @Index(['schoolId', 'nationalId'], { unique: true, where: '"deleted_at" IS NULL' })
+@Index(['enrolledAt'], { where: '"deleted_at" IS NULL' })
 export class Student extends TenantBaseEntity {
   @Column({ name: 'national_id' })
   nationalId!: string;
@@ -194,6 +195,8 @@ export class Student extends TenantBaseEntity {
   guardianPhone!: string;
   @Column({ type: 'boolean' })
   active!: boolean;
+  @Column({ name: 'enrolled_at' })
+  enrolledAt!: Date;
 }
 `;
 
@@ -217,6 +220,7 @@ test('TypeORM: reports through Repository<T>, getRepository and EntityManager; m
     await this.students.find({ where: { active: true } });
     await this.students.find({ where: { gradeLevel: Raw('x') } });
     await this.students.find({ where: [{ gradeLevel: level }] });
+    await this.students.find({ where: { enrolledAt: MoreThan(new Date()) } });
   }
 }`);
   assert.deepEqual(
@@ -231,7 +235,7 @@ test('TypeORM: reports through Repository<T>, getRepository and EntityManager; m
   assert.equal(
     findings[0].message,
     '`Student.gradeLevel` is filtered here and no index starts with it, so this lookup scans the table as it grows. ' +
-      'Add `@Index()` to the `gradeLevel` property of entity `Student` (test/fixtures/schema/typeorm-app/entities.ts:12); ' +
+      'Add `@Index()` to the `gradeLevel` property of entity `Student` (test/fixtures/schema/typeorm-app/entities.ts:13); ' +
       'on a live database build it with `CREATE INDEX CONCURRENTLY "students_grade_level_idx" ON "students" ("grade_level");`. ' +
       'Table size is unknown; pass `--schema` to gate this rule by row count.',
   );
@@ -241,6 +245,7 @@ test('TypeORM: reports through Repository<T>, getRepository and EntityManager; m
     'the partial unique index is not named',
   );
   // Line 11 filters `guardianPhone`, which only the partial index in src/migrations covers: silent.
+  // Line 15 filters `enrolledAt`, led only by a partial index whose predicate is not checked: silent.
 });
 
 const sequelizeModels = `import { Table, Column, Model, DataType, PrimaryKey, Index } from 'sequelize-typescript';
