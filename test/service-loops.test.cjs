@@ -122,7 +122,6 @@ test('skips bounded loops, batches, transactions, failure paths and calls withou
         for (const id of selectIds()) await this.content.approve(id);
         for (const channel of Object.values(Channel)) await this.content.approve(channel);
         for (const id of ids) await this.publishing.approveAll([id]);
-        for (const id of ids) await this.importer.importRow(id);
         for (const id of ids) await this.publishing.build(id);
         for (const id of ids) await this.publishing.tryPublish(id);
         for (const id of ids) await this.local(id);
@@ -133,4 +132,111 @@ test('skips bounded loops, batches, transactions, failure paths and calls withou
       }
     }`;
   assert.deepEqual(findingsFor(source), []);
+});
+
+const extraPackages = {
+  ...packages,
+  'node_modules/@prisma/client/index.d.ts': `export declare class PrismaClient {
+      $executeRaw(query: TemplateStringsArray, ...values: unknown[]): Promise<number>;
+    }`,
+};
+const extraServices = `import { Repository, DataSource } from 'typeorm';
+  import { PrismaClient } from '@prisma/client';
+  export class CacheLayer {
+    async getOrFetch<T>(key: string, load: () => Promise<T>): Promise<T> { return load(); }
+  }
+  export class Reader {
+    constructor(private items: Repository<{ id: string }>, private cache: CacheLayer, private db: DataSource,
+      private prisma: PrismaClient) {}
+    async lookup(id: string) { return this.items.findOne({ where: { id } }); }
+    read(id: string) { return this.cache.getOrFetch(id, () => this.lookup(id)); }
+    async approveWhere(filter: { in: string[] }) { await this.items.findOne({ where: { id: filter } }); }
+    async importOne(id: string, warnings: string[]) {
+      const row = await this.items.findOne({ where: { id } });
+      if (!row) this.warn(id, warnings);
+    }
+    private warn(id: string, warnings: string[]) { warnings.push(id); }
+    async importRow(id: string) {
+      await this.items.findOne({ where: { id } });
+      await this.db.transaction(async () => this.items.save({ id }));
+    }
+    async bump(id: string) { await this.prisma.$executeRaw\`UPDATE item SET hits = hits + 1 WHERE id = \${id}\`; }
+    async longFlow(id: string) {
+      const first = id.trim();
+      const second = first.toLowerCase();
+      const third = second.toUpperCase();
+      const fourth = third.length;
+      await this.items.findOne({ where: { id: String(fourth) } });
+      await this.importRow(id);
+    }
+  }`;
+
+function extraFindings(source) {
+  return lint(source, { ...extraPackages, 'extra.ts': extraServices }).filter((finding) => finding.ruleId === RULE_ID);
+}
+
+test('skips memoised, cached, failure-only, small constructed and key-set calls', () => {
+  const source = `import { Reader } from './extra.js';
+    declare const ids: string[], first: string, second: string | undefined;
+    declare const groups: { ids: string[] }[];
+    const BASE = ['a', 'b'] as const;
+    function picked() { return ['x', ...BASE.filter(Boolean)]; }
+    class Runner {
+      constructor(private reader: Reader) {}
+      private async rollback(created: string[]) {
+        for (const id of created) await this.reader.lookup(id);
+      }
+      async compose() {
+        try { return await this.reader.lookup('new'); } catch (error) { await this.rollback(ids); throw error; }
+      }
+      async run() {
+        for (const id of picked()) await this.reader.lookup(id);
+        for (const id of ids.slice(0, 2)) await this.reader.lookup(id);
+        const pair = [first, second].filter((id): id is string => !!id);
+        const loaded = await Promise.all(pair.map(async (id) => id));
+        for (const id of loaded) await this.reader.lookup(id);
+        let fallback: object | null | undefined;
+        for (const id of ids) fallback ??= await this.reader.lookup(id);
+        const seen = new Map<string, object | null>();
+        for (const id of ids) {
+          let row = seen.get(id);
+          if (!row) {
+            row = await this.reader.lookup(id);
+            seen.set(id, row);
+          }
+        }
+        for (const id of ids) await this.reader.read(id);
+        for (const group of groups) await this.reader.approveWhere({ in: group.ids });
+        return fallback;
+      }
+    }`;
+  assert.deepEqual(extraFindings(source), []);
+});
+
+test('reports output-list arguments, transaction callees and raw templates, and words partial counts as a floor', () => {
+  const source = `import { Reader } from './extra.js';
+    declare const ids: string[];
+    class Runner {
+      constructor(private reader: Reader) {}
+      async run() {
+        const warnings: string[] = [];
+        for (const id of ids) await this.reader.importOne(id, warnings); // report
+        for (const id of ids) await this.reader.importRow(id); // report
+        for (const id of ids) await this.reader.bump(id); // report
+        for (const id of ids) await this.reader.longFlow(id); // report
+      }
+    }`;
+  const findings = extraFindings(source);
+  assert.deepEqual(
+    findings.map((finding) => finding.line),
+    reportedLines(source),
+  );
+  const [, importRow, bump, longFlow] = findings;
+  assert.match(
+    importRow.message,
+    /makes up to 3 database calls per item \(items\.findOne, db\.transaction, items\.save/,
+  );
+  assert.match(bump.message, /makes a database call per item \(prisma\.\$executeRaw/);
+  assert.match(longFlow.message, /makes at least one database call per item/);
+  assert.match(longFlow.message, /pays at least one round trip/);
 });
