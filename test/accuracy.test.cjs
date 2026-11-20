@@ -72,3 +72,71 @@ test('decorator arguments and static initializers run at class definition and ke
   const lazy = 'export class B { peer = A.name; method() { return A; } }';
   assert.equal(cycleFindings({ 'A.ts': a, 'B.ts': importer(lazy) }).length, 0);
 });
+
+const { createDuplicateIndex } = require('../lib/duplicates.cjs');
+
+const sharedBody = `{
+  const cleaned = input.trim();
+  if (!cleaned || cleaned.length > 20) return fallback;
+  const pieces = cleaned.split("-");
+  return pieces.map(piece => piece.toLowerCase()).join("_");
+}`;
+const declaration = (name) => `function ${name}(input: string, fallback: string) ${sharedBody}`;
+
+function duplicateFindings(files) {
+  const index = createDuplicateIndex();
+  for (const [file, source] of Object.entries(files)) {
+    index.add(ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true), file);
+  }
+  return index.findings();
+}
+
+test('test-local setup closures nested in test callbacks are not duplicate implementations', () => {
+  const nested = (name) => `describe('x', () => {\n${declaration(name)}\n});`;
+  assert.equal(duplicateFindings({ 'a.test.ts': nested('one'), 'b.test.ts': nested('two') }).length, 0);
+  // Top-level helpers shared between tests, and nested closures in production code, still report.
+  assert.equal(duplicateFindings({ 'a.test.ts': declaration('one'), 'b.test.ts': declaration('two') }).length, 1);
+  const production = (name) => `export function outer() {\n${declaration(name)}\n}`;
+  assert.equal(duplicateFindings({ 'a.ts': production('one'), 'b.ts': production('two') }).length, 1);
+});
+
+test('standalone sample, fixture and migration directories are not duplicate implementations', () => {
+  for (const directory of ['sample/app', 'examples/app', 'integration/app', 'src/migrations', 'test/fixtures']) {
+    const files = { [directory + '/a.ts']: declaration('one'), 'src/b.ts': declaration('two') };
+    assert.equal(duplicateFindings(files).length, 0, directory);
+    const both = { [directory + '/a.ts']: declaration('one'), [directory + '/b.ts']: declaration('two') };
+    assert.equal(duplicateFindings(both).length, 0, directory);
+  }
+  assert.equal(duplicateFindings({ 'src/a.ts': declaration('one'), 'src/b.ts': declaration('two') }).length, 1);
+});
+
+test('scanning on worker threads gives the same result and the same first error as a single thread', async () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { scan } = require('../lib/scan.cjs');
+  const policy = { exclude: [], boundaries: [], placement: [] };
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'maintainability-parallel-'));
+  try {
+    const duplicated = (name) => `export ${declaration(name)}`;
+    fs.writeFileSync(path.join(root, 'a.ts'), "import { b } from './b';\nexport const a = b;\n" + duplicated('one'));
+    fs.writeFileSync(path.join(root, 'b.ts'), "import { a } from './a';\nexport const b = a;\n" + duplicated('two'));
+    for (let index = 0; index < 40; index++)
+      fs.writeFileSync(path.join(root, `f${index}.ts`), `export const v${index} = ${index};\n`);
+    const single = await scan(root, policy, { parallelFrom: Infinity });
+    const threaded = await scan(root, policy, { parallelFrom: 1 });
+    assert.deepEqual(threaded, single);
+    assert.ok(single.findings.some((row) => row.ruleId === 'duplicate-implementation'));
+    assert.ok(single.findings.some((row) => row.ruleId === 'dependency-cycle'));
+    fs.writeFileSync(path.join(root, 'f30.ts'), 'export const = ;\n');
+    fs.writeFileSync(path.join(root, 'f10.ts'), 'export const = 1;\n');
+    const errors = [];
+    for (const parallelFrom of [Infinity, 1]) {
+      errors.push(await scan(root, policy, { parallelFrom }).then(String, String));
+    }
+    assert.match(errors[0], /f10\.ts:1:/);
+    assert.equal(errors[1], errors[0]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
