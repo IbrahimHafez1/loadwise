@@ -29,6 +29,14 @@ test('--fix --yes rewrites every fixable finding and the rescan comes back clean
   assert.deepEqual(JSON.parse(rescan.stdout).findings, []);
 });
 
+test('--fix --yes leaves findings below --min-impact unchanged', (context) => {
+  const run = project(context);
+  const skipped = run(['slow.ts', '--fix', '--yes', '--min-impact', 'high', '--engine', 'js']);
+  assert.equal(skipped.status, 0, skipped.stderr);
+  assert.doesNotMatch(skipped.stdout, /Applied [1-9]/);
+  assert.equal(JSON.parse(run(['slow.ts', '--json', '--engine', 'js']).stdout).findings.length, 3);
+});
+
 test('--fix without a terminal asks for --yes instead of changing files', (context) => {
   const run = project(context);
   const refused = run(['slow.ts', '--fix', '--engine', 'js']);
