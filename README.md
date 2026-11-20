@@ -555,6 +555,7 @@ It accepts the source-check flags of `loadwise perf`: `--policy`, `--json`, `--i
 | `pg-dynamic-query-text`    | Runtime fragments enter SQL text directly. Bind data as parameters and verify how any dynamic identifiers are chosen and quoted. A finding is a code-review prompt. |
 | `prisma-scope-unverified`  | A Prisma read or write on a model listed in `prismaScopes` does not prove the configured scope in its filter, projection or write data.                             |
 | `drizzle-scope-unverified` | A Drizzle query on a table listed in `drizzleScopes` does not prove the configured predicate, projection or write data.                                             |
+| `ssrf-request-url`         | An outgoing HTTP request whose URL or host comes from request data. A fixed origin with a request path, a host allowlist or an SSRF-filtering agent is quiet.       |
 
 These rules moved from the performance checker with the same ids, so existing `// loadwise-reviewed` comments and `--ignore` flags keep working; `loadwise perf --ignore` still accepts them.
 
