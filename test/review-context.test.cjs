@@ -136,6 +136,19 @@ test('test-directory context is relative to the owning package, independently of
 });
 
 const contextHelpers = require('./helpers.cjs');
+const pgDeclaration = `export class Pool { query(text: string, values?: unknown[]): Promise<{ rows: unknown[] }> }`;
+const prismaFiles = {
+  'node_modules/@prisma/client/index.d.ts': "export * from '.prisma/client';",
+  'node_modules/.prisma/client/index.d.ts':
+    'export interface UserDelegate { findMany(options?: object): Promise<{ id: number }[]> }\n' +
+    'export declare class PrismaClient { user: UserDelegate }',
+};
+const perItemSource = `import { Pool } from 'pg';
+  declare const pool: Pool; declare const ids: number[], column: string;
+  export async function load() {
+    for (const id of ids) await pool.query('SELECT 1 WHERE id = $1', [id]);
+    await pool.query('SELECT ' + column + ' FROM t');
+  }`;
 
 function contextualReasons(fileName, source, files, ruleIds) {
   const { analyzeFile } = require('../lib/analyze.cjs');
@@ -146,6 +159,42 @@ function contextualReasons(fileName, source, files, ruleIds) {
       .map((finding) => [finding.ruleId, Boolean(finding.contextualReason)]),
   );
 }
+
+test('per-item query and dynamic SQL findings are contextual in tests, seeds and benchmarks only', () => {
+  const files = { 'node_modules/pg/index.d.ts': pgDeclaration };
+  const rules = ['pg-query-in-loop', 'pg-dynamic-query-text'];
+  for (const [fileName, contextual] of [
+    ['service.ts', false],
+    ['src/testing/service.ts', false],
+    ['tests/helpers/db.ts', true],
+    ['__tests__/db.ts', true],
+    ['users.spec.ts', true],
+    ['seeder/users.ts', true],
+    ['db/rich-data/users.ts', true],
+    ['users.seed.ts', true],
+    ['bench/users.ts', true],
+    ['users.benchmark.ts', true],
+  ]) {
+    assert.deepEqual(
+      contextualReasons(fileName, perItemSource, files, rules),
+      rules.map((ruleId) => [ruleId, contextual]),
+      fileName,
+    );
+  }
+});
+
+test('Prisma per-item queries are contextual in seed sources', () => {
+  const source = `import { PrismaClient } from '@prisma/client';
+    declare const prisma: PrismaClient, ids: number[];
+    export async function seed() { for (const id of ids) await prisma.user.findMany({ where: { id } }); }`;
+  const files = prismaFiles;
+  assert.deepEqual(contextualReasons('seeder/run.ts', source, files, ['prisma-query-in-loop']), [
+    ['prisma-query-in-loop', true],
+  ]);
+  assert.deepEqual(contextualReasons('service.ts', source, files, ['prisma-query-in-loop']), [
+    ['prisma-query-in-loop', false],
+  ]);
+});
 
 test('seed and test helper files make blocking calls contextual even inside a loop', () => {
   const source = `import { readFileSync } from 'node:fs';
