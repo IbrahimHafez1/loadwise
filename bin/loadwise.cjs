@@ -2,7 +2,7 @@
 'use strict';
 
 const usage = `Usage:
-  loadwise [check] [directory] [--only perf,maint,sec | --skip perf,maint,sec] [--json] [--include-contextual] [--staged | --changed-since git-ref] [--fail-on contract|all]
+  loadwise [check] [directory] [--only perf,maint,sec | --skip perf,maint,sec] [--json] [--include-contextual] [--staged | --changed-since git-ref] [--fail-on contract|all] [--online]
   loadwise perf [args...]
   loadwise maint [args...]
   loadwise sec [args...]
@@ -12,6 +12,7 @@ check, the default command, runs every checker (perf: performance, maint: mainta
 --only runs just the listed checkers and --skip runs all but them; both take a comma-separated list, and they cannot be combined.
 The performance and security checkers use the directory's tsconfig.json or jsconfig.json; without one they are skipped with a note.
 --json prints one key per selected checker, { "performance": report, "maintainability": report, "security": report }; a skipped or failed checker's report is null.
+--online adds the security checker's dependency vulnerability check, which sends package names and versions from the lockfile to the OSV database; without it the check is skipped with a note.
 --include-contextual, --staged, --changed-since and --fail-on apply to every selected checker; without --fail-on each keeps its own default.
 The performance and security checkers share one type-check of the project when both are selected.
 check never changes files: apply fixes with the printed \`loadwise perf --fix --only id\`, \`loadwise maint --fix --only id\` and \`loadwise sec --fix --only id\` commands.
