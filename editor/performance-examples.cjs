@@ -187,6 +187,12 @@ const standaloneExamples = {
     code: 'const hash = await bcrypt.hash(password, 10);\nconst matches = await bcrypt.compare(password, hash);',
     note: 'The synchronous hash blocks the event loop for every other request. Keep the same cost factor.',
   },
+  'serial-awaits-in-literal': {
+    language: 'javascript',
+    before: 'const [posts, accounts] = [await syncPosts(), await syncAccounts()];',
+    code: 'const [posts, accounts] = await Promise.all([syncPosts(), syncAccounts()]);',
+    note: 'Awaits inside a literal still run one after the other, so the wait is the sum. Keep them serial if one depends on the other.',
+  },
   'mongo-collection-scan': collectionScan,
   'mongo-collection-scan-observed': collectionScan,
   'mongo-disk-sort': {
