@@ -615,3 +615,46 @@ test('high-branch-complexity returns the one outer let a moved block updates', (
   fs.writeFileSync(path.join(directory, 'settle.cjs'), text);
   assert.equal(ruleFindings(directory, 'high-branch-complexity').length, 0);
 });
+
+test('no TypeScript extraction when a parameter would be typed {} or unknown', () => {
+  const { ts } = require('../lib/site-fixes/helpers.cjs');
+  const { extractionEdit, ownStatements } = require('../lib/site-fixes/extract-block.cjs');
+  const variants = {
+    'empty.ts': [
+      "import { Doc } from './doc';",
+      'export function collect(doc: Doc, out: string[]) {',
+      '  for (const response of Object.values(doc.responses ?? {})) {',
+      "    if (!response || '$ref' in response) continue;",
+      '    for (const media of Object.values(response.content ?? {})) {',
+      '      out.push(media.example);',
+      '      out.push(media.schema);',
+      '      out.push(media.other);',
+      '    }',
+      '  }',
+      '}',
+    ],
+    'caught.ts': [
+      "import { z } from 'zod';",
+      'export function collect(input: string, out: string[]) {',
+      '  try {',
+      '    JSON.parse(input);',
+      '  } catch (error) {',
+      '    if (error instanceof z.ZodError) {',
+      '      for (const issue of error.issues) {',
+      '        out.push(issue.message);',
+      '        out.push(issue.path);',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+    ],
+  };
+  for (const [file, lines] of Object.entries(variants)) {
+    const sourceFile = ts.createSourceFile(file, lines.join('\n'), ts.ScriptTarget.Latest, true);
+    const fn = sourceFile.statements.find(ts.isFunctionDeclaration);
+    for (const statement of ownStatements(fn)) {
+      const extraction = extractionEdit(statement, fn, sourceFile);
+      assert.doesNotMatch(extraction?.edits[1].text ?? '', /\((response|error|media): (\{\}|unknown)/, file);
+    }
+  }
+});
