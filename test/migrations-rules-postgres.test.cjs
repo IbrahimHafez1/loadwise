@@ -164,6 +164,34 @@ describe('Postgres column rules', () => {
     assert.deepEqual(rules(checkSql(sql)), []);
   });
 
+  test('a table emptied by TRUNCATE earlier in the transaction has no rows to rewrite (k12-style)', () => {
+    const typeorm = `export class RemoveCoursesUnitsDirect1700000000062 {
+  async up(queryRunner) {
+    await queryRunner.query(\`TRUNCATE TABLE "lesson_progress", "course_units" CASCADE\`);
+    await queryRunner.query(\`ALTER TABLE "course_units" ADD COLUMN "subject_id" uuid NOT NULL\`);
+    await queryRunner.query(\`CREATE INDEX "unit_subject_idx" ON "course_units" ("subject_id")\`);
+    await queryRunner.query(\`ALTER TABLE "lessons" ADD COLUMN "course_id" uuid NOT NULL\`);
+  }
+}`;
+    const findings = checkCode(typeorm);
+    assert.deepEqual(
+      findings.map((finding) => [finding.ruleId, finding.line]),
+      [
+        ['migration-missing-lock-timeout', 3],
+        ['migration-not-null-without-default', 6],
+      ],
+    );
+    assert.match(findings[0].message, /^`TRUNCATE TABLE "lesson_progress", "course_units" CASCADE` waits for a lock/);
+    // Outside a transaction rows can arrive between statements, so the table is not treated as empty.
+    const autocommit = checkSql('TRUNCATE orders;\nALTER TABLE orders ADD COLUMN state text NOT NULL;');
+    assert.ok(rules(autocommit).includes('migration-not-null-without-default'));
+    assert.ok(
+      rules(checkSql('BEGIN;\nTRUNCATE orders;\nALTER TABLE orders DROP COLUMN legacy;\nCOMMIT;')).includes(
+        'migration-breaking-drop',
+      ),
+    );
+  });
+
   test('builder columns use framework wording; Sequelize client-side UUIDV4 is not a database default', () => {
     const findings = checkCode(
       "module.exports = { async up(queryInterface, Sequelize) { await queryInterface.sequelize.query(\"SET lock_timeout = '5s'\"); await queryInterface.addColumn('Reports', 'uid', { type: Sequelize.UUID, allowNull: false, defaultValue: Sequelize.UUIDV4 }); } };",
