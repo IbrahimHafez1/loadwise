@@ -226,16 +226,14 @@ const standaloneExamples = {
   },
   'count-then-page-serial': {
     language: 'javascript',
-    before: 'const total = await qb.getCount();
-const rows = await qb.skip(offset).take(limit).getMany();',
+    before: 'const total = await qb.getCount();\nconst rows = await qb.skip(offset).take(limit).getMany();',
     code: 'const [rows, total] = await qb.skip(offset).take(limit).getManyAndCount();',
     note: 'The page waits for the count, so one list costs two round trips. Prisma has no combined call; run both with Promise.all.',
   },
   'redis-keys-command': {
     language: 'javascript',
     before: "const keys = await redis.keys('session:*');",
-    code: "const keys = [];
-for await (const batch of redis.scanStream({ match: 'session:*', count: 100 })) keys.push(...batch);",
+    code: "const keys = [];\nfor await (const batch of redis.scanStream({ match: 'session:*', count: 100 })) keys.push(...batch);",
     note: 'KEYS blocks every Redis client while it walks the whole keyspace; SCAN works in small steps.',
   },
   'mongo-collection-scan': collectionScan,
