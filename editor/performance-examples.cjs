@@ -193,6 +193,13 @@ const standaloneExamples = {
     code: 'const [posts, accounts] = await Promise.all([syncPosts(), syncAccounts()]);',
     note: 'Awaits inside a literal still run one after the other, so the wait is the sum. Keep them serial if one depends on the other.',
   },
+  'typeorm-load-then-save': {
+    language: 'javascript',
+    before:
+      'const user = await users.findOneBy({ id });\nuser.lastLoginAt = new Date();\nuser.tokenVersion += 1;\nawait users.save(user);',
+    code: "await users.increment({ id }, 'tokenVersion', 1);\nawait users.update({ id }, { lastLoginAt: new Date() });",
+    note: 'save() of a loaded entity costs a SELECT, an UPDATE and a transaction. update() skips entity listeners.',
+  },
   'mongo-collection-scan': collectionScan,
   'mongo-collection-scan-observed': collectionScan,
   'mongo-disk-sort': {
