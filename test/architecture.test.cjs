@@ -191,12 +191,14 @@ test('only fully evidenced Nest forwardRef cycles receive context', () => {
     'class WithMetadata { @Inject() field!: B }',
     "import './C';",
   ]) {
-    const { findings } = fixture({ ...modules, 'A.ts': modules['A.ts'] + '\n' + extra, 'C.ts': "import './A';" });
-    assert.equal(findings.length, 1);
+    const { findings } = fixture({ ...modules, 'A.ts': modules['A.ts'] + '\n' + extra, 'C.ts': "import './A';" }, [], {
+      emitDecoratorMetadata: true,
+    });
+    assert.equal(findings.length, 1, extra);
     assert.equal(findings[0].contextualReason, undefined, extra);
   }
   const lookalike = modules['B.ts'].replace('@nestjs/common', 'other-library');
-  assert.equal(fixture({ ...modules, 'B.ts': lookalike }).findings[0].contextualReason, undefined);
+  assert.ok(fixture({ ...modules, 'B.ts': lookalike }).findings.every((row) => row.contextualReason === undefined));
   const edges = [
     { from: 'A.ts', to: 'B.ts', line: 2, column: 1 },
     { from: 'B.ts', to: 'A.ts', line: 2, column: 1 },
