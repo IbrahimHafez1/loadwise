@@ -198,3 +198,24 @@ async function purge(redis: Redis, ids: string[]) {
     [3],
   );
 });
+
+test('redis ignores del of a key batch flushed from a scan loop but reports per-key deletes', () => {
+  const findings = findRedisFindings(`import { Redis } from 'ioredis';
+declare function scanKeys(): AsyncIterable<string>;
+async function purge(redis: Redis, ids: string[]) {
+  let keys: string[] = [];
+  for await (const key of scanKeys()) {
+    keys.push(key);
+    if (keys.length === 500) {
+      await redis.del(keys);
+      keys = [];
+    }
+  }
+  if (keys.length) await redis.del(keys);
+  for (const id of ids) await redis.del(id);
+}`);
+  assert.deepEqual(
+    findings.map((finding) => finding.line),
+    [13],
+  );
+});
