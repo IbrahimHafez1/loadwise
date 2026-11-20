@@ -185,10 +185,13 @@ test('a full PostgreSQL run reports catalog and HypoPG-validated plan findings w
   const snapshotFile = path.join(directory, 'snapshot.json');
   const { code, stdout, stderr, adapter } = await runDb(['--schema-snapshot', snapshotFile]);
   assert.equal(code, 1, stderr);
-  assert.match(stdout, /^db:public\.orders \[db-unindexed-foreign-key\] Foreign key `orders_customer_id_fkey`/m);
   assert.match(
     stdout,
-    /^db:public\.orders \[db-missing-index\] `SELECT \* FROM orders WHERE customer_id = \$1` \(1,204 calls, mean 41 ms measured by pg_stat_statements\)/m,
+    /^db:public\.orders \[db-unindexed-foreign-key #[0-9a-f]{12}\] Foreign key `orders_customer_id_fkey`/m,
+  );
+  assert.match(
+    stdout,
+    /^db:public\.orders \[db-missing-index #[0-9a-f]{12}\] `SELECT \* FROM orders WHERE customer_id = \$1` \(1,204 calls, mean 41 ms measured by pg_stat_statements\)/m,
   );
   assert.match(
     stdout,
@@ -371,7 +374,7 @@ test('--measure times the query before and after and reports a measured Impact',
   assert.match(result.stderr, /SHARE lock on `public\.orders` that blocks writes/);
   assert.match(
     result.stdout,
-    new RegExp(`^${queries.replace(/[\\.]/g, '\\$&')}:2:1 \\[db-missing-index\\] This query plans`, 'm'),
+    new RegExp(`^${queries.replace(/[\\.]/g, '\\$&')}:2:1 \\[db-missing-index #[0-9a-f]{12}\\] This query plans`, 'm'),
   );
   assert.match(
     result.stdout,

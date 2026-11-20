@@ -44,7 +44,10 @@ describe('backend-perf-check migrations', () => {
     const root = temporaryProject(context);
     const { code, stdout, stderr } = migrations(root);
     assert.equal(code, 1);
-    assert.match(stdout, /^prisma\/migrations\/20240101_init\/migration\.sql:2:\d+ \[migration-breaking-drop\] /m);
+    assert.match(
+      stdout,
+      /^prisma\/migrations\/20240101_init\/migration\.sql:2:\d+ \[migration-breaking-drop #[0-9a-f]{12}\] /m,
+    );
     assert.match(stdout, /1 migration file\(s\) checked, 1 finding\(s\)\./);
     assert.equal(stderr.trim().split('\n').length, 1);
     assert.match(
