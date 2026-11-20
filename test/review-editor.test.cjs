@@ -180,7 +180,7 @@ test('editor watch aborts the stale scan child on change and runs one follow-up 
   let refresh;
   const originalLoad = Module._load;
   Module._load = function (request, ...rest) {
-    if (request === 'chokidar') return { watch: () => watcher };
+    if (request === './recursive-watch.cjs') return { watchTree: () => watcher };
     if (request === './editor-signal.cjs') {
       return { listenForEditorRefresh: (_root, callback) => ((refresh = callback), { close() {} }) };
     }

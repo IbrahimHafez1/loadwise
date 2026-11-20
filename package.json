@@ -59,7 +59,6 @@
     "bench:traces": "node bench/traces.cjs"
   },
   "dependencies": {
-    "chokidar": "4.0.3",
     "libpg-query": "18.2.2",
     "typescript": "6.0.3"
   },

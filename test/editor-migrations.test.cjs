@@ -27,13 +27,13 @@ function migrationProject(context) {
   return root;
 }
 
-// Runs the real editor-watch worker against a fake chokidar watcher and resolves with every logged line of one scan.
+// Runs the real editor-watch worker against a fake file watcher and resolves with every logged line of one scan.
 async function scanAfterSave(context, root, savedFile) {
   const watcher = new EventEmitter();
   watcher.close = async () => {};
   const originalLoad = Module._load;
   Module._load = function (request, ...rest) {
-    if (request === 'chokidar') return { watch: () => watcher };
+    if (request === './recursive-watch.cjs') return { watchTree: () => watcher };
     if (request === './editor-signal.cjs') return { listenForEditorRefresh: () => ({ close() {} }) };
     return originalLoad.call(this, request, ...rest);
   };

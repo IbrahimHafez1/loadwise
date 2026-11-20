@@ -49,14 +49,12 @@ def runtime_files(package, relative):
         return relative in {"LICENSE", "wasm/index.cjs", "wasm/libpg-query.js", "wasm/libpg-query.wasm"}
     if package == "@pgsql/types":
         return relative in {"LICENSE", "index.js", "enums.js", "types.js"}
-    if package in {"chokidar", "readdirp"}:
-        return relative in {"LICENSE", "handler.js", "index.js", "esm/package.json", "esm/index.js", "esm/handler.js"}
     return relative == ("ast-grep.exe" if "-win32-" in package else "ast-grep")
 
 
 def stage_runtime(downloads, stage, lock, other_lock):
     variants = lock[f"node_modules/{AST_GREP}"]["optionalDependencies"]
-    packages = ["typescript", "detect-libc", "chokidar", "readdirp", "libpg-query", "@pgsql/types", AST_GREP, *sorted(variants)]
+    packages = ["typescript", "detect-libc", "libpg-query", "@pgsql/types", AST_GREP, *sorted(variants)]
     urls = []
     for name in packages:
         entry = lock[f"node_modules/{name}"]
