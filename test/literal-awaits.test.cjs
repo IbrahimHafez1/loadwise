@@ -62,3 +62,62 @@ test('object fix is withheld when the return is conditional', (context) => {
   assert.ok(finding);
   assert.equal(finding.fix, undefined);
 });
+
+function fixFor(context, body) {
+  const { findings: scanned } = scanWithFixes(context, {
+    'a.ts': `${header}declare function plain(): number;\ndeclare const shared: number;\nexport async function run(flag: boolean) {\n${body}\n}`,
+  });
+  return scanned.find((entry) => entry.ruleId === rule);
+}
+
+test('mixed object keeps plain values in place and hoists only the awaits', (context) => {
+  const finding = fixFor(context, '  return { x: await a(), shared, y: await b(), label: `n${shared}` };');
+  const { after } = onlyChange(finding);
+  assert.match(after, /const \[xValue, yValue\] = await Promise\.all\(\[a\(\), b\(\)\]\);/);
+  assert.match(after, /return \{ x: xValue, shared, y: yValue, label: `n\$\{shared\}` \};/);
+  assert.match(finding.fix.note, /Promise\.all starts/);
+});
+
+test('a call between the awaits is kept in the literal and flagged for review', (context) => {
+  const finding = fixFor(context, '  return { x: await a(), mid: plain(), y: await b() };');
+  assert.match(onlyChange(finding).after, /mid: plain\(\)/);
+  assert.match(finding.fix.note, /mid/);
+});
+
+test('an await at the head of a member chain is hoisted too', (context) => {
+  const finding = fixFor(context, '  return { x: await a(), y: (await b()).toFixed(), z: await a() };');
+  const { after } = onlyChange(finding);
+  assert.match(after, /const \[xValue, yResult, zValue\] = await Promise\.all\(\[a\(\), b\(\), a\(\)\]\);/);
+  assert.match(after, /y: yResult\.toFixed\(\)/);
+});
+
+test('hoisting is withheld for conditional awaits and for effects before the literal in the statement', (context) => {
+  assert.equal(fixFor(context, '  return { x: await a(), z: await b(), y: flag ? await b() : 0 };').fix, undefined);
+  assert.equal(fixFor(context, '  return [plain(), { x: await a(), y: await b() }];').fix, undefined);
+  assert.equal(fixFor(context, '  return flag && { x: await a(), y: await b() };').fix, undefined);
+});
+
+test('a concise arrow body becomes a block that hoists the awaits', (context) => {
+  const finding = fixFor(
+    context,
+    '  const build = async () => ({ x: await a(), tag: shared, y: await b() });\n  return build;',
+  );
+  const { after } = onlyChange(finding);
+  assert.match(
+    after,
+    /=> \{\n\s+const \[xValue, yValue\] = await Promise\.all\(\[a\(\), b\(\)\]\);\n\s+return \{ x: xValue, tag: shared, y: yValue \};\n\s*\};/,
+  );
+});
+
+test('an object nested in a call argument hoists above the statement', (context) => {
+  const finding = fixFor(
+    context,
+    '  sink(label({ x: await a(), y: await b() }));\n  function label(value: object) { return value; }\n  function sink(value: object) {}',
+  );
+  assert.match(onlyChange(finding).after, /const \[xValue, yValue\] = await Promise\.all/);
+});
+
+test('the serial twin of a Promise.all branch gets a deliberate-serial note', (context) => {
+  const finding = fixFor(context, '  return flag ? [await a(), await b()] : await Promise.all([a(), b()]);');
+  assert.match(finding.fix.note, /other branch already uses Promise\.all/);
+});
