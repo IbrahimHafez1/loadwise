@@ -216,10 +216,10 @@ npx backend-perf-check agent init --mode auto   # auto mode: applies fixes witho
 Every finding has a stable `id`, shown as `[rule-id #id]` in text output. It hashes the rule, the file and the flagged line's text, so it survives edits above the finding. JSON findings also carry `fixable` and, when available, `fix`. To apply chosen fixes without a prompt:
 
 ```sh
-npx backend-perf-check --fix --only a1b2c3d4e5f6,0f9e8d7c6b5a --json   # prints { applied, failed }
+npx backend-perf-check --fix --only a1b2c3d4e5f6,0f9e8d7c6b5a --json   # prints { applied, alreadyApplied, failed }
 ```
 
-An unknown id, a finding with no fix, or a fix whose code changed since the scan is listed in `failed`, and the exit code is 2. To dismiss a false positive, add a review comment with a specific reason on the line above: `// backend-perf-reviewed <rule-id> -- <reason>`.
+An unknown id, a finding with no fix, or a fix whose code changed since the scan is listed in `failed`, and the exit code is 2. An id whose change an earlier id in the same run already made, such as a shared `Set`, is listed in `alreadyApplied` and is not a failure. To dismiss a false positive, add a review comment with a specific reason on the line above: `// backend-perf-reviewed <rule-id> -- <reason>`.
 
 ## Migration safety
 

@@ -21,7 +21,7 @@ const usage = `Usage:
 With no arguments, check tsconfig.json or jsconfig.json in the current directory.
 Source checks look for backend-perf.policy.json beside the selected config, or in the working directory for explicit files.
 --fix shows each available code fix and asks before applying it; --fix --yes applies every one without asking.
---fix --only id1,id2 applies exactly those findings' fixes without asking; with --json it prints { applied, failed }.
+--fix --only id1,id2 applies exactly those findings' fixes without asking; with --json it prints { applied, alreadyApplied, failed }.
 Every finding has a stable id (shown as #id); a failed --only id exits 2.
 agent init writes instructions for AI coding agents into AGENTS.md and imports them from CLAUDE.md.
 Source checks summarize contextual findings. --include-contextual includes their locations and review reasons.

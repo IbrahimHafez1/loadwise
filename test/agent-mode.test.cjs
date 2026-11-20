@@ -67,7 +67,7 @@ test('--fix --only applies just the listed fix without a terminal', (context) =>
   const [chosen, ...others] = scan();
   const result = run(['slow.ts', '--fix', '--only', chosen.id, '--json', '--engine', 'js']);
   assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(JSON.parse(result.stdout), { applied: [chosen.id], failed: [] });
+  assert.deepEqual(JSON.parse(result.stdout), { applied: [chosen.id], alreadyApplied: [], failed: [] });
   assert.deepEqual(
     scan().map(({ id }) => id),
     others.map(({ id }) => id),
@@ -81,8 +81,49 @@ test('--fix --only reports an unknown id and exits 2', (context) => {
   assert.equal(result.status, 2, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout), {
     applied: [chosen.id],
+    alreadyApplied: [],
     failed: [{ id: '000000000000', reason: 'unknown id' }],
   });
+});
+
+test('--fix --only treats a change made by an earlier id in the run as success', (context) => {
+  const root = tempRoot(context);
+  fs.writeFileSync(
+    path.join(root, 'shared.ts'),
+    [
+      'export function pick(orders: { a: number; b: number }[], request: { body: { allowed: number[] } }) {',
+      '  const allowed = request.body.allowed;',
+      '  return orders.filter(order => allowed.includes(order.a) || allowed.includes(order.b));',
+      '}',
+      '',
+    ].join('\n'),
+  );
+  const run = (args) =>
+    spawnSync(process.execPath, [bin, 'shared.ts', '--engine', 'js', ...args], { cwd: root, encoding: 'utf8' });
+  const ids = JSON.parse(run(['--json']).stdout).findings.map(({ id }) => id);
+  assert.deepEqual(ids, [ids[0], ids[0] + '-2']);
+  const result = run(['--fix', '--only', ids.join(','), '--json']);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), {
+    applied: [ids[0]],
+    alreadyApplied: [{ id: ids[1], status: 'already applied' }],
+    failed: [],
+  });
+});
+
+test('migration findings carry ids in JSON and text', (context) => {
+  const root = tempRoot(context);
+  const migration = path.join(root, 'migrations', '001_drop.sql');
+  fs.mkdirSync(path.dirname(migration));
+  fs.writeFileSync(migration, "SET lock_timeout = '5s';\nALTER TABLE orders DROP COLUMN legacy;\n");
+  const run = (args) =>
+    spawnSync(process.execPath, [bin, 'migrations', migration, '--dialect', 'postgres', ...args], {
+      cwd: root,
+      encoding: 'utf8',
+    });
+  const [finding] = JSON.parse(run(['--json']).stdout).findings;
+  assert.match(finding.id, /^[0-9a-f]{12}$/);
+  assert.ok(run([]).stdout.includes(`[${finding.ruleId} #${finding.id}]`));
 });
 
 function initAgent(root, ...args) {
