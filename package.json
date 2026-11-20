@@ -11,6 +11,13 @@
     "lib/",
     "polyglot/",
     "examples/",
+    "editor/README.md",
+    "editor/control-flow-comparison.cjs",
+    "editor/finding-comparison.cjs",
+    "editor/performance-examples.cjs",
+    "editor/perf-site-comparison.cjs",
+    "editor/maintainability-examples.cjs",
+    "editor/source-example.cjs",
     "PERFORMANCE.md"
   ],
   "engines": {
