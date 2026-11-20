@@ -1,0 +1,126 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const { spawnSync } = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const test = require('node:test');
+
+const cli = path.resolve(__dirname, '../../bin/loadwise.cjs');
+const slowSource = fs.readFileSync(path.resolve(__dirname, '../../examples/slow.ts'), 'utf8');
+const quietSource = 'export function double(value: number) {\n  return value * 2;\n}\n';
+const tsconfig = JSON.stringify({ compilerOptions: { strict: true }, include: ['*.ts'] });
+
+function project(context, files) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-check-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  for (const [name, text] of Object.entries(files)) fs.writeFileSync(path.join(root, name), text);
+  return root;
+}
+
+function loadwise(root, ...args) {
+  const run = spawnSync(process.execPath, [cli, ...args], { cwd: root, encoding: 'utf8', windowsHide: true });
+  return { code: run.status, stdout: run.stdout, stderr: run.stderr };
+}
+
+test('plain loadwise checks the current folder with both checkers in titled sections', (context) => {
+  const root = project(context, { 'tsconfig.json': tsconfig, 'a.ts': quietSource });
+  const run = loadwise(root);
+  assert.equal(run.code, 0, run.stderr);
+  assert.match(run.stdout, /^== Performance ==\n1 file\(s\) checked, 0 finding\(s\)\.\n== Maintainability ==\n/);
+  assert.deepEqual(loadwise(root, 'check', '.'), run);
+});
+
+test('a performance finding exits 1 and prints the per-checker fix command instead of fixing', (context) => {
+  const root = project(context, { 'tsconfig.json': tsconfig, 'a.ts': slowSource });
+  const run = loadwise(root, 'check');
+  assert.equal(run.code, 1, run.stderr);
+  assert.match(run.stdout, /Fix all: npx loadwise perf -p tsconfig\.json --fix --only [0-9a-f,]+\n/);
+  assert.equal(fs.readFileSync(path.join(root, 'a.ts'), 'utf8'), slowSource);
+});
+
+test('--json prints one key per checker', (context) => {
+  const root = project(context, { 'tsconfig.json': tsconfig, 'a.ts': slowSource });
+  const run = loadwise(root, '--json');
+  const report = JSON.parse(run.stdout);
+  assert.deepEqual(Object.keys(report), ['performance', 'maintainability']);
+  assert.equal(report.performance.findings.length, 3);
+  assert.deepEqual(report.maintainability.findings, []);
+});
+
+test('one checker with invalid configuration makes check exit 2 and its JSON report null', (context) => {
+  const root = project(context, {
+    'tsconfig.json': tsconfig,
+    'a.ts': slowSource,
+    'maintainability.config.json': '{broken',
+  });
+  const run = loadwise(root, '--json');
+  assert.equal(run.code, 2);
+  assert.match(run.stderr, /Invalid JSON in .*maintainability\.config\.json/);
+  const report = JSON.parse(run.stdout);
+  assert.equal(report.maintainability, null);
+  assert.equal(report.performance.findings.length, 3);
+});
+
+test('without a tsconfig or jsconfig the performance checker is skipped with a note', (context) => {
+  const root = project(context, { 'a.ts': quietSource });
+  const run = loadwise(root, '--json');
+  assert.equal(run.code, 0, run.stderr);
+  assert.match(run.stderr, /no tsconfig\.json or jsconfig\.json in .*; skipped the performance checker\./);
+  assert.equal(JSON.parse(run.stdout).performance, null);
+});
+
+test('--only and --skip select checkers, and --json keys follow the selection', (context) => {
+  const root = project(context, { 'tsconfig.json': tsconfig, 'a.ts': slowSource });
+  const keys = (...args) => Object.keys(JSON.parse(loadwise(root, '--json', ...args).stdout));
+  assert.deepEqual(keys('--only', 'maint'), ['maintainability']);
+  assert.deepEqual(keys('--only', 'maint,perf,maint'), ['performance', 'maintainability']);
+  assert.deepEqual(keys('--skip', 'perf'), ['maintainability']);
+  assert.deepEqual(keys('--skip', 'sec'), ['performance', 'maintainability']);
+  const maintOnly = loadwise(root, '--only', 'maint');
+  assert.equal(maintOnly.code, 0, 'the performance findings are not checked');
+  assert.doesNotMatch(maintOnly.stdout, /== Performance ==/);
+});
+
+test('invalid checker selections exit 2 and name the valid checkers', (context) => {
+  const root = project(context, { 'tsconfig.json': tsconfig, 'a.ts': quietSource });
+  const unknown = loadwise(root, '--only', 'perf,lint');
+  assert.equal(unknown.code, 2);
+  assert.match(unknown.stderr, /Unknown --only name "lint"; use perf, maint, sec\./);
+  const both = loadwise(root, '--only', 'perf', '--skip', 'maint');
+  assert.equal(both.code, 2);
+  assert.match(both.stderr, /Choose either --only or --skip\./);
+  assert.equal(loadwise(root, '--skip', 'perf,maint').code, 2);
+});
+
+test('security is reserved until it ships', (context) => {
+  const root = project(context, { 'tsconfig.json': tsconfig, 'a.ts': quietSource });
+  for (const args of [['sec'], ['--only', 'sec']]) {
+    const run = loadwise(root, ...args);
+    assert.equal(run.code, 2);
+    assert.equal(run.stderr, 'security checks are not available yet\n');
+    assert.equal(run.stdout, '');
+  }
+});
+
+test('perf and maint pass their arguments to the full checker CLIs', (context) => {
+  const root = project(context, { 'tsconfig.json': tsconfig, 'a.ts': slowSource });
+  const perf = loadwise(root, 'perf', '-p', 'tsconfig.json', '--json');
+  assert.equal(perf.code, 1, perf.stderr);
+  assert.deepEqual(
+    JSON.parse(perf.stdout).findings.map(({ ruleId }) => ruleId),
+    ['array-repeated-membership', 'array-repeated-find', 'reduce-copy-accumulator'],
+  );
+  assert.match(loadwise(root, 'perf', '--help').stdout, /loadwise perf /);
+  assert.match(loadwise(root, 'maint', '--help').stdout, /loadwise maint /);
+  assert.equal(loadwise(root, 'maint', '.').code, 0);
+});
+
+test('--help documents check, every checker command and the selection flags', () => {
+  const run = loadwise(os.tmpdir(), '--help');
+  assert.equal(run.code, 0);
+  for (const text of ['loadwise perf', 'loadwise maint', 'loadwise sec', 'loadwise agent init', '--only', '--skip']) {
+    assert.ok(run.stdout.includes(text), text);
+  }
+});
