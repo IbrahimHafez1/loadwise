@@ -285,3 +285,44 @@ test('the shipped schema lists exactly the registered rule ids and config keys',
     'rules',
   ]);
 });
+
+const duplicatedBody = `{
+  const cleaned = input.trim();
+  if (!cleaned || cleaned.length > 20) return fallback;
+  const pieces = cleaned.split("-");
+  return pieces.map(piece => piece.toLowerCase()).join("_");
+}`;
+const duplicatedFunction = (name) => `export function ${name}(input: string, fallback: string) ${duplicatedBody}\n`;
+
+test('maint leaves ignored files out of discovery, so they are not counted or compared', (context) => {
+  const files = {
+    'src/a.ts': duplicatedFunction('one'),
+    'copy/b.ts': duplicatedFunction('two'),
+    'src/c.ts': 'export const three = 3;\n',
+  };
+  const plain = JSON.parse(loadwise(project(context, files), 'maint', '.', '--json').stdout);
+  assert.ok(plain.findings.some((finding) => finding.ruleId === 'duplicate-implementation'));
+  const ignored = project(context, { ...files, 'loadwise.config.json': { ignore: ['copy/**'] } });
+  const report = JSON.parse(loadwise(ignored, 'maint', '.', '--json').stdout);
+  assert.deepEqual(report.findings, []);
+  assert.equal(report.scannedFiles, plain.scannedFiles - 1);
+});
+
+test('perf leaves ignored files out of the scan, so they are not counted', (context) => {
+  const base = { 'tsconfig.json': tsconfig, 'src/a.ts': slowSource, 'generated/b.ts': slowSource };
+  const plain = JSON.parse(perfRun(project(context, base)).stdout);
+  const ignored = project(context, { ...base, 'loadwise.config.json': { ignore: ['generated'] } });
+  const report = JSON.parse(perfRun(ignored).stdout);
+  assert.equal(report.scannedFiles, plain.scannedFiles - 1);
+  assert.equal(
+    report.findings.some((finding) => finding.file.startsWith('generated/')),
+    false,
+  );
+});
+
+test('a repeated key in the config exits 2, including inside the performance section', (context) => {
+  const text = '{"performance":{"parallelReads":[],"parallelReads":[]}}';
+  const run = loadwise(project(context, { 'loadwise.config.json': text }), 'check');
+  assert.equal(run.code, 2);
+  assert.match(run.stderr, /Duplicate query policy key/);
+});

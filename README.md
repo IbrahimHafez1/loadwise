@@ -67,7 +67,7 @@ One optional file, `loadwise.config.json`, sets the defaults for every checker. 
 ```
 
 - `checkers` is the default selection for `loadwise check`; `--only` and `--skip` override it.
-- `ignore` lists globs, relative to the config file, that no checker reports on. `*` matches within a folder, `**` any depth, `?` one character and `{a,b}` alternatives; naming a folder covers everything below it.
+- `ignore` lists globs, relative to the config file, that no checker scans or reports on; they leave the scan itself, so they cost no time and never count toward duplicates, cycles or architecture. `*` matches within a folder, `**` any depth, `?` one character and `{a,b}` alternatives; naming a folder covers everything below it.
 - `rules` sets each rule to `"off"` (its findings are dropped), `"warn"` (reported, but never changes the exit code) or `"error"` (reported findings always count, even under `--fail-on contract`). A hidden contextual finding is not reported, so it never counts. The object form `{ "level": "warn" }` is accepted for future rule options; no rule has options yet.
 - `overrides` apply `rules` to the files matching `files`; a later override wins over an earlier one and over `rules`.
 - `performance` holds what `backend-perf.policy.json` holds, and `maintainability` what the `maintainability.config.json` policy holds. The old files keep working when the config lacks the section; when both exist the config wins and a note says so. `--policy` and `--config policy.json` still beat the config.
