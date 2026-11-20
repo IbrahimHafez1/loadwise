@@ -261,5 +261,8 @@ test('reports blocking fs work in multer diskStorage callbacks and the helpers t
     findings.map((diagnostic) => diagnostic.line),
     [10, 11],
   );
-  assert.match(findings[0].message, /`uploadDirectory\(\)` runs fs\.mkdirSync inside the multer `destination` callback/);
+  assert.match(
+    findings[0].message,
+    /`uploadDirectory\(\)` runs fs\.mkdirSync inside the multer `destination` callback/,
+  );
 });
