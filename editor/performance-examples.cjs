@@ -250,6 +250,22 @@ const standaloneExamples = {
     code: "FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } })",
     note: 'Without a cap one large upload is buffered in full and can exhaust memory. Tune the limit per endpoint.',
   },
+  'external-call-in-transaction': {
+    language: 'javascript',
+    before: [
+      'await prisma.$transaction(async (tx) => {',
+      '  await tx.order.create({ data });',
+      '  await fetch(webhookUrl, { method: "POST" });',
+      '});',
+    ].join('\n'),
+    code: [
+      'await prisma.$transaction(async (tx) => {',
+      '  await tx.order.create({ data });',
+      '});',
+      'await fetch(webhookUrl, { method: "POST" }); // after commit',
+    ].join('\n'),
+    note: 'The transaction holds a pool connection and its locks for the whole network call. Make the call after commit, or before the transaction when the write needs its result.',
+  },
   'mongo-collection-scan': collectionScan,
   'mongo-collection-scan-observed': collectionScan,
   'mongo-disk-sort': {
