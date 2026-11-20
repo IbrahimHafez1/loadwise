@@ -105,7 +105,7 @@ export async function names(dir: string) {
   });
 });
 
-test('a named fs import becomes the fs/promises name with an import note', (context) => {
+test('a named fs import that only this call used is swapped for the fs/promises import', (context) => {
   const { change, note } = changeFor(
     context,
     fsRule,
@@ -114,8 +114,58 @@ export async function save(path: string, body: string) {
   writeFileSync(path, body);
 }`,
   );
-  assert.deepEqual(change, { before: 'writeFileSync(path, body);', after: 'await writeFile(path, body);' });
-  assert.equal(note, "Import `writeFile` from 'node:fs/promises'.");
+  assert.deepEqual(change, {
+    before: `import { writeFileSync } from 'fs';
+export async function save(path: string, body: string) {
+  writeFileSync(path, body);`,
+    after: `import { writeFile } from 'fs/promises';
+export async function save(path: string, body: string) {
+  await writeFile(path, body);`,
+  });
+  assert.equal(note, undefined);
+});
+
+test('a require binding keeps its other names and gains the promise require in the same style', (context) => {
+  const { findings } = scanWithFixes(context, {
+    'app.js': [
+      'const { existsSync, writeFileSync } = require("node:fs")',
+      '',
+      '',
+      '',
+      'exports.save = async function (path, body) {',
+      '  if (existsSync(path)) return',
+      '  writeFileSync(path, body)',
+      '}',
+      '',
+    ].join('\r\n'),
+  });
+  // existsSync has no promise twin, so only the writeFileSync call on line 7 is rewritten.
+  const finding = findings.find((candidate) => candidate.ruleId === fsRule && candidate.line === 7);
+  assert.ok(finding?.fix, 'rule should report a fix');
+  assert.deepEqual(
+    finding.fix.changes.map((change) => change.after),
+    [
+      'const { existsSync } = require("node:fs")\nconst { writeFile } = require("node:fs/promises")',
+      '  await writeFile(path, body)',
+    ],
+  );
+  assert.equal(finding.fix.note, undefined);
+});
+
+test('a named fs import still used elsewhere stays, and the fix keeps the import note', (context) => {
+  const { findings } = scanWithFixes(context, {
+    'app.ts': `import { writeFileSync } from 'fs';
+export const writer = writeFileSync;
+export async function save(path: string, body: string) {
+  writeFileSync(path, body);
+}`,
+  });
+  const finding = findings.find((candidate) => candidate.ruleId === fsRule);
+  assert.deepEqual(onlyChange(finding), {
+    before: 'writeFileSync(path, body);',
+    after: 'await writeFile(path, body);',
+  });
+  assert.equal(finding.fix.note, "Import `writeFile` from 'node:fs/promises'.");
 });
 
 test('an aliased named import still maps to the promise name', (context) => {
@@ -129,8 +179,12 @@ export async function read(path: string) {
 }`,
   );
   assert.deepEqual(change, {
-    before: "const text = load(path, 'utf8');",
-    after: "const text = await readFile(path, 'utf8');",
+    before: `import { readFileSync as load } from 'node:fs';
+export async function read(path: string) {
+  const text = load(path, 'utf8');`,
+    after: `import { readFile } from 'node:fs/promises';
+export async function read(path: string) {
+  const text = await readFile(path, 'utf8');`,
   });
 });
 
@@ -144,7 +198,15 @@ export async function read(path: string) {
   return readFileSync(path);
 }`,
   );
-  assert.deepEqual(change, { before: 'return readFileSync(path);', after: 'return await readFile(path);' });
+  assert.deepEqual(change, {
+    before: `import { readFileSync } from 'fs';
+import { readFile } from 'fs/promises';
+export async function read(path: string) {
+  return readFileSync(path);`,
+    after: `import { readFile } from 'fs/promises';
+export async function read(path: string) {
+  return await readFile(path);`,
+  });
   assert.equal(note, undefined);
 });
 
