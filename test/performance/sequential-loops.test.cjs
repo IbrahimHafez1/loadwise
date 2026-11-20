@@ -3,6 +3,9 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { lint } = require('./helpers.cjs');
+const { nativeAvailable, runOnNativeEngine } = require('./index-rules-fixtures.cjs');
+
+const onNativeEngine = process.env.PERF_CHECK_TEST_NATIVE === '1';
 
 const files = {
   'node_modules/typeorm/index.d.ts':
@@ -72,4 +75,24 @@ test('a per-item query inside the walking loop is reported while the walk step i
 }`),
     [5],
   );
+});
+
+test('a destructuring with a skipped element does not stop the loop analysis', () => {
+  const source = `${header}async function loadRow(id: number): Promise<[number, { id: number } | null, number]> {
+  return [id, await repo.findOneBy({ id }), id];
+}
+export async function run() {
+  for (let index = 0; index < ids.length; index++) {
+    const [first, , third] = await loadRow(ids[index]);
+    console.log(first, third);
+  }
+}`;
+  const findings = lint(source, files).filter((finding) => finding.ruleId === 'service-query-in-loop');
+  assert.equal(findings.length, 1);
+});
+
+test('the skipped-element case on the TypeScript 7 engine', { skip: onNativeEngine || !nativeAvailable() }, () => {
+  const result = runOnNativeEngine(__filename);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /# pass [1-9]d*/);
 });
