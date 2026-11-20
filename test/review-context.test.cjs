@@ -20,7 +20,7 @@ test('context requires bounded seed data, timed polling or an actual benchmark e
        for(let index=0;index<30;index++){if(keys.includes(id))return;await new Promise((done)=>setTimeout(done,500));}
        for(let index=0;index<30;index++){if(keys.includes(id))return;}
      }`,
-    'model-benchmark.ts': `declare const keys:number[], list:number[];
+    'model-benchmark.ts': `declare const input:string, list:number[]; const keys:number[]=JSON.parse(input);
        function benchmark() { const filtered=list.filter(id=>keys.includes(id)); process.exit(0); }
        void benchmark();
        export function runtime() { return list.filter(id=>keys.includes(id)); }`,
