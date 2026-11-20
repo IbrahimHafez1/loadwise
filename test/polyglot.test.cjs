@@ -126,6 +126,39 @@ test('polyglot accepts clean explicit input and reports missing or unsupported i
 });
 
 test(
+  'directory scans skip dependency and build trees while explicit files remain scannable',
+  nativeOnly,
+  async (context) => {
+    const source = samples['items.py'];
+    const directory = fixture(context, {
+      'application.py': source,
+      'generated.py': source,
+      '.gitignore': 'generated.py\n',
+    });
+    const excluded = ['node_modules', 'vendor', 'dist'].map((name) => path.join(directory, name));
+    const gitDirectory = path.join(directory, '.git');
+    for (const folder of excluded) {
+      fs.mkdirSync(folder);
+      fs.writeFileSync(path.join(folder, 'example.py'), source);
+    }
+    try {
+      const applicationFiles = (result) => result.findings.map(({ file }) => path.basename(file)).sort();
+      assert.deepEqual(applicationFiles(await checkPolyglot([directory])), ['application.py', 'generated.py']);
+      fs.mkdirSync(gitDirectory);
+      assert.deepEqual(applicationFiles(await checkPolyglot([directory])), ['application.py']);
+      const requested = path.join(excluded[0], 'example.py');
+      assert.deepEqual(applicationFiles(await checkPolyglot([directory, requested])), ['application.py', 'example.py']);
+    } finally {
+      if (fs.existsSync(gitDirectory)) fs.rmdirSync(gitDirectory);
+      for (const folder of excluded) {
+        fs.unlinkSync(path.join(folder, 'example.py'));
+        fs.rmdirSync(folder);
+      }
+    }
+  },
+);
+
+test(
   'polyglot excludes common shadowed or unrelated regex APIs and loop control expressions',
   nativeOnly,
   async (context) => {
