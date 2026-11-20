@@ -200,7 +200,26 @@ npx backend-perf-check -p tsconfig.json --fix         # asks y/n/a/q for each fi
 npx backend-perf-check -p tsconfig.json --fix --yes   # applies every fix without asking
 ```
 
-`--fix` answers are **y**es, **n**o, **a**ll remaining and **q**uit. Without a terminal it requires `--yes`. `--fix` cannot be combined with `--watch` or `--json`, and `--yes` is valid only with `--fix`. A fix applies only where the original lines still exist, so code that changed since the scan is refused and a change already in the file is reported as already applied. A fix never overwrites an existing file. Review the diff and run your tests afterwards.
+`--fix` answers are **y**es, **n**o, **a**ll remaining and **q**uit. Without a terminal it requires `--yes`. `--fix` cannot be combined with `--watch`, or with `--json` except with `--only`, and `--yes` is valid only with `--fix`. A fix applies only where the original lines still exist, so code that changed since the scan is refused and a change already in the file is reported as already applied. A fix never overwrites an existing file. Review the diff and run your tests afterwards.
+
+## Use with AI coding agents
+
+Any agent that runs shell commands and reads an instructions file (Claude Code, Cursor, Codex, Copilot agent, Windsurf, Gemini CLI) can drive the checker.
+
+```sh
+npx backend-perf-check agent init               # ask mode: the agent waits for approval before changing code
+npx backend-perf-check agent init --mode auto   # auto mode: applies fixes without behaviour caveats, asks about the rest
+```
+
+`agent init` writes a marked block into `AGENTS.md` at the project root and adds one `@AGENTS.md` line to `CLAUDE.md`, creating either file if needed. Rerunning it replaces the block and leaves your other text alone. The block tells the agent to run `--json` after backend changes, review each finding, and report a table of what it did. The mode is one line in the block, so you can edit it later.
+
+Every finding has a stable `id`, shown as `[rule-id #id]` in text output. It hashes the rule, the file and the flagged line's text, so it survives edits above the finding. JSON findings also carry `fixable` and, when available, `fix`. To apply chosen fixes without a prompt:
+
+```sh
+npx backend-perf-check --fix --only a1b2c3d4e5f6,0f9e8d7c6b5a --json   # prints { applied, failed }
+```
+
+An unknown id, a finding with no fix, or a fix whose code changed since the scan is listed in `failed`, and the exit code is 2. To dismiss a false positive, add a review comment with a specific reason on the line above: `// backend-perf-reviewed <rule-id> -- <reason>`.
 
 ## Migration safety
 

@@ -7,7 +7,7 @@ const { parseArgs } = require('node:util');
 const { knownRules } = require('../lib/rule-ids.cjs');
 
 const usage = `Usage:
-  backend-perf-check [-p tsconfig.json | file.ts file.js ...] [--engine auto|native|js] [--policy policy.json] [--schema snapshot.json] [--json] [--include-contextual] [--ignore rule-id] [--fail-on all|contract] [--fix [--yes]]
+  backend-perf-check [-p tsconfig.json | file.ts file.js ...] [--engine auto|native|js] [--policy policy.json] [--schema snapshot.json] [--json] [--include-contextual] [--ignore rule-id] [--fail-on all|contract] [--fix [--yes | --only id,...]]
   backend-perf-check --watch [-p tsconfig.json] [--policy policy.json] [--schema snapshot.json] [--include-contextual] [--ignore rule-id]
   backend-perf-check migrations [paths...] [--changed-since git-ref] [--baseline file] [--write-baseline] [--dialect postgres|mysql] [--json] [--include-contextual] [--ignore rule-id]
   backend-perf-check db [--url-env DATABASE_URL] [--env-file .env] [--engine postgres|mysql|mongo] [--schema-snapshot out.json] [--top 20] [--queries file.sql] [--analyze] [--measure --i-understand-this-locks-tables] [--runs 5] [--json] [--ignore rule-id]
@@ -16,10 +16,14 @@ const usage = `Usage:
   backend-perf-check polyglot <file-or-directory> ... [--json]
   backend-perf-check editor init
   backend-perf-check editor watch [-p tsconfig.json]
+  backend-perf-check agent init [--mode ask|auto]
 
 With no arguments, check tsconfig.json or jsconfig.json in the current directory.
 Source checks look for backend-perf.policy.json beside the selected config, or in the working directory for explicit files.
 --fix shows each available code fix and asks before applying it; --fix --yes applies every one without asking.
+--fix --only id1,id2 applies exactly those findings' fixes without asking; with --json it prints { applied, failed }.
+Every finding has a stable id (shown as #id); a failed --only id exits 2.
+agent init writes instructions for AI coding agents into AGENTS.md and imports them from CLAUDE.md.
 Source checks summarize contextual findings. --include-contextual includes their locations and review reasons.
 Source checks use the TypeScript 7 native compiler when it is installed and accepts the project, otherwise TypeScript 6.
 --engine native requires TypeScript 7 (--native is an alias). --engine js always uses TypeScript 6.
@@ -136,6 +140,7 @@ function checkCode(args, report = printResult) {
     schema: { type: 'string' },
     fix: { type: 'boolean' },
     yes: { type: 'boolean' },
+    only: { type: 'string', multiple: true, default: [] },
   });
   if (values.help) return showHelp();
   if (values.project && positionals.length) throw new Error('Choose either a project or explicit source files.');
@@ -147,7 +152,15 @@ function checkCode(args, report = printResult) {
   if (values.watch && engine === 'native')
     throw new Error('--native supports one-shot checks. Use --watch with the incremental JS compiler.');
   if (values.watch && positionals.length) throw new Error('--watch requires a project config.');
-  if (values.fix && (values.watch || values.json)) throw new Error('--fix cannot be combined with --watch or --json.');
+  const onlyIds = values.only
+    .flatMap((list) => list.split(','))
+    .map((id) => id.trim())
+    .filter(Boolean);
+  if (values.only.length && !values.fix) throw new Error('--only is only valid with --fix.');
+  if (values.only.length && !onlyIds.length) throw new Error('--only needs at least one finding id.');
+  if (values.fix && values.watch) throw new Error('--fix cannot be combined with --watch.');
+  if (values.fix && values.json && !onlyIds.length)
+    throw new Error('--fix prints a report with --json only with --only.');
   if (values.yes && !values.fix) throw new Error('--yes is only valid with --fix.');
   for (const ruleId of values.ignore) {
     if (!knownRules.has(ruleId)) throw new Error('Unknown source rule: ' + ruleId);
@@ -178,12 +191,26 @@ function checkCode(args, report = printResult) {
   );
   if (values.project) appendPrismaSchemaFindings(result, values.project);
   if (values.fix && report === printResult) {
+    assignFindingIds(result.findings, findingRoot(values.project));
+    // Named ids are explicit, so they reach contextual and ignored findings too.
+    if (onlyIds.length) {
+      return require('../lib/fix-cli.cjs').applyChosenFixes(result.findings, onlyIds, { json: values.json });
+    }
     selectFindings(result, values);
     return require('../lib/fix-cli.cjs').applyFixes(result.findings, { all: values.yes });
   }
   const code = report(result, values);
   if (report === printResult) require('../lib/notify-editor.cjs').notifyEditor(values.project ?? process.cwd());
   return code;
+}
+
+// Ids hash paths relative to the project root, so they match whichever folder the check runs from.
+function findingRoot(project) {
+  return require('../lib/schema/context.cjs').findProjectRoot(path.resolve(project ?? '.'));
+}
+
+function assignFindingIds(findings, root) {
+  require('../lib/finding-ids.cjs').assignFindingIds(findings, root);
 }
 
 // schema.prisma is not TypeScript, so its foreign-key findings come from the parsed schema after the scan.
@@ -238,20 +265,25 @@ function selectFindings(result, values) {
 }
 
 function printResult(result, values) {
+  // Ids are assigned before filtering, so collision suffixes do not depend on which findings are shown.
+  assignFindingIds(result.findings, findingRoot(values.project));
   selectFindings(result, values);
   const contractOnly = values['fail-on'] === 'contract';
   if (contractOnly) {
     result.contractFindingCount = result.findings.filter(({ ruleId }) => ruleId === 'pg-transaction-on-pool').length;
   }
-  const { attachExample, findingDetailLines } = require('../lib/finding-text.cjs');
+  const { attachExample, findingDetailLines, findingLabel } = require('../lib/finding-text.cjs');
   require('../lib/site-fix.cjs').attachSiteFixes(result.findings);
-  for (const finding of result.findings) attachExample(finding);
+  for (const finding of result.findings) {
+    finding.fixable = Boolean(finding.fix);
+    attachExample(finding);
+  }
   if (values.json) console.log(JSON.stringify(result, null, values.watch ? 0 : 2));
   else {
     for (const finding of result.findings) {
-      const { file, line, column, ruleId, message, contextualReason } = finding;
+      const { file, line, column, message, contextualReason } = finding;
       console.log(
-        `${file}:${line}:${column} [${ruleId}] ${message}${contextualReason ? ' (' + contextualReason + ')' : ''}`,
+        `${file}:${line}:${column} ${findingLabel(finding)} ${message}${contextualReason ? ' (' + contextualReason + ')' : ''}`,
       );
       for (const detail of findingDetailLines(finding)) console.log(detail);
     }
@@ -285,6 +317,16 @@ async function main(args) {
     require('../lib/editor-watch.cjs').watchEditor(process.cwd(), values.project, (inputs) =>
       checkCode(inputs, selectFindings),
     );
+    return 0;
+  }
+  if (args[0] === 'agent') {
+    if (args[1] !== 'init') throw new Error('Usage: backend-perf-check agent init [--mode ask|auto]');
+    const { values, positionals } = parseCommand(args.slice(2), { mode: { type: 'string', default: 'ask' } });
+    if (values.help) return showHelp();
+    if (positionals.length) throw new Error('agent init accepts only --mode ask|auto.');
+    const written = require('../lib/agent-init.cjs').initAgent(process.cwd(), values.mode);
+    for (const filename of written) console.log('Wrote ' + filename);
+    if (!written.length) console.log('AGENTS.md and CLAUDE.md are already up to date.');
     return 0;
   }
   // Lazy, so source scans and the editor watcher never load migration parsing or database drivers.
