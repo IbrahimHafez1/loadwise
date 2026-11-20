@@ -287,3 +287,25 @@ test('words Promise.all fan-out as concurrent and gives per-item transaction ste
   assert.match(byMarker.concurrent.message, /`Promise\.all` starts every item at once, so the waits overlap/);
   assert.match(byMarker.default.message, /so the loop pays/);
 });
+
+test('skips calls on the injected stores a service walks and keeps wording accurate for ordered loops', () => {
+  const source = `import { ContentService } from './services.js';
+    declare const ids: string[];
+    class Registry {
+      constructor(private content: ContentService, private readonly stores: ContentService[]) {}
+      private readonly pending: ContentService[] = [];
+      async flush(id: string) {
+        for (const store of this.stores ?? []) await store.approve(id);
+        for (const store of this.pending) await store.approve(id); // report
+        for (const item of ids) await this.content.approve(item); // report
+      }
+    }`;
+  const findings = findingsFor(source);
+  assert.deepEqual(
+    findings.map((finding) => finding.line),
+    reportedLines(source),
+  );
+  assert.doesNotMatch(findings[1].message, /grows with the list/);
+  assert.match(findings[1].message, /for every item it handles/);
+  assert.match(findings[1].message, /ordering and transaction needs/);
+});
