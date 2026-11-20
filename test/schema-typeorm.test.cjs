@@ -114,6 +114,7 @@ test('marks join columns as foreign keys and skips views and abstract bases', ()
       table: 'School',
       column: 'id',
       explicitName: true,
+      property: 'headTeacher',
     });
     const mirror = department.columns.get('mirror');
     assert.equal(mirror.dbName, 'mirror_school_id');

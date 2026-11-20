@@ -170,9 +170,17 @@ function checkCode(args, report = printResult) {
     { project: values.project, files: positionals, policy },
     report === printResult ? engine : 'js',
   );
+  if (values.project) appendPrismaSchemaFindings(result, values.project);
   const code = report(result, values);
   if (report === printResult) require('../lib/notify-editor.cjs').notifyEditor(values.project ?? process.cwd());
   return code;
+}
+
+// schema.prisma is not TypeScript, so its foreign-key findings come from the parsed schema after the scan.
+function appendPrismaSchemaFindings(result, project) {
+  const { findProjectRoot } = require('../lib/schema/context.cjs');
+  const root = findProjectRoot(path.resolve(project));
+  result.findings.push(...require('../lib/schema/prisma-schema.cjs').checkSchemaFile(root));
 }
 
 // The snapshot is optional; without it every rule still reports, using unknown-size wording.
