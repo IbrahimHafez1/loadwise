@@ -206,6 +206,18 @@ const standaloneExamples = {
     code: "await queue.addBulk(ids.map((id) => ({ name: 'render', data: { id } })));",
     note: 'addBulk sends every job in one Redis call instead of one round trip per job.',
   },
+  'prisma-distinct-in-memory': {
+    language: 'javascript',
+    before: "await prisma.product.findMany({ where, select: { storeId: true }, distinct: ['storeId'] });",
+    code: "await prisma.product.groupBy({ by: ['storeId'], where });",
+    note: 'Prisma applies distinct after reading every matching row; groupBy dedupes in SQL. Not needed with the nativeDistinct preview feature.',
+  },
+  'prisma-relation-count-in-list': {
+    language: 'javascript',
+    before: 'await prisma.brand.findMany({ take: 20, include: { _count: { select: { products: true } } } });',
+    code: "const brands = await prisma.brand.findMany({ take: 20 });\nconst counts = await prisma.product.groupBy({\n  by: ['brandId'],\n  where: { brandId: { in: brands.map((brand) => brand.id) } },\n  _count: { _all: true },\n});",
+    note: 'The _count join groups the whole related table, not just the page. Counting only the page ids keeps the cost tied to take.',
+  },
   'mongo-collection-scan': collectionScan,
   'mongo-collection-scan-observed': collectionScan,
   'mongo-disk-sort': {
