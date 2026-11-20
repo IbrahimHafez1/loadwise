@@ -113,7 +113,7 @@ For an intentionally repeated operation, attach the review to that specific site
 await client.query(statement);
 ```
 
-The site remains available with `--include-contextual`. Source comments cannot lower either CI contract, a configured row-scope check, a Prisma transaction-client escape or a Prisma read-modify-write finding. Test-path context applies only to Prisma dependent writes and Drizzle whole-table writes. Application code, tests and scripts still participate in source analysis.
+The site remains available with `--include-contextual`. Source comments cannot lower either CI contract, a configured row-scope check, a Prisma transaction-client escape or a Prisma read-modify-write finding. Test, seed and script context applies to Prisma dependent writes and Drizzle whole-table writes in test sources. It also applies to per-item query rules, index rules, serial awaits in literals, Redis `KEYS` and pure-JavaScript password hashing in test, seed and operator-tooling sources (`scripts`, `seeds`, `prisma/seed.ts`, `*.seed.ts`, deployment, migrations). Application code, tests and scripts still participate in source analysis.
 
 Watch mode uses TypeScript 6.0.3. Watch a single project while editing. With `--watch --json`, each completed scan writes one JSON line. Ctrl+C stops the watcher. One-shot runs support project references.
 

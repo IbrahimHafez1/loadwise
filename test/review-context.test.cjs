@@ -27,7 +27,8 @@ test('context requires bounded seed data, timed polling or an actual benchmark e
   };
   withProgram('', fixtures, (program) => {
     for (const [filename, expected] of [
-      ['seeds/setup.ts', [true, false]],
+      // A seed is contextual either way; only the small literal catalogue has its own reason.
+      ['seeds/setup.ts', [true, true]],
       // A test source is contextual either way; only the timed poll has its own reason.
       ['service.spec.ts', [true, true]],
       ['model-benchmark.ts', [true, false]],
@@ -232,4 +233,40 @@ test('a project that itself lives under a test directory keeps its sources visib
   };
   assert.equal(reason(path.join(checkout, 'src', 'service.ts')), undefined);
   assert.ok(reason(path.join(checkout, 'test', 'helper.ts')));
+});
+
+test('seed, script and tooling sources are contextual for every request-path-only rule', (context) => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const directory = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'backend-perf-setup-'));
+  fs.writeFileSync(path.join(directory, 'package.json'), '{}');
+  context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const { repeatedReviewContext } = require('../lib/review-context.cjs');
+  const ts = require('../lib/compiler.cjs').syntax;
+  const reason = (file, ruleId) => {
+    const source = ts.createSourceFile(path.join(directory, file), 'run();', ts.ScriptTarget.Latest, true);
+    return repeatedReviewContext(source, ruleId, undefined, source);
+  };
+  const rules = [
+    'orm-query-in-loop',
+    'prisma-query-in-loop',
+    'serial-awaits-in-literal',
+    'redis-keys-command',
+    'index-missing-order',
+    'index-missing-filter',
+    'password-hash-pure-js',
+  ];
+  for (const ruleId of rules) {
+    for (const file of [
+      'prisma/seed.ts',
+      'seeds/bootstrap.ts',
+      'scripts/backfill.ts',
+      'src/database/scripts/fix.ts',
+      'users.seed.ts',
+      'src/users.spec.ts',
+    ]) {
+      assert.ok(reason(file, ruleId), `${ruleId} ${file}`);
+    }
+    assert.equal(reason('src/users.service.ts', ruleId), undefined, ruleId);
+  }
 });
