@@ -13,7 +13,8 @@ test('reports one-hop per-item TypeORM transactions while preserving chunk, retr
       async run(rows: number[], pages: number[][]) {
         for (let index = 0; index < rows.length; index++) {
           const row = rows[index];
-          try { await this.saveRow(row); } catch { continue; } // report
+          try { await this.saveRow(row); } catch { continue; } // per-item isolation, nothing cheaper keeps it
+          try { await this.saveRow(row); } catch (error) { throw error; } // report
         }
         for (const row of rows) await this.#insert(row); // report
         await Promise.all(rows.map(async row => { await this.saveRow(row); })); // report
