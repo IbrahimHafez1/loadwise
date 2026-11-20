@@ -332,7 +332,7 @@ It compares three kinds of source:
 | `api-type-changed`       | A field or parameter whose type changed, or a GraphQL type that became nullable (output) or non-null (input).               |
 | `api-enum-value-removed` | An enum value or string-literal option that requests (or, in GraphQL, any client) can no longer use.                        |
 
-Removals point at the line in the old version (the message says so); every other finding points at the new line. A new version next to the old one (`/v2/users` added while `/v1/users` stays) breaks nothing and is not flagged. Removing a request-only field is not flagged, since most servers ignore unknown input.
+Removals point at the line in the old version (the message says so); every other finding points at the new line. A new version next to the old one (`/v2/users` added while `/v1/users` stays) breaks nothing and is not flagged. A removed request property is flagged only when the project builds a `ValidationPipe` with `forbidNonWhitelisted: true`, because only then do clients that still send it get a 400. Properties inherited from a base class in a relative import count as the class's own.
 
 ```sh
 npx loadwise perf contracts --changed-since origin/main

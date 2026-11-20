@@ -239,6 +239,55 @@ describe('loadwise perf contracts: NestJS DTOs', () => {
   });
 });
 
+describe('loadwise perf contracts: DTO unknown input and inheritance', () => {
+  const controller = `
+    import { Body, Controller, Post } from '@nestjs/common';
+    import { CreateDto } from './dto';
+    @Controller('x')
+    export class XController {
+      @Post() create(@Body() body: CreateDto): void {}
+    }
+  `;
+  const oldDto = 'export class CreateDto { name: string; note?: string; }';
+  const newDto = 'export class CreateDto { name: string; }';
+  const strictMain = 'app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));';
+
+  test('a removed request property is breaking when ValidationPipe forbids unknown properties', (context) => {
+    const root = repository(
+      context,
+      { 'src/x.controller.ts': controller, 'src/dto.ts': oldDto, 'src/main.ts': strictMain },
+      { 'src/dto.ts': newDto },
+    );
+    const run = contracts(root);
+    assert.equal(run.code, 1);
+    assert.deepEqual(ruleLines(run), ['api-removed-field src/dto.ts']);
+    assert.match(run.report.findings[0].message, /CreateDto\.note was removed .*now get a 400 response/);
+  });
+
+  test('without forbidNonWhitelisted a removed request property is not flagged', (context) => {
+    const lenient = 'app.useGlobalPipes(new ValidationPipe({ whitelist: true }));';
+    const root = repository(
+      context,
+      { 'src/x.controller.ts': controller, 'src/dto.ts': oldDto, 'src/main.ts': lenient },
+      { 'src/dto.ts': newDto },
+    );
+    assert.deepEqual(contracts(root).report.findings, []);
+  });
+
+  test('properties inherited from a base class in a relative import are compared', (context) => {
+    const files = {
+      'src/x.controller.ts': controller.replace('./dto', './child'),
+      'src/base.ts': 'export class Base { id: string; age: number; }',
+      'src/child.ts': "import { Base } from './base';\nexport class CreateDto extends Base { name: string; }",
+    };
+    const root = repository(context, files, { 'src/base.ts': 'export class Base { age: string; extra: string; }' });
+    const messages = contracts(root).report.findings.map(({ message }) => message);
+    assert.equal(messages.length, 2);
+    assert.match(messages.join('\n'), /Property CreateDto\.age changed type from number to string/);
+    assert.match(messages.join('\n'), /CreateDto\.extra is new and required/);
+  });
+});
+
 describe('loadwise perf contracts: command line and check', () => {
   test('an unresolvable ref exits 2 with a hint', (context) => {
     const root = repository(context, { 'a.txt': 'x' }, {});
