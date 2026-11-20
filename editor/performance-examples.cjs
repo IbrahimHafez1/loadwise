@@ -251,6 +251,12 @@ const standaloneExamples = {
     code: 'await pipeline(Readable.fromWeb(response.body), createWriteStream(path));',
     note: 'Streaming keeps memory flat however large the payload is.',
   },
+  'list-query-overfetch': {
+    language: 'javascript',
+    before: 'const posts = await prisma.post.findMany({ include: { author: { include: { team: true } } } });',
+    code: 'const posts = await prisma.post.findMany({ select: { id: true, title: true, author: { select: { name: true } } } });',
+    note: 'Each row drags large columns or nested relations along. Select the fields the list shows and load the rest on demand.',
+  },
   'service-query-in-loop': {
     language: 'javascript',
     before: 'for (const id of ids) await this.approve(id); // approve() runs findOne + save',

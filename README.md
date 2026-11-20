@@ -164,6 +164,7 @@ Run in the directory containing `tsconfig.json` or `jsconfig.json`, pass `-p pat
 | `unbounded-list-query`                                                                                               | A Prisma, TypeORM, Drizzle or pg list query has no `take` or `limit` and its rows are returned from a request handler. Unique-key lookups are skipped; service-layer queries are not followed.                   |
 | `unbounded-module-cache`                                                                                             | A module-level or singleton-service `Map`, `Set` or object is filled by dynamic key inside functions and never deleted from, cleared or size-checked. The key space may still be small.                          |
 | `whole-payload-in-memory`                                                                                            | A handler reads a request-chosen path with `fs.readFile`, or a download or stream is buffered whole only to be written out. Stream it with `pipeline`. The `Response` check needs fetch types.                   |
+| `list-query-overfetch`                                                                                               | A Prisma `findMany` or TypeORM `find` without `select` loads `Json`, `Bytes` or text columns, or relations two levels deep. Column checks need a parseable schema; pages up to 100 rows skip them.               |
 
 Source diagnostics include a one-based line and column. Repeat `--ignore RULE` to omit specific JS/TS rules from a run. Keep your project's own type check in CI.
 
