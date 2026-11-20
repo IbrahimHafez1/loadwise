@@ -7,18 +7,23 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
+const workspaceState = { get: (_key, fallback) => fallback, update: async () => {} };
+
 function createVscode(root) {
   const folder = { uri: { scheme: 'file', fsPath: root, toString: () => 'file:' + root }, name: 'ws' };
   const noop = () => ({ dispose() {} });
   const commands = new Map();
   const vscode = {
     RelativePattern: class {},
+    StatusBarAlignment: { Left: 1 },
+    CodeActionKind: { QuickFix: { append: () => ({}) }, SourceFixAll: { append: () => ({}) } },
+    Disposable: { from: (...items) => ({ dispose: () => items.forEach((item) => item.dispose?.()) }) },
     workspace: {
       isTrusted: true,
       workspaceFolders: [folder],
       getConfiguration: () => ({ get: (_key, fallback) => (_key === 'performanceCli' ? 'relative.cjs' : fallback) }),
       findFiles: async () => [],
-      createFileSystemWatcher: () => ({ onDidCreate: noop, onDidDelete: noop, dispose() {} }),
+      createFileSystemWatcher: () => ({ onDidCreate: noop, onDidChange: noop, onDidDelete: noop, dispose() {} }),
       getWorkspaceFolder: () => folder,
       onDidOpenTextDocument: noop,
       onDidSaveTextDocument: noop,
@@ -31,8 +36,12 @@ function createVscode(root) {
     languages: {
       createDiagnosticCollection: () => ({ clear() {}, dispose() {}, get() {}, set() {}, forEach() {} }),
       registerHoverProvider: noop,
+      registerCodeActionsProvider: noop,
     },
-    window: { createOutputChannel: () => ({ appendLine() {}, show() {}, dispose() {} }) },
+    window: {
+      createOutputChannel: () => ({ appendLine() {}, show() {}, dispose() {} }),
+      createStatusBarItem: () => ({ show() {}, hide() {}, dispose() {} }),
+    },
     commands: { registerCommand: (name, handler) => (commands.set(name, handler), { dispose() {} }) },
   };
   return { vscode, commands };
@@ -56,7 +65,7 @@ test('the extension scan probes config files without blocking synchronous filesy
   });
   const extension = require('../editor/extension.cjs');
   const subscriptions = [];
-  extension.activate({ extensionPath: root, subscriptions });
+  extension.activate({ extensionPath: root, subscriptions, workspaceState });
   await commands.get('backendCheckers.scan')();
   for (const subscription of subscriptions) subscription.dispose?.();
   assert.deepEqual(
@@ -73,6 +82,8 @@ const hangingChecker = [
   'const poll = setInterval(() => {',
   '  if (fs.existsSync(release)) { clearInterval(poll); console.log(\'{"findings":[]}\'); }',
   '}, 10);',
+  '// A watch-mode checker keeps running after its report, as backend-perf-check --watch does.',
+  "if (process.argv.includes('--watch')) setInterval(() => {}, 60000);",
 ].join('\n');
 
 async function waitFor(condition) {
@@ -117,33 +128,37 @@ test('changes during a running scan abort the stale child and coalesce into one 
   context.after(() => {
     Module._load = originalLoad;
     for (const subscription of subscriptions) subscription.dispose?.();
-    fs.rmSync(root, { recursive: true, force: true });
+    // Windows keeps the folder locked while the killed watch child exits.
+    fs.rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
   });
   delete require.cache[require.resolve('../editor/extension.cjs')];
-  require('../editor/extension.cjs').activate({ extensionPath: root, subscriptions });
+  require('../editor/extension.cjs').activate({ extensionPath: root, subscriptions, workspaceState });
   const change = () => configurationChanged({ affectsConfiguration: () => true });
 
   context.mock.timers.tick(650);
-  await waitFor(() => startedPids(logFile).length === 1);
-  const [stalePid] = startedPids(logFile);
+  // The performance checker runs as a long-lived watch child beside the one-shot maintainability scan.
+  await waitFor(() => startedPids(logFile).length === 2);
+  const stalePids = startedPids(logFile);
 
   for (let index = 0; index < 5; index++) {
     change();
     context.mock.timers.tick(300);
   }
-  await waitFor(() => !isAlive(stalePid));
-  assert.equal(startedPids(logFile).length, 1, 'no immediate re-run while changes keep arriving');
+  await waitFor(() => !stalePids.some(isAlive));
+  assert.equal(startedPids(logFile).length, 2, 'no immediate re-run while changes keep arriving');
 
   context.mock.timers.tick(349);
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(startedPids(logFile).length, 1, 'follow-up waits the full debounce after the last change');
+  assert.equal(startedPids(logFile).length, 2, 'follow-up waits the full debounce after the last change');
   context.mock.timers.tick(1);
-  await waitFor(() => startedPids(logFile).length === 2);
+  await waitFor(() => startedPids(logFile).length === 4);
 
   fs.writeFileSync(path.join(root, 'release'), '');
-  await waitFor(() => lines.some((line) => line.includes('maintainability-check — 0 finding(s)')));
-  assert.equal(startedPids(logFile).length, 3, 'exactly one follow-up scan (performance then maintainability)');
-  assert.deepEqual(lines.filter((line) => line.includes('finding(s)')).length, 2, 'only the newest scan published');
+  const published = () => lines.filter((line) => line.includes('finding(s)'));
+  await waitFor(() => published().some((line) => line.includes('maintainability-check — 0 finding(s)')));
+  await waitFor(() => published().some((line) => line.includes('backend-perf-check — 0 finding(s)')));
+  assert.equal(startedPids(logFile).length, 4, 'exactly one follow-up scan (a fresh watcher and maintainability)');
+  assert.equal(published().length, 2, 'only the newest scan published');
 });
 
 test('editor watch aborts the stale scan child on change and runs one follow-up after the last change', async (context) => {
