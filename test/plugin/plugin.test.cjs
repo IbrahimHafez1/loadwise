@@ -57,6 +57,10 @@ test('plugin manifests are valid JSON with the required fields', () => {
   assert.ok(fs.existsSync(path.join(repositoryRoot, marketplace.plugins[0].source, '.claude-plugin', 'plugin.json')));
 });
 
+test('the plugin version is the package version, so both are released together', () => {
+  assert.equal(readJson('plugin', '.claude-plugin', 'plugin.json').version, readJson('package.json').version);
+});
+
 test('hooks.json runs the hook script after Edit, Write and MultiEdit', () => {
   const { hooks } = readJson('plugin', 'hooks', 'hooks.json');
   const [entry] = hooks.PostToolUse;
