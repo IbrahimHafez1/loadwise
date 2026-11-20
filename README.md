@@ -4,6 +4,22 @@ Find repeated backend work before deployment or in a recorded request. The local
 
 ## Start here
 
+### Editor findings with the npm packages
+
+Install this package as a project dev dependency. Install `maintainability-check` alongside it to include both checkers. Set up the editor task once from the project root.
+
+```sh
+npx backend-perf-check editor init
+```
+
+Commit the generated `.vscode/tasks.json` with your project. Open the trusted folder in VS Code or Cursor and allow automatic tasks once. The watcher starts on subsequent folder opens. If the folder was already open during setup, reopen it. **Tasks: Manage Automatic Tasks** controls the workspace's choice.
+
+Saving a file or completing an ordinary source scan from the project terminal refreshes the active editor watcher. The editor uses its configured project and rules even when the terminal command uses different flags. A running watcher picks up checker package reinstalls. When upgrading from a version that predates automatic reload, reopen the folder once to load the new watcher.
+
+Open **View > Problems** or hover over an underline. The first line shows a source-based rewrite, an illustrative example or a review action. The hover retains the original finding and, where applicable, the code comparison. The editor controls whether diagnostic text appears beside the code.
+
+This uses built-in tasks across supported source languages, including mixed-language projects. It needs Node.js 20+ on PATH. The default performance scan uses a root `tsconfig.json` or `jsconfig.json`, or explicit JS/TS files discovered by the watcher. To use a particular config, append `-p` and its relative path to the task's arguments. Start the task from a folder with the performance package installed under `node_modules`. Other editors can still run the CLI directly. For syntax-highlighted hover examples and related-location links in VS Code or Cursor, an optional [editor extension](editor/README.md) is also available.
+
 Use Node.js 20+ and point npm at the downloaded archive. From your application directory, install the package and run the first check.
 
 ```sh
