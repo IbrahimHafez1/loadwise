@@ -55,6 +55,7 @@ const sourceRules = new Set([
   'orm-query-in-loop',
   'orm-count-materialization',
   'typeorm-existence-materialization',
+  'typeorm-wide-projection',
   'prisma-scope-unverified',
   'drizzle-scope-unverified',
   'data-access-boundary',
