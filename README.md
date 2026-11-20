@@ -261,6 +261,35 @@ Feed the CLI a JSON file from PostgreSQL `EXPLAIN (ANALYZE, FORMAT JSON)` or Mon
 
 Results include the stage path and observed counts. PostgreSQL and MongoDB planner estimates alone return exit 2. MongoDB coverage includes classic executed query stages and selected slot-based scan/filter and skip shapes. Unsupported layouts return an input error where a scan cannot be attributed.
 
+## Database inspection (optional)
+
+`npx backend-perf-check db` is the only command that connects to a database. Point it at a staging or read replica database, never a primary you cannot afford to touch. It uses the project's own `pg`, `mysql2` or `mongodb` package.
+
+The connection comes from the environment, never a flag: `DATABASE_URL` (or the variable named by `--url-env`), else `DB_HOST`, `DB_PORT`, `DB_USER` or `DB_USERNAME`, `DB_PASSWORD` and `DB_NAME` or `DB_DATABASE`. `--env-file FILE` reads those variables from a file without loading them into the process environment. `--engine postgres|mysql|mongo` is needed with `DB_HOST` variables when `DB_PORT` is not the engine default.
+
+```sh
+npx backend-perf-check db --env-file .env.staging --schema-snapshot snapshot.json
+npx backend-perf-check db --queries queries.sql --analyze
+npx backend-perf-check --schema snapshot.json
+```
+
+| Flag                                         | Effect                                                                                                          |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `--schema-snapshot FILE`                     | Write a schema snapshot (indexes, table sizes, measured round trip) for `--schema`.                             |
+| `--top N`                                    | Explain the N slowest statements (default 20).                                                                  |
+| `--queries FILE`                             | Explain these concrete SELECT statements.                                                                       |
+| `--analyze`                                  | Run `EXPLAIN ANALYZE` on the `--queries` SELECTs inside rolled-back read-only transactions.                     |
+| `--measure --i-understand-this-locks-tables` | PostgreSQL staging only. Time each suggested index for `--queries` by building it in a rolled-back transaction. |
+| `--runs N`                                   | `EXPLAIN ANALYZE` runs per side for `--measure` (default 5).                                                    |
+
+Rules: `db-unindexed-foreign-key`, `db-unused-index`, `db-duplicate-index`, `db-seq-scan-heavy-table`, `db-slow-query-plan`, `db-missing-index` and, for MongoDB, `mongo-collection-scan-observed`. `--include-contextual`, `--ignore RULE` and `--json` work as in the other commands.
+
+**Safety guarantees.** Statements go through a read-only gateway: sessions and transactions are read-only, with a 5 s statement timeout on PostgreSQL, and only SELECT, INSERT, UPDATE and DELETE can be explained. `EXPLAIN ANALYZE` runs only for a plain SELECT (a `WITH` that modifies data is refused). MongoDB uses a command allowlist. Error text is redacted: the connection URL, host, user, password and resolved IP addresses are replaced with `[redacted]`. Usage counters come from the node that answered, so an index unused here may still be used on a replica.
+
+**`--measure` warning.** Building an index blocks writes to that table while it runs. Use it on staging only. It refuses a connection variable or database name matching `/prod/i`, a replica, an unknown table size and any table over 5,000,000 estimated rows, and it needs the long confirmation flag. When the HypoPG extension is installed, suggested indexes are also checked hypothetically without building anything.
+
+**Measured vs estimated.** Output labels every figure. A _measured_ number was timed on your database (a round-trip median, or an `EXPLAIN ANALYZE` before and after an index built by `--measure`). An _estimated_ number comes from planner statistics or a model, and a suggestion validated only by HypoPG still says it is an estimate. Treat estimates as a reason to test, not as a result.
+
 ## Interpreting findings
 
 Start with the endpoint's query count, latency and a representative input size. A reusable index or lookup table costs memory and build time. An extra database index also costs writes and storage. For a proposed batch or cache, compare results as well as time, including empty inputs, duplicates, tenant boundaries and concurrent writes.
