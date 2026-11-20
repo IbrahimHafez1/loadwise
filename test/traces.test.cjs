@@ -252,8 +252,8 @@ test('groups changing Redis keys separately by command, database index, server a
       ['redis-repeated-read', 2],
     ],
   );
-  assert.match(result.findings[0].message, /MGET/);
-  assert.match(result.findings[1].message, /HMGET/);
+  assert.match(result.findings[0].message, /mGet\(keys\)/);
+  assert.match(result.findings[1].message, /hmGet\(key, fields\)/);
   assert.doesNotMatch(JSON.stringify(result), /private/);
 });
 
@@ -388,7 +388,7 @@ test('same Redis key or simple bound SQL lookup gets request-local advice with n
       findings.map(({ ruleId, count }) => [ruleId, count]),
       [['duplicate-key-read', 5]],
     );
-    assert.match(findings[0].message, /within this request/);
+    assert.match(findings[0].message, /reuse it/);
     assert.doesNotMatch(JSON.stringify(findings), /private|103|customers|email|SELECT/);
     assert.equal(cacheFindings([spans[0], spans[1]], 50)[0].count, 2);
   }
