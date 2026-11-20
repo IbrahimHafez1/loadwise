@@ -3,6 +3,29 @@
   "version": "0.3.0",
   "description": "Check backend query performance, transaction usage and project-defined query policies in source code, traces and execution plans.",
   "license": "UNLICENSED",
+  "author": "Ibrahim Hafez",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IbrahimHafez1/backend-perf-check.git"
+  },
+  "bugs": {
+    "url": "https://github.com/IbrahimHafez1/backend-perf-check/issues"
+  },
+  "homepage": "https://github.com/IbrahimHafez1/backend-perf-check#readme",
+  "keywords": [
+    "performance",
+    "n-plus-one",
+    "database",
+    "orm",
+    "prisma",
+    "typeorm",
+    "drizzle",
+    "postgresql",
+    "opentelemetry",
+    "static-analysis",
+    "cli",
+    "vscode"
+  ],
   "bin": {
     "backend-perf-check": "./bin/backend-perf-check.cjs"
   },
@@ -19,10 +42,11 @@
     "editor/maintainability-examples.cjs",
     "editor/source-example.cjs",
     "editor/apply-fix.cjs",
-    "PERFORMANCE.md"
+    "PERFORMANCE.md",
+    "LICENSE"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "format": "prettier --cache --write .",
