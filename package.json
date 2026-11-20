@@ -35,7 +35,7 @@
   },
   "dependencies": {
     "chokidar": "4.0.3",
-    "typescript": "5.9.3"
+    "typescript": "6.0.3"
   },
   "optionalDependencies": {
     "@ast-grep/cli": "0.51.3",

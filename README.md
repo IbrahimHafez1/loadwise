@@ -74,9 +74,9 @@ await client.query(statement);
 
 The site remains available with `--include-contextual`. Source comments cannot lower either CI contract, a configured row-scope check, a Prisma transaction-client escape or a Prisma read-modify-write finding. Test-path context applies only to Prisma dependent writes and Drizzle whole-table writes. Application code, tests and scripts still participate in source analysis.
 
-The default compiler is TypeScript 5.9.3. Watch a single project while editing. With `--watch --json`, each completed scan writes one JSON line. Ctrl+C stops the watcher. One-shot runs support project references.
+Watch mode uses TypeScript 6.0.3. Watch a single project while editing. With `--watch --json`, each completed scan writes one JSON line. Ctrl+C stops the watcher. One-shot runs support project references.
 
-On Node.js 22.13+, `npx backend-perf-check --native -p tsconfig.json` runs the JS/TS checks using Microsoft's Go-based TypeScript 7.1 beta compiler. This opt-in backend requires the optional native package for your platform. It reports incompatible configuration as exit 2. If your project uses an option removed in TypeScript 7, such as `moduleResolution: "node10"`, rerun without `--native` to use 5.9.3. [TypeScript native compiler](https://github.com/microsoft/typescript-go)
+On Node.js 22.13+, `npx backend-perf-check --native -p tsconfig.json` runs the JS/TS checks using Microsoft's Go-based TypeScript 7.1 beta compiler. This opt-in backend requires the optional native package for your platform. It reports incompatible configuration as exit 2. If your project uses an option removed in TypeScript 7, such as `moduleResolution: "node10"`, rerun without `--native` to use 6.0.3. [TypeScript native compiler](https://github.com/microsoft/typescript-go)
 
 Install the application's driver declarations and generate its Prisma client before checking. Result-shape checks target simple literal PostgreSQL reads and supported Prisma model delegates. Unresolved types, wrappers and deferred callbacks can hide findings. Repeated calls can be intentional, for example retries and ordered writes.
 
