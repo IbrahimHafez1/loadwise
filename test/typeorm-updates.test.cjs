@@ -183,3 +183,63 @@ test('findOneOrFail becomes an update that throws EntityNotFoundError when no ro
     "const result = await users.increment({ id }, 'tokenVersion', 1);\nif (!result.affected) throw new EntityNotFoundError(User, { id });",
   );
 });
+
+const softDeleteFiles = {
+  'node_modules/typeorm/index.d.ts': `${typeorm}
+export declare function DeleteDateColumn(): PropertyDecorator;
+export declare function IsNull(): object;`,
+  'src/base.entity.ts': `import { Column, DeleteDateColumn } from 'typeorm';
+export abstract class Base {
+  @Column() id!: number;
+  @DeleteDateColumn() removedAt!: Date | null;
+}`,
+  'src/user.entity.ts': `import { Column, Entity } from 'typeorm';
+import { Base } from './base.entity';
+@Entity()
+export class Member extends Base {
+  @Column() tokenVersion!: number;
+}`,
+};
+
+function serviceUsing(importLine) {
+  return `import { Repository } from 'typeorm';
+${importLine}
+declare const members: Repository<Member>;
+export async function revoke(id: number) {
+  const member = await members.findOneOrFail({ where: { id } });
+  member.tokenVersion += 1;
+  await members.save(member);
+}`;
+}
+
+test('a soft-deletable entity, through its base class, keeps deleted rows out of the update', (context) => {
+  const { findings } = scanWithFixes(context, {
+    ...softDeleteFiles,
+    'src/service.ts': serviceUsing("import { Member } from './user.entity';"),
+  });
+  const finding = findings.find((entry) => entry.ruleId === rule);
+  const [importChange, bodyChange] = finding.fix.changes;
+  assert.equal(importChange.after, "import { Repository, EntityNotFoundError, IsNull } from 'typeorm';");
+  assert.equal(
+    dedent(bodyChange.after),
+    "const result = await members.increment({ id, removedAt: IsNull() }, 'tokenVersion', 1);\n" +
+      'if (!result.affected) throw new EntityNotFoundError(Member, { id });',
+  );
+  assert.match(finding.fix.note, /removedAt: IsNull\(\)/);
+});
+
+test('an entity whose base class cannot be read gets no fix', (context) => {
+  const { findings } = scanWithFixes(context, {
+    ...softDeleteFiles,
+    'src/user.entity.ts': softDeleteFiles['src/user.entity.ts']
+      .replace(
+        "import { Base } from './base.entity';",
+        "import { Base } from './base.entity';\nconst withAudit = <T>(base: T) => base;",
+      )
+      .replace('extends Base', 'extends withAudit(Base)'),
+    'src/service.ts': serviceUsing("import { Member } from './user.entity';"),
+  });
+  const withheld = findings.find((entry) => entry.ruleId === rule);
+  assert.ok(withheld, 'rule should report');
+  assert.equal(withheld.fix, undefined);
+});
