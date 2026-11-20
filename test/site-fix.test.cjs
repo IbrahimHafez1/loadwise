@@ -8,7 +8,7 @@ const { spawnSync } = require('node:child_process');
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { applyChangesToText, applyFix } = require('../lib/apply-fix.cjs');
-const cli = path.join(__dirname, '../bin/maintainability-check.cjs');
+const cli = path.join(__dirname, '../bin/warden-maint.cjs');
 
 function project(context, files) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'maintainability-fix-'));

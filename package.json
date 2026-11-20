@@ -1,18 +1,19 @@
 {
-  "name": "maintainability-check",
+  "name": "@codewarden/maintainability",
   "version": "0.2.0",
-  "description": "Review source complexity, duplicate implementations and project-defined architecture across languages.",
+  "description": "Codewarden maintainability: review source complexity, duplicate implementations and project-defined architecture across languages.",
   "license": "UNLICENSED",
   "author": "Ibrahim Hafez",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/IbrahimHafez1/maintainability-check.git"
+    "url": "git+https://github.com/IbrahimHafez1/codewarden-maintainability.git"
   },
   "bugs": {
-    "url": "https://github.com/IbrahimHafez1/maintainability-check/issues"
+    "url": "https://github.com/IbrahimHafez1/codewarden-maintainability/issues"
   },
-  "homepage": "https://github.com/IbrahimHafez1/maintainability-check#readme",
+  "homepage": "https://github.com/IbrahimHafez1/codewarden-maintainability#readme",
   "keywords": [
+    "codewarden",
     "maintainability",
     "code-quality",
     "duplicate-code",
@@ -27,7 +28,7 @@
     "node": ">=22"
   },
   "bin": {
-    "maintainability-check": "bin/maintainability-check.cjs"
+    "warden-maint": "bin/warden-maint.cjs"
   },
   "files": [
     "bin/",

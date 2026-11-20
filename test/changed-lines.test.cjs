@@ -8,7 +8,7 @@ const test = require('node:test');
 const { spawnSync } = require('node:child_process');
 const { parseChangedRanges, filterToChangedLines } = require('../lib/changed-lines.cjs');
 
-const bin = path.resolve(__dirname, '../bin/maintainability-check.cjs');
+const bin = path.resolve(__dirname, '../bin/warden-maint.cjs');
 const deepFunction = [
   'function label(values, mode) {',
   '  if (!values.length) {',
@@ -106,8 +106,8 @@ test('--staged reports a function finding for an edit inside it and exits 1', (c
   const result = run(root, '--staged', '.');
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout, /^app\.js:\d+ \[deep-control-flow #[0-9a-f]+\]/m);
-  assert.match(result.stdout, /^ {2}fix: {5}npx maintainability-check --fix --only [0-9a-f]+$/m);
-  assert.match(result.stdout, /^ {2}dismiss: \/\/ maintainability-reviewed deep-control-flow -- <reason>$/m);
+  assert.match(result.stdout, /^ {2}fix: {5}npx warden-maint --fix --only [0-9a-f]+$/m);
+  assert.match(result.stdout, /^ {2}dismiss: \/\/ warden-reviewed deep-control-flow -- <reason>$/m);
   assert.match(result.stdout, /^1 new finding\(s\) in changed lines\. Apply fixes, then `git add`/m);
 });
 

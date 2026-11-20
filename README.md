@@ -1,18 +1,18 @@
-# maintainability-check
+# Codewarden — maintainability
 
-A local CLI for finding code that would benefit from a design review and for enforcing the architectural decisions a team has already made. It runs on Node.js 22 or later. It can run independently of `backend-perf-check`.
+A local CLI for finding code that would benefit from a design review and for enforcing the architectural decisions a team has already made. It runs on Node.js 22 or later. It can run independently of `@codewarden/backend` (Codewarden — backend).
 
-Install it, then run it on a project folder. It reports findings with a stable `#id`, a rewrite where one is safe, and a `// maintainability-reviewed` comment to dismiss false positives.
+Install it, then run it on a project folder. It reports findings with a stable `#id`, a rewrite where one is safe, and a `// warden-reviewed` comment to dismiss false positives.
 
 ```sh
-npm install --save-dev --include=optional ./maintainability-check-0.2.0.tgz
-npx maintainability-check .
-npx maintainability-check . --json
+npm install --save-dev --include=optional ./codewarden-maintainability-0.2.0.tgz
+npx warden-maint .
+npx warden-maint . --json
 ```
 
 ## Editor
 
-Install `backend-perf-check` alongside this package and run `npx backend-perf-check editor init` once per project. Open the trusted folder in VS Code or Cursor and allow automatic tasks once. Findings from both checkers appear in Problems, with suggestions and plain-text examples on hover, and a terminal scan refreshes the running task. Commit the generated task to share it. The optional editor extension adds **Apply fix** and **Dismiss** buttons, hover links and the same shortcuts on every OS (Ctrl+Alt+. apply, Ctrl+Alt+Shift+. apply all, Ctrl+Alt+, dismiss); see its README in `backend-perf-check`.
+Install `@codewarden/backend` alongside this package and run `npx warden-backend editor init` once per project. Open the trusted folder in VS Code or Cursor and allow automatic tasks once. Findings from both checkers appear in Problems, with suggestions and plain-text examples on hover, and a terminal scan refreshes the running task. Commit the generated task to share it. The optional editor extension adds **Apply fix** and **Dismiss** buttons, hover links and the same shortcuts on every OS (Ctrl+Alt+. apply, Ctrl+Alt+Shift+. apply all, Ctrl+Alt+, dismiss); see its README in `@codewarden/backend`.
 
 ## What gets checked
 
@@ -52,8 +52,8 @@ Paths use project-relative directory or file names. Directory boundaries match c
 Findings with a safe rewrite carry it as `fix = { changes: [{ file, line, before, after }], note? }` in `--json` output, and the text output prints it as a diff.
 
 ```sh
-npx maintainability-check . --fix         # asks y/n/a/q for each fix; needs a terminal
-npx maintainability-check . --fix --yes   # applies every fix without asking
+npx warden-maint . --fix         # asks y/n/a/q for each fix; needs a terminal
+npx warden-maint . --fix --yes   # applies every fix without asking
 ```
 
 `--fix` is refused with `--json` or `--graph`, and `--yes` alone is refused. Without a terminal, `--fix` requires `--yes`. A fix applies only where the original lines still exist. One that an earlier fix made stale is skipped and reappears, rebuilt, on the next run. Review the diff and run your tests afterwards.
@@ -79,7 +79,7 @@ Other rules have no automatic rewrite.
 ```
 
 ```sh
-npx maintainability-check . --graph modules.json --config maintainability.config.json
+npx warden-maint . --graph modules.json --config maintainability.config.json
 ```
 
 List each project-relative module once. Edges use one-based source coordinates. Set `"kind": "deferred"` for an edge that loads lazily. Graph mode operates entirely on the supplied inventory and edges.
@@ -99,10 +99,10 @@ DRY candidates can represent intentional copies between isolated modules. Deep n
 Any agent that can run shell commands and read an instructions file can drive the checker.
 
 ```sh
-npx maintainability-check agent init [--mode ask|auto] [--hook block|warn|off]
+npx warden-maint agent init [--mode ask|auto] [--hook block|warn|off]
 ```
 
-This writes a short block between `<!-- maintainability-check:agent:start -->` and `...:end -->` markers in `AGENTS.md` at the project root (created if missing, replaced in place on re-runs, other text untouched, and `backend-perf-check`'s block can sit beside it). If `CLAUDE.md` does not already contain `@AGENTS.md`, that line is added once, or the file is created with it.
+This writes a short block between `<!-- warden-maint:agent:start -->` and `...:end -->` markers in `AGENTS.md` at the project root (created if missing, replaced in place on re-runs, other text untouched, and `@codewarden/backend`'s block can sit beside it). If `CLAUDE.md` does not already contain `@AGENTS.md`, that line is added once, or the file is created with it.
 
 - `ask` (default): the agent shows a one-line summary per fix and waits for approval.
 - `auto`: the agent applies fixes that carry no behaviour caveat. In both modes it asks before changing `duplicate-implementation` or `dependency-cycle` findings, which are design decisions.
@@ -110,19 +110,19 @@ This writes a short block between `<!-- maintainability-check:agent:start -->` a
 Every finding in `--json` output has a stable `id` (also shown as `#id` in text output), `fixable`, and `fix` when a rewrite exists. The id hashes the rule, the file and the flagged line's text, so it survives edits above the finding.
 
 ```sh
-npx maintainability-check . --fix --only <id>[,<id>...] [--json]
+npx warden-maint . --fix --only <id>[,<id>...] [--json]
 ```
 
 `--only` applies exactly those fixes with no prompt and no terminal. `--json` prints `{ applied, alreadyApplied, failed }`. An id whose change an earlier id in the same run already made is reported in `alreadyApplied`; an unknown id, a finding without a fix or a stale fix is in `failed` and the exit code is 2.
 
-To dismiss a false positive, put `// maintainability-reviewed <rule-id> -- <specific reason>` on the line above it. The finding becomes contextual with that reason. Only a real line comment counts, and declared contracts (`file-placement`, `folder-boundary`, `data-access-boundary`, `query-mutates-state`) cannot be dismissed this way.
+To dismiss a false positive, put `// warden-reviewed <rule-id> -- <specific reason>` on the line above it. The finding becomes contextual with that reason. Only a real line comment counts, and declared contracts (`file-placement`, `folder-boundary`, `data-access-boundary`, `query-mutates-state`) cannot be dismissed this way.
 
 ## Changed lines and the git pre-commit hook
 
 ```sh
-npx maintainability-check --staged .
-npx maintainability-check --changed-since <git-ref> .
-npx maintainability-check agent init --hook block|warn|off
+npx warden-maint --staged .
+npx warden-maint --changed-since <git-ref> .
+npx warden-maint agent init --hook block|warn|off
 ```
 
 `--staged` reports only findings on lines added or changed in `git diff --cached`; `--changed-since <git-ref>` does the same for the working tree against that ref. A function-level finding (`high-branch-complexity`, `deep-control-flow`) is kept when a changed line falls anywhere inside its function. Text output is one block per finding (`path:line [rule-id #id] message`, then a `fix:` command when a rewrite exists and a `dismiss:` comment to paste above the line), ending with `N new finding(s) in changed lines.`. `--json` works too, with the same shape filtered. With no changed JS/TS files it prints nothing and exits 0 before TypeScript loads. In these modes `--fail-on` defaults to `all`, so the exit code is 1 whenever a finding remains.

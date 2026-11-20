@@ -6,7 +6,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const cli = path.join(__dirname, '../bin/maintainability-check.cjs');
+const cli = path.join(__dirname, '../bin/warden-maint.cjs');
 
 const wideOperandCount = 5000;
 // Within the duplicate detector's 8192-node body cap, so the long chain is still canonicalized.

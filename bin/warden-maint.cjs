@@ -7,11 +7,11 @@ const { parseArgs } = require('node:util');
 const { exampleFor } = require('../lib/examples.cjs');
 const { fixLines } = require('../lib/fix-text.cjs');
 const help = `Usage:
-  maintainability-check [directory] [--config policy.json] [--json] [--include-contextual] [--fail-on contract|all]
-  maintainability-check [directory] [--config policy.json] [--include-contextual] --fix [--yes | --only id,...]
-  maintainability-check agent init [--mode ask|auto] [--hook block|warn|off]
-  maintainability-check [directory] (--staged | --changed-since <git-ref>) [--json] [--fix --only id,...]
-  maintainability-check [directory] --graph modules.json [--config policy.json] [--json]
+  warden-maint [directory] [--config policy.json] [--json] [--include-contextual] [--fail-on contract|all]
+  warden-maint [directory] [--config policy.json] [--include-contextual] --fix [--yes | --only id,...]
+  warden-maint agent init [--mode ask|auto] [--hook block|warn|off]
+  warden-maint [directory] (--staged | --changed-since <git-ref>) [--json] [--fix --only id,...]
+  warden-maint [directory] --graph modules.json [--config policy.json] [--json]
 
 The default directory is the current folder. Source mode discovers supported files.
 Graph mode accepts project-relative files and dependency edges from any language.
@@ -23,7 +23,7 @@ Changed-lines mode: --staged reports only findings on lines added or changed in 
 Only changed files are analysed there (duplicate-implementation and cycles through unchanged files are skipped unless many files changed, which runs the full scan), and --fail-on defaults to all.
 agent init writes instructions for AI coding agents into AGENTS.md and imports them from CLAUDE.md.
 agent init --hook installs a git pre-commit hook that runs --staged: block fails the commit on findings, warn only prints them, off removes the hook. --hook alone means warn.
-Add "// maintainability-reviewed <rule-id> -- <reason>" on the line above a finding to mark it as reviewed.
+Add "// warden-reviewed <rule-id> -- <reason>" on the line above a finding to mark it as reviewed.
 By default, only declared folder or query contracts fail CI. Exit codes are 0, 1 (threshold met), 2 (invalid input).`;
 
 // Prints each rule's example once so output stays short when many findings share a rule.
@@ -76,7 +76,7 @@ function reportHook(mode, projectRoot) {
   const result = require('../lib/git-hook.cjs').installHook(projectRoot, mode);
   if (result.action === 'lefthook') {
     console.log('lefthook is configured; add this command to its pre-commit section yourself:\n  ' + result.command);
-  } else if (result.action === 'absent') console.log('No maintainability-check hook to remove.');
+  } else if (result.action === 'absent') console.log('No warden-maint hook to remove.');
   else console.log(`Hook ${result.action}: ${result.filename}`);
 }
 
@@ -94,8 +94,7 @@ function readChanges(root, values) {
 
 async function main(args) {
   if (args[0] === 'agent') {
-    if (args[1] !== 'init')
-      throw new Error('Usage: maintainability-check agent init [--mode ask|auto] [--hook block|warn|off]');
+    if (args[1] !== 'init') throw new Error('Usage: warden-maint agent init [--mode ask|auto] [--hook block|warn|off]');
     return initAgentCommand(args.slice(2));
   }
   const { values, positionals } = parseArgs({
