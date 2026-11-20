@@ -5,6 +5,7 @@
 
 // How far from the reported line the original lines may have moved because of edits elsewhere in the file.
 const maxLineDrift = 200;
+const alreadyApplied = 'already applied';
 
 function splitLines(text) {
   return text.split(/\r?\n/);
@@ -47,7 +48,7 @@ function applyChangesToText(text, changes) {
     if (isChangeApplied(lines, row, change)) continue;
     located.push({ row, removed: splitLines(change.before).length, added: splitLines(change.after) });
   }
-  if (!located.length) return { error: 'already applied' };
+  if (!located.length) return { error: alreadyApplied };
   located.sort((left, right) => right.row - left.row);
   for (let index = 1; index < located.length; index++) {
     if (located[index].row + located[index].removed > located[index - 1].row) return { error: 'overlapping changes' };
@@ -60,7 +61,7 @@ function applyChangesToText(text, changes) {
 // identical one means the fix was already applied.
 function createdFileText(change, currentText) {
   if (currentText === undefined) return { text: change.after };
-  if (splitLines(currentText).join('\n') === splitLines(change.after).join('\n')) return { error: 'already applied' };
+  if (splitLines(currentText).join('\n') === splitLines(change.after).join('\n')) return { error: alreadyApplied };
   return { error: 'the file already exists with different content' };
 }
 
@@ -88,9 +89,12 @@ function applyFix(fix, { readFile, writeFile }) {
     const currentText = readIfExists(readFile, file);
     if (!created && currentText === undefined) return { error: `${file}: the file no longer exists` };
     const result = created ? createdFileText(changes[0], currentText) : applyChangesToText(currentText, changes);
+    // A file another fix already changed the same way, such as a shared batch helper, needs no write.
+    if (result.error === alreadyApplied) continue;
     if (result.error) return { error: `${file}: ${result.error}` };
     updates.push([file, result.text]);
   }
+  if (!updates.length) return { error: alreadyApplied };
   // Every file is checked before any is written, so a stale fix never leaves a half-applied change.
   for (const [file, text] of updates) writeFile(file, text);
   return { files: updates.map(([file]) => file) };

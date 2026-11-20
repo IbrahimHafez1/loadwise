@@ -71,3 +71,28 @@ test('every file of a fix is checked before any file is written', () => {
   assert.match(result.error, /^b\.ts: /);
   assert.deepEqual(writes, []);
 });
+
+test('a file that another fix already changed is skipped while the rest of the fix applies', () => {
+  const files = new Map([
+    ['helper.ts', 'export async function ids() {}\nexport async function idsMany() {}'],
+    ['caller.ts', 'for (const x of xs) await ids(x);'],
+  ]);
+  const writes = new Map();
+  const fix = {
+    changes: [
+      {
+        file: 'helper.ts',
+        line: 1,
+        before: 'export async function ids() {}',
+        after: 'export async function ids() {}\nexport async function idsMany() {}',
+      },
+      { file: 'caller.ts', line: 1, before: 'for (const x of xs) await ids(x);', after: 'await idsMany(xs);' },
+    ],
+  };
+  const result = applyFix(fix, {
+    readFile: (file) => files.get(file),
+    writeFile: (file, text) => writes.set(file, text),
+  });
+  assert.deepEqual(result.files, ['caller.ts']);
+  assert.equal(writes.get('caller.ts'), 'await idsMany(xs);');
+});
