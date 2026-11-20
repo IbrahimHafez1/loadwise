@@ -137,3 +137,18 @@ declare const builder: Builder;\n`;
   assert.deepEqual(reported(`${builder}export async function run() {\n  builder.set('a');\n}`), []);
   assert.equal(reported(`${builder}export async function run() {\n  builder.send();\n}`).length, 1);
 });
+
+test('an unawaited Prisma model call says the lazy query never runs', () => {
+  const files = {
+    'node_modules/@prisma/client/index.d.ts': `export interface UserDelegate { create(args: object): Promise<object> }
+export declare class PrismaClient { user: UserDelegate }`,
+  };
+  const source = `import { PrismaClient } from '@prisma/client';
+declare const prisma: PrismaClient;
+export async function signup() {
+  prisma.user.create({ data: {} });
+}`;
+  const [finding] = lint(source, files).filter((candidate) => candidate.ruleId === rule);
+  assert.match(finding.message, /^`create\(\)` returns a lazy PrismaPromise, so this query never runs/);
+  assert.doesNotMatch(finding.message, /mark it with `void`/);
+});
