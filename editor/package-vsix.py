@@ -1,4 +1,4 @@
-"""Build one VSIX with the native parsers supported by the two checkers' lockfiles."""
+"""Build one VSIX with the native parsers supported by the loadwise lockfile."""
 
 import argparse
 import base64
@@ -14,7 +14,7 @@ import zipfile
 
 
 EDITOR = Path(__file__).resolve().parent
-PERFORMANCE = EDITOR.parent
+PACKAGE_ROOT = EDITOR.parent
 NPM = shutil.which("npm.cmd" if os.name == "nt" else "npm")
 VSCE = "@vscode/vsce@4.1.1"
 AST_GREP = "@ast-grep/cli"
@@ -52,16 +52,12 @@ def runtime_files(package, relative):
     return relative == ("ast-grep.exe" if "-win32-" in package else "ast-grep")
 
 
-def stage_runtime(downloads, stage, lock, other_lock):
+def stage_runtime(downloads, stage, lock):
     variants = lock[f"node_modules/{AST_GREP}"]["optionalDependencies"]
     packages = ["typescript", "detect-libc", "libpg-query", "@pgsql/types", AST_GREP, *sorted(variants)]
     urls = []
     for name in packages:
-        entry = lock[f"node_modules/{name}"]
-        other = other_lock.get(f"node_modules/{name}")
-        if other and entry["integrity"] != other["integrity"]:
-            raise ValueError(f"Both checkers must lock the same {name} runtime")
-        urls.append(entry["resolved"])
+        urls.append(lock[f"node_modules/{name}"]["resolved"])
     subprocess.run([NPM, "pack", "--silent", "--prefer-offline", "--ignore-scripts", *urls], cwd=downloads, check=True)
     executables = {}
     for name in packages:
@@ -101,25 +97,24 @@ def stage_runtime(downloads, stage, lock, other_lock):
     return executables
 
 
-def build(maintainability, output):
+def build(output):
     if not NPM or output.suffix.lower() != ".vsix":
         raise ValueError("npm must be installed and the output filename must end in .vsix")
     scratch = Path(tempfile.gettempdir()) / "AI-Work"
     scratch.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="backend-checkers-vsix-", dir=scratch) as temp:
+    with tempfile.TemporaryDirectory(prefix="loadwise-vsix-", dir=scratch) as temp:
         root = Path(temp)
         stage = root / "extension"
         stage.mkdir()
         for source in [*EDITOR.glob("*.cjs"), EDITOR / "package.json", EDITOR / "README.md"]:
             shutil.copyfile(source, stage / source.name)
         shutil.copytree(EDITOR / "licenses", stage / "licenses")
-        stage_checker(PERFORMANCE, stage, "@codewarden/backend", "warden-backend")
-        stage_checker(maintainability, stage, "@codewarden/maintainability", "warden-maint")
-        locks = [json.loads((repo / "package-lock.json").read_bytes())["packages"] for repo in (PERFORMANCE, maintainability)]
-        executables = stage_runtime(root, stage, *locks)
+        stage_checker(PACKAGE_ROOT, stage, "@loadwise/cli", "loadwise")
+        lock = json.loads((PACKAGE_ROOT / "package-lock.json").read_bytes())["packages"]
+        executables = stage_runtime(root, stage, lock)
         output.parent.mkdir(parents=True, exist_ok=True)
         # Build beside the destination so replacement is atomic even on another volume.
-        with tempfile.NamedTemporaryFile(prefix=".backend-checkers-", suffix=".vsix", dir=output.parent, delete=False) as file:
+        with tempfile.NamedTemporaryFile(prefix=".loadwise-", suffix=".vsix", dir=output.parent, delete=False) as file:
             artifact = Path(file.name)
         try:
             subprocess.run(
@@ -144,7 +139,6 @@ def build(maintainability, output):
 if __name__ == "__main__":
     version = json.loads((EDITOR / "package.json").read_bytes())["version"]
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("maintainability_root", type=Path, nargs="?", default=PERFORMANCE.parent / "maintainability-check")
-    parser.add_argument("output", type=Path, nargs="?", default=EDITOR / "dist" / f"backend-checkers-{version}.vsix")
+    parser.add_argument("output", type=Path, nargs="?", default=EDITOR / "dist" / f"loadwise-{version}.vsix")
     args = parser.parse_args()
-    build(args.maintainability_root.resolve(), args.output.resolve())
+    build(args.output.resolve())

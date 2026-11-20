@@ -10,7 +10,7 @@ function comparison(source, row, options = {}, supplied) {
   return controlFlowComparison(
     { languageId: 'typescript', lineAt: (index) => ({ text: lines[index] }), lineCount: lines.length, ...options },
     {
-      source: 'warden-maint',
+      source: 'loadwise maint',
       code: 'deep-control-flow',
       comparison: supplied,
       range: { start: { line: row, character: lines[row].indexOf('if') } },

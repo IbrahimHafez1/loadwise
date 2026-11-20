@@ -18,8 +18,8 @@ const { startPerfWatch } = require('./perf-watch.cjs');
 const run = promisify(execFile);
 const debounceMs = 650;
 const maxReportBytes = 64 * 1024 * 1024;
-const perf = 'warden-backend';
-const maint = 'warden-maint';
+const perf = 'loadwise perf';
+const maint = 'loadwise maint';
 const polyglotGlob = '**/*.{py,go,java,cs,rs}';
 const sourceSuffixes = new Set(
   'js jsx ts tsx mjs mts cjs cts py go java cs rs rb php kt kts c h cc cpp cxx hpp hh hxx'.split(' '),
@@ -142,7 +142,7 @@ function monitor(folder, extensionPath, output, { publishOptions, onStatus }) {
     const restart = restartRequested;
     restartRequested = false;
     if (restart) watchUnavailable = false;
-    const settings = vscode.workspace.getConfiguration('backendCheckers', folder.uri);
+    const settings = vscode.workspace.getConfiguration('loadwise', folder.uri);
     if (!settings.get('enabled', true) || !vscode.workspace.isTrusted) {
       stopWatch();
       for (const id of collections.keys()) clear(id);
@@ -154,9 +154,9 @@ function monitor(folder, extensionPath, output, { publishOptions, onStatus }) {
       project || (await exists(path.join(root, 'maintainability.config.json'))) || (await findOne(sourceGlob));
     const hasPolyglotInput = await findOne(polyglotGlob);
     const tasks = [
-      { id: perf, source: perf, args: project ? ['-p', project] : null, watch: true },
-      { id: maint, source: maint, args: hasMaintainabilityInput ? ['.'] : null },
-      { id: perf + '-polyglot', source: perf, args: hasPolyglotInput ? ['polyglot', '.'] : null },
+      { id: perf, source: perf, args: project ? ['perf', '-p', project] : null, watch: true },
+      { id: maint, source: maint, args: hasMaintainabilityInput ? ['maint', '.'] : null },
+      { id: perf + '-polyglot', source: perf, args: hasPolyglotInput ? ['perf', 'polyglot', '.'] : null },
     ];
     for (const { id, source, args, watch } of tasks) {
       if (signal.signal.aborted || version !== revision) return;
@@ -165,8 +165,7 @@ function monitor(folder, extensionPath, output, { publishOptions, onStatus }) {
         clear(id);
         continue;
       }
-      const override = settings.get(source === perf ? 'performanceCli' : 'maintainabilityCli', '');
-      const script = override || path.join(extensionPath, 'tools', source, 'bin', source + '.cjs');
+      const script = settings.get('cli', '') || path.join(extensionPath, 'tools', 'loadwise', 'bin', 'loadwise.cjs');
       try {
         if (!path.isAbsolute(script)) throw new Error('CLI override must be an absolute path.');
         if (watch && !watchUnavailable) {
@@ -268,23 +267,23 @@ function statusText(sessions) {
     findings += status.findings;
     if (status.lastScan && !(lastScan > status.lastScan)) lastScan = status.lastScan;
   }
-  if (scanning) return { text: '$(sync~spin) Backend Checkers: scanning', tooltip: 'Click to show the output.' };
+  if (scanning) return { text: '$(sync~spin) Loadwise: scanning', tooltip: 'Click to show the output.' };
   const time = lastScan ? ' · ' + lastScan.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
   return {
     text: '$(checklist) ' + findings + ' finding' + (findings === 1 ? '' : 's') + time,
     tooltip:
-      (lastScan ? 'Backend Checkers last scanned at ' + lastScan.toLocaleTimeString() + '. ' : '') +
+      (lastScan ? 'Loadwise last scanned at ' + lastScan.toLocaleTimeString() + '. ' : '') +
       'Click to show the output.',
   };
 }
 
 function activate(context) {
   const folders = new Map();
-  const output = vscode.window.createOutputChannel('Backend Checkers');
+  const output = vscode.window.createOutputChannel('Loadwise');
   const dismissals = createDismissals(context.workspaceState);
   const statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
-  statusItem.command = 'backendCheckers.showOutput';
-  statusItem.name = 'Backend Checkers';
+  statusItem.command = 'loadwise.showOutput';
+  statusItem.name = 'Loadwise';
   // Every publish ends in a status update, so the buttons above fixable lines refresh with it.
   const codeLenses = registerCodeLenses(vscode, allDiagnostics);
   function updateStatus() {
@@ -296,7 +295,7 @@ function activate(context) {
   const hooks = {
     publishOptions: (folder) => ({
       isDismissed: (site) => dismissals.has(site),
-      severity: vscode.workspace.getConfiguration('backendCheckers', folder.uri).get('severity', 'default'),
+      severity: vscode.workspace.getConfiguration('loadwise', folder.uri).get('severity', 'default'),
     }),
     onStatus: updateStatus,
   };
@@ -321,7 +320,7 @@ function activate(context) {
   async function showDismissed() {
     const entries = dismissals.entries();
     if (!entries.length) {
-      vscode.window.showInformationMessage('No Backend Checkers findings are dismissed.');
+      vscode.window.showInformationMessage('No Loadwise findings are dismissed.');
       return;
     }
     const items = [
@@ -385,15 +384,15 @@ function activate(context) {
       updateStatus();
     }),
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (!event.affectsConfiguration('backendCheckers')) return;
+      if (!event.affectsConfiguration('loadwise')) return;
       republishAll();
       for (const session of folders.values()) session.schedule({ restart: true });
     }),
-    vscode.commands.registerCommand('backendCheckers.scan', async () => {
+    vscode.commands.registerCommand('loadwise.scan', async () => {
       for (const session of folders.values()) await session.scanNow();
     }),
-    vscode.commands.registerCommand('backendCheckers.showOutput', () => output.show()),
-    vscode.commands.registerCommand('backendCheckers.showDismissed', showDismissed),
+    vscode.commands.registerCommand('loadwise.showOutput', () => output.show()),
+    vscode.commands.registerCommand('loadwise.showDismissed', showDismissed),
     {
       dispose() {
         for (const session of folders.values()) session.dispose();

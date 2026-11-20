@@ -71,7 +71,7 @@ async function scanAfterSave(context, root, savedFile) {
 
 async function waitForFinishedScans(logged, count) {
   const deadline = Date.now() + 20000;
-  while (logged.filter((line) => line === 'Backend Checkers: scan finished').length < count) {
+  while (logged.filter((line) => line === 'Loadwise: scan finished').length < count) {
     if (Date.now() > deadline) throw new Error('scan did not finish');
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
@@ -83,7 +83,7 @@ test('editor rescans on .sql saves and reports migration findings on the stateme
   const markers = logged.filter((line) => line.startsWith('BACKEND_CHECKER | ' + path.normalize(MIGRATION)));
   assert.ok(markers.length >= 2, 'one marker per scan');
   assert.match(markers[0], /^BACKEND_CHECKER \| [^|]+ \| 2 \| /, 'points at the ALTER TABLE statement line');
-  assert.ok(logged.filter((line) => line === 'Backend Checkers: scan started').length >= 2);
+  assert.ok(logged.filter((line) => line === 'Loadwise: scan started').length >= 2);
 });
 
 test('editor ignores baselined migrations', async (context) => {
@@ -100,7 +100,7 @@ test('editor report formats .sql and .prisma findings', (context) => {
   const root = migrationProject(context);
   for (const file of [MIGRATION, 'prisma/schema.prisma']) {
     write(root, file, 'ALTER TABLE orders DROP COLUMN legacy;\n');
-    const report = formatFinding(root, 'warden-backend', {
+    const report = formatFinding(root, 'loadwise perf', {
       file,
       line: 1,
       column: 1,

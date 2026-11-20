@@ -3,7 +3,7 @@
 // Dismissed findings live in the workspace state, never in the user's code. A finding is matched by file, rule and
 // the trimmed text of its flagged line, so it stays hidden across rescans and line shifts and returns once that
 // line changes. An entry without line text hides the rule for the whole file.
-const stateKey = 'backendCheckers.dismissed';
+const stateKey = 'loadwise.dismissed';
 
 function keyOf({ file, ruleId, lineText }) {
   return JSON.stringify([file, ruleId, lineText ?? null]);

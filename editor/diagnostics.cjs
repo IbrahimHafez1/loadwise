@@ -107,7 +107,7 @@ function fixComparison(fix) {
 }
 
 function examplesFor(document, diagnostic, site) {
-  const lookup = diagnostic.source === 'warden-backend' ? performanceExample : maintainabilityExample;
+  const lookup = diagnostic.source === 'loadwise perf' ? performanceExample : maintainabilityExample;
   const example = lookup(diagnostic.code, document.languageId, site.message);
   if (site.fix) return { example, comparison: fixComparison(site.fix) };
   const { source, code, range } = diagnostic;
@@ -165,7 +165,7 @@ function workspaceFix(rootPath, fix) {
 }
 
 // Every finding is an optional suggestion: a warning by default, an error for a declared contract, unless the
-// backendCheckers.severity setting picks one level for all of them.
+// loadwise.severity setting picks one level for all of them.
 function severityFor(vscode, ruleId, setting) {
   const name = severityNames[setting] ?? (contracts.has(ruleId) ? 'Error' : 'Warning');
   return vscode.DiagnosticSeverity[name];
@@ -351,11 +351,11 @@ function onLines(diagnostic, range) {
 }
 
 function registerQuickFixes(vscode, { diagnosticsFor, dismissals, onDismissed }) {
-  const applyCommand = 'backendCheckers.applyFix';
-  const applyAllCommand = 'backendCheckers.applyAllFixes';
-  const dismissCommand = 'backendCheckers.dismiss';
-  const applyAllTitle = 'Apply all Backend Checkers fixes in this file';
-  const fixAllKind = vscode.CodeActionKind.SourceFixAll.append('backendCheckers');
+  const applyCommand = 'loadwise.applyFix';
+  const applyAllCommand = 'loadwise.applyAllFixes';
+  const dismissCommand = 'loadwise.dismiss';
+  const applyAllTitle = 'Apply all Loadwise fixes in this file';
+  const fixAllKind = vscode.CodeActionKind.SourceFixAll.append('loadwise');
   const issuesIn = (uri) => [...diagnosticsFor(uri)].filter((diagnostic) => anchors.has(diagnostic));
   const fixesIn = (uri) => issuesIn(uri).flatMap((diagnostic) => anchors.get(diagnostic).fix ?? []);
   const applyOne = vscode.commands.registerCommand(applyCommand, async (fix) => {
@@ -370,12 +370,12 @@ function registerQuickFixes(vscode, { diagnosticsFor, dismissals, onDismissed })
     const target = uri ?? vscode.window.activeTextEditor?.document.uri;
     const fixes = target ? fixesIn(target) : [];
     if (!fixes.length) {
-      vscode.window.showInformationMessage('Backend Checkers has no fixes for this file.');
+      vscode.window.showInformationMessage('Loadwise has no fixes for this file.');
       return;
     }
     const { edit, applied, skipped } = await fixAllEdit(vscode, fixes);
     if (applied) await vscode.workspace.applyEdit(edit);
-    const summary = 'Backend Checkers applied ' + applied + ' fix(es)';
+    const summary = 'Loadwise applied ' + applied + ' fix(es)';
     if (!skipped) vscode.window.showInformationMessage(summary + '.');
     else
       vscode.window.showWarningMessage(
@@ -399,7 +399,7 @@ function registerQuickFixes(vscode, { diagnosticsFor, dismissals, onDismissed })
     );
     if (!here.length) {
       vscode.window.showInformationMessage(
-        wantsFix ? 'Backend Checkers has no fix on this line.' : 'Backend Checkers has no finding on this line.',
+        wantsFix ? 'Loadwise has no fix on this line.' : 'Loadwise has no finding on this line.',
       );
       return;
     }
@@ -410,11 +410,11 @@ function registerQuickFixes(vscode, { diagnosticsFor, dismissals, onDismissed })
     );
     return picked?.anchor;
   }
-  const applyHere = vscode.commands.registerCommand('backendCheckers.applyFixAtCursor', async () => {
+  const applyHere = vscode.commands.registerCommand('loadwise.applyFixAtCursor', async () => {
     const anchor = await pickAtCursor(true);
     if (anchor) await vscode.commands.executeCommand(applyCommand, anchor.fix);
   });
-  const dismissHere = vscode.commands.registerCommand('backendCheckers.dismissAtCursor', async () => {
+  const dismissHere = vscode.commands.registerCommand('loadwise.dismissAtCursor', async () => {
     const anchor = await pickAtCursor(false);
     if (anchor) await vscode.commands.executeCommand(dismissCommand, anchor.dismissal);
   });
@@ -479,14 +479,14 @@ function registerCodeLenses(vscode, diagnosticsFor) {
     {
       onDidChangeCodeLenses: changed.event,
       provideCodeLenses(document) {
-        if (!vscode.workspace.getConfiguration('backendCheckers', document.uri).get('codeLens', true)) return [];
+        if (!vscode.workspace.getConfiguration('loadwise', document.uri).get('codeLens', true)) return [];
         const fixable = [...diagnosticsFor(document.uri)].filter((diagnostic) => anchors.get(diagnostic)?.fix);
         const lenses = [];
         if (fixable.length > 1) {
           lenses.push(
             new vscode.CodeLens(new vscode.Range(0, 0, 0, 0), {
-              title: '$(wrench) Apply all ' + fixable.length + ' Backend Checkers fixes in this file',
-              command: 'backendCheckers.applyAllFixes',
+              title: '$(wrench) Apply all ' + fixable.length + ' Loadwise fixes in this file',
+              command: 'loadwise.applyAllFixes',
               arguments: [document.uri],
             }),
           );
@@ -498,12 +498,12 @@ function registerCodeLenses(vscode, diagnosticsFor) {
           lenses.push(
             new vscode.CodeLens(range, {
               title: '$(wrench) Apply fix: ' + diagnostic.code,
-              command: 'backendCheckers.applyFix',
+              command: 'loadwise.applyFix',
               arguments: [fix],
             }),
             new vscode.CodeLens(range, {
               title: 'Dismiss',
-              command: 'backendCheckers.dismiss',
+              command: 'loadwise.dismiss',
               arguments: [dismissal],
             }),
           );
@@ -561,12 +561,12 @@ function registerExamples(vscode, diagnosticsFor) {
           if (note) appendParagraphs(content, note);
           if (site.fix) {
             // Only these two commands may run from the hover links.
-            content.isTrusted = { enabledCommands: ['backendCheckers.applyFix', 'backendCheckers.dismiss'] };
+            content.isTrusted = { enabledCommands: ['loadwise.applyFix', 'loadwise.dismiss'] };
             content.appendMarkdown(
               '\n\n' +
-                commandLink('$(wrench) Apply fix', 'backendCheckers.applyFix', site.fix) +
+                commandLink('$(wrench) Apply fix', 'loadwise.applyFix', site.fix) +
                 ' · ' +
-                commandLink('Dismiss', 'backendCheckers.dismiss', site.dismissal),
+                commandLink('Dismiss', 'loadwise.dismiss', site.dismissal),
             );
             content.supportThemeIcons = true;
           }

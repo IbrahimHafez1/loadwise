@@ -1,6 +1,6 @@
 {
-  "name": "backend-checkers",
-  "displayName": "Backend Checkers",
+  "name": "loadwise",
+  "displayName": "Loadwise",
   "description": "See backend performance and maintainability findings and suggested improvements as you edit.",
   "publisher": "IbrahimHafez1",
   "version": "0.1.0",
@@ -28,66 +28,60 @@
   "contributes": {
     "commands": [
       {
-        "command": "backendCheckers.scan",
-        "title": "Backend Checkers: Scan Workspace"
+        "command": "loadwise.scan",
+        "title": "Loadwise: Scan Workspace"
       },
       {
-        "command": "backendCheckers.showOutput",
-        "title": "Backend Checkers: Show Output"
+        "command": "loadwise.showOutput",
+        "title": "Loadwise: Show Output"
       },
       {
-        "command": "backendCheckers.applyAllFixes",
-        "title": "Backend Checkers: Apply all fixes in this file"
+        "command": "loadwise.applyAllFixes",
+        "title": "Loadwise: Apply all fixes in this file"
       },
       {
-        "command": "backendCheckers.showDismissed",
-        "title": "Backend Checkers: Show dismissed findings"
+        "command": "loadwise.showDismissed",
+        "title": "Loadwise: Show dismissed findings"
       },
       {
-        "command": "backendCheckers.applyFix",
-        "title": "Backend Checkers: Apply fix"
+        "command": "loadwise.applyFix",
+        "title": "Loadwise: Apply fix"
       },
       {
-        "command": "backendCheckers.dismiss",
-        "title": "Backend Checkers: Dismiss finding"
+        "command": "loadwise.dismiss",
+        "title": "Loadwise: Dismiss finding"
       },
       {
-        "command": "backendCheckers.applyFixAtCursor",
-        "title": "Backend Checkers: Apply fix on this line"
+        "command": "loadwise.applyFixAtCursor",
+        "title": "Loadwise: Apply fix on this line"
       },
       {
-        "command": "backendCheckers.dismissAtCursor",
-        "title": "Backend Checkers: Dismiss finding on this line"
+        "command": "loadwise.dismissAtCursor",
+        "title": "Loadwise: Dismiss finding on this line"
       }
     ],
     "configuration": {
-      "title": "Backend Checkers",
+      "title": "Loadwise",
       "properties": {
-        "backendCheckers.enabled": {
+        "loadwise.enabled": {
           "type": "boolean",
           "default": true,
           "scope": "resource",
           "description": "Show diagnostics for this workspace folder."
         },
-        "backendCheckers.project": {
+        "loadwise.project": {
           "type": "string",
           "default": "",
           "scope": "resource",
           "description": "TypeScript or JavaScript project config, relative to the workspace folder. Defaults to tsconfig.json or jsconfig.json at its root."
         },
-        "backendCheckers.performanceCli": {
+        "loadwise.cli": {
           "type": "string",
           "default": "",
           "scope": "machine",
-          "description": "Optional absolute path to the warden-backend CLI script."
+          "description": "Optional absolute path to the loadwise CLI script (bin/loadwise.cjs)."
         },
-        "backendCheckers.maintainabilityCli": {
-          "type": "string",
-          "default": "",
-          "scope": "machine",
-          "description": "Optional absolute path to the warden-maint CLI script."
-        },
-        "backendCheckers.severity": {
+        "loadwise.severity": {
           "type": "string",
           "enum": [
             "default",
@@ -105,9 +99,9 @@
           ],
           "default": "default",
           "scope": "resource",
-          "description": "How Backend Checkers findings appear in the editor and the Problems view."
+          "description": "How Loadwise findings appear in the editor and the Problems view."
         },
-        "backendCheckers.codeLens": {
+        "loadwise.codeLens": {
           "type": "boolean",
           "default": true,
           "description": "Show Apply fix and Dismiss buttons above each line that has a fix."
@@ -117,28 +111,28 @@
     "menus": {
       "commandPalette": [
         {
-          "command": "backendCheckers.applyFix",
+          "command": "loadwise.applyFix",
           "when": "false"
         },
         {
-          "command": "backendCheckers.dismiss",
+          "command": "loadwise.dismiss",
           "when": "false"
         }
       ]
     },
     "keybindings": [
       {
-        "command": "backendCheckers.applyFixAtCursor",
+        "command": "loadwise.applyFixAtCursor",
         "key": "ctrl+alt+.",
         "when": "editorTextFocus"
       },
       {
-        "command": "backendCheckers.applyAllFixes",
+        "command": "loadwise.applyAllFixes",
         "key": "ctrl+alt+shift+.",
         "when": "editorTextFocus"
       },
       {
-        "command": "backendCheckers.dismissAtCursor",
+        "command": "loadwise.dismissAtCursor",
         "key": "ctrl+alt+,",
         "when": "editorTextFocus"
       }

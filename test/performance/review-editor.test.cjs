@@ -26,7 +26,7 @@ function createVscode(root) {
     workspace: {
       isTrusted: true,
       workspaceFolders: [folder],
-      getConfiguration: () => ({ get: (_key, fallback) => (_key === 'performanceCli' ? 'relative.cjs' : fallback) }),
+      getConfiguration: () => ({ get: (_key, fallback) => (_key === 'cli' ? 'relative.cjs' : fallback) }),
       findFiles: async () => [],
       createFileSystemWatcher: () => ({ onDidCreate: noop, onDidChange: noop, onDidDelete: noop, dispose() {} }),
       getWorkspaceFolder: () => folder,
@@ -72,7 +72,7 @@ test('the extension scan probes config files without blocking synchronous filesy
   const extension = require('../../editor/extension.cjs');
   const subscriptions = [];
   extension.activate({ extensionPath: root, subscriptions, workspaceState });
-  await commands.get('backendCheckers.scan')();
+  await commands.get('loadwise.scan')();
   for (const subscription of subscriptions) subscription.dispose?.();
   assert.deepEqual(
     probes.filter((file) => file.startsWith(root)),
@@ -88,7 +88,7 @@ const hangingChecker = [
   'const poll = setInterval(() => {',
   '  if (fs.existsSync(release)) { clearInterval(poll); console.log(\'{"findings":[]}\'); }',
   '}, 10);',
-  '// A watch-mode checker keeps running after its report, as warden-backend --watch does.',
+  '// A watch-mode checker keeps running after its report, as loadwise perf --watch does.',
   "if (process.argv.includes('--watch')) setInterval(() => {}, 60000);",
 ].join('\n');
 
@@ -121,7 +121,7 @@ test('changes during a running scan abort the stale child and coalesce into one 
   const logFile = path.join(root, 'starts.log');
   const { vscode } = createVscode(root);
   let configurationChanged;
-  vscode.workspace.getConfiguration = () => ({ get: (key, fallback) => (key.endsWith('Cli') ? script : fallback) });
+  vscode.workspace.getConfiguration = () => ({ get: (key, fallback) => (key === 'cli' ? script : fallback) });
   vscode.workspace.onDidChangeConfiguration = (handler) => ((configurationChanged = handler), { dispose() {} });
   const lines = [];
   vscode.window.createOutputChannel = () => ({ appendLine: (line) => lines.push(line), show() {}, dispose() {} });
@@ -161,8 +161,8 @@ test('changes during a running scan abort the stale child and coalesce into one 
 
   fs.writeFileSync(path.join(root, 'release'), '');
   const published = () => lines.filter((line) => line.includes('finding(s)'));
-  await waitFor(() => published().some((line) => line.includes('warden-maint — 0 finding(s)')));
-  await waitFor(() => published().some((line) => line.includes('warden-backend — 0 finding(s)')));
+  await waitFor(() => published().some((line) => line.includes('loadwise maint — 0 finding(s)')));
+  await waitFor(() => published().some((line) => line.includes('loadwise perf — 0 finding(s)')));
   assert.equal(startedPids(logFile).length, 4, 'exactly one follow-up scan (a fresh watcher and maintainability)');
   assert.equal(published().length, 2, 'only the newest scan published');
 });
@@ -170,14 +170,9 @@ test('changes during a running scan abort the stale child and coalesce into one 
 test('editor watch aborts the stale scan child on change and runs one follow-up after the last change', async (context) => {
   const { EventEmitter } = require('node:events');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'editor-watch-burst-'));
-  const packageDirectory = path.join(root, 'node_modules', '@codewarden', 'maintainability');
-  fs.mkdirSync(path.join(packageDirectory, 'bin'), { recursive: true });
-  fs.writeFileSync(
-    path.join(packageDirectory, 'package.json'),
-    '{"name":"@codewarden/maintainability","version":"1.0.0"}',
-  );
-  fs.writeFileSync(path.join(packageDirectory, 'bin', 'warden-maint.cjs'), hangingChecker);
-  const logFile = path.join(packageDirectory, 'bin', 'starts.log');
+  const maintainabilityCli = path.join(root, 'checker.cjs');
+  fs.writeFileSync(maintainabilityCli, hangingChecker);
+  const logFile = path.join(root, 'starts.log');
   const watcher = new EventEmitter();
   watcher.close = async () => {};
   let refresh;
@@ -214,7 +209,7 @@ test('editor watch aborts the stale scan child on change and runs one follow-up 
   let checkCodeCalls = 0;
   const modulePath = require.resolve('../../lib/performance/editor-watch.cjs');
   delete require.cache[modulePath];
-  require(modulePath).watchEditor(root, undefined, async () => (checkCodeCalls++, []));
+  require(modulePath).watchEditor(root, undefined, async () => (checkCodeCalls++, []), maintainabilityCli);
 
   watcher.emit('all', 'add', 'a.js');
   watcher.emit('ready');
@@ -228,7 +223,7 @@ test('editor watch aborts the stale scan child on change and runs one follow-up 
   }
   refresh();
   await waitFor(() => !isAlive(stalePid));
-  await waitFor(() => logged.filter((line) => line === 'Backend Checkers: scan finished').length === 1);
+  await waitFor(() => logged.filter((line) => line === 'Loadwise: scan finished').length === 1);
   assert.equal(checkCodeCalls, 1, 'no immediate re-run while changes keep arriving');
 
   context.mock.timers.tick(499);
@@ -238,8 +233,8 @@ test('editor watch aborts the stale scan child on change and runs one follow-up 
   await waitFor(() => startedPids(logFile).length === 2);
   assert.equal(checkCodeCalls, 2);
 
-  fs.writeFileSync(path.join(packageDirectory, 'bin', 'release'), '');
-  await waitFor(() => logged.filter((line) => line === 'Backend Checkers: scan finished').length === 2);
+  fs.writeFileSync(path.join(root, 'release'), '');
+  await waitFor(() => logged.filter((line) => line === 'Loadwise: scan finished').length === 2);
   assert.equal(startedPids(logFile).length, 2, 'exactly one follow-up scan');
   assert.equal(checkCodeCalls, 2);
 });

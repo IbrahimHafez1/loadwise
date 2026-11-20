@@ -34,7 +34,8 @@ test('setup creates one background process task whose matcher captures paths, se
   assert.equal(task.type, 'process');
   assert.equal(task.command, 'node');
   assert.deepEqual(task.args, [
-    '${workspaceFolder}/node_modules/@codewarden/backend/bin/warden-backend.cjs',
+    '${workspaceFolder}/node_modules/@loadwise/cli/bin/loadwise.cjs',
+    'perf',
     'editor',
     'watch',
   ]);
@@ -58,8 +59,8 @@ test('setup creates one background process task whose matcher captures paths, se
     fields,
   );
   assert.deepEqual(matcher.fileLocation, ['relative', '${workspaceFolder}']);
-  assert.ok(new RegExp(matcher.background.beginsPattern).test('Backend Checkers: scan started'));
-  assert.ok(new RegExp(matcher.background.endsPattern).test('Backend Checkers: scan finished'));
+  assert.ok(new RegExp(matcher.background.beginsPattern).test('Loadwise: scan started'));
+  assert.ok(new RegExp(matcher.background.endsPattern).test('Loadwise: scan finished'));
   assert.deepEqual(setupEditor(root), { filename, changed: false });
   assert.equal(fs.readFileSync(filename, 'utf8'), original);
 });
