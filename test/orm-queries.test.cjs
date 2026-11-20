@@ -40,6 +40,56 @@ const files = {
     }`,
 };
 
+test('existence-only TypeORM reads require direct truthiness, compatible repository methods and equivalent options', () => {
+  const source = `import { Repository } from 'typeorm';
+    declare const repo: Repository<object>, enabled: boolean, scope: { id: number };
+    async function check() {
+      if (enabled && !(await repo.findOne({ where: { id: 1 } }))) return; // exists
+      return !(await repo.findOneBy({ id: 1 })); // exists
+    }
+    async function skip() {
+      if (await repo.findOne({ where: scope, lock: { mode: 'pessimistic_read' } })) return;
+      if (await repo.findOne({ where: scope, select: { id: true } })) return;
+      if (await repo.findOne({ where: undefined })) return;
+      const entity = await repo.findOneBy({id: 2});
+      return (await repo.findOneBy(scope)) || entity;
+    }
+    async function duplicate() {
+      const found = await repo.findOne({where: {id: 5}}); // exists
+      if (found) throw Error();
+    }
+    async function usesRow() {
+      const found = await repo.findOneBy({id: 5});
+      if (found) return found;
+    }
+    async function captured() {
+      const found = await repo.findOneBy({id: 5});
+      if (!found) return;
+      return () => found;
+    }
+    async function asserted() {
+      if ((await repo.findOneBy({id:1})) as object) return;
+      if (await (repo.findOneBy({id:1}) as Promise<object>)) return;
+    }`;
+  const declarations = `export class Repository<T> {
+    findOne(options: object): Promise<T | null>; findOneBy(filter: object): Promise<T | null>;
+  }`;
+  const scan = (declaration) =>
+    lint(source, { 'node_modules/typeorm/index.d.ts': declaration })
+      .filter((finding) => finding.ruleId === 'typeorm-existence-materialization')
+      .map((finding) => finding.line);
+  assert.deepEqual(scan(declarations), []);
+  assert.deepEqual(
+    scan(
+      declarations.replace(
+        '}',
+        'exists(options: object):Promise<boolean>; existsBy(filter: object):Promise<boolean>; }',
+      ),
+    ),
+    [4, 5, 15],
+  );
+});
+
 test('TypeORM recognizes In on the current batch while preserving per-record and custom predicates', () => {
   const source = `import {Repository, In as among} from 'typeorm';
     declare const repo: Repository<{id: number}>, groups: number[][];

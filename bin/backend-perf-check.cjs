@@ -54,6 +54,7 @@ const sourceRules = new Set([
   'drizzle-unfiltered-write',
   'orm-query-in-loop',
   'orm-count-materialization',
+  'typeorm-existence-materialization',
   'prisma-scope-unverified',
   'drizzle-scope-unverified',
   'data-access-boundary',
