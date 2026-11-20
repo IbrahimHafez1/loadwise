@@ -106,7 +106,7 @@ jobs:
 | `path`         | `.`             | Directory to check.                                                                                   |
 | `changed-only` | `false`         | `true` passes `--changed-since` with the pull request base commit.                                    |
 | `fail-on`      | checker default | Passed to `--fail-on` (`contract` or `all`).                                                          |
-| `upload-sarif` | `true`          | Uploads the SARIF report with `github/codeql-action/upload-sarif@v3`; needs `security-events: write`. |
+| `upload-sarif` | `true`          | Uploads the SARIF report with `github/codeql-action/upload-sarif@v4`; needs `security-events: write`. |
 | `annotations`  | `true`          | Prints findings as workflow annotations.                                                              |
 
 The action runs `npx --yes @loadwise/cli@<version>` with the version in its own `package.json`, and fails the job with the checker's exit code.
