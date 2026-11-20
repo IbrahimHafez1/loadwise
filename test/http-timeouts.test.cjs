@@ -94,3 +94,27 @@ test('axios fix adds a timeout', (context) => {
   assert.match(onlyChange(finding).after, /axios\.get\('\/x', \{ timeout: 10_000 \}\)/);
   assert.match(finding.fix.note, /placeholder/);
 });
+
+test('AWS SDK v3 clients without requestHandler timeouts are reported', () => {
+  const awsFiles = {
+    'node_modules/@aws-sdk/client-s3/index.d.ts': `
+      export interface S3ClientConfig { region?: string; requestHandler?: unknown }
+      export class S3Client { constructor(config?: S3ClientConfig) }`,
+  };
+  const source = [
+    "import { S3Client } from '@aws-sdk/client-s3';",
+    'class LocalClient { constructor(config?: object) {} }',
+    'declare const shared: object;',
+    "export const bare = new S3Client({ region: 'auto' });",
+    'export const none = new S3Client();',
+    "export const limited = new S3Client({ region: 'auto', requestHandler: { requestTimeout: 30_000 } });",
+    'export const spread = new S3Client({ ...shared });',
+    'export const local = new LocalClient({});',
+  ].join('\n');
+  const reported = findings(source, awsFiles);
+  assert.deepEqual(
+    reported.map((finding) => finding.line),
+    [4, 5],
+  );
+  assert.match(reported[0].message, /requestHandler: \{ requestTimeout/);
+});
