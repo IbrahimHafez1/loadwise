@@ -65,7 +65,7 @@ async function main(args) {
       left.column - right.column ||
       left.ruleId.localeCompare(right.ruleId),
   );
-  const contracts = new Set(['file-placement', 'folder-boundary', 'query-mutates-state']);
+  const contracts = new Set(['file-placement', 'folder-boundary', 'data-access-boundary', 'query-mutates-state']);
   report.contractFindingCount = report.findings.filter((finding) => contracts.has(finding.ruleId)).length;
   const contextual = report.findings.filter((finding) => finding.contextualReason && !contracts.has(finding.ruleId));
   if (contextual.length) {
