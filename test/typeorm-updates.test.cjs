@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { lint } = require('./helpers.cjs');
-const { scanWithFixes, onlyChange } = require('./site-fix-helpers.cjs');
+const { scanWithFixes, onlyChange, dedent } = require('./site-fix-helpers.cjs');
 
 const rule = 'typeorm-load-then-save';
 const typeorm = `export class Repository<T> {
@@ -140,7 +140,7 @@ test('fix keeps an exact not-found throw through the update result', (context) =
   assert.match(finding.fix.note, /affected/);
 });
 
-test('fix keeps the load and a return guard, and skips non-key lookups and findOneOrFail', (context) => {
+test('fix keeps the load and a return guard, and skips non-key lookups', (context) => {
   const { findings } = scanWithFixes(context, {
     ...files,
     'a.ts': `${header}export async function guarded(id: number) {
@@ -154,15 +154,32 @@ export async function byName(name: string) {
   user.title = 'x';
   await users.save(user);
 }
-export async function orFail(id: number) {
+`,
+  });
+  const found = findings.filter((entry) => entry.ruleId === rule);
+  assert.equal(found.length, 2);
+  assert.equal(onlyChange(found[0]).after, "await users.update({ id }, { title: 'x' });");
+  assert.equal(found[1].fix, undefined);
+});
+
+test('findOneOrFail becomes an update that throws EntityNotFoundError when no row matched', (context) => {
+  const { findings } = scanWithFixes(context, {
+    ...files,
+    'a.ts': `${header}export async function orFail(id: number) {
   const user = await users.findOneOrFail({ where: { id } });
-  user.title = 'x';
+  user.tokenVersion += 1;
   await users.save(user);
 }`,
   });
-  const found = findings.filter((entry) => entry.ruleId === rule);
-  assert.equal(found.length, 3);
-  assert.equal(onlyChange(found[0]).after, "await users.update({ id }, { title: 'x' });");
-  assert.equal(found[1].fix, undefined);
-  assert.equal(found[2].fix, undefined);
+  const [finding] = findings.filter((entry) => entry.ruleId === rule);
+  const { changes } = finding.fix;
+  assert.equal(changes.length, 2);
+  assert.match(
+    changes[0].after,
+    /import \{[^}]*Repository, Column, ManyToOne, BeforeUpdate, Entity, EntityNotFoundError \} from 'typeorm';/,
+  );
+  assert.equal(
+    dedent(changes[1].after),
+    "const result = await users.increment({ id }, 'tokenVersion', 1);\nif (!result.affected) throw new EntityNotFoundError(User, { id });",
+  );
 });
