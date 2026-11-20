@@ -17,3 +17,22 @@ test('an archive needs an independent source counterpart and cannot hide a live 
   assert.equal(sourceContext(finding, copies, new Set()), undefined);
   assert.equal(sourceContext({ file: archive, ruleId: 'query-mutates-state' }, copies, new Set([archive])), undefined);
 });
+
+test('test, seed and script sources are contextual for function-level rules only', () => {
+  for (const file of [
+    'test/helper.cjs',
+    'src/users.spec.ts',
+    'prisma/seed.ts',
+    'seeds/bootstrap.ts',
+    'scripts/run.ts',
+    'db/users.seed.ts',
+  ]) {
+    assert.ok(sourceContext({ file, ruleId: 'high-branch-complexity' }, new Set(), new Set()), file);
+    assert.ok(sourceContext({ file, ruleId: 'query-mutates-state' }, new Set(), new Set()), file);
+    assert.equal(sourceContext({ file, ruleId: 'dependency-cycle' }, new Set(), new Set()), undefined, file);
+  }
+  assert.equal(
+    sourceContext({ file: 'src/users.service.ts', ruleId: 'deep-control-flow' }, new Set(), new Set()),
+    undefined,
+  );
+});
