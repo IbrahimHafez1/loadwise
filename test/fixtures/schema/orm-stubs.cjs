@@ -120,4 +120,31 @@ export interface QueryRunner { query(sql: string, parameters?: unknown[]): Promi
 export declare class BaseEntity { static find<T>(this: new () => T, options?: FindManyOptions<T>): Promise<T[]> }`,
 };
 
-module.exports = { drizzle, typeorm };
+const sequelizeModel = `export interface FindOptions { where?: object; order?: unknown[]; limit?: number; offset?: number; attributes?: unknown }
+export declare class Model<T = any> {
+  static findAll<M>(this: new () => M, options?: FindOptions): Promise<M[]>;
+  static findOne<M>(this: new () => M, options?: FindOptions): Promise<M | null>;
+  static findAndCountAll<M>(this: new () => M, options?: FindOptions): Promise<{ rows: M[]; count: number }>;
+  static count(options?: FindOptions): Promise<number>;
+  static findByPk<M>(this: new () => M, id: unknown): Promise<M | null>;
+  static init(attributes: object, options: object): void;
+}`;
+
+const sequelize = {
+  'node_modules/sequelize/package.json': '{"name":"sequelize","types":"index.d.ts"}',
+  'node_modules/sequelize/index.d.ts': `${sequelizeModel}
+export declare const DataTypes: { BOOLEAN: unknown; UUID: unknown; STRING: unknown; DATE: unknown; INTEGER: unknown; ENUM(...values: string[]): unknown };
+export declare const Op: { readonly in: unique symbol; readonly gt: unique symbol; readonly gte: unique symbol; readonly lt: unique symbol; readonly like: unique symbol; readonly iLike: unique symbol; readonly or: unique symbol; readonly ne: unique symbol };
+export declare class Sequelize {
+  define(name: string, attributes: object, options?: object): typeof Model;
+  query(sql: string, options?: object): Promise<unknown>;
+}`,
+  'node_modules/sequelize-typescript/package.json': '{"name":"sequelize-typescript","types":"index.d.ts"}',
+  'node_modules/sequelize-typescript/index.d.ts': `export { Model } from 'sequelize';
+export declare const DataType: { BOOLEAN: unknown; UUID: unknown; STRING: unknown; DATE: unknown; INTEGER: unknown; ENUM(...values: string[]): unknown };
+${decorators(['Table', 'Column', 'PrimaryKey', 'ForeignKey', 'BelongsTo', 'Default', 'AllowNull'])}
+export declare function Index(...args: any[]): any;
+export declare function Unique(...args: any[]): any;`,
+};
+
+module.exports = { drizzle, typeorm, sequelize };
