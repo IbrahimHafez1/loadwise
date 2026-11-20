@@ -230,3 +230,36 @@ test('one-off fixture work gets context only in direct nonconcurrent unit-test r
     [21, false],
   ]);
 });
+
+test('reports blocking fs work in multer diskStorage callbacks and the helpers they call', () => {
+  const multer = {
+    'node_modules/@types/multer/index.d.ts': `
+      type Callback = (error: Error | null, value: string) => void;
+      export interface DiskStorageOptions {
+        destination?: string | ((request: unknown, file: unknown, callback: Callback) => void);
+        filename?: (request: unknown, file: unknown, callback: Callback) => void;
+      }
+      export function diskStorage(options: DiskStorageOptions): unknown;`,
+  };
+  const source = [
+    "import { mkdirSync, existsSync } from 'node:fs';",
+    "import { diskStorage } from 'multer';",
+    "mkdirSync('uploads', { recursive: true });",
+    'function uploadDirectory(): string {',
+    "  mkdirSync('uploads', { recursive: true });",
+    "  return 'uploads';",
+    '}',
+    "function plainName(): string { return 'file'; }",
+    'export const storage = diskStorage({',
+    '  destination: (_request, _file, callback) => callback(null, uploadDirectory()),',
+    "  filename: (_request, _file, callback) => callback(null, existsSync('x') ? plainName() : 'y'),",
+    '});',
+    "export const fixed = diskStorage({ destination: 'uploads' });",
+  ].join('\n');
+  const findings = lint(source, multer).filter((diagnostic) => diagnostic.ruleId === 'node-sync-fs-in-async');
+  assert.deepEqual(
+    findings.map((diagnostic) => diagnostic.line),
+    [10, 11],
+  );
+  assert.match(findings[0].message, /`uploadDirectory\(\)` runs fs\.mkdirSync inside the multer `destination` callback/);
+});
