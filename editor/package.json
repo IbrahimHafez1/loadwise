@@ -34,6 +34,22 @@
       {
         "command": "backendCheckers.showOutput",
         "title": "Backend Checkers: Show Output"
+      },
+      {
+        "command": "backendCheckers.applyAllFixes",
+        "title": "Backend Checkers: Apply all fixes in this file"
+      },
+      {
+        "command": "backendCheckers.showDismissed",
+        "title": "Backend Checkers: Show dismissed findings"
+      },
+      {
+        "command": "backendCheckers.applyFix",
+        "title": "Backend Checkers: Apply fix"
+      },
+      {
+        "command": "backendCheckers.dismiss",
+        "title": "Backend Checkers: Dismiss finding"
       }
     ],
     "configuration": {
@@ -62,8 +78,40 @@
           "default": "",
           "scope": "machine",
           "description": "Optional absolute path to the maintainability-check CLI script."
+        },
+        "backendCheckers.severity": {
+          "type": "string",
+          "enum": [
+            "default",
+            "error",
+            "warning",
+            "information",
+            "hint"
+          ],
+          "enumDescriptions": [
+            "Warning for suggestions and Error for declared contract violations.",
+            "Show every finding as an error.",
+            "Show every finding as a warning.",
+            "Show every finding as information.",
+            "Show every finding as a hint (faint dots, not listed in Problems)."
+          ],
+          "default": "default",
+          "scope": "resource",
+          "description": "How Backend Checkers findings appear in the editor and the Problems view."
         }
       }
+    },
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "backendCheckers.applyFix",
+          "when": "false"
+        },
+        {
+          "command": "backendCheckers.dismiss",
+          "when": "false"
+        }
+      ]
     }
   }
 }
