@@ -36,7 +36,30 @@ test('Prisma: reports Json and @db.Text columns loaded by a list without select'
   const [finding] = prismaFindings('export const list = () => prisma.article.findMany({ where: { id: { gt: 1 } } });');
   assert.ok(finding);
   assert.match(finding.message, /body \(Text\), meta \(Json\)/);
-  assert.equal(finding.contextualReason, undefined);
+  assert.match(finding.contextualReason, /returned or passed on whole/);
+});
+
+test('Prisma: large columns the code never reads are reported plainly, and read ones are not', () => {
+  const found = prismaFindings(`export async function titles() {
+  const rows = await prisma.article.findMany({ where: { id: { gt: 1 } } });
+  return rows.map((row) => ({ id: row.id, title: row.title, body: row.body }));
+}
+export async function counted() {
+  const rows = await prisma.article.findMany({ where: { id: { gt: 1 } } });
+  for (const { id, meta } of rows) console.log(id, meta);
+  return rows.length;
+}
+export async function everything() {
+  const rows = await prisma.article.findMany({ where: { id: { gt: 1 } } });
+  const copy = [...rows];
+  return copy;
+}`);
+  assert.equal(found.length, 3);
+  assert.ok(found[0].message.includes('(meta (Json))'));
+  assert.equal(found[0].contextualReason, undefined);
+  assert.ok(found[1].message.includes('(body (Text))'));
+  assert.equal(found[1].contextualReason, undefined);
+  assert.match(found[2].contextualReason, /returned or passed on whole/);
 });
 
 test('Prisma: reports include nesting two levels deep', () => {
