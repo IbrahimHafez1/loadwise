@@ -328,5 +328,5 @@ test('a repeated key in the config exits 2, including inside the performance sec
   const text = '{"performance":{"parallelReads":[],"parallelReads":[]}}';
   const run = loadwise(project(context, { 'loadwise.config.json': text }), 'check');
   assert.equal(run.code, 2);
-  assert.match(run.stderr, /Duplicate query policy key/);
+  assert.match(run.stderr, /Duplicate config key/);
 });
