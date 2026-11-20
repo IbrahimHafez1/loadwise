@@ -349,3 +349,64 @@ test('discarded counts, filters and sorted prefixes do not suggest server-side m
     [],
   );
 });
+
+test('a page OR built through a per-row filter helper is one batched read', () => {
+  const source = `import type {PrismaClient} from '@prisma/client';
+    function windowFor(id: number, since: number) { return { id, owner: { gt: since } }; }
+    async function check(db: PrismaClient, pages: {id: number, since: number}[][]) {
+      for (const page of pages) {
+        await db.user.findMany({ where: { OR: page.map((row) => windowFor(row.id, row.since)) } });
+        for (const row of page) await db.user.findMany({ where: { OR: [windowFor(row.id, row.since)] } }); // repeat
+      }
+    }`;
+  const expected = source.split('\n').flatMap((line, index) => (line.endsWith('// repeat') ? [index + 1] : []));
+  assert.deepEqual(
+    lint(source, legacyFiles)
+      .filter((finding) => finding.ruleId === 'prisma-query-in-loop')
+      .map((finding) => finding.line),
+    expected,
+  );
+});
+
+// analyze.cjs visits calls only, so this drives the check over a TypeScript 6 program directly.
+test(
+  'raw Prisma tagged templates awaited per item are loop queries',
+  {
+    skip: process.env.PERF_CHECK_TEST_NATIVE === '1' && 'builds a TypeScript 6 program',
+  },
+  () => {
+    const { withProgram } = require('./helpers.cjs');
+    const { syntax: ts } = require('../lib/compiler.cjs');
+    const { checkPrismaRawTemplate } = require('../lib/prisma.cjs');
+    const source = `import { PrismaClient } from '@prisma/client';
+    async function run(db: PrismaClient, ids: number[]) {
+      for (const id of ids) await db.$executeRaw\`UPDATE item SET hits = hits + 1 WHERE id = \${id}\`; // repeat
+      await db.$transaction(ids.map((id) => db.$executeRaw\`UPDATE item SET hits = 0 WHERE id = \${id}\`));
+      for (const id of [1]) await db.$queryRaw\`SELECT \${id}\`;
+      await db.$queryRaw\`SELECT 1\`;
+    }`;
+    const files = {
+      'node_modules/@prisma/client/index.d.ts': `export declare class PrismaClient {
+      $executeRaw(query: TemplateStringsArray, ...values: unknown[]): Promise<number>;
+      $queryRaw(query: TemplateStringsArray, ...values: unknown[]): Promise<unknown>;
+      $transaction(queries: Promise<unknown>[]): Promise<unknown[]>;
+    }`,
+    };
+    const lines = withProgram(source, files, (program, sourceFile) => {
+      const reported = [];
+      const context = {
+        checker: program.getTypeChecker(),
+        report: (node) => reported.push(sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1),
+      };
+      (function visit(node) {
+        if (ts.isTaggedTemplateExpression(node)) checkPrismaRawTemplate(node, context);
+        ts.forEachChild(node, visit);
+      })(sourceFile);
+      return reported;
+    });
+    assert.deepEqual(
+      lines,
+      source.split('\n').flatMap((line, index) => (line.endsWith('// repeat') ? [index + 1] : [])),
+    );
+  },
+);
