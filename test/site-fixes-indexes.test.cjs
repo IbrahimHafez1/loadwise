@@ -265,3 +265,70 @@ export class Lesson {
   );
   assert.equal(fixOf({ ...base, message: base.message.replace('`student`', '`other`') }), undefined);
 });
+
+test('TypeORM foreign key: a separate column property or the join column of the relation gets the index', (context) => {
+  const source = `import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
+
+@Entity('reports')
+export class Report {
+  @Column({ type: 'uuid', nullable: true }) approvedById!: string | null;
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'approvedById' })
+  approvedBy!: User | null;
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'ownerId', foreignKeyConstraintName: 'fk_owner' })
+  owner?: User | null;
+}
+`;
+  const root = project(context, { 'report.ts': source });
+  const base = { ruleId: 'index-missing-foreign-key', file: path.join(root, 'report.ts'), column: 3 };
+  const message = (name) => `Add \`@Index()\` to the \`${name}\` property of entity \`Report\` (report.ts:4).`;
+  const column = fixOf({ ...base, line: 8, suggestion: '@Index()', message: message('approvedById') });
+  assert.deepEqual(
+    column.changes.map(({ line, after }) => ({ line, after })),
+    [{ line: 5, after: "  @Index()\n  @Column({ type: 'uuid', nullable: true }) approvedById!: string | null;" }],
+  );
+  const relation = fixOf({ ...base, line: 12, suggestion: '@Index()', message: message('ownerId') });
+  assert.deepEqual(
+    relation.changes.map(({ line, after }) => ({ line, after })),
+    [{ line: 10, after: '  @Index()\n  @ManyToOne(() => User)' }],
+  );
+  assert.match(relation.note, /join column `ownerId`/);
+  assert.equal(fixOf({ ...base, line: 12, suggestion: '@Index()', message: message('creatorId') }), undefined);
+});
+
+test('TypeORM: a column inherited from a base class gets an entity-level index', (context) => {
+  const source = `import { Column, Entity } from 'typeorm';
+import { BaseEntity } from './base';
+
+@Entity('clients')
+export class Client extends BaseEntity {
+  @Column()
+  name!: string;
+}
+`;
+  const root = project(context, { 'client.ts': source });
+  const result = fixOf(
+    finding(root, {
+      declarationFile: 'client.ts',
+      declarationLine: 5,
+      declarationColumn: 14,
+      declarationMessage: 'Entity `Client` is declared here.',
+      ruleId: 'index-missing-order',
+      suggestion: '@Index()',
+      message: 'Add `@Index()` to the `createdAt` property of entity `Client` (client.ts:5).',
+    }),
+  );
+  assert.deepEqual(
+    result.changes.map(({ line, after }) => ({ line, after })),
+    [
+      {
+        line: 1,
+        after:
+          "import { Column, Entity, Index } from 'typeorm';\nimport { BaseEntity } from './base';\n\n@Index(['createdAt'])\n@Entity('clients')",
+      },
+    ],
+  );
+  assert.match(result.note, /declared on the base class/);
+});
