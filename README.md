@@ -41,6 +41,40 @@ The performance checker uses the directory's `tsconfig.json` or `jsconfig.json`;
 
 Exit codes: **0** passed, **1** a checker met its exit threshold, **2** invalid input or configuration in any checker.
 
+## Configuration
+
+One optional file, `loadwise.config.json`, sets the defaults for every checker. `loadwise check` looks for it in the checked directory and `loadwise perf` or `loadwise maint` in the project folder; `--config <file>` on `check` (`--loadwise-config <file>` on `perf` and `maint`) names another one. Add `$schema` for editor completion and validation.
+
+```json
+{
+  "$schema": "./node_modules/@loadwise/cli/schema/loadwise.config.schema.json",
+  "checkers": ["perf", "maint"],
+  "ignore": ["generated/**", "scripts/**"],
+  "rules": {
+    "duplicate-implementation": "warn",
+    "array-repeated-find": "off",
+    "pg-query-in-loop": { "level": "error" }
+  },
+  "overrides": [{ "files": ["src/legacy/**"], "rules": { "high-branch-complexity": "off" } }],
+  "performance": {
+    "parallelReads": [{ "from": "@app/reads", "exports": ["fetchUser", "fetchPosts"] }]
+  },
+  "maintainability": {
+    "exclude": ["vendor"],
+    "placement": [{ "suffix": ".controller.ts", "under": ["src/controllers"] }]
+  }
+}
+```
+
+- `checkers` is the default selection for `loadwise check`; `--only` and `--skip` override it.
+- `ignore` lists globs, relative to the config file, that no checker reports on. `*` matches within a folder, `**` any depth, `?` one character and `{a,b}` alternatives; naming a folder covers everything below it.
+- `rules` sets each rule to `"off"` (its findings are dropped), `"warn"` (reported, but never changes the exit code) or `"error"` (reported findings always count, even under `--fail-on contract`). A hidden contextual finding is not reported, so it never counts. The object form `{ "level": "warn" }` is accepted for future rule options; no rule has options yet.
+- `overrides` apply `rules` to the files matching `files`; a later override wins over an earlier one and over `rules`.
+- `performance` holds what `backend-perf.policy.json` holds, and `maintainability` what the `maintainability.config.json` policy holds. The old files keep working when the config lacks the section; when both exist the config wins and a note says so. `--policy` and `--config policy.json` still beat the config.
+- `--ignore <rule-id>` (repeatable, on `check`, `perf` and `maint`) adds a rule to `"off"` for one run and beats the config.
+
+An unknown key or rule id, a wrong level or a malformed section exits with code 2 and lists each problem. Rule ids come from the registered checkers, so a rule id that no checker has yet is rejected. The config applies to source checks and `perf polyglot`; `perf migrations`, `db`, `traces` and `plan` do not read it.
+
 ## Use with AI coding agents
 
 Any agent that runs shell commands and reads an instructions file (Claude Code, Cursor, Codex, Copilot agent, Windsurf, Gemini CLI) can drive both checkers.

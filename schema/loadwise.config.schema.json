@@ -1,0 +1,311 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "loadwise.config.json",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "checkers": {
+      "type": "array",
+      "items": {
+        "enum": ["perf", "maint", "sec"]
+      },
+      "minItems": 1,
+      "description": "Default checkers for `loadwise check`; --only and --skip override it."
+    },
+    "ignore": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Glob patterns, relative to this file, excluded from every checker."
+    },
+    "rules": {
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "array-repeated-find",
+          "array-repeated-membership",
+          "count-then-page-serial",
+          "data-access-boundary",
+          "db-duplicate-index",
+          "db-missing-index",
+          "db-seq-scan-heavy-table",
+          "db-slow-query-plan",
+          "db-unindexed-foreign-key",
+          "db-unused-index",
+          "deep-control-flow",
+          "dependency-cycle",
+          "drizzle-query-in-loop",
+          "drizzle-scope-unverified",
+          "drizzle-unfiltered-write",
+          "duplicate-implementation",
+          "external-call-in-transaction",
+          "file-placement",
+          "filter-for-existence",
+          "folder-boundary",
+          "guard-query-per-request",
+          "high-branch-complexity",
+          "http-call-without-timeout",
+          "index-missing-filter",
+          "index-missing-foreign-key",
+          "index-missing-order",
+          "index-unusable-expression",
+          "index-unusable-pattern",
+          "known-reads-awaited-serially",
+          "loop-copy-accumulator",
+          "migration-breaking-drop",
+          "migration-breaking-rename",
+          "migration-column-type-rewrite",
+          "migration-concurrent-in-transaction",
+          "migration-constraint-not-valid",
+          "migration-constraint-without-index",
+          "migration-index-not-concurrent",
+          "migration-missing-lock-timeout",
+          "migration-mysql-lock-unspecified",
+          "migration-mysql-table-copy",
+          "migration-not-null-without-default",
+          "migration-set-not-null-scan",
+          "migration-table-rewrite-command",
+          "migration-unparsed",
+          "migration-volatile-default",
+          "mongo-collection-scan-observed",
+          "node-sync-compression-in-async",
+          "node-sync-crypto-in-async",
+          "node-sync-fs-in-async",
+          "node-sync-process-in-async",
+          "numeric-sort-for-extreme",
+          "orm-count-materialization",
+          "orm-query-in-loop",
+          "password-hash-pure-js",
+          "password-hash-sync-in-async",
+          "pg-count-materialization",
+          "pg-dynamic-query-text",
+          "pg-filter-materialization",
+          "pg-first-materialization",
+          "pg-query-in-loop",
+          "pg-top-k-materialization",
+          "pg-transaction-on-pool",
+          "pg-unreleased-checkout",
+          "pool-created-per-request-or-item",
+          "prisma-count-materialization",
+          "prisma-dependent-writes",
+          "prisma-distinct-in-memory",
+          "prisma-filter-materialization",
+          "prisma-first-materialization",
+          "prisma-query-in-loop",
+          "prisma-read-modify-write",
+          "prisma-relation-count-in-list",
+          "prisma-scope-unverified",
+          "prisma-top-k-materialization",
+          "prisma-transaction-client-escape",
+          "promise-combinator-serial-await",
+          "query-mutates-state",
+          "queue-add-in-loop",
+          "rebuild-lookup-in-loop",
+          "redis-command-in-loop",
+          "redis-keys-command",
+          "reduce-copy-accumulator",
+          "serial-awaits-in-literal",
+          "service-query-in-loop",
+          "typeorm-existence-materialization",
+          "typeorm-load-then-save",
+          "typeorm-transaction-client-escape",
+          "typeorm-transaction-in-loop",
+          "typeorm-wide-projection",
+          "upload-without-size-limit"
+        ]
+      },
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "enum": ["off", "warn", "error"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "level": {
+                "enum": ["off", "warn", "error"]
+              }
+            },
+            "required": ["level"],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "overrides": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1
+          },
+          "rules": {
+            "type": "object",
+            "propertyNames": {
+              "enum": [
+                "array-repeated-find",
+                "array-repeated-membership",
+                "count-then-page-serial",
+                "data-access-boundary",
+                "db-duplicate-index",
+                "db-missing-index",
+                "db-seq-scan-heavy-table",
+                "db-slow-query-plan",
+                "db-unindexed-foreign-key",
+                "db-unused-index",
+                "deep-control-flow",
+                "dependency-cycle",
+                "drizzle-query-in-loop",
+                "drizzle-scope-unverified",
+                "drizzle-unfiltered-write",
+                "duplicate-implementation",
+                "external-call-in-transaction",
+                "file-placement",
+                "filter-for-existence",
+                "folder-boundary",
+                "guard-query-per-request",
+                "high-branch-complexity",
+                "http-call-without-timeout",
+                "index-missing-filter",
+                "index-missing-foreign-key",
+                "index-missing-order",
+                "index-unusable-expression",
+                "index-unusable-pattern",
+                "known-reads-awaited-serially",
+                "loop-copy-accumulator",
+                "migration-breaking-drop",
+                "migration-breaking-rename",
+                "migration-column-type-rewrite",
+                "migration-concurrent-in-transaction",
+                "migration-constraint-not-valid",
+                "migration-constraint-without-index",
+                "migration-index-not-concurrent",
+                "migration-missing-lock-timeout",
+                "migration-mysql-lock-unspecified",
+                "migration-mysql-table-copy",
+                "migration-not-null-without-default",
+                "migration-set-not-null-scan",
+                "migration-table-rewrite-command",
+                "migration-unparsed",
+                "migration-volatile-default",
+                "mongo-collection-scan-observed",
+                "node-sync-compression-in-async",
+                "node-sync-crypto-in-async",
+                "node-sync-fs-in-async",
+                "node-sync-process-in-async",
+                "numeric-sort-for-extreme",
+                "orm-count-materialization",
+                "orm-query-in-loop",
+                "password-hash-pure-js",
+                "password-hash-sync-in-async",
+                "pg-count-materialization",
+                "pg-dynamic-query-text",
+                "pg-filter-materialization",
+                "pg-first-materialization",
+                "pg-query-in-loop",
+                "pg-top-k-materialization",
+                "pg-transaction-on-pool",
+                "pg-unreleased-checkout",
+                "pool-created-per-request-or-item",
+                "prisma-count-materialization",
+                "prisma-dependent-writes",
+                "prisma-distinct-in-memory",
+                "prisma-filter-materialization",
+                "prisma-first-materialization",
+                "prisma-query-in-loop",
+                "prisma-read-modify-write",
+                "prisma-relation-count-in-list",
+                "prisma-scope-unverified",
+                "prisma-top-k-materialization",
+                "prisma-transaction-client-escape",
+                "promise-combinator-serial-await",
+                "query-mutates-state",
+                "queue-add-in-loop",
+                "rebuild-lookup-in-loop",
+                "redis-command-in-loop",
+                "redis-keys-command",
+                "reduce-copy-accumulator",
+                "serial-awaits-in-literal",
+                "service-query-in-loop",
+                "typeorm-existence-materialization",
+                "typeorm-load-then-save",
+                "typeorm-transaction-client-escape",
+                "typeorm-transaction-in-loop",
+                "typeorm-wide-projection",
+                "upload-without-size-limit"
+              ]
+            },
+            "additionalProperties": {
+              "oneOf": [
+                {
+                  "enum": ["off", "warn", "error"]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "level": {
+                      "enum": ["off", "warn", "error"]
+                    }
+                  },
+                  "required": ["level"],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          }
+        },
+        "required": ["files", "rules"],
+        "additionalProperties": false
+      }
+    },
+    "performance": {
+      "type": "object",
+      "description": "The content of backend-perf.policy.json.",
+      "properties": {
+        "prismaScopes": {
+          "type": "object"
+        },
+        "drizzleScopes": {
+          "type": "object"
+        },
+        "parallelReads": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": false
+    },
+    "maintainability": {
+      "type": "object",
+      "description": "The content of the maintainability policy file.",
+      "properties": {
+        "exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "boundaries": {
+          "type": "array"
+        },
+        "placement": {
+          "type": "array"
+        },
+        "dataAccess": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
