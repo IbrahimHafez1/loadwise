@@ -39,8 +39,13 @@ test('lookups stay visible in server sources and become contextual in tests, see
   }
 });
 
-test('a project that lives under a test directory is not treated as a test source', () => {
-  assert.deepEqual(summary(lintAs('tests/service.ts', membershipSource), 'array-repeated-membership'), [[2, false]]);
+test('helpers inside test directories without a spec or test suffix are contextual', () => {
+  for (const fileName of ['tests/service.ts', 'test/helpers/db.ts', 'src/__tests__/factory.ts']) {
+    assert.deepEqual(summary(lintAs(fileName, membershipSource), 'array-repeated-membership'), [[2, true]], fileName);
+  }
+  assert.deepEqual(summary(lintAs('src/testing/service.ts', membershipSource), 'array-repeated-membership'), [
+    [2, false],
+  ]);
 });
 
 test('a constant allowlist of plain values is a cheap lookup up to a bounded length', () => {

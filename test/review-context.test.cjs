@@ -134,3 +134,38 @@ test('test-directory context is relative to the owning package, independently of
   assert.equal(classify(path.join(checkout, 'src', 'service.ts'), 'drizzle-unfiltered-write'), undefined);
   assert.ok(classify(path.join(checkout, 'test', 'setup.ts'), 'drizzle-unfiltered-write'));
 });
+
+const contextHelpers = require('./helpers.cjs');
+
+function contextualReasons(fileName, source, files, ruleIds) {
+  const { analyzeFile } = require('../lib/analyze.cjs');
+  const path = require('node:path');
+  return contextHelpers.withProgram('export {};', { [fileName]: source, ...files }, (program) =>
+    analyzeFile(program, program.getSourceFile(path.join(__dirname, 'virtual-project', fileName)))
+      .filter((finding) => ruleIds.includes(finding.ruleId))
+      .map((finding) => [finding.ruleId, Boolean(finding.contextualReason)]),
+  );
+}
+
+test('a project that itself lives under a test directory keeps its sources visible', (context) => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const base = process.env.LOCALAPPDATA
+    ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work')
+    : require('node:os').tmpdir();
+  fs.mkdirSync(base, { recursive: true });
+  const directory = fs.mkdtempSync(path.join(base, 'backend-perf-review-'));
+  const checkout = path.join(directory, 'tests', 'checkout');
+  fs.mkdirSync(path.join(checkout, 'src'), { recursive: true });
+  const manifest = path.join(checkout, 'package.json');
+  fs.writeFileSync(manifest, '{}');
+  context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const { repeatedReviewContext } = require('../lib/review-context.cjs');
+  const ts = require('../lib/compiler.cjs').syntax;
+  const reason = (file) => {
+    const source = ts.createSourceFile(file, 'hashSync();', ts.ScriptTarget.Latest, true);
+    return repeatedReviewContext(source, 'node-sync-fs-in-async', undefined, source);
+  };
+  assert.equal(reason(path.join(checkout, 'src', 'service.ts')), undefined);
+  assert.ok(reason(path.join(checkout, 'test', 'helper.ts')));
+});
