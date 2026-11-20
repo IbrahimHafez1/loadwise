@@ -1,0 +1,12 @@
+{
+  "name": "maintainability-check",
+  "version": "0.2.0",
+  "description": "Review source complexity, duplicate implementations and project-defined architecture across languages.",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=20" },
+  "bin": { "maintainability-check": "bin/maintainability-check.cjs" },
+  "files": ["bin/", "lib/", "polyglot/"],
+  "scripts": { "test": "node --test --test-concurrency=2 test/*.test.cjs" },
+  "dependencies": { "typescript": "5.9.3" },
+  "optionalDependencies": { "@ast-grep/cli": "0.51.3" }
+}
