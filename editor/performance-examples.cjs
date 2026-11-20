@@ -216,8 +216,8 @@ const standaloneExamples = {
   },
   'guard-query-per-request': {
     language: 'javascript',
-    before: 'async canActivate(context) {\n  const user = await this.users.findOne({ where: { id } });\n}',
-    code: 'async canActivate(context) {\n  const user = await this.userCache.wrap(id, () => this.users.findOne({ where: { id } }), 60_000);\n}',
+    before: 'async function canActivate(context) {\n  const user = await this.users.findOne({ where: { id } });\n}',
+    code: 'async function canActivate(context) {\n  const user = await this.userCache.wrap(id, () => this.users.findOne({ where: { id } }), 60_000);\n}',
     note: 'A global guard runs this query before every handler. Cache it by id with a short TTL and invalidate it when the user changes.',
   },
   'count-then-page-serial': {
