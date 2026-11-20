@@ -7,7 +7,7 @@ const test = require('node:test');
 const { spawn, spawnSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
-const bin = path.join(root, 'bin/backend-perf-check.cjs');
+const bin = path.join(root, 'bin/warden-backend.cjs');
 const guard = path.join(__dirname, 'network-guard.cjs');
 const sentinel = 'postgres://sentinel-user:sentinel-pass@sentinel-host.invalid:5432/sentinel';
 const environment = { ...process.env, DATABASE_URL: sentinel, BACKEND_CHECKERS_EDITOR_SCAN: '1' };

@@ -9,7 +9,7 @@ const { spawnSync } = require('node:child_process');
 const { knownRules } = require('../lib/rule-ids.cjs');
 
 const root = path.resolve(__dirname, '..');
-const bin = path.join(root, 'bin/backend-perf-check.cjs');
+const bin = path.join(root, 'bin/warden-backend.cjs');
 const fakeSubcommands = path.join(__dirname, 'fake-subcommands.cjs');
 
 function run(args, nodeOptions = []) {
@@ -42,8 +42,8 @@ test('source scans never load the migrations or db modules', () => {
 test('usage lists the new commands and the schema flag', () => {
   const help = run(['--help']);
   assert.equal(help.status, 0, help.stderr);
-  assert.match(help.stdout, /backend-perf-check migrations /);
-  assert.match(help.stdout, /backend-perf-check db /);
+  assert.match(help.stdout, /warden-backend migrations /);
+  assert.match(help.stdout, /warden-backend db /);
   assert.match(help.stdout, /--schema snapshot\.json/);
 });
 

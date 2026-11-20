@@ -8,7 +8,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const root = path.resolve(__dirname, '..');
-const bin = path.join(root, 'bin/backend-perf-check.cjs');
+const bin = path.join(root, 'bin/warden-backend.cjs');
 const [major, minor] = process.versions.node.split('.').map(Number);
 let skip = major < 22 || (major === 22 && minor < 13) ? 'native requires Node 22.13+' : false;
 try {

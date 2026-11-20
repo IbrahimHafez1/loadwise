@@ -7,17 +7,17 @@ const { parseArgs } = require('node:util');
 const { knownRules } = require('../lib/rule-ids.cjs');
 
 const usage = `Usage:
-  backend-perf-check [-p tsconfig.json | file.ts file.js ...] [--engine auto|native|js] [--policy policy.json] [--schema snapshot.json] [--json] [--include-contextual] [--ignore rule-id] [--fail-on all|contract] [--fix [--yes | --only id,...]]
-  backend-perf-check [-p tsconfig.json] (--staged | --changed-since git-ref) [--json] [--include-contextual] [--ignore rule-id]
-  backend-perf-check --watch [-p tsconfig.json] [--policy policy.json] [--schema snapshot.json] [--include-contextual] [--ignore rule-id]
-  backend-perf-check migrations [paths...] [--changed-since git-ref] [--baseline file] [--write-baseline] [--dialect postgres|mysql] [--json] [--include-contextual] [--ignore rule-id]
-  backend-perf-check db [--url-env DATABASE_URL] [--env-file .env] [--engine postgres|mysql|mongo] [--schema-snapshot out.json] [--top 20] [--queries file.sql] [--analyze] [--measure --i-understand-this-locks-tables] [--runs 5] [--json] [--ignore rule-id]
-  backend-perf-check traces trace.json [--threshold 5] [--json]
-  backend-perf-check plan explain.json [--json]
-  backend-perf-check polyglot <file-or-directory> ... [--json]
-  backend-perf-check editor init
-  backend-perf-check editor watch [-p tsconfig.json]
-  backend-perf-check agent init [--mode ask|auto] [--hook [block|warn|off]]
+  warden-backend [-p tsconfig.json | file.ts file.js ...] [--engine auto|native|js] [--policy policy.json] [--schema snapshot.json] [--json] [--include-contextual] [--ignore rule-id] [--fail-on all|contract] [--fix [--yes | --only id,...]]
+  warden-backend [-p tsconfig.json] (--staged | --changed-since git-ref) [--json] [--include-contextual] [--ignore rule-id]
+  warden-backend --watch [-p tsconfig.json] [--policy policy.json] [--schema snapshot.json] [--include-contextual] [--ignore rule-id]
+  warden-backend migrations [paths...] [--changed-since git-ref] [--baseline file] [--write-baseline] [--dialect postgres|mysql] [--json] [--include-contextual] [--ignore rule-id]
+  warden-backend db [--url-env DATABASE_URL] [--env-file .env] [--engine postgres|mysql|mongo] [--schema-snapshot out.json] [--top 20] [--queries file.sql] [--analyze] [--measure --i-understand-this-locks-tables] [--runs 5] [--json] [--ignore rule-id]
+  warden-backend traces trace.json [--threshold 5] [--json]
+  warden-backend plan explain.json [--json]
+  warden-backend polyglot <file-or-directory> ... [--json]
+  warden-backend editor init
+  warden-backend editor watch [-p tsconfig.json]
+  warden-backend agent init [--mode ask|auto] [--hook [block|warn|off]]
 
 With no arguments, check tsconfig.json or jsconfig.json in the current directory.
 Source checks look for backend-perf.policy.json beside the selected config, or in the working directory for explicit files.
@@ -314,11 +314,11 @@ function printChangedFindings(findings) {
   const { findingLabel } = require('../lib/finding-text.cjs');
   for (const finding of findings) {
     console.log(`${finding.file}:${finding.line} ${findingLabel(finding)} ${finding.message}`);
-    if (finding.fixable) console.log(`  fix:     npx backend-perf-check --fix --only ${finding.id}`);
-    console.log(`  dismiss: // backend-perf-reviewed ${finding.ruleId} -- <reason>`);
+    if (finding.fixable) console.log(`  fix:     npx warden-backend --fix --only ${finding.id}`);
+    console.log(`  dismiss: // warden-reviewed ${finding.ruleId} -- <reason>`);
   }
   const fixableIds = findings.filter((finding) => finding.fixable).map((finding) => finding.id);
-  if (fixableIds.length > 1) console.log(`Fix all: npx backend-perf-check --fix --only ${fixableIds.join(',')}`);
+  if (fixableIds.length > 1) console.log(`Fix all: npx warden-backend --fix --only ${fixableIds.join(',')}`);
   console.log(
     findings.length
       ? `${findings.length} new finding(s) in changed lines. Apply fixes, then \`git add\` the files and commit again.`
@@ -366,8 +366,7 @@ async function main(args) {
       );
       return 0;
     }
-    if (args[1] !== 'watch')
-      throw new Error('Usage: backend-perf-check editor init  |  editor watch [-p tsconfig.json]');
+    if (args[1] !== 'watch') throw new Error('Usage: warden-backend editor init  |  editor watch [-p tsconfig.json]');
     const { values, positionals } = parseCommand(args.slice(2), { project: { type: 'string', short: 'p' } });
     if (values.help) return showHelp();
     if (positionals.length) throw new Error('editor watch accepts only an optional -p project config.');
@@ -379,7 +378,7 @@ async function main(args) {
   }
   if (args[0] === 'agent') {
     if (args[1] !== 'init')
-      throw new Error('Usage: backend-perf-check agent init [--mode ask|auto] [--hook [block|warn|off]]');
+      throw new Error('Usage: warden-backend agent init [--mode ask|auto] [--hook [block|warn|off]]');
     const { values, positionals } = parseCommand(normalizeHookArgument(args.slice(2)), {
       mode: { type: 'string', default: 'ask' },
       hook: { type: 'string' },

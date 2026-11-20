@@ -7,7 +7,7 @@ const path = require('node:path');
 const test = require('node:test');
 const { spawnSync } = require('node:child_process');
 
-const bin = path.join(__dirname, '../bin/backend-perf-check.cjs');
+const bin = path.join(__dirname, '../bin/warden-backend.cjs');
 
 test('a one-shot scan loads the SQL parser, so raw SQL index rules report', (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-raw-sql-'));

@@ -7,7 +7,7 @@ const path = require('node:path');
 const test = require('node:test');
 const { spawnSync } = require('node:child_process');
 
-const bin = path.resolve(__dirname, '../bin/backend-perf-check.cjs');
+const bin = path.resolve(__dirname, '../bin/warden-backend.cjs');
 const example = fs.readFileSync(path.resolve(__dirname, '../examples/slow.ts'), 'utf8');
 
 function project(context) {

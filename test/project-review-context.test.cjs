@@ -38,7 +38,7 @@ test('overlapping projects retain the visible advisory in either reference order
   for (const folder of directories) fs.mkdirSync(path.join(root, folder));
   for (const [name, source] of Object.entries(files)) fs.writeFileSync(path.join(root, name), source);
 
-  const bin = path.resolve(__dirname, '../bin/backend-perf-check.cjs');
+  const bin = path.resolve(__dirname, '../bin/warden-backend.cjs');
   for (const native of [false, true]) {
     await context.test(native ? 'native compiler' : 'TypeScript compiler', (subtest) => {
       if (native) {

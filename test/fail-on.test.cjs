@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const bin = path.resolve(__dirname, '../bin/backend-perf-check.cjs');
+const bin = path.resolve(__dirname, '../bin/warden-backend.cjs');
 
 test('source fail-on thresholds apply after ignores while JSON keeps all remaining findings', (context) => {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();

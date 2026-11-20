@@ -88,7 +88,7 @@ const hangingChecker = [
   'const poll = setInterval(() => {',
   '  if (fs.existsSync(release)) { clearInterval(poll); console.log(\'{"findings":[]}\'); }',
   '}, 10);',
-  '// A watch-mode checker keeps running after its report, as backend-perf-check --watch does.',
+  '// A watch-mode checker keeps running after its report, as warden-backend --watch does.',
   "if (process.argv.includes('--watch')) setInterval(() => {}, 60000);",
 ].join('\n');
 
@@ -161,8 +161,8 @@ test('changes during a running scan abort the stale child and coalesce into one 
 
   fs.writeFileSync(path.join(root, 'release'), '');
   const published = () => lines.filter((line) => line.includes('finding(s)'));
-  await waitFor(() => published().some((line) => line.includes('maintainability-check — 0 finding(s)')));
-  await waitFor(() => published().some((line) => line.includes('backend-perf-check — 0 finding(s)')));
+  await waitFor(() => published().some((line) => line.includes('warden-maint — 0 finding(s)')));
+  await waitFor(() => published().some((line) => line.includes('warden-backend — 0 finding(s)')));
   assert.equal(startedPids(logFile).length, 4, 'exactly one follow-up scan (a fresh watcher and maintainability)');
   assert.equal(published().length, 2, 'only the newest scan published');
 });
@@ -170,10 +170,13 @@ test('changes during a running scan abort the stale child and coalesce into one 
 test('editor watch aborts the stale scan child on change and runs one follow-up after the last change', async (context) => {
   const { EventEmitter } = require('node:events');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'editor-watch-burst-'));
-  const packageDirectory = path.join(root, 'node_modules', 'maintainability-check');
+  const packageDirectory = path.join(root, 'node_modules', '@codewarden', 'maintainability');
   fs.mkdirSync(path.join(packageDirectory, 'bin'), { recursive: true });
-  fs.writeFileSync(path.join(packageDirectory, 'package.json'), '{"name":"maintainability-check","version":"1.0.0"}');
-  fs.writeFileSync(path.join(packageDirectory, 'bin', 'maintainability-check.cjs'), hangingChecker);
+  fs.writeFileSync(
+    path.join(packageDirectory, 'package.json'),
+    '{"name":"@codewarden/maintainability","version":"1.0.0"}',
+  );
+  fs.writeFileSync(path.join(packageDirectory, 'bin', 'warden-maint.cjs'), hangingChecker);
   const logFile = path.join(packageDirectory, 'bin', 'starts.log');
   const watcher = new EventEmitter();
   watcher.close = async () => {};

@@ -39,7 +39,7 @@ function migrations(cwd, ...args) {
   return { code: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 
-describe('backend-perf-check migrations', () => {
+describe('warden-backend migrations', () => {
   test('without a baseline every migration is enforced, with one stderr hint', (context) => {
     const root = temporaryProject(context);
     const { code, stdout, stderr } = migrations(root);
@@ -50,10 +50,7 @@ describe('backend-perf-check migrations', () => {
     );
     assert.match(stdout, /1 migration file\(s\) checked, 1 finding\(s\)\./);
     assert.equal(stderr.trim().split('\n').length, 1);
-    assert.match(
-      stderr,
-      /All 1 migration file\(s\) are enforced\. Run `backend-perf-check migrations --write-baseline`/,
-    );
+    assert.match(stderr, /All 1 migration file\(s\) are enforced\. Run `warden-backend migrations --write-baseline`/);
   });
 
   test('--write-baseline accepts existing files; only new ones fail; old findings are contextual', (context) => {
@@ -159,6 +156,6 @@ describe('backend-perf-check migrations', () => {
   test('--help prints usage and exits 0', (context) => {
     const { code, stdout } = migrations(temporaryProject(context), '--help');
     assert.equal(code, 0);
-    assert.match(stdout, /^Usage:\n {2}backend-perf-check migrations /);
+    assert.match(stdout, /^Usage:\n {2}warden-backend migrations /);
   });
 });

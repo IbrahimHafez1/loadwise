@@ -12,7 +12,7 @@ const groupsPerService = 100;
 const modulesPerGroup = 4;
 const sourceFileCount = serviceCount * groupsPerService * modulesPerGroup;
 const samples = 3;
-const bin = path.resolve(__dirname, '../bin/backend-perf-check.cjs');
+const bin = path.resolve(__dirname, '../bin/warden-backend.cjs');
 
 function makeCorpus() {
   const artifacts = new Map();

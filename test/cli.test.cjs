@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const ts = require('typescript');
-const bin = path.resolve(__dirname, '../bin/backend-perf-check.cjs');
+const bin = path.resolve(__dirname, '../bin/warden-backend.cjs');
 const root = path.resolve(__dirname, '..');
 function run(args, cwd = root) {
   return spawnSync(process.execPath, [bin, ...args], { cwd, encoding: 'utf8' });

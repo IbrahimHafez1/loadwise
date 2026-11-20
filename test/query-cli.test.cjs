@@ -10,7 +10,7 @@ const { createInterface } = require('node:readline');
 const { PassThrough } = require('node:stream');
 const test = require('node:test');
 
-const bin = path.resolve(__dirname, '../bin/backend-perf-check.cjs');
+const bin = path.resolve(__dirname, '../bin/warden-backend.cjs');
 const policyName = 'backend-perf.policy.json';
 const scopeRule = 'prisma-scope-unverified';
 const requirement = { field: 'tenantId', from: '@app/auth', export: 'requireAuthorizedTenantId' };

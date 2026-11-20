@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const packageRoot = path.resolve(__dirname, '../../..');
-const checker = path.join(packageRoot, 'bin', 'backend-perf-check.cjs');
+const checker = path.join(packageRoot, 'bin', 'warden-backend.cjs');
 const compiler = require.resolve('typescript/bin/tsc', { paths: [packageRoot] });
 const ruleNames = { loop: 'orm-query-in-loop', count: 'orm-count-materialization' };
 

@@ -1,18 +1,19 @@
 {
-  "name": "backend-perf-check",
+  "name": "@codewarden/backend",
   "version": "0.3.0",
   "description": "Check backend query performance, transaction usage and project-defined query policies in source code, traces and execution plans.",
   "license": "UNLICENSED",
   "author": "Ibrahim Hafez",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/IbrahimHafez1/backend-perf-check.git"
+    "url": "git+https://github.com/IbrahimHafez1/codewarden-backend.git"
   },
   "bugs": {
-    "url": "https://github.com/IbrahimHafez1/backend-perf-check/issues"
+    "url": "https://github.com/IbrahimHafez1/codewarden-backend/issues"
   },
-  "homepage": "https://github.com/IbrahimHafez1/backend-perf-check#readme",
+  "homepage": "https://github.com/IbrahimHafez1/codewarden-backend#readme",
   "keywords": [
+    "codewarden",
     "performance",
     "n-plus-one",
     "database",
@@ -27,7 +28,7 @@
     "vscode"
   ],
   "bin": {
-    "backend-perf-check": "./bin/backend-perf-check.cjs"
+    "warden-backend": "./bin/warden-backend.cjs"
   },
   "files": [
     "bin/",

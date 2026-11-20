@@ -87,7 +87,7 @@ test('linked entry paths resolve their imports independently', (context) => {
   } catch {
     return;
   }
-  const bin = path.join(__dirname, '../bin/backend-perf-check.cjs');
+  const bin = path.join(__dirname, '../bin/warden-backend.cjs');
   const checked = spawnSync(
     process.execPath,
     [bin, '--native', '--json', ...links.map((link) => path.join(link, 'check.ts'))],

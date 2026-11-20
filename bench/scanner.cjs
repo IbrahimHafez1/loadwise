@@ -85,7 +85,7 @@ function benchmarkCli() {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
   const root = fs.mkdtempSync(path.join(base, 'backend-perf-bench-'));
-  const bin = path.resolve(__dirname, '../bin/backend-perf-check.cjs');
+  const bin = path.resolve(__dirname, '../bin/warden-backend.cjs');
   const artifacts = { ...files };
   const jsLine = "  for (const id of ids) await pool.query('select id from people where id = $1', [id]);";
   artifacts['service.cjs'] = [

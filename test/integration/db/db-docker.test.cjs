@@ -1,6 +1,6 @@
 'use strict';
 
-// Docker integration for `backend-perf-check db`. Skipped unless BACKEND_PERF_DOCKER=1.
+// Docker integration for `warden-backend db`. Skipped unless BACKEND_PERF_DOCKER=1.
 // Drivers come from ./fixture-project (installed there, never in this package), as they would from a user's project.
 const assert = require('node:assert/strict');
 const { execFileSync, spawnSync } = require('node:child_process');
@@ -243,7 +243,7 @@ test('PostgreSQL 18', { skip: !enabled && 'set BACKEND_PERF_DOCKER=1', timeout: 
   await t.test('the bin dispatches db to the same command', () => {
     const child = spawnSync(
       process.execPath,
-      [path.join(repositoryRoot, 'bin', 'backend-perf-check.cjs'), 'db', '--json'],
+      [path.join(repositoryRoot, 'bin', 'warden-backend.cjs'), 'db', '--json'],
       {
         cwd: fixtureProject,
         env: { ...process.env, DATABASE_URL: url },

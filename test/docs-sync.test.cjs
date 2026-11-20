@@ -9,13 +9,13 @@ const { test } = require('node:test');
 const { knownRules } = require('../lib/rule-ids.cjs');
 
 const root = path.join(__dirname, '..');
-const binEntry = path.join(root, 'bin', 'backend-perf-check.cjs');
+const binEntry = path.join(root, 'bin', 'warden-backend.cjs');
 const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8').replaceAll('\r\n', '\n');
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const helpText = spawnSync(process.execPath, [binEntry, '--help'], { encoding: 'utf8' }).stdout;
 
 // Package names are hyphenated too but are not rules.
-const siblingPackages = new Set(['backend-perf-check', 'maintainability-check']);
+const siblingPackages = new Set(['warden-backend', 'warden-maint', 'warden-reviewed']);
 const rulePattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/;
 
 function readRuleTokens(markdown) {
@@ -56,7 +56,7 @@ test('every rule-like README entry exists in the code', () => {
 test('every --help flag and subcommand is in the README', () => {
   const flags = new Set(helpText.match(/--[a-z][a-z-]*/g));
   const subcommands = new Set(
-    [...helpText.matchAll(/^ {2}backend-perf-check ([a-z]+)(?: ([a-z]+))?/gm)]
+    [...helpText.matchAll(/^ {2}warden-backend ([a-z]+)(?: ([a-z]+))?/gm)]
       .filter((match) => !/^[[<-]/.test(match[1]))
       .map((match) => (match[1] === 'editor' || match[1] === 'agent' ? `${match[1]} ${match[2]}` : match[1])),
   );

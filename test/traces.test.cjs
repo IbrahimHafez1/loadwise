@@ -618,7 +618,7 @@ test('traces text output prints the Impact line under a finding', () => {
   const file = join(mkdtempSync(join(tmpdir(), 'traces-impact-')), 'trace.json');
   const spans = [1, 2, 3, 4, 5].map((index) => timed(index, 0, 10));
   writeFileSync(file, JSON.stringify({ resourceSpans: [resource(spans)] }));
-  const result = spawnSync(process.execPath, [join(__dirname, '..', 'bin', 'backend-perf-check.cjs'), 'traces', file], {
+  const result = spawnSync(process.execPath, [join(__dirname, '..', 'bin', 'warden-backend.cjs'), 'traces', file], {
     encoding: 'utf8',
   });
   assert.match(

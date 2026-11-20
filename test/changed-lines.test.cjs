@@ -8,7 +8,7 @@ const path = require('node:path');
 const test = require('node:test');
 const { keepChangedFindings, parseChangedLines, fileKey } = require('../lib/changed-lines.cjs');
 
-const bin = path.resolve(__dirname, '../bin/backend-perf-check.cjs');
+const bin = path.resolve(__dirname, '../bin/warden-backend.cjs');
 const slowExample = fs.readFileSync(path.resolve(__dirname, '../examples/slow.ts'), 'utf8');
 const directory = path.resolve('project');
 
@@ -111,7 +111,7 @@ test('--staged ignores findings on unchanged lines and prints fix and dismiss co
   const noisy = run('--staged', '-p', 'tsconfig.json', '--engine', 'js');
   assert.equal(noisy.status, 1);
   assert.match(noisy.stdout, /^slow\.ts:\d+ \[[a-z-]+ #[0-9a-f]{12}\] /m);
-  assert.match(noisy.stdout, /dismiss: \/\/ backend-perf-reviewed [a-z-]+ -- <reason>/);
+  assert.match(noisy.stdout, /dismiss: \/\/ warden-reviewed [a-z-]+ -- <reason>/);
   assert.match(
     noisy.stdout,
     /\d+ new finding\(s\) in changed lines\. Apply fixes, then `git add` the files and commit again\./,
