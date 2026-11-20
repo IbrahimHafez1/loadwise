@@ -814,3 +814,113 @@ export async function run(names: string[], sessions: { token: string }[]) {
     undefined,
   ]);
 });
+
+test('a TypeORM list read per item becomes one In read grouped by key, keeping the shared order', (context) => {
+  const findings = fixesFor(
+    context,
+    typeormFiles,
+    `import { Repository } from 'typeorm';
+type Post = { id: number, authorId: number, title: string };
+declare const postRepository: Repository<Post>;
+export async function titles(authors: { id: number }[], items: { authorId: number }[]) {
+  for (const author of authors) {
+    const posts = await postRepository.find({ where: { authorId: author.id }, order: { id: 'DESC' } });
+    console.log(posts.map((post) => post.title));
+  }
+  for (const item of items) {
+    console.log(await postRepository.findBy({ authorId: item.authorId }));
+  }
+}`,
+    'orm-query-in-loop',
+  );
+  assert.equal(findings.length, 2);
+  const [byOwnId, byForeignKey] = findings.map((finding) => finding.fix.changes.at(-1).after);
+  assert.equal(
+    byOwnId,
+    `  const existingPosts = await postRepository.find({ where: { authorId: In(authors.map((author) => author.id)) }, order: { id: 'DESC' } });
+  const existingPostsByAuthorId = new Map<unknown, typeof existingPosts>();
+  for (const post of existingPosts) {
+    const group = existingPostsByAuthorId.get(post.authorId) ?? [];
+    group.push(post);
+    existingPostsByAuthorId.set(post.authorId, group);
+  }
+  for (const author of authors) {
+    const posts = existingPostsByAuthorId.get(author.id) ?? [];`,
+  );
+  // Items may share a foreign key, so each gets its own copy of the list, as its own query returned.
+  assert.match(
+    byForeignKey,
+    /console\.log\(\[\.\.\.\(existingPostsByAuthorId\.get\(item\.authorId\) \?\? \[\]\)\]\);$/,
+  );
+  assert.match(findings[1].fix.note, /grouped through a Map in query order.*null or undefined now gets no rows/s);
+  assert.doesNotMatch(findings[0].fix.note, /null or undefined/);
+});
+
+test('a Prisma findMany per item in a CommonJS file with CRLF and tabs keeps the file style', (context) => {
+  const crlf = (text) => text.replace(/\n/g, '\r\n');
+  const { findings } = scanWithFixes(context, {
+    ...prismaFiles,
+    'src/report.cjs': crlf(`'use strict';
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+async function report(users) {
+\tfor (const user of users) {
+\t\tconst rows = await prisma.user.findMany({ where: { id: user.id }, select: { score: true }, orderBy: { score: 'desc' } });
+\t\tconsole.log(rows.length);
+\t}
+}
+module.exports = { report };
+`),
+  });
+  const finding = findings.find((candidate) => candidate.ruleId === 'prisma-query-in-loop');
+  assert.equal(
+    onlyChange(finding).after,
+    [
+      "const existingUsers = await prisma.user.findMany({ where: { id: { in: Array.from(users, (user) => user.id) } }, select: { score: true, id: true }, orderBy: { score: 'desc' } });",
+      'const existingUsersById = new Map();',
+      'for (const user of existingUsers) {',
+      '\tconst group = existingUsersById.get(user.id) ?? [];',
+      '\tgroup.push(user);',
+      '\texistingUsersById.set(user.id, group);',
+      '}',
+      'for (const user of users) {',
+      '\tconst rows = existingUsersById.get(user.id) ?? [];',
+    ].join('\n'),
+  );
+  assert.match(finding.fix.note, /also reads `id`/);
+});
+
+test('list reads that page, pick distinct rows, filter on a relation or run in a try are not batched', (context) => {
+  const prismaFindings = fixesFor(
+    context,
+    prismaFiles,
+    `${prismaHeader}export async function load(items: Item[]) {
+  for (const item of items) console.log(await prisma.user.findMany({ where: { id: item.userId }, take: 5 }));
+  for (const item of items) console.log(await prisma.user.findMany({ where: { id: item.userId }, distinct: ['score'] }));
+  for (const item of items) console.log(await prisma.user.findMany({ where: { profile: { id: item.userId } } }));
+  for (const item of items) {
+    try {
+      console.log(await prisma.user.findMany({ where: { id: item.userId } }));
+    } catch {}
+  }
+}`,
+    'prisma-query-in-loop',
+  );
+  assert.equal(prismaFindings.length, 4);
+  for (const finding of prismaFindings) assert.equal(finding.fix, undefined);
+  const typeormFindings = fixesFor(
+    context,
+    typeormFiles,
+    `${typeormHeader}declare const repo: Repository<Role>;
+export async function load(entries: { id: number }[]) {
+  for (const entry of entries) console.log(await repo.find({ where: { clinicId: entry.id }, skip: 10 }));
+  for (const entry of entries) {
+    await repo.save({ id: entry.id, name: 'x', clinicId: entry.id });
+    console.log(await repo.find({ where: { clinicId: entry.id } }));
+  }
+}`,
+    'orm-query-in-loop',
+  );
+  assert.equal(typeormFindings.length, 2);
+  for (const finding of typeormFindings) assert.equal(finding.fix, undefined);
+});

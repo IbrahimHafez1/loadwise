@@ -242,3 +242,140 @@ export class Expirer {
   assert.equal(findings.length, 2);
   for (const finding of findings) assert.equal(finding.fix, undefined);
 });
+
+const auditWithVariants = (variants) => `import { PrismaClient } from '@prisma/client';
+export interface Entry { action: string }
+function toRow(entry: Entry) {
+  return { action: entry.action };
+}
+function toRowAt(entry: Entry, index = 0) {
+  return { action: entry.action + index };
+}
+export class AuditService {
+  constructor(private prisma: PrismaClient) {}
+
+  async log(client: PrismaClient, entry: Entry): Promise<void> {
+    await client.log.create({ data: toRow(entry) });
+  }
+${variants}}
+`;
+const auditCaller = `import { PrismaClient } from '@prisma/client';
+import { AuditService, Entry } from './audit.js';
+export class Worker {
+  constructor(private audit: AuditService, private prisma: PrismaClient) {}
+  async record(entries: Entry[]) {
+    for (const entry of entries) {
+      await this.audit.log(this.prisma, entry);
+    }
+  }
+}
+`;
+
+test("the helper's own array variant doing the same write is called instead of adding a sibling", (context) => {
+  const [finding] = scan(context, {
+    'audit.ts': auditWithVariants(`
+  async writeAll(db: PrismaClient, rows: readonly Entry[]): Promise<void> {
+    if (rows.length === 0) return;
+    await db.log.createMany({ data: rows.map(toRow) });
+  }
+`),
+    'main.ts': auditCaller,
+  });
+  assert.deepEqual(changesByFile(finding), {
+    'main.ts': [
+      {
+        before: ['for (const entry of entries) {', '  await this.audit.log(this.prisma, entry);', '}'].join('\n'),
+        after: 'await this.audit.writeAll(this.prisma, entries);',
+      },
+    ],
+  });
+  assert.match(finding.fix.note, /^Calls the existing writeAll\(\)/);
+});
+
+test('an array variant that maps with extra arguments, catches errors or is private is not taken as the same write', (context) => {
+  for (const variant of [
+    'async writeAll(db: PrismaClient, rows: Entry[]) { await db.log.createMany({ data: rows.map(toRowAt) }); }',
+    'async writeAll(db: PrismaClient, rows: Entry[]) { await db.log.createMany({ data: rows.map(toRow) }).catch(() => undefined); }',
+    'async writeAll(db: PrismaClient, rows: Entry[]) { await db.log.createMany({ data: rows.map(toRow) }); await db.log.createMany({ data: [] }); }',
+  ]) {
+    const [finding] = scan(context, { 'audit.ts': auditWithVariants(`\n  ${variant}\n`), 'main.ts': auditCaller });
+    assert.match(changesByFile(finding)['main.ts'][0].after, /this\.audit\.logMany\(this\.prisma, entries\)/);
+  }
+  const [hidden] = scan(context, {
+    'audit.ts': auditWithVariants(
+      '\n  private async writeAll(db: PrismaClient, rows: Entry[]) { await db.log.createMany({ data: rows.map(toRow) }); }\n',
+    ),
+    'main.ts': auditCaller,
+  });
+  assert.equal(hidden.fix, undefined);
+});
+
+test('a batch sibling an earlier fix added is reused, and a different method with its name blocks the fix', (context) => {
+  const [first] = scan(context, { 'audit.ts': auditWithVariants(''), 'main.ts': auditCaller });
+  const inserted = first.fix.changes.find((change) => change.file.endsWith('audit.ts')).after;
+  // Two loops calling the helper get the same insertion, so applying both fixes adds the sibling once.
+  const twoLoops = scan(context, {
+    'audit.ts': auditWithVariants(''),
+    'main.ts': auditCaller.replace(
+      '  async record(',
+      '  async other(entries: Entry[]) {\n    for (const entry of entries) {\n      await this.audit.log(this.prisma, entry);\n    }\n  }\n  async record(',
+    ),
+  });
+  assert.equal(twoLoops.length, 2);
+  for (const finding of twoLoops)
+    assert.equal(finding.fix.changes.find((change) => change.file.endsWith('audit.ts')).after, inserted);
+  // After applying, a new scan of a CRLF copy finds the sibling and only rewrites the call site.
+  const applied = auditWithVariants(inserted.split('\n').slice(2).join('\n') + '\n');
+  const [reused] = scan(context, { 'audit.ts': applied.replace(/\n/g, '\r\n'), 'main.ts': auditCaller });
+  assert.deepEqual(Object.keys(changesByFile(reused)), ['main.ts']);
+  assert.match(reused.fix.note, /^Calls the existing logMany\(\)/);
+  const [blocked] = scan(context, {
+    'audit.ts': auditWithVariants('\n  async logMany(entries: Entry[]): Promise<number> { return entries.length; }\n'),
+    'main.ts': auditCaller,
+  });
+  assert.equal(blocked.fix, undefined);
+});
+
+test('an exported lookup function in another file gets a batch sibling the call site imports', (context) => {
+  const prismaLookup = `import { PrismaClient } from '@prisma/client';
+declare const prisma: PrismaClient;
+export async function findEntry(id: number) {
+  return prisma.entry.findUnique({ where: { id } });
+}
+`;
+  const files = {
+    'node_modules/@prisma/client/index.d.ts': `export interface EntryDelegate {
+      findUnique(input: object): Promise<{ id: number } | null>;
+      findMany(input: object): Promise<{ id: number }[]>;
+    }
+    export class PrismaClient { entry: EntryDelegate }`,
+    'lookup.ts': prismaLookup,
+  };
+  const [finding] = scan(context, {
+    ...files,
+    'main.ts': `import { findEntry } from './lookup';
+export async function load(ids: number[]) {
+  return Promise.all(ids.map((id) => findEntry(id)));
+}
+`,
+  });
+  const changes = changesByFile(finding);
+  assert.equal(
+    changes['main.ts'][0].after,
+    "import { findEntry, findEntryMany } from './lookup';\nexport async function load(ids: number[]) {\n  return findEntryMany(ids);",
+  );
+  assert.match(changes['lookup.ts'][0].after, /^export async function findEntryMany\(ids: number\[\]\) \{$/m);
+  // An aliased import or one through another module cannot simply name the new function.
+  for (const importLine of ["import { findEntry as find } from './lookup';", "import { findEntry } from './index';"]) {
+    const [aliased] = scan(context, {
+      ...files,
+      'index.ts': "export { findEntry } from './lookup';\n",
+      'main.ts': `${importLine}
+export async function load(ids: number[]) {
+  return Promise.all(ids.map((id) => ${importLine.includes(' as ') ? 'find' : 'findEntry'}(id)));
+}
+`,
+    });
+    assert.equal(aliased.fix, undefined);
+  }
+});
