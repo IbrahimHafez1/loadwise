@@ -52,7 +52,25 @@ function applyChangesToText(text, changes) {
   return { text: lines.join(newline) };
 }
 
-// Groups a fix's changes by file and applies them through the given file accessors.
+// A change with `create: true` holds a whole new file. It refuses to overwrite a different existing file, and an
+// identical one means the fix was already applied.
+function createdFileText(change, currentText) {
+  if (currentText === undefined) return { text: change.after };
+  if (splitLines(currentText).join('\n') === splitLines(change.after).join('\n')) return { error: 'already applied' };
+  return { error: 'the file already exists with different content' };
+}
+
+function readIfExists(readFile, file) {
+  try {
+    return readFile(file);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return undefined;
+    throw error;
+  }
+}
+
+// Groups a fix's changes by file and applies them through the given file accessors. `readFile` throws an ENOENT
+// error (or returns undefined) for a missing file; `writeFile` creates the parent folders of a new file.
 function applyFix(fix, { readFile, writeFile }) {
   const byFile = new Map();
   for (const change of fix.changes) {
@@ -61,7 +79,11 @@ function applyFix(fix, { readFile, writeFile }) {
   }
   const updates = [];
   for (const [file, changes] of byFile) {
-    const result = applyChangesToText(readFile(file), changes);
+    const created = changes.some((change) => change.create);
+    if (created && changes.length > 1) return { error: `${file}: a new file cannot take other changes` };
+    const currentText = readIfExists(readFile, file);
+    if (!created && currentText === undefined) return { error: `${file}: the file no longer exists` };
+    const result = created ? createdFileText(changes[0], currentText) : applyChangesToText(currentText, changes);
     if (result.error) return { error: `${file}: ${result.error}` };
     updates.push([file, result.text]);
   }
