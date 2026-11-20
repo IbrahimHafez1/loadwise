@@ -13,6 +13,34 @@ export class Client {query(statement: Input, values?: unknown[]): Promise<unknow
 export interface PoolClient extends Client {release(): void}`;
 const files = { 'node_modules/@types/pg/index.d.ts': declarations };
 
+test('standalone transaction commands require a checked-out PostgreSQL client', () => {
+  const findings = lint(
+    `import {Pool as DatabasePool, type Client} from 'pg';
+async function work(pool: DatabasePool, client: Client) {
+  await pool.query('BEGIN');
+  await pool.query({text: 'start transaction READ ONLY, ISOLATION LEVEL SERIALIZABLE;'});
+  await pool['query']('SAVEPOINT part_one');
+  await pool.query('ROLLBACK TRANSACTION TO SAVEPOINT part_one');
+  await pool.query({['text']: 'release savepoint part_one'});
+  await pool.query('SET TRANSACTION READ WRITE');
+  await pool.query('commit and no chain; -- final step');
+  await pool.query('/* maintenance */ ROLLBACK;');
+  const connection = await pool.connect();
+  try {await connection.query('BEGIN'); await connection.query('COMMIT');} finally {connection.release();}
+  await client.query('ROLLBACK');
+  await pool.query("SELECT 'BEGIN' AS label");
+  await pool.query('BEGIN; SELECT 1; COMMIT');
+  await pool.query("COMMIT PREPARED 'task'");
+  await pool.query('SELECT 1 -- COMMIT');
+}`,
+    files,
+  );
+  assert.deepEqual(
+    findings.map((item) => [item.ruleId, item.line]),
+    [3, 4, 5, 6, 7, 8, 9, 10].map((line) => ['pg-transaction-on-pool', line]),
+  );
+});
+
 test('review inline runtime SQL while preserving bound values, literal fragments and SQL tags', () => {
   const findings = lint(
     `import type {Pool, Client} from 'pg';
@@ -39,7 +67,7 @@ async function run(pool: Pool, client: Client, id: number, table: string, descen
   );
 });
 
-test('commands assembled entirely from constants are not dynamic query text', () => {
+test('a pool cannot own a transaction even when the complete command is assembled from constants', () => {
   const findings = lint(
     [
       "import type {Pool, Client} from 'pg';",
@@ -64,7 +92,7 @@ test('commands assembled entirely from constants are not dynamic query text', ()
   );
   assert.deepEqual(
     findings.map((item) => [item.ruleId, item.line]),
-    [['pg-dynamic-query-text', 15]],
+    [...[5, 6, 7, 8, 10].map((line) => ['pg-transaction-on-pool', line]), ['pg-dynamic-query-text', 15]],
   );
 });
 
@@ -86,7 +114,10 @@ async function run(pool: Pool, table: string, options: {text: string}, optionNam
   );
   assert.deepEqual(
     findings.map((item) => [item.ruleId, item.line]),
-    [['pg-dynamic-query-text', 11]],
+    [
+      ['pg-transaction-on-pool', 10],
+      ['pg-dynamic-query-text', 11],
+    ],
   );
 });
 
@@ -176,6 +207,26 @@ async function review(pool: Pool, table: string, key: string, submit: () => void
   );
   assert.deepEqual(
     findings.map((item) => [item.ruleId, item.line]),
-    [],
+    [['pg-transaction-on-pool', 13]],
+  );
+});
+
+test('transaction control requires an overload declared by pg and skips an overriding subclass', () => {
+  const findings = lint(
+    `import {Pool as DriverPool} from 'pg';
+declare module 'pg' { interface Pool { query(statement: 'BEGIN'): Promise<unknown> } }
+class Pool extends DriverPool {
+  override query(statement: string | {text: string}): Promise<unknown> {return Promise.resolve(statement);}
+}
+async function check(pool: DriverPool, overridden: Pool) {
+  await pool.query('BEGIN');
+  await overridden.query('COMMIT');
+  await pool.query('COMMIT');
+}`,
+    files,
+  );
+  assert.deepEqual(
+    findings.map((item) => [item.ruleId, item.line]),
+    [['pg-transaction-on-pool', 9]],
   );
 });

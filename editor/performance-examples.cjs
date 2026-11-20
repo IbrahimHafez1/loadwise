@@ -94,9 +94,29 @@ const examples = {
     "const { rows } = await pool.query('SELECT id FROM orders WHERE status = $1', [status]);",
     'For a single statement, the pool borrows and returns the client. A multi-statement transaction needs its own checked-out client.',
   ],
+  'pg-transaction-on-pool': [
+    "const client = await pool.connect();\ntry {\n  await client.query('BEGIN'); await updateOrders(client); await client.query('COMMIT');\n} catch (error) { await client.query('ROLLBACK'); throw error; }\nfinally { client.release(); }",
+    'Send every operation in the transaction through this client; discard an unusable connection if rollback itself fails.',
+  ],
   'pg-dynamic-query-text': [
     "const { rows } = await client.query('SELECT id FROM users WHERE email = $1', [email]);",
     'Bind values as parameters. For dynamic identifiers or sort directions, choose among fixed, allowlisted SQL fragments.',
+  ],
+  'prisma-transaction-client-escape': [
+    'await prisma.$transaction(async tx => {\n  await tx.order.create({ data: orderData });\n  await tx.auditEntry.create({ data: auditData });\n});',
+    'Pass tx to any helper that participates in this transaction.',
+  ],
+  'prisma-read-modify-write': [
+    'await prisma.counter.update({\n  where: uniqueCounterFilter, data: { value: { increment: delta } }\n});',
+    'For a non-null counter and a simple addition. Conditional business rules may require a guarded update or version check.',
+  ],
+  'prisma-dependent-writes': [
+    'await prisma.$transaction(async tx => {\n  const order = await tx.order.create({ data: orderData });\n  await tx.lineItem.create({ data: { ...lineData, orderId: order.id } });\n});',
+    'Use when the writes must succeed or fail together. A nested write is another option for an existing relation.',
+  ],
+  'drizzle-unfiltered-write': [
+    'await db.update(orders).set(changes).where(and(scope, eq(orders.id, orderId)));',
+    'Use the intended filter for this operation. Confirm explicitly if a whole-table mutation is intentional.',
   ],
   'prisma-scope-unverified': [
     'const rows = await prisma.invoice.findMany({\n  where: { AND: [filter, { organizationId: currentOrganization() }] }\n});',

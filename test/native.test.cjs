@@ -73,6 +73,8 @@ test(
       'postgres',
       'pg-integrity',
       'prisma',
+      'prisma-integrity',
+      'dependent-writes',
       'drizzle',
       'drizzle-policy',
       'orm-queries',
