@@ -74,7 +74,7 @@ function runtimeRequires(entryFile, seen = new Set()) {
     const target = [literal, `${literal}.cjs`, `${literal}/index.cjs`]
       .map((candidate) => path.resolve(path.dirname(entryFile), candidate))
       .find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile());
-    if (target && /\.cjs$/.test(target)) runtimeRequires(target, seen);
+    if (target?.endsWith('.cjs')) runtimeRequires(target, seen);
     else if (target) seen.add(target);
   }
   return seen;
