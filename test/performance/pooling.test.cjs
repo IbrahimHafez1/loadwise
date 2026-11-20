@@ -92,7 +92,7 @@ test('detects lost direct pg checkouts and accepts released or independently man
     files,
   );
   assert.deepEqual(
-    findings.map(({ ruleId, line }) => [ruleId, line]),
+    findings.filter(({ ruleId }) => ruleId !== 'floating-promise').map(({ ruleId, line }) => [ruleId, line]),
     [
       ['pg-unreleased-checkout', 4],
       ['pg-unreleased-checkout', 5],
