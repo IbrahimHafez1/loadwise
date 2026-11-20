@@ -226,6 +226,26 @@ const standaloneExamples = {
     code: 'const [rows, total] = await qb.skip(offset).take(limit).getManyAndCount();',
     note: 'The page waits for the count, so one list costs two round trips. Prisma has no combined call; run both with Promise.all.',
   },
+  'await-before-early-exit': {
+    language: 'javascript',
+    before:
+      "const user = await prisma.user.findUnique({ where: { id } });\nif (!dto.name) throw new BadRequestException('name required');",
+    code: "if (!dto.name) throw new BadRequestException('name required');\nconst user = await prisma.user.findUnique({ where: { id } });",
+    note: 'Run the guard before the read it does not use. Keep the order when the read is there for its own error or timing.',
+  },
+  'floating-promise': {
+    language: 'javascript',
+    before: 'sendWelcomeEmail(user.email);',
+    code: 'await sendWelcomeEmail(user.email);\n// or, on purpose in the background:\nvoid sendWelcomeEmail(user.email).catch((error) => logger.error(error));',
+    note: 'An unawaited rejection is unhandled and can stop the process. List deliberate background helpers under fireAndForget in the policy.',
+  },
+  'find-then-create-race': {
+    language: 'javascript',
+    before:
+      'const found = await prisma.user.findFirst({ where: { email } });\nif (!found) await prisma.user.create({ data: { email } });',
+    code: 'await prisma.user.upsert({ where: { email }, update: {}, create: { email } });',
+    note: 'Needs a unique constraint on email; two requests can otherwise both find nothing and both insert. Or insert and catch P2002.',
+  },
   'redis-keys-command': {
     language: 'javascript',
     before: "const keys = await redis.keys('session:*');",
