@@ -272,6 +272,7 @@ async function main(args) {
     const { values, positionals } = parseCommand(args.slice(2), { project: { type: 'string', short: 'p' } });
     if (values.help) return showHelp();
     if (positionals.length) throw new Error('editor watch accepts only an optional -p project config.');
+    await loadSqlParser();
     require('../lib/editor-watch.cjs').watchEditor(process.cwd(), values.project, (inputs) =>
       checkCode(inputs, selectFindings),
     );
@@ -292,7 +293,13 @@ async function main(args) {
     require('../lib/notify-editor.cjs').notifyEditor(positionals.length === 1 ? positionals[0] : process.cwd());
     return code;
   }
+  await loadSqlParser();
   return checkCode(args);
+}
+
+// Raw SQL index rules parse synchronously during the scan, and the WASM parser can only load asynchronously.
+function loadSqlParser() {
+  return require('../lib/sql/pg-parser.cjs').ensureLoaded();
 }
 
 main(process.argv.slice(2))
