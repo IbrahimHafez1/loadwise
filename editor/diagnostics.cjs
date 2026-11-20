@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { exampleFor: performanceExample } = require('./performance-examples.cjs');
 const { exampleFor: maintainabilityExample } = require('./maintainability-examples.cjs');
+const { exampleFor: securityExample } = require('./security-examples.cjs');
 const { getFindingComparison, inlineComparison } = require('./finding-comparison.cjs');
 const { isChangeApplied, locateChange } = require('./apply-fix.cjs');
 const anchors = new WeakMap();
@@ -24,6 +25,10 @@ const advice = new Map([
   ],
   ['file-placement', 'Move the file to one of the configured folders and update its imports.'],
 ]);
+
+function sourceExample(ruleId, languageId, message) {
+  return performanceExample(ruleId, languageId, message) ?? securityExample(ruleId, languageId);
+}
 
 function sourceRange(vscode, site, document) {
   const line = site.line - 1;
@@ -107,7 +112,8 @@ function fixComparison(fix) {
 }
 
 function examplesFor(document, diagnostic, site) {
-  const lookup = diagnostic.source === 'loadwise perf' ? performanceExample : maintainabilityExample;
+  // The perf watcher also reports security findings, so its lookup falls back to the security examples.
+  const lookup = diagnostic.source === 'loadwise perf' ? sourceExample : maintainabilityExample;
   const example = lookup(diagnostic.code, document.languageId, site.message);
   if (site.fix) return { example, comparison: fixComparison(site.fix) };
   const { source, code, range } = diagnostic;
