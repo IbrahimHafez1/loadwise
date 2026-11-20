@@ -43,6 +43,26 @@ Save team decisions in `maintainability.config.json` at the project root, or pas
 
 Paths use project-relative directory or file names. Directory boundaries match complete segments. The longest matching filename suffix wins. With no configuration, each project keeps its own folder conventions. Discovery uses tracked and nonignored untracked Git files where available and a directory walk elsewhere. Dependency and build output directories and minified files are skipped. Use explicit exclusions for checked-in vendor code.
 
+## Inline fixes
+
+Findings with a safe rewrite carry it as `fix = { changes: [{ file, line, before, after }], note? }` in `--json` output, and the text output prints it as a diff.
+
+```sh
+npx maintainability-check . --fix         # asks y/n/a/q for each fix; needs a terminal
+npx maintainability-check . --fix --yes   # applies every fix without asking
+```
+
+`--fix` is refused with `--json` or `--graph`, and `--yes` alone is refused. Without a terminal, `--fix` requires `--yes`. A fix applies only where the original lines still exist. One that an earlier fix made stale is skipped and reappears, rebuilt, on the next run. Review the diff and run your tests afterwards.
+
+| Rule                       | Rewrite                                                                                                                                                                                        |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deep-control-flow`        | Lifts the deepest branch one level with a guard clause, a merged nested `if`, or by dropping an `else` after a branch that exits.                                                              |
+| `high-branch-complexity`   | Removes decisions the score counts: merges nested `if`s, joins adjacent same-exit `if`s with `\|\|`, turns `x ? true : false` into `Boolean(x)`, and `if (!x) x = value` into `x \|\|= value`. |
+| `duplicate-implementation` | Keeps one top-level function and makes each other copy delegate to it, adding an import where needed. Applied only when every name the copies use resolves to the same binding.                |
+| `dependency-cycle`         | Turns an import whose names are used only as types into `import type`, which removes that edge from the runtime cycle.                                                                         |
+
+Other rules have no automatic rewrite.
+
 ## A module graph in any language
 
 ```json
