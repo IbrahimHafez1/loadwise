@@ -2,28 +2,28 @@ id: polyglot-parse-error-python
 language: Python
 severity: warning
 message: The parser encountered invalid or unsupported syntax.
-rule: {kind: ERROR}
+rule: { kind: ERROR }
 ---
 id: polyglot-parse-error-go
 language: Go
 severity: warning
 message: The parser encountered invalid or unsupported syntax.
-rule: {kind: ERROR}
+rule: { kind: ERROR }
 ---
 id: polyglot-parse-error-java
 language: Java
 severity: warning
 message: The parser encountered invalid or unsupported syntax.
-rule: {kind: ERROR}
+rule: { kind: ERROR }
 ---
 id: polyglot-parse-error-csharp
 language: CSharp
 severity: warning
 message: The parser encountered invalid or unsupported syntax.
-rule: {kind: ERROR}
+rule: { kind: ERROR }
 ---
 id: polyglot-parse-error-rust
 language: Rust
 severity: warning
 message: The parser encountered invalid or unsupported syntax.
-rule: {kind: ERROR}
+rule: { kind: ERROR }

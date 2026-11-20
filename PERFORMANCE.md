@@ -8,11 +8,11 @@ The default TypeScript engine now checks once per compiler program whether Drizz
 
 ## Version 0.2.1 review
 
-| Workload | Comparison | Local result |
-| --- | --- | --- |
-| 3,200 JS/TS files in eight referenced projects, default compiler | Locally installed 0.2.0 archive vs 0.2.1, three fresh processes each in alternating order | Median 1.549 s to 1.043 s (33% shorter). All six complete reports matched, including the 72 diagnostic locations. |
-| Watch on the same 3,200 files, one edited source | Same rules with recursive traversal or reuse of syntax candidates, eight measured edits per variant after four warmups | Median analysis 225 to 155 ms. Median edit-to-report time including the watcher debounce went from 572 to 539 ms. Each snapshot correctly added or cleared one finding. |
-| 24,000 OTLP spans, 480 expected groups | In-memory scan, 12 paired samples after warmup | Median 15.1 to 9.8 ms. On a second fixture with 720 findings including bound lookups, 34.0 to 23.5 ms. Complete results matched on every repetition. |
+| Workload                                                         | Comparison                                                                                                             | Local result                                                                                                                                                            |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3,200 JS/TS files in eight referenced projects, default compiler | Locally installed 0.2.0 archive vs 0.2.1, three fresh processes each in alternating order                              | Median 1.549 s to 1.043 s (33% shorter). All six complete reports matched, including the 72 diagnostic locations.                                                       |
+| Watch on the same 3,200 files, one edited source                 | Same rules with recursive traversal or reuse of syntax candidates, eight measured edits per variant after four warmups | Median analysis 225 to 155 ms. Median edit-to-report time including the watcher debounce went from 572 to 539 ms. Each snapshot correctly added or cleared one finding. |
+| 24,000 OTLP spans, 480 expected groups                           | In-memory scan, 12 paired samples after warmup                                                                         | Median 15.1 to 9.8 ms. On a second fixture with 720 findings including bound lookups, 34.0 to 23.5 ms. Complete results matched on every repetition.                    |
 
 The default one-shot compiler now remembers file and directory existence for one run and shares the compiler library text across referenced configs. A separate instrumented scan on the 4,466-file VS Code checkout reduced physical directory probes from **71,651 to 3,408** and file probes from **33,101 to 6,417**. In the eight-project fixture, library snapshot sharing and probe reuse reduced reads from 3,737 to 3,296 and directory probes from 21,320 to 226. Watch mode uses TypeScript's live filesystem host and rechecks types against the current program on each edit. Its cache holds syntax candidates tied to the original source tree. Policies requiring block or import traversal use the full walk.
 
@@ -26,12 +26,12 @@ Maintained review fixtures cover unused lazy Prisma operations, mutations of a l
 
 These CLI checks used the pinned checkouts described below, fresh Node processes and a warm OS file cache. Timing includes compiler startup, rule execution and JSON output. The 3,200-file fixture and VS Code native timings are medians of three consecutive runs. NestJS and TypeORM each have one reported timing in this series.
 
-| Input | Files | Engine | Wall time | Candidates |
-| --- | ---: | --- | ---: | ---: |
-| VS Code 1.100.0, complete src config | 4,466 | Native | 6.69 s (6.61–7.09) | 431 |
-| NestJS framework | 1,180 | Native | 0.86 s | 17 |
-| TypeORM, original root config | 3,267 | Default | 7.88 s | 62 |
-| Generated mixed JS/TS backend | 3,200 | Native | 0.84 s (0.80–0.86) | 72 |
+| Input                                | Files | Engine  |          Wall time | Candidates |
+| ------------------------------------ | ----: | ------- | -----------------: | ---------: |
+| VS Code 1.100.0, complete src config | 4,466 | Native  | 6.69 s (6.61–7.09) |        431 |
+| NestJS framework                     | 1,180 | Native  |             0.86 s |         17 |
+| TypeORM, original root config        | 3,267 | Default |             7.88 s |         62 |
+| Generated mixed JS/TS backend        | 3,200 | Native  | 0.84 s (0.80–0.86) |         72 |
 
 The default compiler also scanned the 4,466-file VS Code project and produced an identical full JSON report. One run took 23.56 s while the automated test suite was active.
 
@@ -49,11 +49,11 @@ The row-scope fixtures use different fields and authorization helpers in the sam
 
 These are timed local runs against the repositories' own project configurations. The default engine uses the JavaScript TypeScript compiler. The optional native engine uses Microsoft's Go compiler through its 7.1 beta API. The scanner itself emitted no project files.
 
-| Source tree | Input files | Default | Native | Result |
-| --- | ---: | ---: | ---: | --- |
-| Visual Studio Code 1.100.0, complete `src/tsconfig.json` | 4,466 | 10.91 s | 10.20 s | 430 identical findings, including messages and locations |
-| TypeORM, commit `7a9009d299c1`, original root config | 3,267 | 7.13 s | TS5108 | 62 findings, identical across two successful default runs |
-| NestJS 12.0.0 framework checkout, commit `27b0cb024d17` | 1,180 | 6.18 s | 1.53 s | 17 identical findings |
+| Source tree                                              | Input files | Default |  Native | Result                                                    |
+| -------------------------------------------------------- | ----------: | ------: | ------: | --------------------------------------------------------- |
+| Visual Studio Code 1.100.0, complete `src/tsconfig.json` |       4,466 | 10.91 s | 10.20 s | 430 identical findings, including messages and locations  |
+| TypeORM, commit `7a9009d299c1`, original root config     |       3,267 |  7.13 s |  TS5108 | 62 findings, identical across two successful default runs |
+| NestJS 12.0.0 framework checkout, commit `27b0cb024d17`  |       1,180 |  6.18 s |  1.53 s | 17 identical findings                                     |
 
 **VS Code** included 1,379,848 source lines and its test directories. Of 430 findings, 271 were under test directories. The release's seven configured type roots and Node types were installed from its lockfile. All relative imports resolved. Of 76 distinct external import specifiers, 49 lacked declarations in this source-only checkout. Type-dependent checks can miss calls using those imports. The final default process peaked at 1,994 MiB. The native process tree peaked at a sampled 2,340 MiB combined, with working sets sampled every 50 ms. Earlier runs on the same machine took 28.0 and 18.0 s, respectively. The 1,536 MiB default-engine heap trial failed; successful full runs used a 2,560 MiB ceiling. [VS Code source release](https://github.com/microsoft/vscode/tree/19e0f9e681ecb8e5c09d8784acaa601316ca4571)
 
@@ -68,9 +68,9 @@ A generated backend contains 3,200 JavaScript and TypeScript files, 23,240 sourc
 The multi-project scanner shares parsed copies of the compiler's bundled declaration files across compatible compiler settings. It checks an overlapping source file under each config, where the same expression can resolve to different types. Source files follow the compiler's logical paths so differently resolved symlink aliases get checked.
 
 | Final rule set, three fresh processes per cell | Default median | Native median |
-| --- | ---: | ---: |
-| All 3,200 files in one project | 2.234 s | 1.071 s |
-| The same files in eight referenced projects | 2.606 s | 1.270 s |
+| ---------------------------------------------- | -------------: | ------------: |
+| All 3,200 files in one project                 |        2.234 s |       1.071 s |
+| The same files in eight referenced projects    |        2.606 s |       1.270 s |
 
 Both engines returned the 72 exact expected findings on all twelve runs. The workload includes many typed query sites and 72 deliberate per-item queries. `npm run bench:scan -- --large --native` runs the native variant.
 
@@ -84,8 +84,8 @@ The polyglot source checker separately scanned 756 real Python 3.12 standard-lib
 
 The trace benchmark used 24,000 spans (11.1 MiB of JSON), including 4,800 eligible DB spans and 480 expected groups. It checked the complete output on every run. The optimized reader indexes attributes in one pass and reuses bounded operation-signature fingerprints.
 
-| Local measurement | Before | After |
-| --- | ---: | ---: |
+| Local measurement             |  Before |   After |
+| ----------------------------- | ------: | ------: |
 | Inspect already-parsed export | 23.9 ms | 19.5 ms |
 | Parse JSON string and inspect | 66.5 ms | 59.4 ms |
 
@@ -101,11 +101,10 @@ Run `npm run bench:patterns` to compare application code. Its output measures th
 
 ## Live database checks
 
-| Engine | Measured outcome on isolated test data |
-| --- | --- |
-| PostgreSQL 18.0 | A sequential scan examined 20,000 rows for one match. Adding an index preserved the row and cleared the finding. An offset page walked 15,010 rows to return ten. Keyset pagination read ten and returned the same ten. The checker also found a 4,088 KiB disk sort. |
-| MongoDB 8.2.3 | A collection scan examined 20,000 documents for one match. Indexing reduced that to one. Deep skip walked 15,010 index entries even though top-level documents examined was only ten. The keyset query returned the same documents and passed. A separate sort spilled 79 times and was detected. |
-| Redis 7.2.16 | Python instrumentation captured a real `KEYS` operation. Incremental `SCAN` returned the same fixture key and passed. Eight default-redacted GETs produced a batching finding. Eight reads of a visible synthetic key produced a request-local reuse finding. One GET reused eight times returned the same values and passed. |
+| Engine          | Measured outcome on isolated test data                                                                                                                                                                                                                                                                                        |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PostgreSQL 18.0 | A sequential scan examined 20,000 rows for one match. Adding an index preserved the row and cleared the finding. An offset page walked 15,010 rows to return ten. Keyset pagination read ten and returned the same ten. The checker also found a 4,088 KiB disk sort.                                                         |
+| MongoDB 8.2.3   | A collection scan examined 20,000 documents for one match. Indexing reduced that to one. Deep skip walked 15,010 index entries even though top-level documents examined was only ten. The keyset query returned the same documents and passed. A separate sort spilled 79 times and was detected.                             |
+| Redis 7.2.16    | Python instrumentation captured a real `KEYS` operation. Incremental `SCAN` returned the same fixture key and passed. Eight default-redacted GETs produced a batching finding. Eight reads of a visible synthetic key produced a request-local reuse finding. One GET reused eight times returned the same values and passed. |
 
 SQL Server, MySQL, MariaDB, DynamoDB, Cassandra and additional language/driver combinations are covered by contract fixtures where noted in the README. The live database checks above establish a different level of evidence.
-

@@ -5,16 +5,20 @@ const test = require('node:test');
 const { lint } = require('./helpers.cjs');
 const { validateParallelReads } = require('../lib/parallel-reads.cjs');
 
-const files = { 'node_modules/@app/reads/index.d.ts': `
+const files = {
+  'node_modules/@app/reads/index.d.ts': `
 export function fetchUser(id?: string): Promise<string>;
 export function fetchPosts(id?: string): Promise<string>;
 export function fetchVotes(id?: string): Promise<string>;
 export function save(id?: string): Promise<string>;
 export function cached(id?: string): string;
 export { fetchUser as sameUser };
-` };
-const groups = [{ from: '@app/reads', exports: ['fetchUser', 'fetchPosts', 'cached', 'sameUser'] },
-  { from: '@app/reads', exports: ['fetchVotes', 'fetchPosts'] }];
+`,
+};
+const groups = [
+  { from: '@app/reads', exports: ['fetchUser', 'fetchPosts', 'cached', 'sameUser'] },
+  { from: '@app/reads', exports: ['fetchVotes', 'fetchPosts'] },
+];
 
 function findings(source, configured = true) {
   const policy = configured ? { parallelReads: validateParallelReads(groups) } : undefined;
@@ -34,7 +38,10 @@ export const overview = async () => {
   const articles = await reads.fetchPosts('news');
   return { votes, articles };
 };`;
-  assert.deepEqual(findings(source), [5, 10].map(line => ['known-reads-awaited-serially', line]));
+  assert.deepEqual(
+    findings(source),
+    [5, 10].map((line) => ['known-reads-awaited-serially', line]),
+  );
   assert.deepEqual(findings(source, false), []);
 });
 
@@ -74,9 +81,17 @@ async function opaqueSetup(id: string, setup = client.query('BEGIN')) { const fi
 });
 
 test('parallelReads rejects ambiguous groups and validates without selecting a compiler', () => {
-  for (const invalid of [null, {}, [], [{}], [{ from: '../reads', exports: ['a', 'b'] }],
-    [{ from: '@app/reads', exports: ['a'] }], [{ from: '@app/reads', exports: ['a', 'a'] }],
-    [{ from: '@app/reads', exports: ['a', 'bad*'] }], [{ ...groups[0], unexpected: true }]]) {
+  for (const invalid of [
+    null,
+    {},
+    [],
+    [{}],
+    [{ from: '../reads', exports: ['a', 'b'] }],
+    [{ from: '@app/reads', exports: ['a'] }],
+    [{ from: '@app/reads', exports: ['a', 'a'] }],
+    [{ from: '@app/reads', exports: ['a', 'bad*'] }],
+    [{ ...groups[0], unexpected: true }],
+  ]) {
     assert.throws(() => validateParallelReads(invalid), /parallelReads/);
   }
 });

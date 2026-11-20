@@ -9,7 +9,7 @@ const { spawnSync } = require('node:child_process');
 
 const bin = path.resolve(__dirname, '../bin/backend-perf-check.cjs');
 
-test('source fail-on thresholds apply after ignores while JSON keeps all remaining findings', context => {
+test('source fail-on thresholds apply after ignores while JSON keeps all remaining findings', (context) => {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
   const directory = fs.mkdtempSync(path.join(base, 'backend-perf-threshold-'));
@@ -18,9 +18,13 @@ test('source fail-on thresholds apply after ignores while JSON keeps all remaini
   const files = {
     'node_modules/pg/index.d.ts': 'export class Pool { query(sql: string): Promise<unknown> }',
     'service.ts': [
-      "import { Pool } from 'pg';", "import { readFileSync } from 'node:fs';",
-      'const pool = new Pool();', 'export async function handle() {',
-      "  await pool.query('BEGIN');", "  readFileSync('example');", '}',
+      "import { Pool } from 'pg';",
+      "import { readFileSync } from 'node:fs';",
+      'const pool = new Pool();',
+      'export async function handle() {',
+      "  await pool.query('BEGIN');",
+      "  readFileSync('example');",
+      '}',
     ].join('\n'),
     'policy.json': JSON.stringify({ dataAccess: { modules: ['pg'], allowIn: ['reviewed'] } }),
     'invalid.json': JSON.stringify({ dataAccess: { modules: ['pg'], allowIn: [] } }),
@@ -34,7 +38,9 @@ test('source fail-on thresholds apply after ignores while JSON keeps all remaini
     return spawnSync(process.execPath, [bin, ...args], { cwd: directory, encoding: 'utf8' });
   }
   const sourceArgs = ['service.ts', '--json', '--policy', 'policy.json'];
-  const boundary = 'data-access-boundary', transaction = 'pg-transaction-on-pool', advisory = 'node-sync-fs-in-async';
+  const boundary = 'data-access-boundary',
+    transaction = 'pg-transaction-on-pool',
+    advisory = 'node-sync-fs-in-async';
   for (const [threshold, ignored, status, expected] of [
     ['all', [], 1, [boundary, transaction, advisory]],
     ['contract', [], 1, [boundary, transaction, advisory]],
@@ -44,12 +50,18 @@ test('source fail-on thresholds apply after ignores while JSON keeps all remaini
     ['all', [boundary, transaction], 1, [advisory]],
     ['all', [boundary, transaction, advisory], 0, []],
   ]) {
-    const result = run([...sourceArgs, '--fail-on', threshold, ...ignored.flatMap(rule => ['--ignore', rule])]);
+    const result = run([...sourceArgs, '--fail-on', threshold, ...ignored.flatMap((rule) => ['--ignore', rule])]);
     assert.equal(result.status, status, result.stderr);
     const report = JSON.parse(result.stdout);
-    assert.deepEqual(report.findings.map(({ ruleId }) => ruleId), expected);
+    assert.deepEqual(
+      report.findings.map(({ ruleId }) => ruleId),
+      expected,
+    );
     if (threshold === 'contract') {
-      assert.equal(report.contractFindingCount, expected.filter(rule => rule === boundary || rule === transaction).length);
+      assert.equal(
+        report.contractFindingCount,
+        expected.filter((rule) => rule === boundary || rule === transaction).length,
+      );
     } else assert.equal(Object.hasOwn(report, 'contractFindingCount'), false);
   }
   const textReport = run(['service.ts', '--policy', 'policy.json', '--fail-on', 'contract']);

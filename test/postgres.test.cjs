@@ -21,16 +21,23 @@ const pgTypes = `
 const pgFiles = { 'node_modules/@types/pg/index.d.ts': pgTypes };
 
 test('discarded reads of PostgreSQL results do not suggest pushing the unused work into SQL', () => {
-  assert.deepEqual(lint(`import type { Pool } from 'pg';
+  assert.deepEqual(
+    lint(
+      `import type { Pool } from 'pg';
     async function run(pool: Pool) {
       void (0, (await pool.query('SELECT * FROM items')).rows.length);
       void (await pool.query('SELECT * FROM items')).rows[0];
       (await pool.query('SELECT * FROM items')).rows.sort((a, b) => b.id - a.id).slice(0, 3);
-    }`, pgFiles), []);
+    }`,
+      pgFiles,
+    ),
+    [],
+  );
 });
 
 test('pg catches repeated reads, writes and query configs on typed clients', () => {
-  const findings = lint(`import { Pool as DatabasePool, type Client, type PoolClient } from 'pg';
+  const findings = lint(
+    `import { Pool as DatabasePool, type Client, type PoolClient } from 'pg';
 const pool = new DatabasePool();
 async function load(ids: number[], client: Client, checkedOut: PoolClient, sql: string) {
   for (const id of ids) await pool.query('SELECT * FROM accounts WHERE id = $1', [id]);
@@ -38,15 +45,23 @@ async function load(ids: number[], client: Client, checkedOut: PoolClient, sql: 
   for (const id of ids) await checkedOut.query('DELETE FROM staged WHERE id = $1', [id]);
   const connection = await pool.connect();
   for (const id of ids) await connection.query(sql, [id]);
-}`, pgFiles);
-  assert.deepEqual(findings.map(({ ruleId, line }) => [ruleId, line]), [
-    ['pg-query-in-loop', 4], ['pg-query-in-loop', 5],
-    ['pg-query-in-loop', 6], ['pg-query-in-loop', 8],
-  ]);
+}`,
+    pgFiles,
+  );
+  assert.deepEqual(
+    findings.map(({ ruleId, line }) => [ruleId, line]),
+    [
+      ['pg-query-in-loop', 4],
+      ['pg-query-in-loop', 5],
+      ['pg-query-in-loop', 6],
+      ['pg-query-in-loop', 8],
+    ],
+  );
 });
 
 test('pg avoids batched reads and unrelated clients with identical names', () => {
-  const findings = lint(`import { Pool } from 'pg';
+  const findings = lint(
+    `import { Pool } from 'pg';
 import { Pool as SearchPool } from 'local-search';
 const pool = new Pool();
 async function load(ids: number[], fake: { query(id: number): { rows: number[] } }) {
@@ -56,24 +71,34 @@ async function load(ids: number[], fake: { query(id: number): { rows: number[] }
   const search = new SearchPool();
   for (const id of ids) await search.query('example', [id]);
   return (await fake.query(1)).rows.length;
-}`, { ...pgFiles, 'node_modules/local-search/index.d.ts': pgTypes });
+}`,
+    { ...pgFiles, 'node_modules/local-search/index.d.ts': pgTypes },
+  );
   assert.deepEqual(findings, []);
 });
 
 test('pg suggests counting in SQL for a simple literal SELECT used only for its length', () => {
-  const findings = lint(`import { Pool } from 'pg';
+  const findings = lint(
+    `import { Pool } from 'pg';
 const pool = new Pool();
 async function count(active: boolean) {
   const total = (await pool.query('SELECT id, name FROM public.accounts WHERE active = $1;', [active])).rows.length;
   return total + (await pool.query({ text: 'SELECT * FROM accounts' }))!.rows.length;
-}`, pgFiles);
-  assert.deepEqual(findings.map(({ ruleId, line }) => [ruleId, line]), [
-    ['pg-count-materialization', 4], ['pg-count-materialization', 5],
-  ]);
+}`,
+    pgFiles,
+  );
+  assert.deepEqual(
+    findings.map(({ ruleId, line }) => [ruleId, line]),
+    [
+      ['pg-count-materialization', 4],
+      ['pg-count-materialization', 5],
+    ],
+  );
 });
 
 test('pg skips ambiguous or bounded count expressions and rows used elsewhere', () => {
-  const findings = lint(`import { Pool } from 'pg';
+  const findings = lint(
+    `import { Pool } from 'pg';
 const pool = new Pool();
 async function inspect(sql: string) {
   const dynamic = (await pool.query(sql)).rows.length;
@@ -87,12 +112,15 @@ async function inspect(sql: string) {
   const indirect = ((await pool.query('SELECT * FROM accounts')), { rows: [1] }).rows.length;
   (await pool.query('SELECT * FROM accounts')).rows.length = 0;
   return { total: result.rows.length, rows: result.rows };
-}`, pgFiles);
+}`,
+    pgFiles,
+  );
   assert.deepEqual(findings, []);
 });
 
 test('pg keeps quoted SQL, shadowed clients, custom submissions and destructuring writes out of row counts', () => {
-  const findings = lint(`import type { Client } from 'pg';
+  const findings = lint(
+    `import type { Client } from 'pg';
 declare function submit(connection: unknown): void;
 async function inspect(client: Client) {
   const quoted = (await client.query("SELECT 'SELECT * FROM users' AS sample")).rows.length;
@@ -105,12 +133,18 @@ async function inspect(client: Client) {
     const shadowed = (await client.query('SELECT * FROM users')).rows.length;
   }
   return { count: (await client.query('SELECT * FROM users')).rows.length };
-}`, pgFiles);
-  assert.deepEqual(findings.map(({ ruleId, line }) => [ruleId, line]), [['pg-count-materialization', 13]]);
+}`,
+    pgFiles,
+  );
+  assert.deepEqual(
+    findings.map(({ ruleId, line }) => [ruleId, line]),
+    [['pg-count-materialization', 13]],
+  );
 });
 
 test('pg detects unbounded first-row reads and skips bounded queries and writes', () => {
-  const findings = lint(`import { Pool } from 'pg';
+  const findings = lint(
+    `import { Pool } from 'pg';
 const db = new Pool();
 async function first(active: boolean, sql: string, fake: { query(text: string): Promise<{rows: unknown[]}> }) {
   const ordered = (await db.query('SELECT id, name FROM app.users WHERE active = $1 ORDER BY name ASC, id DESC NULLS LAST;', [active])).rows[0];
@@ -125,16 +159,23 @@ async function first(active: boolean, sql: string, fake: { query(text: string): 
   delete (await db.query('SELECT * FROM users')).rows[0];
   const result = await db.query('SELECT * FROM users');
   return {ordered, anyRow, result, first: result.rows[0]};
-}`, pgFiles);
-  assert.deepEqual(findings.map(({ ruleId, line }) => [ruleId, line]), [
-    ['pg-first-materialization', 4], ['pg-first-materialization', 5],
-  ]);
+}`,
+    pgFiles,
+  );
+  assert.deepEqual(
+    findings.map(({ ruleId, line }) => [ruleId, line]),
+    [
+      ['pg-first-materialization', 4],
+      ['pg-first-materialization', 5],
+    ],
+  );
   assert.match(findings[0].message, /LIMIT 1/);
   assert.match(findings[0].message, /order/i);
 });
 
 test('pg recognizes simple local filtering and bounded numeric sort consumers', () => {
-  const findings = lint(`import { Pool } from 'pg';
+  const findings = lint(
+    `import { Pool } from 'pg';
 const db = new Pool();
 async function example(threshold: number, dynamic: string) {
   const active = (await db.query('SELECT id, active FROM users')).rows.filter(row => row.active === true);
@@ -150,9 +191,16 @@ async function example(threshold: number, dynamic: string) {
   const dynamicLimit = (await db.query('SELECT * FROM users')).rows.sort((a,b) => a.id - b.id).slice(0,threshold);
   const reassigned = (await db.query('SELECT * FROM users')).rows.sort((a,b) => a.id - b.id)[0] = active[0];
   const fullSort = (await db.query('SELECT * FROM users')).rows.sort((a,b) => a.id - b.id);
-}`, pgFiles);
-  assert.deepEqual(findings.map(({ruleId, line}) => [ruleId, line]), [
-    ['pg-filter-materialization', 4], ['pg-filter-materialization', 5],
-    ['pg-top-k-materialization', 6], ['pg-top-k-materialization', 7],
-  ]);
+}`,
+    pgFiles,
+  );
+  assert.deepEqual(
+    findings.map(({ ruleId, line }) => [ruleId, line]),
+    [
+      ['pg-filter-materialization', 4],
+      ['pg-filter-materialization', 5],
+      ['pg-top-k-materialization', 6],
+      ['pg-top-k-materialization', 7],
+    ],
+  );
 });

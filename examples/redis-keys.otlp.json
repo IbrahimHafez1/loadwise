@@ -1,16 +1,22 @@
 {
-  "resourceSpans": [{
-    "scopeSpans": [{
-      "spans": [{
-        "traceId": "00000000000000000000000000000001",
-        "spanId": "0000000000000001",
-        "kind": 3,
-        "name": "KEYS",
-        "attributes": [
-          {"key": "db.system.name", "value": {"stringValue": "redis"}},
-          {"key": "db.operation.name", "value": {"stringValue": "KEYS"}}
-        ]
-      }]
-    }]
-  }]
+  "resourceSpans": [
+    {
+      "scopeSpans": [
+        {
+          "spans": [
+            {
+              "traceId": "00000000000000000000000000000001",
+              "spanId": "0000000000000001",
+              "kind": 3,
+              "name": "KEYS",
+              "attributes": [
+                { "key": "db.system.name", "value": { "stringValue": "redis" } },
+                { "key": "db.operation.name", "value": { "stringValue": "KEYS" } }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
 }

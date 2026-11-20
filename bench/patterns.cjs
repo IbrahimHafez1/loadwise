@@ -67,7 +67,7 @@ function benchmarkQueries(database) {
   function perCustomer() {
     return read(customers, CUSTOMER_PAGE_SIZE).map(({ id }) => ({
       id,
-      orders: read(single, id).map(order => order.id),
+      orders: read(single, id).map((order) => order.id),
     }));
   }
   function batched() {
@@ -95,10 +95,14 @@ function benchmarkQueries(database) {
   const minimumCustomerIds = [1, TOTAL_CUSTOMERS + 1];
   const materializedRows = minimumCustomerIds.reduce((total, id) => total + allMatches.all(id).length, 0);
   compare('First matching order, including an empty result', [
-    { label: `Read ${materializedRows} rows and keep the first match`,
-      run: () => minimumCustomerIds.map(id => allMatches.all(id)[0]) },
-    { label: 'Ordered LIMIT 1 (one row returned across both lookups)',
-      run: () => minimumCustomerIds.map(id => firstMatch.all(id)[0]) },
+    {
+      label: `Read ${materializedRows} rows and keep the first match`,
+      run: () => minimumCustomerIds.map((id) => allMatches.all(id)[0]),
+    },
+    {
+      label: 'Ordered LIMIT 1 (one row returned across both lookups)',
+      run: () => minimumCustomerIds.map((id) => firstMatch.all(id)[0]),
+    },
   ]);
 }
 
@@ -108,27 +112,35 @@ function benchmarkCollections() {
   const allowed = Array.from({ length: ALLOWED_COUNT }, (_, index) => index * 2);
   const requested = Array.from({ length: REQUEST_COUNT }, (_, index) => index);
   compare(`Membership, ${ALLOWED_COUNT} allowed IDs and ${REQUEST_COUNT} lookups`, [
-    { label: 'Array.includes for each ID', run: () => requested.filter(id => allowed.includes(id)) },
-    { label: 'Build Set and test each ID', run() {
-      const allowedIds = new Set(allowed);
-      return requested.filter(id => allowedIds.has(id));
-    } },
+    { label: 'Array.includes for each ID', run: () => requested.filter((id) => allowed.includes(id)) },
+    {
+      label: 'Build Set and test each ID',
+      run() {
+        const allowedIds = new Set(allowed);
+        return requested.filter((id) => allowedIds.has(id));
+      },
+    },
   ]);
 
   const VALUE_COUNT = 4_000;
   const values = Array.from({ length: VALUE_COUNT }, (_, index) => index);
   compare(`Collecting ${VALUE_COUNT} transformed IDs`, [
     { label: 'Copy growing accumulator', run: () => values.reduce((result, id) => [...result, id * 2], []) },
-    { label: 'Append to private accumulator', run() {
-      const result = [];
-      for (const id of values) result.push(id * 2);
-      return result;
-    } },
+    {
+      label: 'Append to private accumulator',
+      run() {
+        const result = [];
+        for (const id of values) result.push(id * 2);
+        return result;
+      },
+    },
   ]);
 }
 
 console.log(`Node ${process.version}; ${WARMUP_PAIRS} warm-up pairs, ${SAMPLE_PAIRS} alternating sample pairs.`);
-console.log('Local elapsed time includes result construction. SQLite uses prepared statements and an in-memory database.');
+console.log(
+  'Local elapsed time includes result construction. SQLite uses prepared statements and an in-memory database.',
+);
 const database = new DatabaseSync(':memory:');
 try {
   benchmarkQueries(database);

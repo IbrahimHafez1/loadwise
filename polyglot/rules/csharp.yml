@@ -21,8 +21,8 @@ rule:
                   has:
                     stopBy: end
                     any:
-                      - any: [{kind: class_declaration}, {kind: struct_declaration}, {kind: record_declaration}]
-                        has: {field: name, regex: '^Regex$'}
+                      - any: [{ kind: class_declaration }, { kind: struct_declaration }, { kind: record_declaration }]
+                        has: { field: name, regex: '^Regex$' }
                       - kind: using_directive
                         regex: '\busing\s+Regex\s*='
     - inside:

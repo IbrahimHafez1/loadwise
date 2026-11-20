@@ -37,4 +37,4 @@ constraints:
             - pattern: '()'
             - pattern: '($ONLY,)'
         - not:
-            has: {kind: list_splat}
+            has: { kind: list_splat }

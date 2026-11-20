@@ -5,8 +5,9 @@ const assert = require('node:assert/strict');
 const { lint } = require('./helpers.cjs');
 
 function scan(source) {
-  return lint('/// <reference lib="es2023.array" />\n' + source)
-    .filter(finding => finding.ruleId === 'numeric-sort-for-extreme');
+  return lint('/// <reference lib="es2023.array" />\n' + source).filter(
+    (finding) => finding.ruleId === 'numeric-sort-for-extreme',
+  );
 }
 
 test('recognizes numeric minima and maxima across ordering, endpoint and fresh copy forms', () => {
@@ -16,8 +17,15 @@ test('recognizes numeric minima and maxima across ordering, endpoint and fresh c
     const high = Array.from(values).sort((current, next) => next - current).at(0);
     return values.toSorted(function (current, next) { return next - current; }).at(-1);
   }`);
-  assert.deepEqual(findings.map(finding => [finding.line, /maximum/.test(finding.message)]),
-    [[3, false], [4, true], [5, true], [6, false]]);
+  assert.deepEqual(
+    findings.map((finding) => [finding.line, /maximum/.test(finding.message)]),
+    [
+      [3, false],
+      [4, true],
+      [5, true],
+      [6, false],
+    ],
+  );
   assert.match(findings[0].message, /empty/);
   assert.match(findings[0].message, /NaN/);
 });

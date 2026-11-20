@@ -33,12 +33,16 @@ function verify(flags) {
   const result = JSON.parse(run(checker, ['-p', 'tsconfig.json', '--json', ...flags], 1));
   assert.equal(result.scannedFiles, 1);
   // Comparing the complete set catches reports on clean controls as well as missed detections.
-  assert.deepEqual(result.findings.map(({ file, line, column, ruleId }) => ({ file, line, column, ruleId })), expected);
+  assert.deepEqual(
+    result.findings.map(({ file, line, column, ruleId }) => ({ file, line, column, ruleId })),
+    expected,
+  );
   console.log(`${flags.length ? 'Native' : 'Default'} checker matched all ${expected.length} locations.`);
   return result;
 }
 
 const args = process.argv.slice(2);
-if (args.length && !(args.length === 1 && args[0] === '--native')) throw new Error('Usage: npm run verify -- [--native]');
+if (args.length && !(args.length === 1 && args[0] === '--native'))
+  throw new Error('Usage: npm run verify -- [--native]');
 const classic = verify([]);
 if (args.length) assert.deepEqual(verify(['--native']), classic);

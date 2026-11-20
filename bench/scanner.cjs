@@ -30,16 +30,21 @@ for (let moduleIndex = 0; moduleIndex < routeModuleCount; moduleIndex++) {
     lines.push(line);
   }
   for (let routeIndex = 0; routeIndex < routesPerModule; routeIndex++) {
-    lines.push(`export async function route${routeIndex}(pool: Pool, ids: string[]) {`,
-      "  const selected = ids.map(id => clean(id.trim()).toLowerCase()).filter(Boolean);",
+    lines.push(
+      `export async function route${routeIndex}(pool: Pool, ids: string[]) {`,
+      '  const selected = ids.map(id => clean(id.trim()).toLowerCase()).filter(Boolean);',
       "  const rows = await pool.query('SELECT id FROM products WHERE id = ANY($1)', [selected]);",
-      "  const labels = selected.map(id => clean(id).slice(0, 16)).join(',');");
+      "  const labels = selected.map(id => clean(id).slice(0, 16)).join(',');",
+    );
     if (routeIndex === 0) {
-      addFinding("  for (const id of ids) await pool.query('SELECT id FROM products WHERE id = $1', [id]);",
-        'query', 'pg-query-in-loop');
+      addFinding(
+        "  for (const id of ids) await pool.query('SELECT id FROM products WHERE id = $1', [id]);",
+        'query',
+        'pg-query-in-loop',
+      );
       if (usesFilesystem) addFinding("  loadFile('config.txt');", 'loadFile', 'node-sync-fs-in-async');
     }
-    lines.push("  return { rows: rows.rows, labels, length: selected.length };", "}");
+    lines.push('  return { rows: rows.rows, labels, length: selected.length };', '}');
   }
   files[filename] = lines.join('\n');
 }
@@ -55,14 +60,15 @@ const sourceLines = Object.values(files).reduce((total, source) => total + sourc
 
 function measure() {
   const started = performance.now();
-  return withProgram('export {};', files, program => {
-    const application = program.getSourceFiles().filter(file => !file.isDeclarationFile);
+  return withProgram('export {};', files, (program) => {
+    const application = program.getSourceFiles().filter((file) => !file.isDeclarationFile);
     program.getTypeChecker();
     const bound = performance.now();
-    const findings = application.flatMap(file => analyzeFile(program, file));
+    const findings = application.flatMap((file) => analyzeFile(program, file));
     const finished = performance.now();
-    const signature = findings.map(({ file, line, column, ruleId }) =>
-      [path.basename(file), line, column, ruleId].join('|')).sort();
+    const signature = findings
+      .map(({ file, line, column, ruleId }) => [path.basename(file), line, column, ruleId].join('|'))
+      .sort();
     assert.deepEqual(signature, expected);
     return { setup: bound - started, analysis: finished - bound, total: finished - started };
   });
@@ -84,10 +90,12 @@ function benchmarkCli() {
   const jsLine = "  for (const id of ids) await pool.query('select id from people where id = $1', [id]);";
   artifacts['service.cjs'] = [
     "/** @param {import('pg').Pool} pool @param {string[]} ids */",
-    "module.exports = async function list(pool, ids) {", jsLine, "};",
+    'module.exports = async function list(pool, ids) {',
+    jsLine,
+    '};',
   ].join('\n');
   const signature = [...expected, ['service.cjs', 3, jsLine.indexOf('query') + 1, 'pg-query-in-loop'].join('|')].sort();
-  const rootFiles = Object.keys(artifacts).filter(name => !name.includes('/'));
+  const rootFiles = Object.keys(artifacts).filter((name) => !name.includes('/'));
   const compilerOptions = { target: 'ES2022', module: 'NodeNext', allowJs: true, skipLibCheck: true, types: [] };
   const references = Array.from({ length: 6 }, (_, index) => ({ path: `./service-${index}.json` }));
   for (const [index, reference] of references.entries()) {
@@ -97,7 +105,10 @@ function benchmarkCli() {
   artifacts['all.json'] = JSON.stringify({ compilerOptions, files: rootFiles });
   artifacts['tsconfig.json'] = JSON.stringify({ files: [], references });
   const cliSamples = 5;
-  const timings = new Map([['all.json', []], ['tsconfig.json', []]]);
+  const timings = new Map([
+    ['all.json', []],
+    ['tsconfig.json', []],
+  ]);
   try {
     for (const [name, content] of Object.entries(artifacts)) {
       const destination = path.join(root, name);
@@ -112,13 +123,20 @@ function benchmarkCli() {
         assert.equal(result.status, 1, result.stderr);
         const { findings, scannedFiles } = JSON.parse(result.stdout);
         assert.equal(scannedFiles, rootFiles.length);
-        assert.deepEqual(findings.map(({ file, line, column, ruleId }) => [file, line, column, ruleId].join('|')).sort(), signature);
+        assert.deepEqual(
+          findings.map(({ file, line, column, ruleId }) => [file, line, column, ruleId].join('|')).sort(),
+          signature,
+        );
       }
     }
-    console.log(`${rootFiles.length} on-disk modules, ${signature.length} exact findings, ${cliSamples} fresh Node processes per configuration, filesystem cache warm.`);
+    console.log(
+      `${rootFiles.length} on-disk modules, ${signature.length} exact findings, ${cliSamples} fresh Node processes per configuration, filesystem cache warm.`,
+    );
     for (const [config, samples] of timings) {
       const label = config === 'all.json' ? 'Single project' : 'Six referenced projects';
-      console.log(`${label}: median ${median(samples).toFixed(0)} ms (range ${Math.min(...samples).toFixed(0)}–${Math.max(...samples).toFixed(0)} ms)`);
+      console.log(
+        `${label}: median ${median(samples).toFixed(0)} ms (range ${Math.min(...samples).toFixed(0)}–${Math.max(...samples).toFixed(0)} ms)`,
+      );
     }
   } finally {
     for (const name of Object.keys(artifacts)) fs.rmSync(path.join(root, name), { force: true });
@@ -140,9 +158,19 @@ if (process.argv.includes('--cli')) {
 
 for (let index = 0; index < warmupRuns; index++) measure();
 const runs = Array.from({ length: sampleCount }, measure);
-console.log(`Node ${process.version}; TypeScript ${require('typescript').version}; ${appModuleCount} synthetic app modules, ${sourceLines} lines including mock pg types, ${expected.length} findings.`);
-console.log(`Module load ${moduleLoadMs.toFixed(1)} ms. Medians from ${sampleCount} fresh programs after ${warmupRuns} warmups; exact findings checked every run.`);
-for (const [key, name] of [['setup', 'Program creation and binding'], ['analysis', 'Rule analysis'], ['total', 'Total']]) {
-  const measurements = runs.map(run => run[key]);
-  console.log(`${name}: ${median(measurements).toFixed(1)} ms (range ${Math.min(...measurements).toFixed(1)}–${Math.max(...measurements).toFixed(1)} ms)`);
+console.log(
+  `Node ${process.version}; TypeScript ${require('typescript').version}; ${appModuleCount} synthetic app modules, ${sourceLines} lines including mock pg types, ${expected.length} findings.`,
+);
+console.log(
+  `Module load ${moduleLoadMs.toFixed(1)} ms. Medians from ${sampleCount} fresh programs after ${warmupRuns} warmups; exact findings checked every run.`,
+);
+for (const [key, name] of [
+  ['setup', 'Program creation and binding'],
+  ['analysis', 'Rule analysis'],
+  ['total', 'Total'],
+]) {
+  const measurements = runs.map((run) => run[key]);
+  console.log(
+    `${name}: ${median(measurements).toFixed(1)} ms (range ${Math.min(...measurements).toFixed(1)}–${Math.max(...measurements).toFixed(1)} ms)`,
+  );
 }

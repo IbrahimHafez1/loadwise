@@ -24,28 +24,28 @@ Source checks summarize contextual findings separately. They include certain one
 
 The default `--fail-on all` applies to the displayed findings. For a complete advisory report that only fails CI on a transaction-client or import contract violation, use `npx backend-perf-check --include-contextual --fail-on contract`. The two enforced rules are `pg-transaction-on-pool` and `data-access-boundary`.
 
-| Input | Command after `npx backend-perf-check` | Coverage |
-| --- | --- | --- |
-| JavaScript or TypeScript | `-p tsconfig.json`, `--watch -p tsconfig.json` or `src/handler.ts` | Typed database calls, collection algorithms, connections and synchronous Node APIs. |
-| Python, Go, Java, C#, Rust | `polyglot src` | Five narrowly scoped source patterns powered by a Rust binary. |
-| OTLP/JSON from any application language | `traces request.otlp.json --threshold 5` | Repeated SQL or NoSQL operations, duplicate lookups and Redis/Valkey commands. |
-| Executed PostgreSQL or MongoDB plan | `plan explain.json` | Inefficient scans, disk sorts and deep pagination at individual plan stages. |
+| Input                                   | Command after `npx backend-perf-check`                             | Coverage                                                                            |
+| --------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| JavaScript or TypeScript                | `-p tsconfig.json`, `--watch -p tsconfig.json` or `src/handler.ts` | Typed database calls, collection algorithms, connections and synchronous Node APIs. |
+| Python, Go, Java, C#, Rust              | `polyglot src`                                                     | Five narrowly scoped source patterns powered by a Rust binary.                      |
+| OTLP/JSON from any application language | `traces request.otlp.json --threshold 5`                           | Repeated SQL or NoSQL operations, duplicate lookups and Redis/Valkey commands.      |
+| Executed PostgreSQL or MongoDB plan     | `plan explain.json`                                                | Inefficient scans, disk sorts and deep pagination at individual plan stages.        |
 
 ## Source checks
 
 Run in the directory containing `tsconfig.json` or `jsconfig.json`, pass `-p path/to/config.json`, or give explicit JS/TS files. A project check scans the config's input files and follows project references. Declaration files supply types. A standalone file check uses ES2022 and NodeNext compiler defaults. Use a project config for aliases, custom libraries and JS projects with `allowJs`.
 
-| JS/TS rule | Trigger and review |
-| --- | --- |
-| `pg-query-in-loop`, `prisma-query-in-loop` | Per-item queries. Consider a parameterized set query, relation load or bulk write if ordering and transaction behavior permit it. Prisma can already batch compatible `findUnique` calls. |
-| `pg-count-materialization`, `prisma-count-materialization` | Counting an immediately loaded result. Use a database count with equivalent predicates and handle its return type. |
-| `pg-first-materialization`, `prisma-first-materialization` | Reading only index zero from an unbounded result. Preserve ordering and empty-result behavior when limiting the query. |
-| `pg-filter-materialization`, `prisma-filter-materialization` | Applying a literal equality filter in JS after loading an unbounded result. Check database collation and null semantics before moving the predicate. |
-| `pg-top-k-materialization`, `prisma-top-k-materialization` | Sorting an unbounded result with a numeric comparator to keep the top rows. Use database ordering and a limit with a stable tie-breaker. |
-| `array-repeated-membership`, `array-repeated-find`, `rebuild-lookup-in-loop` | Repeated linear lookups or rebuilt indexes. Reuse a Set or Map if inputs are stable and enough lookups justify construction. Preserve first-match semantics with duplicate keys. |
-| `reduce-copy-accumulator`, `loop-copy-accumulator`, `filter-for-existence` | Copying a growing result or allocating a filtered array for a boolean test. Consider a private accumulator or a short-circuiting predicate. |
-| `pool-created-per-request-or-item`, `pg-unreleased-checkout` | A recognized pg, Prisma, MongoDB or Redis client/pool is created on a repeated path, or a chained pg checkout loses the client reference. Scope reuse to the right credentials and release checked-out clients. |
-| `node-sync-fs-in-async`, `node-sync-compression-in-async`, `node-sync-crypto-in-async`, `node-sync-process-in-async` | A recognized synchronous API blocks an async function. Examples include `readFileSync`, `gzipSync`, `scryptSync` and `execFileSync`. |
+| JS/TS rule                                                                                                           | Trigger and review                                                                                                                                                                                              |
+| -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pg-query-in-loop`, `prisma-query-in-loop`                                                                           | Per-item queries. Consider a parameterized set query, relation load or bulk write if ordering and transaction behavior permit it. Prisma can already batch compatible `findUnique` calls.                       |
+| `pg-count-materialization`, `prisma-count-materialization`                                                           | Counting an immediately loaded result. Use a database count with equivalent predicates and handle its return type.                                                                                              |
+| `pg-first-materialization`, `prisma-first-materialization`                                                           | Reading only index zero from an unbounded result. Preserve ordering and empty-result behavior when limiting the query.                                                                                          |
+| `pg-filter-materialization`, `prisma-filter-materialization`                                                         | Applying a literal equality filter in JS after loading an unbounded result. Check database collation and null semantics before moving the predicate.                                                            |
+| `pg-top-k-materialization`, `prisma-top-k-materialization`                                                           | Sorting an unbounded result with a numeric comparator to keep the top rows. Use database ordering and a limit with a stable tie-breaker.                                                                        |
+| `array-repeated-membership`, `array-repeated-find`, `rebuild-lookup-in-loop`                                         | Repeated linear lookups or rebuilt indexes. Reuse a Set or Map if inputs are stable and enough lookups justify construction. Preserve first-match semantics with duplicate keys.                                |
+| `reduce-copy-accumulator`, `loop-copy-accumulator`, `filter-for-existence`                                           | Copying a growing result or allocating a filtered array for a boolean test. Consider a private accumulator or a short-circuiting predicate.                                                                     |
+| `pool-created-per-request-or-item`, `pg-unreleased-checkout`                                                         | A recognized pg, Prisma, MongoDB or Redis client/pool is created on a repeated path, or a chained pg checkout loses the client reference. Scope reuse to the right credentials and release checked-out clients. |
+| `node-sync-fs-in-async`, `node-sync-compression-in-async`, `node-sync-crypto-in-async`, `node-sync-process-in-async` | A recognized synchronous API blocks an async function. Examples include `readFileSync`, `gzipSync`, `scryptSync` and `execFileSync`.                                                                            |
 
 Source diagnostics include a one-based line and column. Repeat `--ignore RULE` to omit specific JS/TS rules from a run. Keep your project's own type check in CI.
 
@@ -68,26 +68,26 @@ Install the application's driver declarations and generate its Prisma client bef
 
 The JS/TS checker resolves declarations from installed drivers and generated clients. Install the dependencies used by the project, including type declarations. When resolution is incomplete, some calls will be missed. The rules run locally against source and recorded evidence.
 
-| Library | Source patterns covered |
-| --- | --- |
-| Prisma | Executed per-item operations, fetching rows only to count, filter, sort or take the first, dependent creates, transaction client use, stale numeric overwrites and opt-in row scopes. |
-| Drizzle ORM | Executed fluent queries on the PostgreSQL, MySQL and SQLite core APIs, per-item prepared executions, and direct mutations with an absent or demonstrably ineffective predicate. |
-| TypeORM | Repository reads inside repeated execution and simple `find` or `findBy` calls that load entities only for their count. |
-| Sequelize | Model reads inside repeated execution and immediate counts of simple `findAll` results. |
-| Mongoose | Consumed model queries including common `lean` and `exec` chains, plus immediate counts for simple equivalent filters. |
-| Knex and Kysely | Consumed Knex builders and Kysely SELECT execution methods inside repeated work. Simple single-table queries materialized only to read their length. |
-| node-postgres | Per-item queries, client-side result processing, pool handoff, transaction commands issued through a pool, and runtime fragments composed directly into SQL text. |
+| Library         | Source patterns covered                                                                                                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Prisma          | Executed per-item operations, fetching rows only to count, filter, sort or take the first, dependent creates, transaction client use, stale numeric overwrites and opt-in row scopes. |
+| Drizzle ORM     | Executed fluent queries on the PostgreSQL, MySQL and SQLite core APIs, per-item prepared executions, and direct mutations with an absent or demonstrably ineffective predicate.       |
+| TypeORM         | Repository reads inside repeated execution and simple `find` or `findBy` calls that load entities only for their count.                                                               |
+| Sequelize       | Model reads inside repeated execution and immediate counts of simple `findAll` results.                                                                                               |
+| Mongoose        | Consumed model queries including common `lean` and `exec` chains, plus immediate counts for simple equivalent filters.                                                                |
+| Knex and Kysely | Consumed Knex builders and Kysely SELECT execution methods inside repeated work. Simple single-table queries materialized only to read their length.                                  |
+| node-postgres   | Per-item queries, client-side result processing, pool handoff, transaction commands issued through a pool, and runtime fragments composed directly into SQL text.                     |
 
 `orm-query-in-loop`, `drizzle-query-in-loop` and `orm-count-materialization` preserve the distinction between building a lazy statement and executing it. Counts with pagination, grouping, joins, hooks or scopes need particular care. The adapters recognize specific typed APIs. Custom methods with the same name, raw queries and wrappers often have different semantics.
 
-| Integrity rule | What to review |
-| --- | --- |
-| `pg-transaction-on-pool` | A standalone transaction-control statement is sent to a typed pool. Use the same checked-out client for the whole transaction and release it in `finally`. |
-| `pg-dynamic-query-text` | Runtime fragments enter SQL text directly. Bind data as parameters and verify how any dynamic identifiers are chosen and quoted. A finding is a code-review prompt. |
-| `prisma-transaction-client-escape` | A direct model operation uses the same outer client that opened an interactive transaction. Verify that the operation belongs inside that transaction. |
-| `prisma-dependent-writes` | Adjacent creates pass a value from the first record into the next write. Explicit single-key nested `connect` can use a custom unique field when generated types confirm a relation. Direct scalar assignments currently recognize `parent.id` going into a field ending in `Id` or `_id`. Other scalar foreign-key conventions can be missed. If both writes must succeed together, consider a nested write or an appropriate transaction. |
-| `prisma-read-modify-write` | A direct read of one row feeds a numeric update of the same field and key. Review atomic arithmetic, an optimistic version check or serializable execution with retries. |
-| `drizzle-unfiltered-write` | An executed update/delete has no effective predicate in a recognized direct chain. An intentional whole-table maintenance operation can legitimately match. |
+| Integrity rule                     | What to review                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pg-transaction-on-pool`           | A standalone transaction-control statement is sent to a typed pool. Use the same checked-out client for the whole transaction and release it in `finally`.                                                                                                                                                                                                                                                                                  |
+| `pg-dynamic-query-text`            | Runtime fragments enter SQL text directly. Bind data as parameters and verify how any dynamic identifiers are chosen and quoted. A finding is a code-review prompt.                                                                                                                                                                                                                                                                         |
+| `prisma-transaction-client-escape` | A direct model operation uses the same outer client that opened an interactive transaction. Verify that the operation belongs inside that transaction.                                                                                                                                                                                                                                                                                      |
+| `prisma-dependent-writes`          | Adjacent creates pass a value from the first record into the next write. Explicit single-key nested `connect` can use a custom unique field when generated types confirm a relation. Direct scalar assignments currently recognize `parent.id` going into a field ending in `Id` or `_id`. Other scalar foreign-key conventions can be missed. If both writes must succeed together, consider a nested write or an appropriate transaction. |
+| `prisma-read-modify-write`         | A direct read of one row feeds a numeric update of the same field and key. Review atomic arithmetic, an optimistic version check or serializable execution with retries.                                                                                                                                                                                                                                                                    |
+| `drizzle-unfiltered-write`         | An executed update/delete has no effective predicate in a recognized direct chain. An intentional whole-table maintenance operation can legitimately match.                                                                                                                                                                                                                                                                                 |
 
 For Prisma, building an array of lazy queries alone is quiet. A sequential `await` inside a loop can trigger the rule. Same-tick `findUnique` callbacks can use Prisma's own batching, so these are left to runtime traces. [Prisma Client reference](https://www.prisma.io/docs/orm/reference/prisma-client-reference#prismapromise-behavior) · [Prisma transactions](https://www.prisma.io/docs/orm/prisma-client/queries/transactions) · [node-postgres transactions](https://node-postgres.com/features/transactions) · [Drizzle conditional filters](https://orm.drizzle.team/docs/guides/conditional-filters-in-query)
 
@@ -109,11 +109,11 @@ These checks assume the configured helper authenticates the caller and authorize
 
 ### Async work and sorting
 
-| Rule | When it reports |
-| --- | --- |
-| `promise-combinator-serial-await` | A built-in `Promise.all` or `Promise.allSettled` receives an array of two or more already-awaited calls with known promise types. Starting them together changes which calls run after a failure. With `allSettled`, it also changes how rejections are returned. |
-| `known-reads-awaited-serially` | Two adjacent awaited reads come from a project-configured `parallelReads` group and the second call is independent of the first result in a supported straight-line shape. |
-| `numeric-sort-for-extreme` | A numeric comparison sort on a private copy, or a nonmutating numeric sort, is used only to retrieve its first or last value. A single-pass extreme can use constant extra space. Preserve empty input, NaN, sparse inputs and signed-zero semantics when applicable. |
+| Rule                              | When it reports                                                                                                                                                                                                                                                       |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `promise-combinator-serial-await` | A built-in `Promise.all` or `Promise.allSettled` receives an array of two or more already-awaited calls with known promise types. Starting them together changes which calls run after a failure. With `allSettled`, it also changes how rejections are returned.     |
+| `known-reads-awaited-serially`    | Two adjacent awaited reads come from a project-configured `parallelReads` group and the second call is independent of the first result in a supported straight-line shape.                                                                                            |
+| `numeric-sort-for-extreme`        | A numeric comparison sort on a private copy, or a nonmutating numeric sort, is used only to retrieve its first or last value. A single-pass extreme can use constant extra space. Preserve empty input, NaN, sparse inputs and signed-zero semantics when applicable. |
 
 The example policy declares that `fetchUser` and `fetchPosts` from `@app/reads` may start together. Only group operations whose ordering, shared connections, rate limits and failure effects your project has reviewed. With that declaration, the checker can flag the pair below. Ordinary adjacent calls such as `saveSettings()` followed by `reloadSettings()` carry no such contract.
 
@@ -133,13 +133,13 @@ The CLI reports review candidates and leaves source files untouched. The schedul
 
 `npx backend-perf-check polyglot src` accepts directories or individual `.py`, `.go`, `.java`, `.cs` and `.rs` files. It uses the optional ast-grep native binary and its syntax-tree patterns. Language-specific aliases and wrappers can fall outside a pattern. [ast-grep](https://ast-grep.github.io/)
 
-| Rule | Example in a loop |
-| --- | --- |
-| `python-copy-growing-list` | A list initialized to `[]` is repeatedly assigned `items = items + [value]` in a simple loop. |
-| `go-fixed-regexp-in-loop` | `regexp.Compile("pattern")` or `regexp.MustCompile("pattern")` |
-| `java-fixed-regex-in-loop` | `Pattern.compile("pattern")` |
-| `csharp-fixed-regex-in-loop` | `new Regex("pattern")` |
-| `rust-fixed-regex-in-loop` | `Regex::new("pattern")` |
+| Rule                         | Example in a loop                                                                             |
+| ---------------------------- | --------------------------------------------------------------------------------------------- |
+| `python-copy-growing-list`   | A list initialized to `[]` is repeatedly assigned `items = items + [value]` in a simple loop. |
+| `go-fixed-regexp-in-loop`    | `regexp.Compile("pattern")` or `regexp.MustCompile("pattern")`                                |
+| `java-fixed-regex-in-loop`   | `Pattern.compile("pattern")`                                                                  |
+| `csharp-fixed-regex-in-loop` | `new Regex("pattern")`                                                                        |
+| `rust-fixed-regex-in-loop`   | `Regex::new("pattern")`                                                                       |
 
 ## Trace checks in other languages and databases
 
@@ -147,12 +147,12 @@ Supply a local **OTLP/JSON trace export** with `resourceSpans → scopeSpans →
 
 Try `npx backend-perf-check traces node_modules/backend-perf-check/examples/repeated-db.otlp.json`. The example reports five similar MongoDB operations under one parent. The trace rules use current and legacy database attributes and deduplicate span IDs.
 
-| Rule | Evidence and interpretation |
-| --- | --- |
-| `repeated-db-span` | Five similar sibling DB calls by default, grouped by resource, trace, parent and recorded database target. SQL statements, query summaries, operation/collection pairs and recognized DynamoDB `GetItem` events can provide signatures. Namespace-only MongoDB or DynamoDB groups call for inspection of the actual predicates. |
-| `redis-keys-scan` | One Redis or Valkey `KEYS` command can scan the keyspace. For incremental iteration, account for duplicates and keys changing between `SCAN` calls. |
-| `redis-repeated-read` | Repeated sibling `GET` or `HGET` calls. Consider compatible multi-key reads or bounded pipelining with appropriate cluster slots, ordering and error handling. Recognized pipeline children are excluded. |
-| `duplicate-key-read` | Two or more reads with the same observable lookup, database target and recorded scalar context under one parent. The comparison accepts application-defined context keys. Supported evidence includes a concrete Redis `GET` key or a narrow SQL equality lookup with its bound parameter. Masked targets, ambiguous context, observed writes, transactions or failed calls suppress the suggestion where identity or freshness is uncertain. |
+| Rule                  | Evidence and interpretation                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `repeated-db-span`    | Five similar sibling DB calls by default, grouped by resource, trace, parent and recorded database target. SQL statements, query summaries, operation/collection pairs and recognized DynamoDB `GetItem` events can provide signatures. Namespace-only MongoDB or DynamoDB groups call for inspection of the actual predicates.                                                                                                               |
+| `redis-keys-scan`     | One Redis or Valkey `KEYS` command can scan the keyspace. For incremental iteration, account for duplicates and keys changing between `SCAN` calls.                                                                                                                                                                                                                                                                                           |
+| `redis-repeated-read` | Repeated sibling `GET` or `HGET` calls. Consider compatible multi-key reads or bounded pipelining with appropriate cluster slots, ordering and error handling. Recognized pipeline children are excluded.                                                                                                                                                                                                                                     |
+| `duplicate-key-read`  | Two or more reads with the same observable lookup, database target and recorded scalar context under one parent. The comparison accepts application-defined context keys. Supported evidence includes a concrete Redis `GET` key or a narrow SQL equality lookup with its bound parameter. Masked targets, ambiguous context, observed writes, transactions or failed calls suppress the suggestion where identity or freshness is uncertain. |
 
 Matching keys in two reads are a reason to consider **request-local** reuse when authorization, freshness and ordering allow it. Keep existing telemetry redaction. A redacted key can still support a batching finding. Reports contain span IDs and counts and omit raw SQL, parameters and keys. Check `scannedSpans` and `eligibleDbSpans` when interpreting a clean result. Sampling, missing parents, different literal values and coarse summaries affect grouping. [OpenTelemetry database spans](https://opentelemetry.io/docs/specs/semconv/db/database-spans/) · [OTLP JSON encoding](https://opentelemetry.io/docs/specs/otlp/#json-protobuf-encoding)
 
@@ -160,11 +160,11 @@ Matching keys in two reads are a reason to consider **request-local** reuse when
 
 Feed the CLI a JSON file from PostgreSQL `EXPLAIN (ANALYZE, FORMAT JSON)` or MongoDB `explain("executionStats")`. For example, run `npx backend-perf-check plan node_modules/backend-perf-check/examples/postgres-plan.json`. The checker reads the file locally. PostgreSQL's `ANALYZE` option executes the statement when you collect the plan. [PostgreSQL EXPLAIN](https://www.postgresql.org/docs/current/using-explain.html) · [MongoDB explain results](https://www.mongodb.com/docs/manual/reference/explain-results/)
 
-| Observed work | Threshold and review |
-| --- | --- |
-| `pg-sequential-scan`, `mongo-collection-scan` | At least 1,000 examined and at least 100 examined per returned record, treating zero returns as one for this ratio. Review selectivity and available indexes. PostgreSQL totals use the reported per-loop averages. |
-| `pg-disk-sort`, `mongo-disk-sort` | At least 1,024 KiB of disk use by a PostgreSQL sort participant, including a reported incremental-sort group peak, or at least 1 MiB of spill or eight spills on a MongoDB sort. Check whether earlier filtering or an index can reduce sorting work. |
-| `pg-deep-offset`, `mongo-deep-skip` | At least ten times as many entries walked as returned and at least 10,000 skipped per execution. For sequential pages, keyset pagination needs a stable ordering with a unique tie-breaker. |
+| Observed work                                 | Threshold and review                                                                                                                                                                                                                                  |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pg-sequential-scan`, `mongo-collection-scan` | At least 1,000 examined and at least 100 examined per returned record, treating zero returns as one for this ratio. Review selectivity and available indexes. PostgreSQL totals use the reported per-loop averages.                                   |
+| `pg-disk-sort`, `mongo-disk-sort`             | At least 1,024 KiB of disk use by a PostgreSQL sort participant, including a reported incremental-sort group peak, or at least 1 MiB of spill or eight spills on a MongoDB sort. Check whether earlier filtering or an index can reduce sorting work. |
+| `pg-deep-offset`, `mongo-deep-skip`           | At least ten times as many entries walked as returned and at least 10,000 skipped per execution. For sequential pages, keyset pagination needs a stable ordering with a unique tie-breaker.                                                           |
 
 Results include the stage path and observed counts. PostgreSQL and MongoDB planner estimates alone return exit 2. MongoDB coverage includes classic executed query stages and selected slot-based scan/filter and skip shapes. Unsupported layouts return an input error where a scan cannot be attributed.
 
@@ -210,4 +210,3 @@ Prisma documents per-item queries and batching. Node documents the event-loop ef
 Repeated lookups can benefit from a reusable membership index. Repeated growing copies can become quadratic. Biome already includes a lint rule for accumulating spread. [JavaScript Set](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Set) · [Array.reduce](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/reduce#when_to_not_use_reduce) · [Biome rule](https://biomejs.dev/linter/rules/no-accumulating-spread/javascript/)
 
 Sentry also has an N+1 detector that considers sequential spans and their total duration. This package's local trace check groups similar sibling calls, including concurrent calls. [Sentry N+1 detection](https://docs.sentry.io/product/issues/issue-details/performance-issues/n-one-queries/)
-

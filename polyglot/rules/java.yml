@@ -20,8 +20,16 @@ rule:
                 not:
                   has:
                     stopBy: end
-                    any: [{kind: class_declaration}, {kind: interface_declaration}, {kind: record_declaration}, {kind: variable_declarator}, {kind: formal_parameter}, {kind: enhanced_for_statement}]
-                    has: {field: name, regex: '^Pattern$'}
+                    any:
+                      [
+                        { kind: class_declaration },
+                        { kind: interface_declaration },
+                        { kind: record_declaration },
+                        { kind: variable_declarator },
+                        { kind: formal_parameter },
+                        { kind: enhanced_for_statement },
+                      ]
+                    has: { field: name, regex: '^Pattern$' }
     - inside:
         any:
           - kind: for_statement

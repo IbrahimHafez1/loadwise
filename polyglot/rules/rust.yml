@@ -20,8 +20,8 @@ rule:
                 not:
                   has:
                     stopBy: end
-                    any: [{kind: struct_item}, {kind: enum_item}, {kind: type_item}]
-                    has: {field: name, regex: '^Regex$'}
+                    any: [{ kind: struct_item }, { kind: enum_item }, { kind: type_item }]
+                    has: { field: name, regex: '^Regex$' }
     - inside:
         any:
           - kind: for_expression
@@ -40,9 +40,9 @@ rule:
             stopBy: end
             any:
               - kind: mod_item
-                has: {field: name, regex: '^regex$'}
+                has: { field: name, regex: '^regex$' }
               - kind: use_as_clause
-                has: {field: alias, regex: '^regex$'}
+                has: { field: alias, regex: '^regex$' }
 constraints:
   PAT:
     any:

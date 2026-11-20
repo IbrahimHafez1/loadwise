@@ -51,9 +51,16 @@ test('TypeORM recognizes In on the current batch while preserving per-record and
         for (const id of page) await repo.findBy({ id, scope: among(page) });
       }
     }`;
-  const declarations = { ...files, 'node_modules/typeorm/index.d.ts': repository + 'export function In(ids: number[]): object;' };
-  assert.deepEqual(lint(source, declarations).filter(finding => finding.ruleId === 'orm-query-in-loop')
-    .map(finding => finding.line), [7, 8]);
+  const declarations = {
+    ...files,
+    'node_modules/typeorm/index.d.ts': repository + 'export function In(ids: number[]): object;',
+  };
+  assert.deepEqual(
+    lint(source, declarations)
+      .filter((finding) => finding.ruleId === 'orm-query-in-loop')
+      .map((finding) => finding.line),
+    [7, 8],
+  );
 });
 
 function assertMarked(source) {
@@ -62,8 +69,12 @@ function assertMarked(source) {
     if (line.endsWith('// loop')) expectations.push([index + 1, 'orm-query-in-loop']);
     if (line.endsWith('// count')) expectations.push([index + 1, 'orm-count-materialization']);
   }
-  assert.deepEqual(lint(source, files).filter(finding => finding.ruleId.startsWith('orm-'))
-    .map(({ line, ruleId }) => [line, ruleId]), expectations);
+  assert.deepEqual(
+    lint(source, files)
+      .filter((finding) => finding.ruleId.startsWith('orm-'))
+      .map(({ line, ruleId }) => [line, ruleId]),
+    expectations,
+  );
 }
 
 test('discarded ORM counts do not recommend a replacement database query', () => {

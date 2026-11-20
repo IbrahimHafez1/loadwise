@@ -28,18 +28,18 @@ rule:
           stopBy: end
     - not:
         inside:
-          any: [{kind: function_declaration}, {kind: method_declaration}, {kind: func_literal}]
+          any: [{ kind: function_declaration }, { kind: method_declaration }, { kind: func_literal }]
           stopBy: end
           has:
             stopBy: end
             any:
-              - any: [{kind: parameter_declaration}, {kind: var_spec}]
-                has: {field: name, regex: '^regexp$'}
-              - any: [{kind: short_var_declaration}, {kind: range_clause}]
+              - any: [{ kind: parameter_declaration }, { kind: var_spec }]
+                has: { field: name, regex: '^regexp$' }
+              - any: [{ kind: short_var_declaration }, { kind: range_clause }]
                 has:
                   field: left
                   kind: expression_list
-                  has: {kind: identifier, regex: '^regexp$'}
+                  has: { kind: identifier, regex: '^regexp$' }
 constraints:
   PAT:
     any:

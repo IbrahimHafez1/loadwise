@@ -11,8 +11,11 @@ const root = path.resolve(__dirname, '..');
 const bin = path.join(root, 'bin/backend-perf-check.cjs');
 const [major, minor] = process.versions.node.split('.').map(Number);
 let skip = major < 22 || (major === 22 && minor < 13) ? 'native requires Node 22.13+' : false;
-try { if (!skip) require('../lib/native-runtime.cjs').executable(); }
-catch { skip = 'optional native compiler is absent'; }
+try {
+  if (!skip) require('../lib/native-runtime.cjs').executable();
+} catch {
+  skip = 'optional native compiler is absent';
+}
 
 test('native candidate walk visits the same syntax nodes in compiler order', { skip }, () => {
   const { requireNative, executable } = require('../lib/native-runtime.cjs');
@@ -43,7 +46,7 @@ test('native candidate walk visits the same syntax nodes in compiler order', { s
       try {
         const indexed = [];
         const recursive = [];
-        forEachSourceCandidate(retained.sourceFile, node => indexed.push(node.index));
+        forEachSourceCandidate(retained.sourceFile, (node) => indexed.push(node.index));
         function visit(node) {
           if (kinds.has(node.kind)) recursive.push(node.index);
           node.forEachChild(visit);
@@ -51,28 +54,61 @@ test('native candidate walk visits the same syntax nodes in compiler order', { s
         visit(retained.sourceFile);
         assert.ok(recursive.length > 0, name);
         assert.deepEqual(indexed, recursive, name);
-      } finally { retained.dispose(); }
+      } finally {
+        retained.dispose();
+      }
     }
-  } finally { api.close(); }
+  } finally {
+    api.close();
+  }
 });
 
-test('native compiler passes the shared filesystem, pooling, PostgreSQL, Prisma and collection rule fixtures', { skip }, () => {
-  const suites = ['node-fs', 'pooling', 'postgres', 'pg-integrity', 'prisma', 'prisma-integrity', 'dependent-writes',
-    'drizzle', 'drizzle-policy', 'orm-queries', 'query-policy', 'data-access', 'awaits', 'parallel-reads',
-    'sort-extreme', 'collections']
-    .map(name => path.join(__dirname, name + '.test.cjs'));
-  const env = { ...process.env, PERF_CHECK_TEST_NATIVE: '1' };
-  delete env.NODE_TEST_CONTEXT;
-  // The excluded test instruments TS5 watch-program reuse. Native runs are one-shot.
-  const result = spawnSync(process.execPath, ['--test', '--test-concurrency=1', '--test-reporter=tap',
-    '--test-skip-pattern=a rebuilt program checks writes again', ...suites], {
-    cwd: root, encoding: 'utf8', env,
-  });
-  assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stdout, /# pass [1-9]\d*/);
-});
+test(
+  'native compiler passes the shared filesystem, pooling, PostgreSQL, Prisma and collection rule fixtures',
+  { skip },
+  () => {
+    const suites = [
+      'node-fs',
+      'pooling',
+      'postgres',
+      'pg-integrity',
+      'prisma',
+      'prisma-integrity',
+      'dependent-writes',
+      'drizzle',
+      'drizzle-policy',
+      'orm-queries',
+      'query-policy',
+      'data-access',
+      'awaits',
+      'parallel-reads',
+      'sort-extreme',
+      'collections',
+    ].map((name) => path.join(__dirname, name + '.test.cjs'));
+    const env = { ...process.env, PERF_CHECK_TEST_NATIVE: '1' };
+    delete env.NODE_TEST_CONTEXT;
+    // The excluded test instruments TS5 watch-program reuse. Native runs are one-shot.
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--test',
+        '--test-concurrency=1',
+        '--test-reporter=tap',
+        '--test-skip-pattern=a rebuilt program checks writes again',
+        ...suites,
+      ],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        env,
+      },
+    );
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /# pass [1-9]\d*/);
+  },
+);
 
-test('native CLI covers clean and flagged files, overlapping configs, and invalid inputs', { skip }, context => {
+test('native CLI covers clean and flagged files, overlapping configs, and invalid inputs', { skip }, (context) => {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
   const directory = fs.mkdtempSync(path.join(base, 'backend-perf-native-test-'));
@@ -91,7 +127,7 @@ test('native CLI covers clean and flagged files, overlapping configs, and invali
     fs.rmdirSync(directory);
   });
   for (const [name, contents] of Object.entries(inputs)) fs.writeFileSync(path.join(directory, name), contents);
-  const run = args => spawnSync(process.execPath, [bin, ...args, '--json'], { cwd: directory, encoding: 'utf8' });
+  const run = (args) => spawnSync(process.execPath, [bin, ...args, '--json'], { cwd: directory, encoding: 'utf8' });
   const native = run(['--native', '-p', '.']);
   assert.equal(native.status, 1, native.stderr);
   assert.deepEqual(JSON.parse(native.stdout), JSON.parse(run(['-p', '.']).stdout));

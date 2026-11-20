@@ -24,25 +24,43 @@ test('a review applies to one advisory rule on the next physical line', () => {
     '}',
   ].join('\r\n');
   const findings = lint(source);
-  assert.deepEqual(findings.map(({ line, contextualReason }) => [line, contextualReason]), [
-    [4, 'Reviewed in source: Offline snapshot written once.'], [5, undefined], [7, undefined],
-    [9, undefined], [12, undefined], [15, undefined],
-  ]);
+  assert.deepEqual(
+    findings.map(({ line, contextualReason }) => [line, contextualReason]),
+    [
+      [4, 'Reviewed in source: Offline snapshot written once.'],
+      [5, undefined],
+      [7, undefined],
+      [9, undefined],
+      [12, undefined],
+      [15, undefined],
+    ],
+  );
 });
 
 test('a source review cannot lower a transaction contract', () => {
-  const findings = lint([
-    "import { Pool } from 'pg';", 'const pool = new Pool();',
-    '// backend-perf-reviewed pg-transaction-on-pool -- This annotation cannot waive the contract.',
-    "pool.query('BEGIN');",
-  ].join('\n'), { 'node_modules/pg/index.d.ts': 'export class Pool { query(text: string): Promise<unknown> }' });
-  assert.deepEqual(findings.map(({ ruleId, contextualReason }) => [ruleId, contextualReason]),
-    [['pg-transaction-on-pool', undefined]]);
+  const findings = lint(
+    [
+      "import { Pool } from 'pg';",
+      'const pool = new Pool();',
+      '// backend-perf-reviewed pg-transaction-on-pool -- This annotation cannot waive the contract.',
+      "pool.query('BEGIN');",
+    ].join('\n'),
+    { 'node_modules/pg/index.d.ts': 'export class Pool { query(text: string): Promise<unknown> }' },
+  );
+  assert.deepEqual(
+    findings.map(({ ruleId, contextualReason }) => [ruleId, contextualReason]),
+    [['pg-transaction-on-pool', undefined]],
+  );
 });
 
 test('only test write advisories receive an automatic test-path context', () => {
   const { testWriteContext } = require('../lib/review-context.cjs');
-  for (const file of ['service.spec.ts', 'src/model.test.mts', 'test/integration/setup.ts', 'src\\__tests__\\setup.js']) {
+  for (const file of [
+    'service.spec.ts',
+    'src/model.test.mts',
+    'test/integration/setup.ts',
+    'src\\__tests__\\setup.js',
+  ]) {
     assert.ok(testWriteContext(file, 'prisma-dependent-writes'));
     assert.ok(testWriteContext(file, 'drizzle-unfiltered-write'));
     assert.equal(testWriteContext(file, 'pg-transaction-on-pool'), undefined);
@@ -52,10 +70,12 @@ test('only test write advisories receive an automatic test-path context', () => 
   }
 });
 
-test('test-directory context is relative to the owning package, independently of invocation directory', context => {
+test('test-directory context is relative to the owning package, independently of invocation directory', (context) => {
   const fs = require('node:fs');
   const path = require('node:path');
-  const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : require('node:os').tmpdir();
+  const base = process.env.LOCALAPPDATA
+    ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work')
+    : require('node:os').tmpdir();
   fs.mkdirSync(base, { recursive: true });
   const directory = fs.mkdtempSync(path.join(base, 'backend-perf-review-'));
   const testParent = path.join(directory, 'tests');

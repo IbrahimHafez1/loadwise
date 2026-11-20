@@ -12,8 +12,8 @@ const delegateDeclaration = `
   }`;
 const legacyFiles = {
   'node_modules/@prisma/client/index.d.ts': "export * from '.prisma/client';",
-  'node_modules/.prisma/client/index.d.ts': delegateDeclaration
-    + 'export declare class PrismaClient { user: UserDelegate }',
+  'node_modules/.prisma/client/index.d.ts':
+    delegateDeclaration + 'export declare class PrismaClient { user: UserDelegate }',
 };
 
 test('loop queries distinguish a terminating lookup from repeats through retries and outer items', () => {
@@ -45,9 +45,13 @@ test('loop queries distinguish a terminating lookup from repeats through retries
         return rows;
       }
     }`;
-  const repeated = source.split('\n').flatMap((line, index) => line.includes('// repeat') ? [index + 1] : []);
-  assert.deepEqual(lint(source, legacyFiles).filter(finding => finding.ruleId === 'prisma-query-in-loop')
-    .map(finding => finding.line), repeated);
+  const repeated = source.split('\n').flatMap((line, index) => (line.includes('// repeat') ? [index + 1] : []));
+  assert.deepEqual(
+    lint(source, legacyFiles)
+      .filter((finding) => finding.ruleId === 'prisma-query-in-loop')
+      .map((finding) => finding.line),
+    repeated,
+  );
 });
 
 test('bulk predicates and advancing keysets are distinguished from per-item and stationary reads', () => {
@@ -75,9 +79,13 @@ test('bulk predicates and advancing keysets are distinguished from per-item and 
         after = rows[rows.length - 1].id;
       }
     }`;
-  const repeated = source.split('\n').flatMap((line, index) => line.includes('// repeat') ? [index + 1] : []);
-  assert.deepEqual(lint(source, legacyFiles).filter(finding => finding.ruleId === 'prisma-query-in-loop')
-    .map(finding => finding.line), repeated);
+  const repeated = source.split('\n').flatMap((line, index) => (line.includes('// repeat') ? [index + 1] : []));
+  assert.deepEqual(
+    lint(source, legacyFiles)
+      .filter((finding) => finding.ruleId === 'prisma-query-in-loop')
+      .map((finding) => finding.line),
+    repeated,
+  );
 });
 
 test('a keyset advances the same ordered field by a strict boundary or an explicitly skipped cursor', () => {
@@ -103,12 +111,20 @@ test('a keyset advances the same ordered field by a strict boundary or an explic
   const source = `import type {PrismaClient} from '@prisma/client';
     async function check(db: PrismaClient, dynamicSize: number, overrides: object) {
       let after: number | boolean = 0;
-      ${cases.map(([options, label, assigned, reset]) =>
-        `while (true) { const rows = await db.user.findMany({${options}}); if (!rows.length) break; after = ${assigned || 'rows[rows.length - 1].id'}; ${reset || ''} } // ${label || 'page'}`).join('\n')}
+      ${cases
+        .map(
+          ([options, label, assigned, reset]) =>
+            `while (true) { const rows = await db.user.findMany({${options}}); if (!rows.length) break; after = ${assigned || 'rows[rows.length - 1].id'}; ${reset || ''} } // ${label || 'page'}`,
+        )
+        .join('\n')}
     }`;
-  const expected = source.split('\n').flatMap((line, index) => line.endsWith('// repeat') ? [index + 1] : []);
-  assert.deepEqual(lint(source, legacyFiles).filter(finding => finding.ruleId === 'prisma-query-in-loop')
-    .map(finding => finding.line), expected);
+  const expected = source.split('\n').flatMap((line, index) => (line.endsWith('// repeat') ? [index + 1] : []));
+  assert.deepEqual(
+    lint(source, legacyFiles)
+      .filter((finding) => finding.ruleId === 'prisma-query-in-loop')
+      .map((finding) => finding.line),
+    expected,
+  );
 });
 
 test('effective positive batch filters retain singleton grouping, mixed OR, negation and later overrides', () => {
@@ -128,9 +144,13 @@ test('effective positive batch filters retain singleton grouping, mixed OR, nega
         await db.user.findMany({where: {...overrides, id: {in: group}}});
       }
     }`;
-  const expected = source.split('\n').flatMap((line, index) => line.endsWith('// repeat') ? [index + 1] : []);
-  assert.deepEqual(lint(source, legacyFiles).filter(finding => finding.ruleId === 'prisma-query-in-loop')
-    .map(finding => finding.line), expected);
+  const expected = source.split('\n').flatMap((line, index) => (line.endsWith('// repeat') ? [index + 1] : []));
+  assert.deepEqual(
+    lint(source, legacyFiles)
+      .filter((finding) => finding.ruleId === 'prisma-query-in-loop')
+      .map((finding) => finding.line),
+    expected,
+  );
 });
 
 test('flags per-item reads and single-row writes through the resolved Prisma delegate', () => {
@@ -146,8 +166,13 @@ test('flags per-item reads and single-row writes through the resolved Prisma del
     const db = new Database();
     const jobs = [1, 2].map(id => db.user.findUnique({ where: { id } }));`;
   const findings = lint(source, legacyFiles);
-  assert.deepEqual(findings.map(finding => [finding.line, finding.ruleId]),
-    [[6, 'prisma-query-in-loop'], [7, 'prisma-query-in-loop']]);
+  assert.deepEqual(
+    findings.map((finding) => [finding.line, finding.ruleId]),
+    [
+      [6, 'prisma-query-in-loop'],
+      [7, 'prisma-query-in-loop'],
+    ],
+  );
 });
 
 test('lazy Prisma builders and concurrent unique lookups stay quiet while sequential and consumed queries report', () => {
@@ -163,8 +188,14 @@ test('lazy Prisma builders and concurrent unique lookups stay quiet while sequen
       await Promise.all(ids.map(id => db.user.findMany({ where: { id } })));
       (await db.user.findMany()).length;
     }`;
-  assert.deepEqual(lint(source, legacyFiles).map(({ line, ruleId }) => [line, ruleId]),
-    [[7, 'prisma-query-in-loop'], [8, 'prisma-query-in-loop'], [10, 'prisma-query-in-loop']]);
+  assert.deepEqual(
+    lint(source, legacyFiles).map(({ line, ruleId }) => [line, ruleId]),
+    [
+      [7, 'prisma-query-in-loop'],
+      [8, 'prisma-query-in-loop'],
+      [10, 'prisma-query-in-loop'],
+    ],
+  );
 });
 
 test('count materialization requires a direct awaited length and count-compatible options', () => {
@@ -185,25 +216,38 @@ test('count materialization requires a direct awaited length and count-compatibl
       (await db.user.findMany()).length = 0;
     }`;
   const findings = lint(source, legacyFiles);
-  assert.deepEqual(findings.map(finding => [finding.line, finding.ruleId]),
-    [[4, 'prisma-count-materialization'], [5, 'prisma-count-materialization']]);
+  assert.deepEqual(
+    findings.map((finding) => [finding.line, finding.ruleId]),
+    [
+      [4, 'prisma-count-materialization'],
+      [5, 'prisma-count-materialization'],
+    ],
+  );
 });
 
 test('resolves a delegate from modern project-local generated model declarations', () => {
   const files = {
-    'orm/models/User.ts': "/* This is code generated by Prisma. */ import type * as runtime from '@prisma/client/runtime/client';"
-      + delegateDeclaration,
-    'orm/client.ts': "import type { UserDelegate } from './models/User';"
-      + ' export interface PrismaClient { user: UserDelegate }',
+    'orm/models/User.ts':
+      "/* This is code generated by Prisma. */ import type * as runtime from '@prisma/client/runtime/client';" +
+      delegateDeclaration,
+    'orm/client.ts':
+      "import type { UserDelegate } from './models/User';" + ' export interface PrismaClient { user: UserDelegate }',
     'node_modules/@prisma/client/runtime/client.d.ts': 'export {};',
   };
-  const findings = lint(`import type { PrismaClient } from './orm/client';
-    async function counts(db: PrismaClient) { return (await db.user.findMany({})).length; }`, files);
-  assert.deepEqual(findings.map(finding => finding.ruleId), ['prisma-count-materialization']);
+  const findings = lint(
+    `import type { PrismaClient } from './orm/client';
+    async function counts(db: PrismaClient) { return (await db.user.findMany({})).length; }`,
+    files,
+  );
+  assert.deepEqual(
+    findings.map((finding) => finding.ruleId),
+    ['prisma-count-materialization'],
+  );
 });
 
 test('first-row materialization keeps filters, ordering and nullable result semantics explicit', () => {
-  const findings = lint(`import { PrismaClient } from '@prisma/client';
+  const findings = lint(
+    `import { PrismaClient } from '@prisma/client';
 async function first(db: PrismaClient, options: object, fake: {findMany(): Promise<number[]>}) {
   const where = {enabled: true};
   const orderBy = [{score: 'desc'}, {id: 'asc'}];
@@ -220,17 +264,25 @@ async function first(db: PrismaClient, options: object, fake: {findMany(): Promi
   (await db.user.findMany())[0].id = 0;
   delete (await db.user.findMany())[0];
   return (await db.user.findMany())[0];
-}`, legacyFiles);
-  assert.deepEqual(findings.map(({ruleId, line}) => [ruleId, line]), [
-    ['prisma-first-materialization', 5], ['prisma-first-materialization', 6], ['prisma-first-materialization', 17],
-  ]);
+}`,
+    legacyFiles,
+  );
+  assert.deepEqual(
+    findings.map(({ ruleId, line }) => [ruleId, line]),
+    [
+      ['prisma-first-materialization', 5],
+      ['prisma-first-materialization', 6],
+      ['prisma-first-materialization', 17],
+    ],
+  );
   assert.match(findings[0].message, /findFirst/);
   assert.match(findings[0].message, /null/);
   assert.match(findings[0].message, /undefined/);
 });
 
 test('Prisma recognizes simple inline filters and top-K sorts on unbounded model queries', () => {
-  const findings = lint(`import { PrismaClient } from '@prisma/client';
+  const findings = lint(
+    `import { PrismaClient } from '@prisma/client';
 async function load(db: PrismaClient, key: number, method: (row: {id:number}) => boolean) {
   const booleans = (await db.user.findMany({select: {active: true}})).filter(row => row.active === false);
   const negative = (await db.user.findMany({where: {active: true}})).filter(row => row.id === -1);
@@ -246,11 +298,18 @@ async function load(db: PrismaClient, key: number, method: (row: {id:number}) =>
   const offset = (await db.user.findMany()).sort((a,b) => a.id - b.id).slice(1, 2);
   const noPrefix = (await db.user.findMany()).sort((a,b) => a.id - b.id);
   const valueComparison = (await db.user.findMany()).sort((a,b) => Number(a.active) - Number(b.active))[0];
-}`, legacyFiles);
-  assert.deepEqual(findings.map(({ruleId, line}) => [ruleId, line]), [
-    ['prisma-filter-materialization', 3], ['prisma-filter-materialization', 4],
-    ['prisma-top-k-materialization', 5], ['prisma-top-k-materialization', 6],
-  ]);
+}`,
+    legacyFiles,
+  );
+  assert.deepEqual(
+    findings.map(({ ruleId, line }) => [ruleId, line]),
+    [
+      ['prisma-filter-materialization', 3],
+      ['prisma-filter-materialization', 4],
+      ['prisma-top-k-materialization', 5],
+      ['prisma-top-k-materialization', 6],
+    ],
+  );
 });
 
 test('leaves lookalike repositories, batched queries, and deferred callbacks alone', () => {
@@ -266,18 +325,27 @@ test('leaves lookalike repositories, batched queries, and deferred callbacks alo
       }
       return rows;
     }`;
-  assert.deepEqual(lint(source, {
-    ...legacyFiles,
-    'node_modules/@prisma/client/runtime/client.d.ts': 'export {};',
-  }), []);
+  assert.deepEqual(
+    lint(source, {
+      ...legacyFiles,
+      'node_modules/@prisma/client/runtime/client.d.ts': 'export {};',
+    }),
+    [],
+  );
 });
 
 test('discarded counts, filters and sorted prefixes do not suggest server-side materialization changes', () => {
-  assert.deepEqual(lint(`import type { PrismaClient } from '@prisma/client';
+  assert.deepEqual(
+    lint(
+      `import type { PrismaClient } from '@prisma/client';
     async function run(db: PrismaClient) {
       void (await db.user.findMany()).length;
       ((await db.user.findMany())[0], 1);
       void (await db.user.findMany()).filter(row => row.active === true);
       (await db.user.findMany()).sort((a, b) => a.id - b.id).slice(0, 2);
-    }`, legacyFiles), []);
+    }`,
+      legacyFiles,
+    ),
+    [],
+  );
 });

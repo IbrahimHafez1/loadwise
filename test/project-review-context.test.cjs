@@ -7,17 +7,19 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-test('overlapping projects retain the visible advisory in either reference order', async context => {
+test('overlapping projects retain the visible advisory in either reference order', async (context) => {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
   const root = fs.mkdtempSync(path.join(base, 'backend-perf-review-context-'));
   const callback = 'declare function it(name: string, work: () => Promise<void>): void;';
   const jestDeclaration = 'node_modules/@types/jest/index.d.ts';
-  const leaf = declaration => JSON.stringify({
-    compilerOptions: { target: 'ES2022', types: [] },
-    files: ['service.ts', declaration],
-  });
-  const solution = (...configs) => JSON.stringify({ files: [], references: configs.map(file => ({ path: './' + file })) });
+  const leaf = (declaration) =>
+    JSON.stringify({
+      compilerOptions: { target: 'ES2022', types: [] },
+      files: ['service.ts', declaration],
+    });
+  const solution = (...configs) =>
+    JSON.stringify({ files: [], references: configs.map((file) => ({ path: './' + file })) });
   const files = {
     'service.ts': "import {readFileSync} from 'node:fs'; it('work', async () => { readFileSync('report'); });",
     [jestDeclaration]: callback,
@@ -38,12 +40,15 @@ test('overlapping projects retain the visible advisory in either reference order
 
   const bin = path.resolve(__dirname, '../bin/backend-perf-check.cjs');
   for (const native of [false, true]) {
-    await context.test(native ? 'native compiler' : 'TypeScript compiler', subtest => {
+    await context.test(native ? 'native compiler' : 'TypeScript compiler', (subtest) => {
       if (native) {
         const [major, minor] = process.versions.node.split('.').map(Number);
         if (major < 22 || (major === 22 && minor < 13)) return subtest.skip('Native requires Node 22.13+');
-        try { require('../lib/native-runtime.cjs').executable(); }
-        catch { return subtest.skip('Optional native compiler is absent'); }
+        try {
+          require('../lib/native-runtime.cjs').executable();
+        } catch {
+          return subtest.skip('Optional native compiler is absent');
+        }
       }
       function scan(config, ...options) {
         const args = [bin, ...(native ? ['--native'] : []), '-p', config, '--json', ...options];
@@ -57,8 +62,10 @@ test('overlapping projects retain the visible advisory in either reference order
       const service = scan('jest-first.json');
       assert.deepEqual(service, scan('service-first.json'));
       assert.equal(service.scannedFiles, 1);
-      assert.deepEqual(service.findings.map(finding => [finding.ruleId, finding.contextualReason]),
-        [['node-sync-fs-in-async', undefined]]);
+      assert.deepEqual(
+        service.findings.map((finding) => [finding.ruleId, finding.contextualReason]),
+        [['node-sync-fs-in-async', undefined]],
+      );
     });
   }
 });

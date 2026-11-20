@@ -15,7 +15,7 @@ test('the same logical source passed twice is counted and analyzed once', () => 
   });
 });
 
-test('one-shot probes see newly installed declarations on the next run', context => {
+test('one-shot probes see newly installed declarations on the next run', (context) => {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
   const root = fs.mkdtempSync(path.join(base, 'backend-perf-probes-'));
@@ -27,23 +27,26 @@ test('one-shot probes see newly installed declarations on the next run', context
     for (const file of [declaration, source]) if (fs.existsSync(file)) fs.unlinkSync(file);
     for (const directory of [driver, modules, root]) if (fs.existsSync(directory)) fs.rmdirSync(directory);
   });
-  fs.writeFileSync(source, "import type {Pool} from 'pg'; export async function load(pool:Pool, ids:number[]) { for(const id of ids) await pool.query(String(id)); }");
-  const scan = () => analyzeSources({ files: [source] }).findings.map(finding => finding.ruleId);
+  fs.writeFileSync(
+    source,
+    "import type {Pool} from 'pg'; export async function load(pool:Pool, ids:number[]) { for(const id of ids) await pool.query(String(id)); }",
+  );
+  const scan = () => analyzeSources({ files: [source] }).findings.map((finding) => finding.ruleId);
   assert.deepEqual(scan(), []);
   fs.mkdirSync(driver, { recursive: true });
   fs.writeFileSync(declaration, 'export declare class Pool {query(text:string):Promise<unknown>}');
   assert.deepEqual(scan(), ['pg-query-in-loop']);
 });
 
-test('linked entry paths resolve their imports independently', context => {
+test('linked entry paths resolve their imports independently', (context) => {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
   const root = fs.mkdtempSync(path.join(base, 'backend-perf-paths-'));
   const files = {
     'shared/check.ts': "import {pool} from '../database'; for (const id of [1, 2]) pool.query(String(id));",
-    'local/database.ts': "export declare const pool: {query(sql: string): void};",
+    'local/database.ts': 'export declare const pool: {query(sql: string): void};',
     'live/database.ts': "import type {Pool} from 'pg'; export declare const pool: Pool;",
-    'node_modules/pg/index.d.ts': "export declare class Pool { query(sql: string): void; }",
+    'node_modules/pg/index.d.ts': 'export declare class Pool { query(sql: string): void; }',
   };
   const directories = ['shared', 'local', 'live', 'node_modules', 'node_modules/pg'];
   const links = [];
@@ -69,16 +72,26 @@ test('linked entry paths resolve their imports independently', context => {
     }
     links.push(link);
   }
-  const result = analyzeSources({ files: links.map(link => path.join(link, 'check.ts')) });
+  const result = analyzeSources({ files: links.map((link) => path.join(link, 'check.ts')) });
   assert.equal(result.scannedFiles, 2);
-  assert.deepEqual(result.findings.map(finding => finding.ruleId), ['pg-query-in-loop']);
+  assert.deepEqual(
+    result.findings.map((finding) => finding.ruleId),
+    ['pg-query-in-loop'],
+  );
   assert.match(result.findings[0].file, /\/live\/entry\/check\.ts$/);
   const [major, minor] = process.versions.node.split('.').map(Number);
   if (major < 22 || (major === 22 && minor < 13)) return;
-  try { require('../lib/native-runtime.cjs').executable(); } catch { return; }
+  try {
+    require('../lib/native-runtime.cjs').executable();
+  } catch {
+    return;
+  }
   const bin = path.join(__dirname, '../bin/backend-perf-check.cjs');
-  const checked = spawnSync(process.execPath, [bin, '--native', '--json', ...links.map(link => path.join(link, 'check.ts'))],
-    { encoding: 'utf8' });
+  const checked = spawnSync(
+    process.execPath,
+    [bin, '--native', '--json', ...links.map((link) => path.join(link, 'check.ts'))],
+    { encoding: 'utf8' },
+  );
   assert.equal(checked.status, 1, checked.stderr);
   assert.deepEqual(JSON.parse(checked.stdout), result);
 });

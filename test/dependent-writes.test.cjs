@@ -25,55 +25,66 @@ const files = {
 };
 
 function check(source, extra = {}) {
-  return lint(source, { ...files, ...extra }).filter(finding => finding.ruleId === 'prisma-dependent-writes');
+  return lint(source, { ...files, ...extra }).filter((finding) => finding.ruleId === 'prisma-dependent-writes');
 }
 
 test('dependent writes link adjacent awaited creations through literal relationship data on the same client', () => {
-  const findings = check([
-    "import { PrismaClient as Client } from '@prisma/client';",
-    'const db = new Client();',
-    'const alias = db;',
-    'const orders = alias.order, items = db.item;',
-    'async function first() {',
-    '  const order = await orders.create({data: {}});',
-    '  // Both writes belong to a single order submission.',
-    '  await items.create({data: {orderId: order.id}});',
-    '}',
-    'async function second(db: Client) {',
-    '  const order = (await db.order.create({data: {}}));',
-    '  return await db.item.createMany({data: [{order_id: order.id}]});',
-    '}',
-    'async function third(db: Client) {',
-    '  const created = await db.order.create({data: {}});',
-    '  const child = await db.item.create({data: {order: {connect: {id: created.id}}}});',
-    '}',
-  ].join('\n'));
-  assert.deepEqual(findings.map(finding => finding.line), [8, 12, 16]);
+  const findings = check(
+    [
+      "import { PrismaClient as Client } from '@prisma/client';",
+      'const db = new Client();',
+      'const alias = db;',
+      'const orders = alias.order, items = db.item;',
+      'async function first() {',
+      '  const order = await orders.create({data: {}});',
+      '  // Both writes belong to a single order submission.',
+      '  await items.create({data: {orderId: order.id}});',
+      '}',
+      'async function second(db: Client) {',
+      '  const order = (await db.order.create({data: {}}));',
+      '  return await db.item.createMany({data: [{order_id: order.id}]});',
+      '}',
+      'async function third(db: Client) {',
+      '  const created = await db.order.create({data: {}});',
+      '  const child = await db.item.create({data: {order: {connect: {id: created.id}}}});',
+      '}',
+    ].join('\n'),
+  );
+  assert.deepEqual(
+    findings.map((finding) => finding.line),
+    [8, 12, 16],
+  );
   assert.match(findings[0].message, /If both must succeed or roll back together/);
 });
 
 test('nested connect uses its generated relation type with arbitrary key and source field names', () => {
-  const findings = check([
-    "import { PrismaClient } from '@prisma/client';",
-    'async function write(db: PrismaClient) {',
-    '  const created = await db.order.create({data: {}});',
-    "  await db.item.create({data: {owner: {connect: {'slug': created.handle}}}});",
-    '  const logged = await db.order.create({data: {}});',
-    '  await db.item.create({data: {metadata: {connect: {slug: logged.handle}}}});',
-    '  const recorded = await db.order.create({data: {}});',
-    '  await db.item.create({data: {metadata: {connect: {id: recorded.id}}}});',
-    '  const mixed = await db.order.create({data: {}});',
-    "  await db.item.create({data: {owner: {connect: {id: mixed.id, slug: 'other'}}}});",
-    '  const copy = await db.order.create({data: {}});',
-    '  await db.item.create({data: {message: copy.handle}});',
-    '}',
-  ].join('\n'));
-  assert.deepEqual(findings.map(finding => finding.line), [4]);
+  const findings = check(
+    [
+      "import { PrismaClient } from '@prisma/client';",
+      'async function write(db: PrismaClient) {',
+      '  const created = await db.order.create({data: {}});',
+      "  await db.item.create({data: {owner: {connect: {'slug': created.handle}}}});",
+      '  const logged = await db.order.create({data: {}});',
+      '  await db.item.create({data: {metadata: {connect: {slug: logged.handle}}}});',
+      '  const recorded = await db.order.create({data: {}});',
+      '  await db.item.create({data: {metadata: {connect: {id: recorded.id}}}});',
+      '  const mixed = await db.order.create({data: {}});',
+      "  await db.item.create({data: {owner: {connect: {id: mixed.id, slug: 'other'}}}});",
+      '  const copy = await db.order.create({data: {}});',
+      '  await db.item.create({data: {message: copy.handle}});',
+      '}',
+    ].join('\n'),
+  );
+  assert.deepEqual(
+    findings.map((finding) => finding.line),
+    [4],
+  );
   assert.match(findings[0].message, /a value from the preceding/);
 });
 
 test('independent, nonadjacent, cross-client, metadata and already-transactional writes stay quiet', () => {
-  assert.deepEqual(check(`
+  assert.deepEqual(
+    check(`
     import { PrismaClient, type TransactionClient } from '@prisma/client';
     async function independent(db: PrismaClient, other: PrismaClient) {
       const order = await db.order.create({data: {}});
@@ -98,11 +109,14 @@ test('independent, nonadjacent, cross-client, metadata and already-transactional
       const atomic = await tx.order.create({data: {}});
       await tx.item.create({data: {orderId: atomic.id}});
     }
-  `), []);
+  `),
+    [],
+  );
 });
 
 test('lookalikes and outer-client usage inside a transaction do not get a new-transaction suggestion', () => {
-  assert.deepEqual(check(`
+  assert.deepEqual(
+    check(`
     import { PrismaClient as Real } from '@prisma/client';
     class PrismaClient {
       order = { async create(input: object) { return {id: 1}; } };
@@ -118,5 +132,7 @@ test('lookalikes and outer-client usage inside a transaction do not get a new-tr
         await db.item.create({data: {orderId: parent.id}});
       });
     }
-  `), []);
+  `),
+    [],
+  );
 });

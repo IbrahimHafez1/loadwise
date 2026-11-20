@@ -6,4 +6,3 @@
     "executionStages": { "stage": "COLLSCAN", "docsExamined": 20000, "nReturned": 1 }
   }
 }
-

@@ -21,7 +21,17 @@
     }
   ],
   "dataAccess": {
-    "modules": ["@app/db", "@prisma/client", "drizzle-orm", "mongoose", "typeorm", "sequelize", "@sequelize/core", "knex", "kysely"],
+    "modules": [
+      "@app/db",
+      "@prisma/client",
+      "drizzle-orm",
+      "mongoose",
+      "typeorm",
+      "sequelize",
+      "@sequelize/core",
+      "knex",
+      "kysely"
+    ],
     "allowIn": ["src/data"]
   }
 }

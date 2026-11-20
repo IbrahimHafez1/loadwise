@@ -21,7 +21,8 @@ function assertRepeatOwners(source, expected) {
 }
 
 test('distinguishes repeated loop work from one-time setup', () => {
-  assertRepeatOwners(`
+  assertRepeatOwners(
+    `
     for (let index = probe('setup'); probe('condition'); probe('update')) probe('body');
     for (const entry of probe('iterable')) probe('forOf');
     for (const key in probe('enumerable')) probe('forIn');
@@ -29,15 +30,27 @@ test('distinguishes repeated loop work from one-time setup', () => {
     while (probe('while')) break;
     do { probe('do'); } while (false);
     for (const group of [1, 2]) for (const row of probe('innerSetup')) {}
-  `, {
-    setup: null, condition: 'ForStatement', update: 'ForStatement', body: 'ForStatement',
-    iterable: null, forOf: 'ForOfStatement', enumerable: null, forIn: 'ForInStatement',
-    binding: 'ForOfStatement', while: 'WhileStatement', do: 'DoStatement', innerSetup: 'ForOfStatement',
-  });
+  `,
+    {
+      setup: null,
+      condition: 'ForStatement',
+      update: 'ForStatement',
+      body: 'ForStatement',
+      iterable: null,
+      forOf: 'ForOfStatement',
+      enumerable: null,
+      forIn: 'ForInStatement',
+      binding: 'ForOfStatement',
+      while: 'WhileStatement',
+      do: 'DoStatement',
+      innerSetup: 'ForOfStatement',
+    },
+  );
 });
 
 test('recognizes direct built-in callbacks using their resolved declaration', () => {
-  assertRepeatOwners(`
+  assertRepeatOwners(
+    `
     declare const ids: readonly number[];
     declare const pairs: Map<number, string>;
     declare const options: Set<string>;
@@ -52,15 +65,23 @@ test('recognizes direct built-in callbacks using their resolved declaration', ()
     function apply<T extends readonly number[]>(values: T) {
       values.some(() => probe('generic'));
     }
-  `, {
-    map: 'ArrowFunction', filter: 'FunctionExpression', thisArg: null,
-    mapForEach: 'ArrowFunction', setForEach: 'ArrowFunction', custom: null,
-    deferred: null, generic: 'ArrowFunction',
-  });
+  `,
+    {
+      map: 'ArrowFunction',
+      filter: 'FunctionExpression',
+      thisArg: null,
+      mapForEach: 'ArrowFunction',
+      setForEach: 'ArrowFunction',
+      custom: null,
+      deferred: null,
+      generic: 'ArrowFunction',
+    },
+  );
 });
 
 test('respects function and instance-field execution boundaries', () => {
-  assertRepeatOwners(`
+  assertRepeatOwners(
+    `
     for (const row of [1, 2]) {
       (() => probe('iife'))();
       (function* () { probe('generator'); })();
@@ -72,8 +93,15 @@ test('respects function and instance-field execution boundaries', () => {
         read() { probe('method'); }
       }
     }
-  `, {
-    iife: 'ForOfStatement', generator: null, later: null, declared: null,
-    instance: null, static: 'ForOfStatement', method: null,
-  });
+  `,
+    {
+      iife: 'ForOfStatement',
+      generator: null,
+      later: null,
+      declared: null,
+      instance: null,
+      static: 'ForOfStatement',
+      method: null,
+    },
+  );
 });

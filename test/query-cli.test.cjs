@@ -14,9 +14,11 @@ const bin = path.resolve(__dirname, '../bin/backend-perf-check.cjs');
 const policyName = 'backend-perf.policy.json';
 const scopeRule = 'prisma-scope-unverified';
 const requirement = { field: 'tenantId', from: '@app/auth', export: 'requireAuthorizedTenantId' };
-const policyFor = model => JSON.stringify({ prismaScopes: { [model]: requirement } });
-const config = JSON.stringify({ compilerOptions: { target: 'ES2022', module: 'NodeNext', strict: true, types: [] },
-  files: ['reads.ts', 'perf.ts'] });
+const policyFor = (model) => JSON.stringify({ prismaScopes: { [model]: requirement } });
+const config = JSON.stringify({
+  compilerOptions: { target: 'ES2022', module: 'NodeNext', strict: true, types: [] },
+  files: ['reads.ts', 'perf.ts'],
+});
 
 function project(context) {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
@@ -41,17 +43,26 @@ function project(context) {
   write('app/tsconfig.json', config);
   write('node_modules/@app/auth/index.d.ts', 'export declare function requireAuthorizedTenantId(): string;');
   write('node_modules/@prisma/client/index.d.ts', "export * from '.prisma/client';");
-  write('node_modules/.prisma/client/index.d.ts', [
-    'export interface InvoiceDelegate { findMany(args?: { where?: { tenantId: string } }): Promise<unknown[]> }',
-    'export declare class PrismaClient { invoice: InvoiceDelegate }',
-  ].join('\n'));
-  write('app/reads.ts', [
-    "import type { PrismaClient } from '@prisma/client';",
-    "import { requireAuthorizedTenantId as tenant } from '@app/auth';",
-    'export function scoped(db: PrismaClient) { return db.invoice.findMany({ where: { tenantId: tenant() } }); }',
-    'export function unscoped(db: PrismaClient) { return db.invoice.findMany(); }',
-  ].join('\n'));
-  write('app/perf.ts', 'export function select(ids: string[], allowed: string[]) { return ids.filter(id => allowed.includes(id)); }');
+  write(
+    'node_modules/.prisma/client/index.d.ts',
+    [
+      'export interface InvoiceDelegate { findMany(args?: { where?: { tenantId: string } }): Promise<unknown[]> }',
+      'export declare class PrismaClient { invoice: InvoiceDelegate }',
+    ].join('\n'),
+  );
+  write(
+    'app/reads.ts',
+    [
+      "import type { PrismaClient } from '@prisma/client';",
+      "import { requireAuthorizedTenantId as tenant } from '@app/auth';",
+      'export function scoped(db: PrismaClient) { return db.invoice.findMany({ where: { tenantId: tenant() } }); }',
+      'export function unscoped(db: PrismaClient) { return db.invoice.findMany(); }',
+    ].join('\n'),
+  );
+  write(
+    'app/perf.ts',
+    'export function select(ids: string[], allowed: string[]) { return ids.filter(id => allowed.includes(id)); }',
+  );
   return { root, write };
 }
 
@@ -69,9 +80,12 @@ function locations(result) {
   return result.findings.map(({ file, line, ruleId }) => [path.basename(file), line, ruleId]);
 }
 
-const expectedProject = [['perf.ts', 1, 'array-repeated-membership'], ['reads.ts', 4, scopeRule]];
+const expectedProject = [
+  ['perf.ts', 1, 'array-repeated-membership'],
+  ['reads.ts', 4, scopeRule],
+];
 
-test('query policy discovery follows project configuration or the explicit-file working directory', context => {
+test('query policy discovery follows project configuration or the explicit-file working directory', (context) => {
   const { root, write } = project(context);
   write('app/' + policyName, policyFor('Invoice'));
   write(policyName, policyFor('Ledger'));
@@ -82,7 +96,7 @@ test('query policy discovery follows project configuration or the explicit-file 
   assert.deepEqual(locations(checked(root, ['-p', 'app', '--policy', policyName], 1)), [expectedProject[0]]);
 });
 
-test('opting out preserves existing performance checks and malformed policy files stop analysis', context => {
+test('opting out preserves existing performance checks and malformed policy files stop analysis', (context) => {
   const { root, write } = project(context);
   assert.deepEqual(locations(checked(root, ['-p', 'app'], 1)), [expectedProject[0]]);
   write('app/' + policyName, policyFor('Invoice'));
@@ -102,10 +116,13 @@ test('opting out preserves existing performance checks and malformed policy file
 
 const [major, minor] = process.versions.node.split('.').map(Number);
 let nativeSkip = major < 22 || (major === 22 && minor < 13) ? 'native requires Node 22.13+' : false;
-try { if (!nativeSkip) require('../lib/native-runtime.cjs').executable(); }
-catch { nativeSkip = 'optional native compiler is absent'; }
+try {
+  if (!nativeSkip) require('../lib/native-runtime.cjs').executable();
+} catch {
+  nativeSkip = 'optional native compiler is absent';
+}
 
-test('the native CLI agrees with the default engine on opted-in scope findings', { skip: nativeSkip }, context => {
+test('the native CLI agrees with the default engine on opted-in scope findings', { skip: nativeSkip }, (context) => {
   const { root, write } = project(context);
   write('app/' + policyName, policyFor('Invoice'));
   const args = ['-p', 'app'];
@@ -135,12 +152,17 @@ async function exerciseWatch(context, explicit) {
   async function nextLine(transition) {
     let timeout;
     try {
-      const result = await Promise.race([lines.next(), new Promise((resolve, reject) => {
-        timeout = setTimeout(() => reject(new Error('No watch response after ' + transition)), transitionTimeout);
-      })]);
+      const result = await Promise.race([
+        lines.next(),
+        new Promise((resolve, reject) => {
+          timeout = setTimeout(() => reject(new Error('No watch response after ' + transition)), transitionTimeout);
+        }),
+      ]);
       assert.ok(!result.done, 'watch exited before it reported a policy change');
       return result.value;
-    } finally { clearTimeout(timeout); }
+    } finally {
+      clearTimeout(timeout);
+    }
   }
   async function expectSnapshot(expected, transition) {
     const line = await nextLine(transition);
@@ -168,7 +190,11 @@ async function exerciseWatch(context, explicit) {
   }
 }
 
-test('watch discovers an added policy and recovers from edits, parse errors and deletion',
-  { timeout: 40_000 }, context => exerciseWatch(context, false));
-test('watch follows changes to an explicit policy outside the source directory',
-  { timeout: 40_000 }, context => exerciseWatch(context, true));
+test(
+  'watch discovers an added policy and recovers from edits, parse errors and deletion',
+  { timeout: 40_000 },
+  (context) => exerciseWatch(context, false),
+);
+test('watch follows changes to an explicit policy outside the source directory', { timeout: 40_000 }, (context) =>
+  exerciseWatch(context, true),
+);

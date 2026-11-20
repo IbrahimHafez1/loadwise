@@ -10,41 +10,67 @@ const { loadQueryPolicy } = require('../lib/query-policy.cjs');
 
 const scope = { field: 'tenantId', from: '@app/auth', export: 'requireAuthorizedTenantId' };
 const policy = { prismaScopes: { Invoice: scope } };
-const operations = ['findMany', 'findUnique', 'findFirstOrThrow', 'count', 'aggregate', 'groupBy', 'update',
-  'updateMany', 'updateManyAndReturn', 'delete', 'deleteMany', 'create', 'createMany', 'createManyAndReturn', 'upsert', 'findRaw'];
+const operations = [
+  'findMany',
+  'findUnique',
+  'findFirstOrThrow',
+  'count',
+  'aggregate',
+  'groupBy',
+  'update',
+  'updateMany',
+  'updateManyAndReturn',
+  'delete',
+  'deleteMany',
+  'create',
+  'createMany',
+  'createManyAndReturn',
+  'upsert',
+  'findRaw',
+];
 const files = {
   'node_modules/.prisma/client/index.d.ts': [
     'type Options = { where?: unknown, data?: unknown, create?: unknown, update?: unknown, include?: unknown,',
     '  select?: { id?: boolean, tenantId?: boolean, items?: boolean | { where?: unknown } } };',
     'export interface InvoiceDelegate {',
-    ...operations.map(name => name + '(options?: Options): Promise<unknown>;'), '}',
+    ...operations.map((name) => name + '(options?: Options): Promise<unknown>;'),
+    '}',
     'export interface OtherDelegate { findMany(options?: Options): Promise<unknown> }',
     'export interface WorkspaceDelegate { findMany(options?: Options): Promise<unknown> }',
     'export declare class PrismaClient { invoice: InvoiceDelegate; other: OtherDelegate; workspace: WorkspaceDelegate }',
   ].join('\n'),
   'node_modules/@prisma/client/index.d.ts': "export * from '.prisma/client';",
-  'node_modules/@app/auth/index.d.ts': ['export function requireAuthorizedTenantId(): string;',
+  'node_modules/@app/auth/index.d.ts': [
+    'export function requireAuthorizedTenantId(): string;',
     'export function requireAuthorizedTenantId(mode: 1): string | undefined;',
     'export function requireAuthorizedTenantId(mode: 2): Promise<string>;',
     'export function requireOrganizationId(): string; export function requireWorkspaceId(): string;',
     'type ScopedId = string & { readonly scopeBrand: unique symbol };',
-    'export function brandedOrg(): ScopedId; export function brandedOrg(optional: true): ScopedId | undefined;'].join('\n'),
+    'export function brandedOrg(): ScopedId; export function brandedOrg(optional: true): ScopedId | undefined;',
+  ].join('\n'),
 };
 
-const header = ["import { PrismaClient } from '@prisma/client';",
-  "import { requireAuthorizedTenantId as trusted } from '@app/auth';", "import * as auth from '@app/auth';",
-  'const db = new PrismaClient();', 'async function handler(input: { tenant: string }) {',
-  '  const tenantId = trusted();'];
+const header = [
+  "import { PrismaClient } from '@prisma/client';",
+  "import { requireAuthorizedTenantId as trusted } from '@app/auth';",
+  "import * as auth from '@app/auth';",
+  'const db = new PrismaClient();',
+  'async function handler(input: { tenant: string }) {',
+  '  const tenantId = trusted();',
+];
 function flagged(lines, config = policy) {
   return lint([...header, ...lines, '}'].join('\n'), files, config)
-    .filter(record => record.ruleId === 'prisma-scope-unverified').map(record => record.line - header.length);
+    .filter((record) => record.ruleId === 'prisma-scope-unverified')
+    .map((record) => record.line - header.length);
 }
 
 test('matches each Prisma model’s configured scalar field and trusted function by exact name', () => {
-  const custom = { prismaScopes: {
-    Invoice: { ...scope, field: 'organizationId', export: 'requireOrganizationId' },
-    Workspace: { ...scope, field: 'workspace_id', export: 'requireWorkspaceId' },
-  } };
+  const custom = {
+    prismaScopes: {
+      Invoice: { ...scope, field: 'organizationId', export: 'requireOrganizationId' },
+      Workspace: { ...scope, field: 'workspace_id', export: 'requireWorkspaceId' },
+    },
+  };
   const source = [
     'const organizationId = auth.requireOrganizationId(); const workspace_id = auth.requireWorkspaceId();',
     'db.invoice.findMany({where:{organizationId}});',
@@ -63,30 +89,39 @@ test('matches each Prisma model’s configured scalar field and trusted function
 });
 
 test('proves explicit scalar scope and positive branch conditions on real delegate types', () => {
-  assert.deepEqual(flagged([
-    'const alias = tenantId;',
-    'const asynchronous = await auth.requireAuthorizedTenantId(2);',
-    'db.invoice.findMany({ where: { tenantId } });',
-    'db.invoice.count({ where: { tenantId: { equals: alias } } });',
-    'db.invoice.groupBy({ where: { OR: [{tenantId}, {AND: [{id: 9}, {tenantId: asynchronous}]}] } });',
-    'db.invoice.findUnique({ where: { id: 4, tenantId }, select: { id: true } });',
-    'db.invoice["findMany"]({ where: { tenantId: trusted() } });',
-    'db.invoice.findMany({ where: { tenantId } }).then(() => 1);',
-    'db.other.findMany({});',
-    '({findMany() {}}).findMany();',
-  ]), []);
+  assert.deepEqual(
+    flagged([
+      'const alias = tenantId;',
+      'const asynchronous = await auth.requireAuthorizedTenantId(2);',
+      'db.invoice.findMany({ where: { tenantId } });',
+      'db.invoice.count({ where: { tenantId: { equals: alias } } });',
+      'db.invoice.groupBy({ where: { OR: [{tenantId}, {AND: [{id: 9}, {tenantId: asynchronous}]}] } });',
+      'db.invoice.findUnique({ where: { id: 4, tenantId }, select: { id: true } });',
+      'db.invoice["findMany"]({ where: { tenantId: trusted() } });',
+      'db.invoice.findMany({ where: { tenantId } }).then(() => 1);',
+      'db.other.findMany({});',
+      '({findMany() {}}).findMany();',
+    ]),
+    [],
+  );
 });
 
 test('branded scalar IDs and satisfies annotations retain their original provenance', () => {
   const configured = { prismaScopes: { Invoice: { ...scope, export: 'brandedOrg' } } };
-  assert.deepEqual(flagged([
-    'const id = auth.brandedOrg() satisfies string;',
-    'db.invoice.findMany(({ where: { tenantId: (id satisfies string) } } satisfies object));',
-    'db.invoice.create({ data: ({ tenantId: id } satisfies object) });',
-    'db.invoice.findMany({ where: { tenantId: (input.tenant satisfies string) } });',
-    'db.invoice.findMany({ where: { tenantId: auth.brandedOrg(true) } });',
-    'db.invoice.findMany({ where: { tenantId: (auth.brandedOrg(true) as string) satisfies string } });',
-  ], configured), [4,5,6]);
+  assert.deepEqual(
+    flagged(
+      [
+        'const id = auth.brandedOrg() satisfies string;',
+        'db.invoice.findMany(({ where: { tenantId: (id satisfies string) } } satisfies object));',
+        'db.invoice.create({ data: ({ tenantId: id } satisfies object) });',
+        'db.invoice.findMany({ where: { tenantId: (input.tenant satisfies string) } });',
+        'db.invoice.findMany({ where: { tenantId: auth.brandedOrg(true) } });',
+        'db.invoice.findMany({ where: { tenantId: (auth.brandedOrg(true) as string) satisfies string } });',
+      ],
+      configured,
+    ),
+    [4, 5, 6],
+  );
 });
 
 test('marks absent, unverifiable or non-positive proof for review', () => {
@@ -111,24 +146,30 @@ test('marks absent, unverifiable or non-positive proof for review', () => {
     '{ const operation: string = "findMany"; db.invoice[operation]({where:{tenantId}}); }',
     'db.invoice.findUnique({ where: { tenantId } }).items();',
   ];
-  assert.deepEqual(flagged(cases), cases.map((line, index) => index + 1));
+  assert.deepEqual(
+    flagged(cases),
+    cases.map((line, index) => index + 1),
+  );
 });
 
 test('checks all write branches, scoped updates and each item in a bulk create', () => {
-  assert.deepEqual(flagged([
-    'db.invoice.create({ data: { tenantId, label: "new" } });',
-    'db.invoice.createMany({ data: [{ tenantId }, { tenantId: trusted() }] });',
-    'db.invoice.update({ where: { id: 1, tenantId }, data: { label: "paid" } });',
-    'db.invoice.updateManyAndReturn({ where: { tenantId }, data: { tenantId: { set: trusted() } } });',
-    'db.invoice.upsert({ where: { tenantId }, create: { tenantId }, update: { label: "paid" } });',
-    'db.invoice.delete({ where: { id: 1, tenantId } });',
-    'db.invoice.updateMany({ where: { tenantId }, data: { tenantId: input.tenant } });',
-    'db.invoice.createManyAndReturn({ data: [{ tenantId }, { label: "new" }] });',
-    'db.invoice.upsert({ where: { tenantId }, create: { tenantId }, update: { owner: { connect: { id: 2 } } } });',
-    'db.invoice.deleteMany({});',
-    'db.invoice.create({ data: { tenantId, ...input } });',
-    'db.invoice.updateMany({ where: {}, data: { tenantId } });',
-  ]), [7,8,9,10,11,12]);
+  assert.deepEqual(
+    flagged([
+      'db.invoice.create({ data: { tenantId, label: "new" } });',
+      'db.invoice.createMany({ data: [{ tenantId }, { tenantId: trusted() }] });',
+      'db.invoice.update({ where: { id: 1, tenantId }, data: { label: "paid" } });',
+      'db.invoice.updateManyAndReturn({ where: { tenantId }, data: { tenantId: { set: trusted() } } });',
+      'db.invoice.upsert({ where: { tenantId }, create: { tenantId }, update: { label: "paid" } });',
+      'db.invoice.delete({ where: { id: 1, tenantId } });',
+      'db.invoice.updateMany({ where: { tenantId }, data: { tenantId: input.tenant } });',
+      'db.invoice.createManyAndReturn({ data: [{ tenantId }, { label: "new" }] });',
+      'db.invoice.upsert({ where: { tenantId }, create: { tenantId }, update: { owner: { connect: { id: 2 } } } });',
+      'db.invoice.deleteMany({});',
+      'db.invoice.create({ data: { tenantId, ...input } });',
+      'db.invoice.updateMany({ where: {}, data: { tenantId } });',
+    ]),
+    [7, 8, 9, 10, 11, 12],
+  );
 });
 
 test('requires an explicit policy and rejects ambiguous configurations', () => {
@@ -168,8 +209,13 @@ test('requires an explicit policy and rejects ambiguous configurations', () => {
       assert.equal(loaded.dataAccess.modules.has('mongoose'), true);
       assert.deepEqual(loaded.prismaScopes, sections.prismaScopes);
     }
-    for (const invalid of [{}, { prismaScopes: {} }, { unexpected: true, ...policy },
-      { prismaScopes: { Invoice: { ...scope, typo: true } } }, { prismaScopes: { Invoice: { ...scope, from: './auth' } } }]) {
+    for (const invalid of [
+      {},
+      { prismaScopes: {} },
+      { unexpected: true, ...policy },
+      { prismaScopes: { Invoice: { ...scope, typo: true } } },
+      { prismaScopes: { Invoice: { ...scope, from: './auth' } } },
+    ]) {
       fs.writeFileSync(filename, JSON.stringify(invalid));
       assert.throws(() => loadQueryPolicy(filename), TypeError);
     }
