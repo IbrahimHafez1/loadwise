@@ -140,8 +140,9 @@ def build(maintainability, output):
 
 
 if __name__ == "__main__":
+    version = json.loads((EDITOR / "package.json").read_bytes())["version"]
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("maintainability_root", type=Path)
-    parser.add_argument("output", type=Path)
+    parser.add_argument("maintainability_root", type=Path, nargs="?", default=PERFORMANCE.parent / "maintainability-check")
+    parser.add_argument("output", type=Path, nargs="?", default=EDITOR / "dist" / f"backend-checkers-{version}.vsix")
     args = parser.parse_args()
     build(args.maintainability_root.resolve(), args.output.resolve())
