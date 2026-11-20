@@ -114,6 +114,40 @@ describe('Postgres locking rules', () => {
     assert.equal(findings[0].example.after, "SET lock_timeout = '5s'; ALTER TABLE orders ADD COLUMN note text");
   });
 
+  test('plain DROP INDEX blocks its table; the table comes from the migration that created the index', () => {
+    const registry = createPostgresRegistry();
+    checkSql(
+      'CREATE TABLE orders (id int, status text);\nCREATE INDEX orders_status_idx ON orders (status);',
+      'prisma',
+      registry,
+    );
+    const findings = checkSql('DROP INDEX "orders_status_idx";\nDROP INDEX CONCURRENTLY other_idx;', 'sql', registry);
+    const [dropped] = only(findings, 'migration-index-not-concurrent');
+    assertFindingShape(dropped);
+    assert.equal(dropped.line, 1);
+    assert.match(
+      dropped.message,
+      /^`DROP INDEX "orders_status_idx"` takes an ACCESS EXCLUSIVE lock on existing table `orders`/,
+    );
+    assert.equal(dropped.example.after, 'DROP INDEX CONCURRENTLY "orders_status_idx"');
+    const [lockTimeout] = only(findings, 'migration-missing-lock-timeout');
+    assert.equal(lockTimeout.line, 1);
+    assert.match(lockTimeout.message, /waits for a lock on `orders`/);
+  });
+
+  test('DROP INDEX of an index from outside the scanned history is reported against its table', () => {
+    const findings = checkSql(withLockTimeout('DROP INDEX IF EXISTS legacy_idx;'));
+    assert.deepEqual(rules(findings), ['migration-index-not-concurrent']);
+    assert.match(findings[0].message, /lock on its table/);
+  });
+
+  test('DROP INDEX on a table or index created in the same migration is silent', () => {
+    assert.deepEqual(
+      rules(checkSql('CREATE TABLE fresh (a int);\nCREATE INDEX fresh_a ON fresh (a);\nDROP INDEX fresh_a;')),
+      [],
+    );
+  });
+
   test('masrmart-style file with SET lock_timeout is silent for that rule', () => {
     const findings = checkSql(fixture('prisma-lock-timeout.sql'), 'prisma');
     assert.deepEqual(only(findings, 'migration-missing-lock-timeout'), []);
@@ -424,6 +458,70 @@ describe('Postgres compatibility rules', () => {
     );
     assert.equal(dynamic[0].ruleId, 'migration-unparsed');
     assert.match(dynamic[0].contextualReason, /interpolated/);
+  });
+
+  test('renaming a table away and recreating its name in the same transaction is not breaking', () => {
+    const findings = checkSql(
+      withLockTimeout(
+        'BEGIN;\nALTER TABLE events RENAME TO events_old;\nCREATE TABLE events (id int) PARTITION BY RANGE (id);\nINSERT INTO events SELECT * FROM events_old;\nDROP TABLE events_old;\nCOMMIT;',
+      ),
+    );
+    assert.deepEqual(only(findings, 'migration-breaking-rename'), []);
+    assert.deepEqual(only(findings, 'migration-breaking-drop'), []);
+  });
+
+  test('renaming away without recreating, or recreating outside the transaction, is still breaking', () => {
+    const kept = checkSql(withLockTimeout('BEGIN;\nALTER TABLE events RENAME TO events_old;\nCOMMIT;'));
+    assert.deepEqual(rules(kept), ['migration-breaking-rename']);
+    const split = checkSql(withLockTimeout('ALTER TABLE events RENAME TO events_old;\nCREATE TABLE events (id int);'));
+    assert.deepEqual(rules(split), ['migration-breaking-rename']);
+  });
+
+  test('statements built in a same-file helper are checked at each call, with literal arguments resolved', () => {
+    const findings = checkCode(
+      [
+        'export class Rekey implements MigrationInterface {',
+        '  async up(queryRunner: QueryRunner) {',
+        '    await queryRunner.query("SET lock_timeout = \'5s\'");',
+        "    await this.rekey(queryRunner, 'invoices');",
+        "    await this.rekey(queryRunner, 'refunds');",
+        '  }',
+        '  private async rekey(runner: QueryRunner, table: string) {',
+        '    await runner.query(`ALTER TABLE "${table}" ALTER COLUMN "account_id" SET NOT NULL`);',
+        '    await runner.query(`ALTER TABLE "${table}" DROP COLUMN "user_id"`);',
+        '  }',
+        '}',
+      ].join('\n'),
+    );
+    assert.deepEqual(
+      findings.map((finding) => [finding.line, finding.ruleId, finding.contextualReason]),
+      [
+        [4, 'migration-set-not-null-scan', undefined],
+        [4, 'migration-breaking-drop', undefined],
+        [5, 'migration-set-not-null-scan', undefined],
+        [5, 'migration-breaking-drop', undefined],
+      ],
+    );
+    assert.match(findings[2].message, /`refunds\.account_id`/);
+  });
+
+  test('a function declared in the file is followed too; an unresolved table name is reported as contextual', () => {
+    const findings = checkCode(
+      [
+        'async function enforce(queryRunner, table) {',
+        '  await queryRunner.query(`ALTER TABLE "${table}" ALTER COLUMN "owner_id" SET NOT NULL`);',
+        '}',
+        'export class Enforce implements MigrationInterface {',
+        '  async up(queryRunner: QueryRunner) {',
+        '    await queryRunner.query("SET lock_timeout = \'5s\'");',
+        '    for (const table of tables) await enforce(queryRunner, table);',
+        '  }',
+        '}',
+      ].join('\n'),
+    );
+    assert.deepEqual(rules(findings), ['migration-set-not-null-scan']);
+    assert.equal(findings[0].line, 7);
+    assert.match(findings[0].contextualReason, /table name is interpolated/);
   });
 
   test('data statements produce no findings', () => {
