@@ -23,6 +23,11 @@ test('single await, no awaits, and writes inside the literal are quiet', () => {
   assert.deepEqual(findings('return [(await a()) + 1, (await b()) + 1];'), []);
 });
 
+test('literals passed to a Promise combinator are left to promise-combinator-serial-await', () => {
+  assert.deepEqual(findings('return Promise.all([await a(), await b()]);'), []);
+  assert.deepEqual(findings('return Promise.allSettled([await a(), await b()]);'), []);
+});
+
 test('array fix wraps the calls in Promise.all', (context) => {
   const { findings: scanned } = scanWithFixes(context, {
     'a.ts': `${header}export async function run() {\n  const [x, y] = [await a(), await b()];\n  return [x, y];\n}`,
