@@ -108,3 +108,10 @@ test('the same order findings on the TypeScript 7 engine', { skip: onNativeEngin
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /# pass [1-9]\d*/);
 });
+
+test('Prisma: an index on the first sort column serves an id tiebreaker through incremental sort', () => {
+  const findings = prisma(`export function page(storeId: string) {
+  return prisma.order.findMany({ where: { storeId }, orderBy: [{ createdAt: 'desc' }, { totalEGP: 'asc' }], take: 20 });
+}`);
+  assert.deepEqual(findings, []);
+});
