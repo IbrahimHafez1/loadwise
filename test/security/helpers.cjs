@@ -100,8 +100,37 @@ const stubs = {
       'export declare function Headers(property?: string): ParameterDecorator;',
       'export declare function Req(): ParameterDecorator;',
       'export declare function UploadedFile(): ParameterDecorator;',
+      'export declare function UsePipes(...pipes: unknown[]): MethodDecorator & ClassDecorator;',
       'export declare class ParseIntPipe {}',
+      'export declare class ParseFloatPipe {}',
+      'export declare class ParseBoolPipe {}',
+      'export declare class ParseUUIDPipe {}',
+      'export declare class ParseEnumPipe { constructor(type: object) }',
+      'export declare class ValidationPipe { constructor(options?: object) }',
     ].join('\n'),
+    'node_modules/@nestjs/mapped-types/index.d.ts':
+      'export declare function PartialType<T>(type: new () => T): new () => Partial<T>;',
+  },
+  classValidator: {
+    'node_modules/class-validator/index.d.ts': [
+      'IsInt',
+      'IsUUID',
+      'IsString',
+      'IsEmail',
+      'Matches',
+      'ValidateIf',
+      'IsIn',
+    ]
+      .map((name) => `export declare function ${name}(...options: unknown[]): PropertyDecorator;`)
+      .join('\n'),
+  },
+  // Schema libraries typed as `any`, so the typed run prunes nothing the untyped run keeps.
+  schemas: {
+    'node_modules/zod/index.d.ts': 'export declare const z: any;',
+    'node_modules/joi/index.d.ts': 'declare const Joi: any; export default Joi;',
+    'node_modules/yup/index.d.ts': 'export declare const object: any, string: any, number: any;',
+    'node_modules/valibot/index.d.ts':
+      'export declare const object: any, string: any, uuid: any, pipe: any, parse: any;',
   },
   childProcess: {
     'node_modules/@types/node/index.d.ts': [
