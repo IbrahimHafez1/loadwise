@@ -5,7 +5,7 @@ const path = require('node:path');
 const fs = require('node:fs/promises');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
-const { publish, refreshDocument, registerExamples } = require('./diagnostics.cjs');
+const { publish, refreshDocument, registerExamples, registerQuickFixes } = require('./diagnostics.cjs');
 
 const run = promisify(execFile);
 const debounceMs = 650;
@@ -188,6 +188,7 @@ function activate(context) {
     registerExamples(vscode, function* (uri) {
       for (const session of folders.values()) yield* session.diagnosticsFor(uri);
     }),
+    registerQuickFixes(vscode),
     watcher.onDidCreate(changed),
     watcher.onDidDelete(changed),
     vscode.workspace.onDidOpenTextDocument((document) => {

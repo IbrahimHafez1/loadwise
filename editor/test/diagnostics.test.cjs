@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const test = require('node:test');
-const { publish, refreshDocument, registerExamples } = require('../diagnostics.cjs');
+const { publish, refreshDocument, registerExamples, registerQuickFixes } = require('../diagnostics.cjs');
 
 function fixture() {
   const root = path.resolve('example');
@@ -274,4 +274,61 @@ test('hover retains the scanner-proven edit when the diagnostic is reopened from
   assert.equal(parts[1].code, comparison.before);
   assert.equal(parts[3].code, comparison.code);
   assert.equal(parts[4].text, comparison.note);
+});
+
+test('a finding with a site fix offers a one-click quick fix that edits only the original lines', async () => {
+  const { vscode, collection, root, byUri } = fixture();
+  const file = path.join(root, 'orders.ts');
+  const text = 'const a = 1;\r\nconst found = await repo.findOne(where);\r\n';
+  const edits = [];
+  const commands = new Map();
+  Object.assign(vscode, {
+    CodeAction: class {
+      constructor(title, kind) {
+        Object.assign(this, { title, kind });
+      }
+    },
+    CodeActionKind: { QuickFix: 'quickfix' },
+    Disposable: { from: (...items) => items },
+    EndOfLine: { LF: 1, CRLF: 2 },
+    WorkspaceEdit: class {
+      replace(uri, range, newText) {
+        edits.push({ uri, range, newText });
+      }
+    },
+    commands: { registerCommand: (id, run) => commands.set(id, run) },
+    languages: { registerCodeActionsProvider: (_selector, provider) => provider },
+    window: { showWarningMessage() {} },
+  });
+  vscode.workspace = {
+    textDocuments: [],
+    openTextDocument: async () => ({ getText: () => text, eol: vscode.EndOfLine.CRLF }),
+    applyEdit: async () => true,
+  };
+  const change = {
+    file: 'orders.ts',
+    line: 2,
+    before: 'const found = await repo.findOne(where);',
+    after: 'const found = await repo.exists(where);',
+  };
+  const finding = { file: 'orders.ts', line: 2, column: 21, ruleId: 'typeorm-existence-materialization', message: 'm' };
+  publish(vscode, collection, root, 'backend-perf-check', [
+    { ...finding, fix: { changes: [change] } },
+    { ...finding, line: 1, fix: { changes: [{ ...change, file: '../outside.ts' }] } },
+  ]);
+  const [, provider] = registerQuickFixes(vscode);
+  const diagnostics = byUri.get(file);
+  const actions = provider.provideCodeActions({}, diagnostics[0].range, { diagnostics });
+  assert.equal(actions.length, 1, 'a fix that leaves the workspace is dropped');
+  assert.equal(actions[0].title, 'Apply fix: typeorm-existence-materialization');
+  await commands.get(actions[0].command.command)(...actions[0].command.arguments);
+  assert.equal(edits.length, 1);
+  assert.deepEqual(
+    [edits[0].range.start, edits[0].range.end],
+    [
+      { line: 1, character: 0 },
+      { line: 1, character: change.before.length },
+    ],
+  );
+  assert.equal(edits[0].newText, change.after);
 });
