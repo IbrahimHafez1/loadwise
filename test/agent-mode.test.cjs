@@ -8,7 +8,7 @@ const test = require('node:test');
 const { spawnSync } = require('node:child_process');
 const { assignFindingIds } = require('../lib/finding-ids.cjs');
 
-const bin = path.resolve(__dirname, '../bin/backend-perf-check.cjs');
+const bin = path.resolve(__dirname, '../bin/warden-backend.cjs');
 const example = fs.readFileSync(path.resolve(__dirname, '../examples/slow.ts'), 'utf8');
 
 function tempRoot(context) {
@@ -138,7 +138,7 @@ test('agent init replaces its own block and keeps the other text', (context) => 
   assert.equal(initAgent(root, '--mode', 'auto').status, 0);
   const text = fs.readFileSync(agentsFile, 'utf8');
   assert.ok(text.startsWith('# Team rules\n\nKeep functions small.\n'));
-  assert.equal(text.match(/backend-perf-check:agent:start/g).length, 1);
+  assert.equal(text.match(/warden-backend:agent:start/g).length, 1);
   assert.match(text, /Mode: auto/);
   assert.doesNotMatch(text, /Mode: ask/);
   fs.appendFileSync(agentsFile, '\nAfter the block.\n');
@@ -157,4 +157,18 @@ test('agent init imports AGENTS.md from CLAUDE.md exactly once', (context) => {
   initAgent(root);
   initAgent(root);
   assert.equal(fs.readFileSync(claudeFile, 'utf8'), '# Project notes\n\n@AGENTS.md\n');
+});
+
+test('agent init replaces an AGENTS.md block written under the old name', (context) => {
+  const root = tempRoot(context);
+  const agentsFile = path.join(root, 'AGENTS.md');
+  fs.writeFileSync(
+    agentsFile,
+    '# Team rules\n\n<!-- backend-perf-check:agent:start -->\nold text\n<!-- backend-perf-check:agent:end -->\n',
+  );
+  assert.equal(initAgent(root).status, 0);
+  const text = fs.readFileSync(agentsFile, 'utf8');
+  assert.ok(text.startsWith('# Team rules\n\n'));
+  assert.equal(text.match(/warden-backend:agent:start/g).length, 1);
+  assert.doesNotMatch(text, /backend-perf-check|old text|backend-perf-reviewed/);
 });

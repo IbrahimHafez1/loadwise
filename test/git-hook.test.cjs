@@ -7,8 +7,8 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const bin = path.resolve(__dirname, '../bin/backend-perf-check.cjs');
-const blockMarker = '# >>> backend-perf-check pre-commit';
+const bin = path.resolve(__dirname, '../bin/warden-backend.cjs');
+const blockMarker = '# >>> warden-backend pre-commit';
 const hasSh = spawnSync('sh', ['-c', 'exit 0']).status === 0;
 
 function repository(context) {
@@ -34,7 +34,7 @@ test('--hook block writes an executable hook once and rerunning does not duplica
   if (process.platform !== 'win32') assert.ok(fs.statSync(hookFile).mode & 0o100);
   installHook('--hook', 'block');
   assert.equal(fs.readFileSync(hookFile, 'utf8'), first);
-  assert.equal(first.match(/>>> backend-perf-check pre-commit/g).length, 1);
+  assert.equal(first.match(/>>> warden-backend pre-commit/g).length, 1);
 });
 
 test('--hook without a value means warn, and switching mode replaces only the block', (context) => {
@@ -78,7 +78,7 @@ test('lefthook is not edited; the command to add is printed', (context) => {
   const { root, installHook, hookFile } = repository(context);
   fs.writeFileSync(path.join(root, 'lefthook.yml'), 'pre-commit:\n  commands: {}\n');
   const result = installHook('--hook', 'block');
-  assert.match(result.stdout, /node_modules\/\.bin\/backend-perf-check --staged/);
+  assert.match(result.stdout, /node_modules\/\.bin\/warden-backend --staged/);
   assert.equal(fs.readFileSync(path.join(root, 'lefthook.yml'), 'utf8'), 'pre-commit:\n  commands: {}\n');
   assert.equal(fs.existsSync(hookFile), false);
 });
@@ -107,7 +107,7 @@ function runHook(root, hookFile, checkerExitCode) {
   const binDirectory = path.join(root, 'node_modules', '.bin');
   fs.mkdirSync(binDirectory, { recursive: true });
   fs.writeFileSync(
-    path.join(binDirectory, 'backend-perf-check'),
+    path.join(binDirectory, 'warden-backend'),
     `#!/bin/sh\necho checker ran\nexit ${checkerExitCode}\n`,
     {
       mode: 0o755,
@@ -133,4 +133,30 @@ test('the hook skips quietly when the checker is not installed', { skip: !hasSh 
   const result = spawnSync('sh', [hookFile], { cwd: root, encoding: 'utf8' });
   assert.equal(result.status, 0);
   assert.match(result.stdout, /not installed here, skipped/);
+});
+
+const legacyBlock = [
+  '# >>> backend-perf-check pre-commit (managed by `backend-perf-check agent init --hook`)',
+  'node_modules/.bin/backend-perf-check --staged || true',
+  '# <<< backend-perf-check pre-commit',
+].join('\n');
+
+test('rerunning init replaces a block written under the old name instead of duplicating it', (context) => {
+  const { installHook, hookFile } = repository(context);
+  fs.mkdirSync(path.dirname(hookFile), { recursive: true });
+  fs.writeFileSync(hookFile, `#!/bin/sh\necho other tool\n\n${legacyBlock}\n`);
+  assert.equal(installHook('--hook', 'block').status, 0);
+  const text = fs.readFileSync(hookFile, 'utf8');
+  assert.ok(text.includes('echo other tool'));
+  assert.ok(text.includes(blockMarker));
+  assert.doesNotMatch(text, /backend-perf-check/);
+});
+
+test('--hook off removes a block written under the old name', (context) => {
+  const { installHook, hookFile } = repository(context);
+  const original = '#!/bin/sh\necho other tool\n';
+  fs.mkdirSync(path.dirname(hookFile), { recursive: true });
+  fs.writeFileSync(hookFile, `${original}\n${legacyBlock}\n`);
+  assert.equal(installHook('--hook', 'off').status, 0);
+  assert.equal(fs.readFileSync(hookFile, 'utf8'), original);
 });
