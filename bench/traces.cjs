@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const { performance } = require('node:perf_hooks');
 const { resolve } = require('node:path');
-const { inspectTraces } = require('../lib/traces.cjs');
+const { inspectTraces } = require('../lib/performance/traces.cjs');
 
 const REQUESTS = 240;
 const SPANS_PER_REQUEST = 100;

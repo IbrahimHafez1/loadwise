@@ -5,7 +5,7 @@ const startup = performance.now();
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { withProgram } = require('../test/helpers.cjs');
-const { analyzeFile } = require('../lib/analyze.cjs');
+const { analyzeFile } = require('../lib/performance/analyze.cjs');
 const moduleLoadMs = performance.now() - startup;
 
 const routeModuleCount = 40;

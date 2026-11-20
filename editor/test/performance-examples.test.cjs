@@ -28,7 +28,7 @@ function parsesAsJavaScript(code) {
 }
 
 test('each CLI source rule has a syntactically valid hover example', () => {
-  const { sourceRules } = require('../../lib/rule-ids.cjs');
+  const { sourceRules } = require('../../lib/performance/rule-ids.cjs');
   assert.ok(sourceRules.length > 0);
   for (const id of sourceRules) {
     const { code, language } = exampleFor(id, 'javascript');
@@ -40,7 +40,7 @@ test('each CLI source rule has a syntactically valid hover example', () => {
 });
 
 test('every known rule and every plan or trace rule has a compact example', () => {
-  const { knownRules } = require('../../lib/rule-ids.cjs');
+  const { knownRules } = require('../../lib/performance/rule-ids.cjs');
   for (const id of [...knownRules, ...planAndTraceRules]) {
     const example = exampleFor(id, 'typescript');
     assert.ok(example?.code, id + ' has no example');
@@ -49,7 +49,7 @@ test('every known rule and every plan or trace rule has a compact example', () =
 });
 
 test('plan, trace, index and migration examples show a before and an after that parse', () => {
-  const { indexRules, migrationRules, databaseRules } = require('../../lib/rule-ids.cjs');
+  const { indexRules, migrationRules, databaseRules } = require('../../lib/performance/rule-ids.cjs');
   const standalone = [
     ...indexRules,
     ...migrationRules,
@@ -70,7 +70,7 @@ test('plan, trace, index and migration examples show a before and an after that 
 });
 
 test('each polyglot match gets an example for its language', () => {
-  const dir = path.join(root, 'polyglot', 'rules');
+  const dir = path.join(root, 'polyglot', 'performance', 'rules');
   for (const name of fs.readdirSync(dir).filter((name) => name.endsWith('.yml') && name !== 'input.yml')) {
     const id = fs
       .readFileSync(path.join(dir, name), 'utf8')

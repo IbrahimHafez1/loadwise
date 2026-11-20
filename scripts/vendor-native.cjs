@@ -6,7 +6,7 @@ const { createRequire, isBuiltin } = require('node:module');
 const ts = require('typescript');
 
 const source = path.resolve(process.argv[2]);
-const destination = path.resolve(__dirname, '../lib/vendor/typescript');
+const destination = path.resolve(__dirname, '../lib/performance/vendor/typescript');
 const manifest = JSON.parse(fs.readFileSync(path.join(source, 'package.json'), 'utf8'));
 if (manifest.name !== 'typescript' || manifest.version !== '7.1.0-beta') {
   throw new Error('Expected the published typescript@7.1.0-beta package.');

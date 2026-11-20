@@ -4,7 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { parseArgs } = require('node:util');
-const { knownRules } = require('../lib/rule-ids.cjs');
+const { knownRules } = require('../lib/performance/rule-ids.cjs');
 
 const usage = `Usage:
   warden-backend [-p tsconfig.json | file.ts file.js ...] [--engine auto|native|js] [--policy policy.json] [--schema snapshot.json] [--json] [--include-contextual] [--ignore rule-id] [--fail-on all|contract] [--fix [--yes | --only id,...]]
@@ -58,7 +58,7 @@ function checkPlan(args) {
   const { values, positionals } = parseCommand(args, { json: { type: 'boolean' } });
   if (values.help) return showHelp();
   if (positionals.length !== 1) throw new Error('Pass exactly one executed query plan to plan.');
-  const { inspectPlan } = require('../lib/plans.cjs');
+  const { inspectPlan } = require('../lib/performance/plans.cjs');
   const result = inspectPlan(readJsonFile(positionals[0], 'Plan'));
   if (values.json) console.log(JSON.stringify(result, null, 2));
   else {
@@ -82,8 +82,8 @@ function checkTraces(args) {
     throw new Error('--threshold must be an integer of at least 2.');
   }
   const document = readJsonFile(positionals[0], 'Trace');
-  const { inspectTraces } = require('../lib/traces.cjs');
-  const { formatImpact } = require('../lib/impact.cjs');
+  const { inspectTraces } = require('../lib/performance/traces.cjs');
+  const { formatImpact } = require('../lib/performance/impact.cjs');
   const result = inspectTraces(document, { threshold });
   const { findings, scannedSpans, eligibleDbSpans } = result;
   if (values.json) console.log(JSON.stringify(result, null, 2));
@@ -103,7 +103,7 @@ function checkTraces(args) {
 }
 
 function sourcePolicy(explicit, config, files) {
-  const { resolveConfig } = require('../lib/source-inputs.cjs');
+  const { resolveConfig } = require('../lib/performance/source-inputs.cjs');
   const filename =
     explicit !== undefined
       ? path.resolve(explicit)
@@ -116,7 +116,7 @@ function sourcePolicy(explicit, config, files) {
     filename,
     read() {
       try {
-        const policy = require('../lib/query-policy.cjs').loadQueryPolicy(filename);
+        const policy = require('../lib/performance/query-policy.cjs').loadQueryPolicy(filename);
         required = true;
         return policy;
       } catch (error) {
@@ -178,7 +178,7 @@ function checkCode(args, report = printResult, scope) {
   const policySource = sourcePolicy(values.policy, values.project, positionals);
   const policy = policySource.read();
   if (values.watch) {
-    const { watchProject } = require('../lib/watch.cjs');
+    const { watchProject } = require('../lib/performance/watch.cjs');
     watchProject(values.project ?? '.', {
       policySource,
       onResult(result) {
@@ -201,35 +201,35 @@ function checkCode(args, report = printResult, scope) {
     assignFindingIds(result.findings, findingRoot(values.project));
     // Named ids are explicit, so they reach contextual and ignored findings too.
     if (onlyIds.length) {
-      return require('../lib/fix-cli.cjs').applyChosenFixes(result.findings, onlyIds, { json: values.json });
+      return require('../lib/performance/fix-cli.cjs').applyChosenFixes(result.findings, onlyIds, { json: values.json });
     }
     selectFindings(result, values);
-    return require('../lib/fix-cli.cjs').applyFixes(result.findings, { all: values.yes });
+    return require('../lib/performance/fix-cli.cjs').applyFixes(result.findings, { all: values.yes });
   }
   const code = report(result, scope ? { ...values, changedLines: scope.changedLines } : values);
-  if (report === printResult) require('../lib/notify-editor.cjs').notifyEditor(values.project ?? process.cwd());
+  if (report === printResult) require('../lib/performance/notify-editor.cjs').notifyEditor(values.project ?? process.cwd());
   return code;
 }
 
 // Ids hash paths relative to the project root, so they match whichever folder the check runs from.
 function findingRoot(project) {
-  return require('../lib/schema/context.cjs').findProjectRoot(path.resolve(project ?? '.'));
+  return require('../lib/performance/schema/context.cjs').findProjectRoot(path.resolve(project ?? '.'));
 }
 
 function assignFindingIds(findings, root) {
-  require('../lib/finding-ids.cjs').assignFindingIds(findings, root);
+  require('../lib/performance/finding-ids.cjs').assignFindingIds(findings, root);
 }
 
 // schema.prisma is not TypeScript, so its foreign-key findings come from the parsed schema after the scan.
 function appendPrismaSchemaFindings(result, project) {
-  const { findProjectRoot } = require('../lib/schema/context.cjs');
+  const { findProjectRoot } = require('../lib/performance/schema/context.cjs');
   const root = findProjectRoot(path.resolve(project));
-  result.findings.push(...require('../lib/schema/prisma-schema.cjs').checkSchemaFile(root));
+  result.findings.push(...require('../lib/performance/schema/prisma-schema.cjs').checkSchemaFile(root));
 }
 
 // The snapshot is optional; without it every rule still reports, using unknown-size wording.
 function loadSchemaSnapshot(filename) {
-  const { loadSnapshot, useSnapshot } = require('../lib/schema/context.cjs');
+  const { loadSnapshot, useSnapshot } = require('../lib/performance/schema/context.cjs');
   useSnapshot(filename === undefined ? undefined : loadSnapshot(path.resolve(filename)));
 }
 
@@ -240,9 +240,9 @@ function firstReason(reason) {
 
 // Loading the JS engine binds the shared rules to TypeScript 6, so it is required only once native is ruled out.
 function analyzeSourceCode(options, engine) {
-  const analyzeSources = (sourceOptions) => require('../lib/projects.cjs').analyzeSources(sourceOptions);
+  const analyzeSources = (sourceOptions) => require('../lib/performance/projects.cjs').analyzeSources(sourceOptions);
   if (engine === 'js') return analyzeSources(options);
-  const result = require('../lib/native.cjs').analyzeNative({ ...options, fallback: engine === 'auto' });
+  const result = require('../lib/performance/native.cjs').analyzeNative({ ...options, fallback: engine === 'auto' });
   if (!result.fallback) return result;
   const fallbackResult = analyzeSources(options);
   if (result.reason) {
@@ -257,7 +257,7 @@ function analyzeSourceCode(options, engine) {
 function selectFindings(result, values) {
   result.findings = result.findings.filter((finding) => !values.ignore.includes(finding.ruleId));
   if (values['include-contextual'] !== undefined) {
-    const classifyTestWrite = require('../lib/review-context.cjs').createTestWriteClassifier();
+    const classifyTestWrite = require('../lib/performance/review-context.cjs').createTestWriteClassifier();
     let contextualCount = 0;
     result.findings = result.findings.filter((finding) => {
       const reason = finding.contextualReason || classifyTestWrite(finding.file, finding.ruleId);
@@ -276,14 +276,14 @@ function printResult(result, values) {
   assignFindingIds(result.findings, findingRoot(values.project));
   selectFindings(result, values);
   if (values.changedLines) {
-    result.findings = require('../lib/changed-lines.cjs').keepChangedFindings(result.findings, values.changedLines);
+    result.findings = require('../lib/performance/changed-lines.cjs').keepChangedFindings(result.findings, values.changedLines);
   }
   const contractOnly = values['fail-on'] === 'contract';
   if (contractOnly) {
     result.contractFindingCount = result.findings.filter(({ ruleId }) => ruleId === 'pg-transaction-on-pool').length;
   }
-  const { attachExample, findingDetailLines, findingLabel } = require('../lib/finding-text.cjs');
-  require('../lib/site-fix.cjs').attachSiteFixes(result.findings);
+  const { attachExample, findingDetailLines, findingLabel } = require('../lib/performance/finding-text.cjs');
+  require('../lib/performance/site-fix.cjs').attachSiteFixes(result.findings);
   for (const finding of result.findings) {
     finding.fixable = Boolean(finding.fix);
     attachExample(finding);
@@ -311,7 +311,7 @@ function printResult(result, values) {
 
 // Terse form for commits: where it is, what it says, then the exact command to fix or dismiss it.
 function printChangedFindings(findings) {
-  const { findingLabel } = require('../lib/finding-text.cjs');
+  const { findingLabel } = require('../lib/performance/finding-text.cjs');
   for (const finding of findings) {
     console.log(`${finding.file}:${finding.line} ${findingLabel(finding)} ${finding.message}`);
     if (finding.fixable) console.log(`  fix:     npx warden-backend --fix --only ${finding.id}`);
@@ -336,7 +336,7 @@ function readChangedScope(args) {
   if (positionals.length || values.watch || values.fix) {
     throw new Error('--staged and --changed-since cannot be combined with explicit files, --watch or --fix.');
   }
-  const { collectChangedLines, fileKey } = require('../lib/changed-lines.cjs');
+  const { collectChangedLines, fileKey } = require('../lib/performance/changed-lines.cjs');
   const changedLines = collectChangedLines({ staged: values.staged, ref: values['changed-since'] });
   return { changedLines, isChangedFile: (filename) => changedLines.has(fileKey(filename)) };
 }
@@ -350,7 +350,7 @@ function normalizeHookArgument(args) {
 }
 
 function installHook(hookMode) {
-  const { installHook: writeHook, removeHook } = require('../lib/git-hook.cjs');
+  const { installHook: writeHook, removeHook } = require('../lib/performance/git-hook.cjs');
   const result = hookMode === 'off' ? removeHook(process.cwd()) : writeHook(process.cwd(), hookMode);
   console.log(result.message);
   return 0;
@@ -359,7 +359,7 @@ function installHook(hookMode) {
 async function main(args) {
   if (args[0] === 'editor') {
     if (args[1] === 'init' && args.length === 2) {
-      const setup = require('../lib/editor-setup.cjs').setupEditor(process.cwd());
+      const setup = require('../lib/performance/editor-setup.cjs').setupEditor(process.cwd());
       console.log((setup.changed ? 'Configured ' : 'Already configured: ') + setup.filename);
       console.log(
         'Open or reopen the trusted folder in VS Code or Cursor and allow automatic tasks once. Terminal source scans refresh the active watcher.',
@@ -371,7 +371,7 @@ async function main(args) {
     if (values.help) return showHelp();
     if (positionals.length) throw new Error('editor watch accepts only an optional -p project config.');
     await loadSqlParser();
-    require('../lib/editor-watch.cjs').watchEditor(process.cwd(), values.project, (inputs) =>
+    require('../lib/performance/editor-watch.cjs').watchEditor(process.cwd(), values.project, (inputs) =>
       checkCode(inputs, selectFindings),
     );
     return 0;
@@ -386,24 +386,24 @@ async function main(args) {
     if (values.help) return showHelp();
     if (positionals.length) throw new Error('agent init accepts only --mode ask|auto and --hook block|warn|off.');
     if (values.hook !== undefined) return installHook(values.hook);
-    const written = require('../lib/agent-init.cjs').initAgent(process.cwd(), values.mode);
+    const written = require('../lib/performance/agent-init.cjs').initAgent(process.cwd(), values.mode);
     for (const filename of written) console.log('Wrote ' + filename);
     if (!written.length) console.log('AGENTS.md and CLAUDE.md are already up to date.');
     return 0;
   }
   // Lazy, so source scans and the editor watcher never load migration parsing or database drivers.
-  if (args[0] === 'migrations') return require('../lib/migrations/cli.cjs').run(args.slice(1));
-  if (args[0] === 'db') return require('../lib/db/cli.cjs').run(args.slice(1));
+  if (args[0] === 'migrations') return require('../lib/performance/migrations/cli.cjs').run(args.slice(1));
+  if (args[0] === 'db') return require('../lib/performance/db/cli.cjs').run(args.slice(1));
   if (args[0] === 'traces') return checkTraces(args.slice(1));
   if (args[0] === 'plan') return checkPlan(args.slice(1));
   if (args[0] === 'polyglot') {
     const { values, positionals } = parseCommand(args.slice(1), { json: { type: 'boolean' } });
     if (values.help) return showHelp();
     if (!positionals.length) throw new Error('Pass at least one file or directory to polyglot.');
-    const { checkPolyglot } = require('../lib/polyglot.cjs');
+    const { checkPolyglot } = require('../lib/performance/polyglot.cjs');
     const result = await checkPolyglot(positionals);
     const code = printResult(result, { ...values, ignore: [] });
-    require('../lib/notify-editor.cjs').notifyEditor(positionals.length === 1 ? positionals[0] : process.cwd());
+    require('../lib/performance/notify-editor.cjs').notifyEditor(positionals.length === 1 ? positionals[0] : process.cwd());
     return code;
   }
   const scope = readChangedScope(args);
@@ -419,7 +419,7 @@ async function main(args) {
 
 // Raw SQL index rules parse synchronously during the scan, and the WASM parser can only load asynchronously.
 function loadSqlParser() {
-  return require('../lib/sql/pg-parser.cjs').ensureLoaded();
+  return require('../lib/performance/sql/pg-parser.cjs').ensureLoaded();
 }
 
 main(process.argv.slice(2))

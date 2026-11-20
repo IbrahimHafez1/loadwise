@@ -1,2 +1,2 @@
 * text=auto eol=lf
-lib/vendor/** -text
+lib/performance/vendor/** -text

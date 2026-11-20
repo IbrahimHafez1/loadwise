@@ -7,5 +7,5 @@
     "node": true,
     "browser": false
   },
-  "ignorePatterns": ["lib/vendor/**", "examples/**", "test/integration/orms/app.ts"]
+  "ignorePatterns": ["lib/performance/vendor/**", "examples/**", "test/performance/integration/orms/app.ts"]
 }

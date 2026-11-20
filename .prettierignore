@@ -1,4 +1,4 @@
 package-lock.json
-lib/vendor/
+lib/performance/vendor/
 examples/*.ts
-test/integration/orms/app.ts
+test/performance/integration/orms/app.ts
