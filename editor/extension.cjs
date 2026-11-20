@@ -2,7 +2,7 @@
 
 const vscode = require('vscode');
 const path = require('node:path');
-const fs = require('node:fs');
+const fs = require('node:fs/promises');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const { publish, refreshDocument, registerExamples } = require('./diagnostics.cjs');
@@ -21,6 +21,17 @@ const ignored = new Set(
   '.git node_modules dist build coverage .next .nuxt .venv venv __pycache__ target vendor'.split(' '),
 );
 const excludeGlob = '**/{' + [...ignored].join(',') + '}/**';
+
+function exists(file) {
+  return fs.access(file).then(
+    () => true,
+    () => false,
+  );
+}
+
+async function firstExisting(root, names) {
+  for (const name of names) if (await exists(path.join(root, name))) return name;
+}
 
 async function readFindings(script, args, cwd, signal) {
   const options = {
@@ -48,8 +59,10 @@ function monitor(folder, extensionPath, output) {
   const signal = new AbortController();
   const collections = new Map();
   let revision = 0;
+  let scannedRevision = -1;
   let running;
   let timer;
+  let activeScan;
 
   function collection(id) {
     if (!collections.has(id)) collections.set(id, vscode.languages.createDiagnosticCollection(id));
@@ -60,17 +73,16 @@ function monitor(folder, extensionPath, output) {
       .findFiles(new vscode.RelativePattern(folder, glob), excludeGlob, 1)
       .then((files) => files.length > 0);
   }
-  async function scan(version) {
+  async function scan(version, scanSignal) {
     const settings = vscode.workspace.getConfiguration('backendCheckers', folder.uri);
     if (!settings.get('enabled', true) || !vscode.workspace.isTrusted) {
       for (const diagnostics of collections.values()) diagnostics.clear();
       return;
     }
     const explicitProject = settings.get('project', '');
-    const project =
-      explicitProject || ['tsconfig.json', 'jsconfig.json'].find((name) => fs.existsSync(path.join(root, name)));
+    const project = explicitProject || (await firstExisting(root, ['tsconfig.json', 'jsconfig.json']));
     const hasMaintainabilityInput =
-      project || fs.existsSync(path.join(root, 'maintainability.config.json')) || (await findOne(sourceGlob));
+      project || (await exists(path.join(root, 'maintainability.config.json'))) || (await findOne(sourceGlob));
     const hasPolyglotInput = await findOne(polyglotGlob);
     const tasks = [
       { id: perf, source: perf, args: project ? ['-p', project] : null },
@@ -88,7 +100,7 @@ function monitor(folder, extensionPath, output) {
       const script = override || path.join(extensionPath, 'tools', source, 'bin', source + '.cjs');
       try {
         if (!path.isAbsolute(script)) throw new Error('CLI override must be an absolute path.');
-        const findings = await readFindings(script, args, root, signal.signal);
+        const findings = await readFindings(script, args, root, scanSignal);
         if (version !== revision || signal.signal.aborted) return;
         publish(vscode, diagnostics, root, source, findings);
         output.appendLine(folder.name + ' / ' + id + ' — ' + findings.length + ' finding(s)');
@@ -99,29 +111,37 @@ function monitor(folder, extensionPath, output) {
       }
     }
   }
+  function abortStaleScan() {
+    activeScan?.abort();
+  }
+  async function runScan() {
+    const version = revision;
+    if (signal.signal.aborted || version === scannedRevision) return;
+    scannedRevision = version;
+    activeScan = new AbortController();
+    try {
+      await scan(version, activeScan.signal);
+    } catch (error) {
+      if (!signal.signal.aborted && version === revision) output.appendLine(folder.name + ' — ' + error.message);
+    } finally {
+      activeScan = undefined;
+    }
+  }
   function start() {
     clearTimeout(timer);
-    if (!running) {
-      running = (async () => {
-        let version;
-        do {
-          version = revision;
-          try {
-            await scan(version);
-          } catch (error) {
-            if (!signal.signal.aborted) output.appendLine(folder.name + ' — ' + error.message);
-          }
-        } while (!signal.signal.aborted && version !== revision);
-      })().finally(() => {
-        running = undefined;
-      });
-    }
-    return running;
+    // A stale scan is aborted by schedule(); wait for it to wind down, then scan the newest state once.
+    const previous = running;
+    const current = (previous ?? Promise.resolve()).then(runScan).finally(() => {
+      if (running === current) running = undefined;
+    });
+    running = current;
+    return current;
   }
   function schedule() {
     revision++;
     clearTimeout(timer);
-    if (!running) timer = setTimeout(start, debounceMs);
+    abortStaleScan();
+    timer = setTimeout(start, debounceMs);
   }
   return {
     schedule,
@@ -133,11 +153,13 @@ function monitor(folder, extensionPath, output) {
     },
     scanNow() {
       revision++;
+      abortStaleScan();
       return start();
     },
     dispose() {
       clearTimeout(timer);
       signal.abort();
+      abortStaleScan();
       for (const diagnostics of collections.values()) diagnostics.dispose();
     },
   };
