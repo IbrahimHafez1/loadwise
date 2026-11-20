@@ -23,3 +23,14 @@ test('the released dependency graph is independent of ESLint and the referenced 
     }
   }
 });
+
+test('the package ships no database driver; db uses the project’s own', () => {
+  const drivers = new Set(['pg', 'mysql2', 'mysql', 'mongodb', 'mongoose', 'pg-pool']);
+  for (const [location, entry] of Object.entries(lock.packages)) {
+    const installedAs = location.split('node_modules/').at(-1);
+    assert.ok(!drivers.has(installedAs) && !drivers.has(entry.name), location);
+    for (const dependency of Object.keys({ ...entry.dependencies, ...entry.optionalDependencies })) {
+      assert.ok(!drivers.has(dependency), location + ' declares ' + dependency);
+    }
+  }
+});
