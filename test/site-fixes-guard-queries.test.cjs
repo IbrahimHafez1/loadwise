@@ -105,3 +105,15 @@ test('lookups whose options vary per request beyond the where clause are left al
   );
   assert.equal(finding.fix, undefined);
 });
+
+test('guards that check revocation or roles get no cache, since a cached row would delay the change', (context) => {
+  for (const check of ['user?.revokedAt', 'user?.role']) {
+    const source = guard('const user = await this.users.findOne({ where: { id: context.userId } });').replace(
+      'Boolean(user?.active)',
+      `Boolean(${check})`,
+    );
+    const [finding] = scan(context, source);
+    assert.ok(finding);
+    assert.equal(finding.fix, undefined);
+  }
+});
