@@ -176,6 +176,52 @@ async function load() {
 
 The CLI reports review candidates and leaves source files untouched. The scheduling and sorting rules were implemented in this package. The lockfile test checks the full resolved graph for ESLint and the referenced plugins. Design references include the documented ordering limits of sequential-await analysis, ESLint's loop examples and Unicorn's numeric-sort and Promise rules. [Parallelize](https://github.com/braeden/eslint-plugin-parallelize) · [ESLint](https://eslint.org/docs/latest/rules/no-await-in-loop) · [Unicorn](https://github.com/sindresorhus/eslint-plugin-unicorn) · [Perf Fiscal](https://github.com/ruidosujeira/perf-fiscal)
 
+## Migration safety
+
+`npx backend-perf-check migrations` reads Prisma, Drizzle, TypeORM, Knex and Sequelize migrations (SQL or code) and flags statements that lock or rewrite a table. It reads files only. `--dialect postgres|mysql` selects the rule set, `--json` for structured output and `--ignore RULE` to skip a rule.
+
+| Rule                                                                                                  | What it flags                                                                                                                               |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `migration-index-not-concurrent`, `migration-concurrent-in-transaction`                               | A PostgreSQL index built without `CONCURRENTLY`, or `CONCURRENTLY` inside a transaction that cannot run it.                                 |
+| `migration-not-null-without-default`, `migration-volatile-default`                                    | A NOT NULL column added without a default (fails once rows exist), or a volatile default that rewrites the table.                           |
+| `migration-column-type-rewrite`, `migration-table-rewrite-command`                                    | A column type change or command (`VACUUM FULL`, `CLUSTER`, `REINDEX`) that rewrites the table.                                              |
+| `migration-set-not-null-scan`, `migration-constraint-not-valid`, `migration-constraint-without-index` | Full-table validation scans, constraints that should be added `NOT VALID` first, and constraints that build an index while blocking writes. |
+| `migration-breaking-drop`, `migration-breaking-rename`                                                | Dropping or renaming a column or table that running application code may still use.                                                         |
+| `migration-missing-lock-timeout`                                                                      | A locking statement with no `lock_timeout`.                                                                                                 |
+| `migration-mysql-table-copy`, `migration-mysql-lock-unspecified`                                      | MySQL changes that copy the table or leave the lock level unspecified.                                                                      |
+| `migration-unparsed`                                                                                  | A statement the checker could not read. Review it by hand.                                                                                  |
+
+Only new migrations fail the run. Older migrations are contextual: counted, listed with `--include-contextual`, and never exit 1.
+
+**CI recipe.** Enforce only what the branch adds or changes (files modified since the merge base, plus untracked files). Use a full-history checkout (`fetch-depth: 0`) so the ref resolves.
+
+```sh
+npx backend-perf-check migrations --changed-since origin/main
+```
+
+**Baseline workflow.** For a project with existing migrations, accept them once and enforce the rest.
+
+```sh
+npx backend-perf-check migrations --write-baseline   # writes backend-perf.migrations-baseline.json
+npx backend-perf-check migrations                    # new migrations fail; baselined ones do not
+```
+
+Commit the baseline. `--baseline FILE` reads or writes another path. Exit codes match the source checks: 0 passed, 1 findings in enforced migrations, 2 invalid input.
+
+## Schema-aware index checks
+
+The source checker reads the project's ORM schema (Prisma, Drizzle, TypeORM, Sequelize, Mongoose) and compares declared indexes with the queries it finds.
+
+| Rule                        | What it flags                                                                     |
+| --------------------------- | --------------------------------------------------------------------------------- |
+| `index-missing-filter`      | A query filters on a column that no index leads with.                             |
+| `index-missing-order`       | A query orders by columns no index can serve in that order.                       |
+| `index-missing-foreign-key` | A foreign key column has no index.                                                |
+| `index-unusable-pattern`    | A predicate such as a leading-wildcard `LIKE` cannot use an ordinary index.       |
+| `index-unusable-expression` | A function or expression on an indexed column prevents the index from being used. |
+
+Pass `--schema snapshot.json` (written by `db --schema-snapshot`) to refine them with real table sizes and the measured round trip, which also feeds the Impact line of `*-query-in-loop` findings. Without a snapshot, the checks run from the source schema alone.
+
 ## Polyglot source checks
 
 `npx backend-perf-check polyglot src` accepts directories or individual `.py`, `.go`, `.java`, `.cs` and `.rs` files. It uses the optional ast-grep native binary and its syntax-tree patterns. Language-specific aliases and wrappers can fall outside a pattern. [ast-grep](https://ast-grep.github.io/)
