@@ -200,6 +200,12 @@ const standaloneExamples = {
     code: "await users.increment({ id }, 'tokenVersion', 1);\nawait users.update({ id }, { lastLoginAt: new Date() });",
     note: 'save() of a loaded entity costs a SELECT, an UPDATE and a transaction. update() skips entity listeners.',
   },
+  'queue-add-in-loop': {
+    language: 'javascript',
+    before: "for (const id of ids) await queue.add('render', { id });",
+    code: "await queue.addBulk(ids.map((id) => ({ name: 'render', data: { id } })));",
+    note: 'addBulk sends every job in one Redis call instead of one round trip per job.',
+  },
   'mongo-collection-scan': collectionScan,
   'mongo-collection-scan-observed': collectionScan,
   'mongo-disk-sort': {
