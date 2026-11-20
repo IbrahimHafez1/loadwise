@@ -44,6 +44,7 @@ test('ignores sync variants and native bcrypt', () => {
 test('site fix swaps the import specifier for compatible import shapes only', (context) => {
   const { findings } = scanWithFixes(context, {
     ...files,
+    'package.json': JSON.stringify({ dependencies: { bcrypt: '^6.0.0', bcryptjs: '^2.4.3' } }),
     'a.ts': "import * as bcrypt from 'bcryptjs';\nexport const a = () => bcrypt.hash('p', 10);\n",
     'b.ts': "import { hash, hashSync } from 'bcryptjs';\nexport const b = () => hash('p', 10) && hashSync('p', 10);\n",
   });
@@ -55,4 +56,15 @@ test('site fix swaps the import specifier for compatible import shapes only', (c
   });
   assert.match(byFile('a.ts').fix.note, /@types\/bcrypt/);
   assert.equal(byFile('b.ts').fix, undefined);
+});
+
+test('site fix offers no edit while bcrypt is missing from package.json', (context) => {
+  const { findings } = scanWithFixes(context, {
+    'node_modules/bcryptjs/index.d.ts': bcryptjsTypes,
+    'package.json': JSON.stringify({ dependencies: { bcryptjs: '^2.4.3' } }),
+    'a.ts': "import { hash } from 'bcryptjs';\nexport const a = () => hash('p', 10);\n",
+  });
+  const finding = findings.find((candidate) => candidate.ruleId === 'password-hash-pure-js');
+  assert.ok(finding);
+  assert.equal(finding.fix, undefined);
 });
