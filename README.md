@@ -10,10 +10,10 @@ Each finding has a stable `#id` for review. Where a checker can generate an edit
 
 ## Install
 
-Use Node.js 22 or later. For this private preview, use the npm archive provided by the package owner. If you have the checkout, run `npm pack /path/to/loadwise` from your application directory to create the archive there. Install the filename that npm prints. For version 0.4.1-preview.15, run:
+Use Node.js 22 or later. For this private preview, use the npm archive provided by the package owner. If you have the checkout, run `npm pack /path/to/loadwise` from your application directory to create the archive there. Install the filename that npm prints. For version 0.4.1-preview.16, run:
 
 ```sh
-npm install --save-dev ./loadwise-cli-0.4.1-preview.15.tgz
+npm install --save-dev ./loadwise-cli-0.4.1-preview.16.tgz
 npx loadwise --version
 ```
 
@@ -66,6 +66,10 @@ npx loadwise fix --yes maintainability            # automatic maintainability ed
 Manual findings have no generated edit. With `--all`, inspect the resulting diff and run the project's tests, especially for schema changes and edits that alter application behavior.
 
 ### Project-specific fixes
+
+The default `fix --yes` can simplify nested conditions that choose the same status string. It preserves evaluation order and short-circuiting. Two other transformations need individual review: making a locally used constant private can affect consumers outside the scan, and sharing a private helper between sibling TypeScript modules changes the files included in the build. Inspect those diffs before applying them by finding ID.
+
+The unused-module check considers literal Node commands in operator documentation and corroborated container entry points. Running a script establishes that the file is used; its unused exports can still be reported. The performance checker also recognizes supported Drizzle helpers that already receive a batch of keys.
 
 For private TypeScript applications that control their consumers, Loadwise includes a compiler-backed recipe for unused type exports:
 
@@ -846,12 +850,12 @@ npx loadwise maint . --fix --yes   # applies every fix without asking
 
 `--fix` is refused with `--json` or `--graph`, and `--yes` alone is refused. Without a terminal, `--fix` requires `--yes`. A fix applies only where the original lines still exist. One that an earlier fix made stale is skipped and reappears, rebuilt, on the next run. Review the diff and run your tests afterwards.
 
-| Rule                       | Rewrite                                                                                                                                                                                        |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `deep-control-flow`        | Lifts the deepest branch one level with a guard clause, a merged nested `if`, or by dropping an `else` after a branch that exits.                                                              |
-| `high-branch-complexity`   | Removes decisions the score counts: merges nested `if`s, joins adjacent same-exit `if`s with `\|\|`, turns `x ? true : false` into `Boolean(x)`, and `if (!x) x = value` into `x \|\|= value`. |
-| `duplicate-implementation` | Keeps one top-level function and makes each other copy delegate to it, adding an import where needed. Applied only when every name the copies use resolves to the same binding.                |
-| `dependency-cycle`         | Turns an import whose names are used only as types into `import type`, which removes that edge from the runtime cycle.                                                                         |
+| Rule                       | Rewrite                                                                                                                                                                                                                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deep-control-flow`        | Lifts the deepest branch one level with a guard clause, a merged nested `if`, or by dropping an `else` after a branch that exits.                                                                                                                                                     |
+| `high-branch-complexity`   | Combines nested conditional expressions with the same literal success label while preserving short-circuit order. Other fixes merge nested `if`s, join adjacent same-exit `if`s with `\|\|`, turn `x ? true : false` into `Boolean(x)`, and `if (!x) x = value` into `x \|\|= value`. |
+| `duplicate-implementation` | Keeps one top-level function and makes each other copy delegate to it, adding an import where needed. Applied only when every name the copies use resolves to the same binding.                                                                                                       |
+| `dependency-cycle`         | Turns an import whose names are used only as types into `import type`, which removes that edge from the runtime cycle.                                                                                                                                                                |
 
 Other rules have no automatic rewrite.
 
@@ -963,7 +967,7 @@ It accepts the source-check flags of `loadwise perf`, including `--format`, `--m
 | <a id="template-injection"></a>`template-injection`                               | Request data is the template text of `ejs`, `pug`, `handlebars`, `nunjucks`, `mustache` or lodash `template`.                                                                                                                                                                                                                                       |
 | <a id="typeorm-dynamic-query-text"></a>`typeorm-dynamic-query-text`               | A TypeORM `query` or a query-builder condition, order, group, select or join receives SQL text built from a runtime value.                                                                                                                                                                                                                          |
 | <a id="open-redirect"></a>`open-redirect`                                         | A redirect target whose site comes from request data. A fixed origin or an enforced relative-path check can keep the target on site. A Referer target is contextual.                                                                                                                                                                                |
-| <a id="path-traversal"></a>`path-traversal`                                       | A file path built from request data reaches `fs`, `res.sendFile` without `root`, `res.download` or `res.render`. `path.basename` and a containment check clear it.                                                                                                                                                                                  |
+| <a id="path-traversal"></a>`path-traversal`                                       | A file path built from request data reaches `fs`, `res.sendFile` without `root`, `res.download` or `res.render`. `path.basename` and a containment check clear it. An anchored filename allowlist also clears it when the checker can prove the allowed characters and the validated value reaches the file operation unchanged.                    |
 | <a id="ssrf-request-url"></a>`ssrf-request-url`                                   | An outgoing HTTP request whose URL or host comes from request data. A fixed origin with a request path, an enforced exact host allowlist on the parsed URL, or an SSRF-filtering agent is quiet.                                                                                                                                                    |
 | <a id="upload-client-filename"></a>`upload-client-filename`                       | multer disk storage saves uploads under the client's file name, so same-named uploads overwrite each other and the client picks the extension.                                                                                                                                                                                                      |
 | <a id="zip-slip-extraction"></a>`zip-slip-extraction`                             | An archive entry name (adm-zip, yauzl, unzipper, tar-stream, jszip, node-stream-zip) reaches a file write without a prior containment check. The trace follows aliases, destructuring and local call hops.                                                                                                                                          |

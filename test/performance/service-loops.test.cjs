@@ -63,6 +63,39 @@ function reportedLines(source) {
   return source.split('\n').flatMap((line, index) => (line.includes('// report') ? [index + 1] : []));
 }
 
+test('a Drizzle helper executing a predicate over a slice batch already makes one trip per batch', () => {
+  const source = `import { inArray as includesAny, and, sql, Database, SQL } from 'drizzle-orm';
+    declare const db: Database, ids: number[], scope: SQL;
+    const batchSize = 1000;
+    async function insertRecipients(filter: SQL) { await db.execute(sql\`INSERT INTO recipients SELECT id FROM users WHERE \${filter}\`); }
+    async function ignoresFilter(filter: SQL) { await db.execute(sql\`SELECT 1\`); }
+    async function projectsFilter(filter: SQL) { await db.execute(sql\`SELECT \${filter} FROM users\`); }
+    declare function lookalike(...terms: unknown[]): SQL;
+    async function run() {
+      for (let offset = 0; offset < ids.length; offset += batchSize) {
+        const batch = ids.slice(offset, offset + batchSize);
+        await insertRecipients(and(scope, includesAny('id', batch)));
+        await insertRecipients(and(scope, includesAny('id', [ids[offset]]))); // report
+        await insertRecipients(lookalike(scope, includesAny('id', batch))); // report
+        await ignoresFilter(includesAny('id', batch)); // report
+        await projectsFilter(includesAny('id', batch)); // report
+      }
+    }`;
+  const files = {
+    'node_modules/drizzle-orm/index.d.ts': `export interface SQL { readonly text: string }
+      export function inArray(column: string, ids: number[]): SQL;
+      export function and(...terms: SQL[]): SQL;
+      export function sql(strings: TemplateStringsArray, ...terms: SQL[]): SQL;
+      export interface Database { execute(query: SQL): Promise<unknown> }`,
+  };
+  assert.deepEqual(
+    lint(source, files)
+      .filter(({ ruleId }) => ruleId === RULE_ID)
+      .map(({ line }) => line),
+    reportedLines(source),
+  );
+});
+
 test('reports project calls in loops whose callee queries, one or two levels deep', () => {
   const source = `import { ContentService, PublishingService, CacheService } from './services.js';
     declare const ids: string[];

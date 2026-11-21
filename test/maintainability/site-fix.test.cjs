@@ -164,6 +164,41 @@ test('deep-control-flow rewrites no if that would need intent, and extracts the 
   assert.equal(load(text).scan(grid), load(source).scan(grid));
 });
 
+test('combining matching conditional labels preserves evaluation order and short circuiting', (context) => {
+  const source = [
+    'module.exports = function status(first, second, fallback, flags) {',
+    ...Array.from({ length: 12 }, (_, index) => `  if (flags[${index}]) return "other";`),
+    '  return (first() ?? fallback()) ? "ready" : (second() ? "ready" : "pending");',
+    '};',
+  ].join('\n');
+  const directory = project(context, { 'status.cjs': source });
+  const [finding] = ruleFindings(directory, 'high-branch-complexity');
+  assert.ok(finding.fix && !finding.fix.requiresReview);
+  const updated = fixedFiles(directory, finding.fix)['status.cjs'];
+  assert.match(updated, /\(first\(\) \?\? fallback\(\)\) \|\| second\(\) \? "ready" : "pending"/);
+  function evaluate(text, values) {
+    const calls = [];
+    const functions = values.map((value, index) => () => {
+      calls.push(index);
+      return value;
+    });
+    return [load(text)(...functions, []), calls];
+  }
+  for (const values of [
+    [true, false, null],
+    [0, true, 1],
+    [null, false, 1],
+    [undefined, null, false],
+  ])
+    assert.deepEqual(evaluate(updated, values), evaluate(source, values));
+  for (const branch of ['"other"', '/* keep */ "ready"', 'getLabel()']) {
+    const different = source.replace('second() ? "ready"', 'second() ? ' + branch);
+    fs.writeFileSync(path.join(directory, 'status.cjs'), different);
+    const [remaining] = ruleFindings(directory, 'high-branch-complexity');
+    assert.ok(!remaining.fix || fixedFiles(directory, remaining.fix)['status.cjs'].includes('second() ? ' + branch));
+  }
+});
+
 test('high-branch-complexity fix applies every exact simplification and reports the new complexity', (context) => {
   const source = [
     'function score(input) {',

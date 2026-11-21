@@ -110,6 +110,28 @@ test('reviews direct internal function calls and primitive constants, leaving ru
   }
 });
 
+test('reviews locally used literal products and ignores prose when checking for module reflection', async () => {
+  const source = [
+    '// This module and its callers require millisecond precision.',
+    'export const LIFETIME = (20 * 60) * 1000;',
+    'export function run(now: number) { return now + LIFETIME; }',
+  ].join('\n');
+  const project = { ...privateApp, 'src/helpers.ts': source };
+  const [finding] = await scanProject(project);
+  assert.equal(finding.fix.requiresReview, true);
+  assert.equal(finding.fix.changes[0].after, 'const LIFETIME = (20 * 60) * 1000;');
+  for (const usedDynamically of [
+    'Reflect.ownKeys(module.exports);',
+    'globalThis["eval"]("exports.LIFETIME");',
+    'void import("./helpers");',
+  ]) {
+    const actual = await scanProject({ ...project, 'src/helpers.ts': source + '\n' + usedDynamically });
+    assert.ok(!actual.some((item) => item.fix), usedDynamically);
+  }
+  const computed = await scanProject({ ...project, 'src/helpers.ts': source.replace('20 * 60', 'getRate() * 60') });
+  assert.ok(!computed.some((item) => item.fix));
+});
+
 test('Node shebangs mark executable files as entries', async () => {
   const findings = await scanProject({
     'package.json': '{}',
@@ -298,6 +320,47 @@ test('literal Node entries in GitHub workflow steps count as entry points', asyn
     'unreferenced-file integration/custom-cwd.js',
     'unreferenced-file integration/default-cwd.js',
     'unreferenced-file integration/input.js',
+  ]);
+});
+
+test('operator commands run scripts without consuming their exports; documentary mentions need corroboration', async () => {
+  const cli = 'launch().catch(error => { console.error(error); process.exitCode = 1; });';
+  const findings = await scanProject({
+    'package.json': '{}',
+    'ops/RUNBOOK.md': [
+      '```text',
+      'node ops/launch.js --verbose',
+      '# node ops/comment.js',
+      'cd other',
+      'node ops/different-working-directory.js',
+      '```',
+      '```js',
+      'node ops/not-a-command.js',
+      '```',
+      'The runners are `ops/smoke.cjs`, `server.js` and `ops/bootstrap.js`.',
+      'Older versions used `old.js` and `ops/nested.js`. Do not invoke them.',
+    ].join('\n'),
+    'ops/Dockerfile': 'FROM node:22\nCMD ["node","ops/server.js"]',
+    'ops/compose.yaml': 'services:\n  worker:\n    command: [node, ops/bootstrap.js]',
+    'ops/launch.js': 'export const neverImported = 1;',
+    'ops/server.js': 'console.log("listening");',
+    'ops/bootstrap.js': 'console.log("bootstrapping");',
+    'ops/smoke.cjs': cli,
+    'ops/undocumented.cjs': cli,
+    'ops/nested.js': 'function optional() { ' + cli + ' }',
+    'ops/old.js': 'export const old = 1;',
+    'ops/comment.js': 'console.log(1);',
+    'ops/different-working-directory.js': 'console.log(1);',
+    'ops/not-a-command.js': 'console.log(2);',
+  });
+  assert.deepEqual(summary(findings), [
+    'unreferenced-file ops/comment.js',
+    'unreferenced-file ops/different-working-directory.js',
+    'unreferenced-file ops/nested.js',
+    'unreferenced-file ops/not-a-command.js',
+    'unreferenced-file ops/old.js',
+    'unreferenced-file ops/undocumented.cjs',
+    'unused-export ops/launch.js',
   ]);
 });
 

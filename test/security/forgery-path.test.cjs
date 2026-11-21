@@ -22,17 +22,42 @@ function findings(source, files = stubs.express) {
   return lintBothWays(source, files).typed.filter((finding) => finding.ruleId === ruleId);
 }
 
-test('a previously reviewed generated-filename guard keeps its reason on the file read', () => {
+test('a checked match for an anchored filename format validates the original filename', () => {
   const body = [
     'const filename = req.params.name;',
     'const match = allowedName.exec(filename);',
     'if (!match) return;',
-    '// loadwise-reviewed path-traversal -- The complete stored filename is validated before opening.',
     "await readFile(path.join('/srv/files', filename));",
   ].join('\n');
   const result = findings(expressRoute(body, 'const allowedName = /^([0-9]+)-[a-f0-9-]{36}\\.(pdf|png|jpg)$/;'));
-  assert.equal(result.length, 1);
-  assert.match(result[0].contextualReason, /complete stored filename/);
+  assert.equal(result.length, 0);
+});
+
+test('a filename guard must establish a closed format for the exact value reaching the path', () => {
+  const guarded = (pattern, condition = 'if (!match) return;', extra = '') =>
+    expressRoute(
+      `const name = req.params.name; const match = pattern.exec(name); ${condition} await readFile(path.join('/srv', name));`,
+      `const pattern = ${pattern}; ${extra}`,
+    );
+  assert.equal(findings(guarded('/^[A-Z0-9_-]+\\.pdf$/i')).length, 0);
+  const byTest = (pattern) =>
+    expressRoute(
+      `const name = req.params.name; if (!${pattern}.test(name)) return; await readFile(path.join('/srv', name));`,
+    );
+  assert.equal(findings(byTest('/^[a-z]+$/')).length, 0);
+  assert.equal(findings(byTest('/^[A-z]+$/')).length, 1);
+  for (const pattern of ['/^[A-z]+$/', '/^[a-z]+.pdf$/', '/^[a-z]+$/m', '/[a-z]+$/', '/^a|b$/']) {
+    assert.equal(findings(guarded(pattern)).length, 1, pattern);
+  }
+  assert.equal(findings(guarded('/^[a-z]+$/', 'if (!match) console.info("invalid");')).length, 1);
+  assert.equal(findings(guarded('/^[a-z]+$/', 'if (match) return;')).length, 1);
+  assert.equal(findings(guarded('/^[a-z]+$/', 'if (!match) return;', 'configureMatcher(pattern);')).length, 1);
+  const checkedOther =
+    "const name = req.params.name; if (!/^[a-z]+$/.exec(req.params.other)) return; await readFile(path.join('/srv', name));";
+  assert.equal(findings(expressRoute(checkedOther)).length, 1);
+  const changedName =
+    'function open(name: string, other: string) { const match = /^[a-z]+$/.exec(name); if (!match) return; [name] = [other]; fs.readFileSync(name); }';
+  assert.equal(findings(expressRoute('open(req.params.name, req.params.other);', changedName)).length, 1);
 });
 
 test('a request value in an fs path or a rootless sendFile is reported', () => {

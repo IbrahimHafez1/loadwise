@@ -3,7 +3,7 @@
   "displayName": "Loadwise",
   "description": "See backend performance and maintainability findings and suggested improvements as you edit.",
   "publisher": "IbrahimHafez1",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "license": "UNLICENSED",
   "engines": {
     "vscode": "^1.90.0"

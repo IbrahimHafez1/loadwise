@@ -1,6 +1,6 @@
 {
   "name": "@loadwise/cli",
-  "version": "0.4.1-preview.15",
+  "version": "0.4.1-preview.16",
   "description": "Find backend performance, maintainability and security issues, review suggested fixes, and check changed code locally or in CI.",
   "license": "UNLICENSED",
   "author": "Ibrahim Hafez",
