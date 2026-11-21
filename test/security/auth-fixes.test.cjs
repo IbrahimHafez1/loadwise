@@ -2,7 +2,19 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { execFileSync, spawnSync } = require('node:child_process');
+const ts = require('typescript');
 const { scanWithFixes, onlyChange, withSecurity } = require('../performance/site-fix-helpers.cjs');
+const { stubs } = require('./helpers.cjs');
+
+const cli = path.resolve(__dirname, '../../bin/loadwise.cjs');
+const comparisonRule = 'secret-compared-non-constant-time';
+const expressPackage = {
+  ...stubs.express,
+  'node_modules/express/package.json': '{"types":"./index.d.ts"}',
+};
 
 function fixesFor(context, ruleId, source, filename = 'app.ts') {
   const { findings } = scanWithFixes(context, { [filename]: source }, { analyzers: withSecurity });
@@ -118,4 +130,83 @@ test('insecure-random-for-secret offers no fix for other shapes or files without
     'insecure-random-for-secret',
     'export const resetPin = () => Math.floor(Math.random() * 10000);\n',
   );
+});
+
+test('the security CLI fixes both strict string comparisons and preserves their results and evaluation order', (context) => {
+  const source = [
+    "import { deepEqual } from 'node:assert/strict';",
+    "import type { Request } from 'express';",
+    'function equal(req: Request, stored: { secret: string }) { return req.headers.signature === stored.secret; }',
+    'function different(req: Request, stored: { secret: string }) { return stored.secret !== req.headers.signature; }',
+    'const pairs = [["equal", "equal"], ["a", "b"], ["a", "longer"], ["\\uD800", "\\uFFFD"], [null, null], ["1", 1]];',
+    'for (const [supplied, expected] of pairs) {',
+    '  const reads: string[] = [];',
+    '  const req = { get headers() { reads.push("request"); return { signature: supplied }; } } as Request;',
+    '  const stored = { get secret() { reads.push("stored"); return expected; } } as { secret: string };',
+    '  console.log(JSON.stringify([equal(req, stored), different(req, stored)]));',
+    '  deepEqual(reads, ["request", "stored", "stored", "request"]);',
+    '}',
+  ].join('\n');
+  const { root } = scanWithFixes(context, { 'app.mts': source, ...expressPackage }, { analyzers: withSecurity });
+  const run = (...args) =>
+    spawnSync(process.execPath, [cli, 'sec', 'app.mts', '--json', ...args], { cwd: root, encoding: 'utf8' });
+  const filename = path.join(root, 'app.mts');
+  const execute = () => {
+    const input = ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
+      fileName: filename,
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+    }).outputText;
+    return execFileSync(process.execPath, ['--input-type=module'], { cwd: root, input, encoding: 'utf8' });
+  };
+  const before = execute();
+  const report = run();
+  assert.equal(report.status, 1, report.stderr);
+  const findings = JSON.parse(report.stdout).findings.filter(({ ruleId }) => ruleId === comparisonRule);
+  assert.equal(findings.length, 2);
+  assert.ok(
+    findings.every(({ fixable }) => fixable),
+    'both type-proven comparisons have a fix',
+  );
+  const ids = findings.map(({ id }) => id);
+  const fixed = run('--fix', '--only', ids.join(','));
+  assert.equal(fixed.status, 0, fixed.stdout + fixed.stderr);
+  assert.deepEqual(JSON.parse(fixed.stdout).applied, ids);
+  const rewritten = fs.readFileSync(filename, 'utf8');
+  assert.match(rewritten, /timingSafeEqual/);
+  assert.equal((rewritten.match(/from 'node:crypto'/g) ?? []).length, 1);
+  assert.equal(execute(), before);
+  assert.ok(JSON.parse(run().stdout).findings.every(({ ruleId }) => ruleId !== comparisonRule));
+});
+
+test('the timing-safe fix leaves loose equality, unproven operands, and runtime ambiguity for manual review', (context) => {
+  const source = [
+    "import 'node:crypto';",
+    "import type { Request } from 'express';",
+    'function loose(req: Request, secret: string) { return req.headers.signature == secret; }',
+    'function coercion(req: Request, secret: string) { return req.body.signature === secret; }',
+    'function mixed(req: Request, secret: string | undefined) { return req.headers.signature === secret; }',
+  ].join('\n');
+  const typeOnlySource = [
+    "import { type IncomingMessage } from 'node:http';",
+    "import type { Request } from 'express';",
+    'function compare(req: Request, secret: string) { return req.headers.signature === secret; }',
+  ].join('\n');
+  const { root } = scanWithFixes(
+    context,
+    { 'app.mts': source, 'type-only.mts': typeOnlySource, ...expressPackage },
+    { analyzers: withSecurity },
+  );
+  fs.writeFileSync(
+    path.join(root, 'tsconfig.json'),
+    '{"compilerOptions":{"strict":true},"files":["app.mts","type-only.mts"]}',
+  );
+  const report = spawnSync(process.execPath, [cli, 'sec', '-p', 'tsconfig.json', '--json'], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  assert.equal(report.status, 1, report.stderr);
+  const comparisons = JSON.parse(report.stdout).findings.filter(({ ruleId }) => ruleId === comparisonRule);
+  assert.equal(comparisons.length, 4);
+  assert.ok(comparisons.every(({ fixable }) => !fixable));
+  assert.equal(fs.readFileSync(path.join(root, 'app.mts'), 'utf8'), source);
 });

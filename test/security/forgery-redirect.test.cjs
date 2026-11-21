@@ -35,7 +35,7 @@ test('relative paths, fixed origins and checked targets are not reported', () =>
   assert.equal(findings(expressRoute('res.redirect(`https://app.example.com/${req.query.page}`);')).length, 0);
   const relativeGuard = [
     'const next = req.query.next as string;',
-    "if (!next.startsWith('/') || next.startsWith('//')) return res.redirect('/');",
+    String.raw`if (!next.startsWith('/') || next.startsWith('//') || /[\\\t\r\n]/.test(next)) return res.redirect('/');`,
     'res.redirect(next);',
   ].join(' ');
   assert.equal(findings(expressRoute(relativeGuard)).length, 0);
@@ -44,6 +44,20 @@ test('relative paths, fixed origins and checked targets are not reported', () =>
   assert.equal(findings(expressRoute("res.redirect(process.env.APP_URL ?? '/');")).length, 0);
   assert.equal(findings(expressRoute("res.redirect('https://' + req.headers.host + req.url);")).length, 0);
   assert.equal(findings(expressRoute('store.redirect(req.query.next);', 'declare const store: any;')).length, 0);
+});
+
+test('a relative-path check must reject incomplete validation before redirecting', () => {
+  const setup = 'const next = req.query.next as string;';
+  const send = 'res.redirect(next);';
+  const remainder = String.raw`next.startsWith('//') || /[\\\t\r\n]/.test(next)`;
+  for (const body of [
+    `${setup} if (!next.startsWith('/')) return; ${send}`,
+    `${setup} if (!next.startsWith('/') || next.startsWith('//')) return; ${send}`,
+    `${setup} ${send} if (!next.startsWith('/') || ${remainder}) return;`,
+    `${setup} if (!next.startsWith('/') || ${remainder}) console.warn(next); ${send}`,
+  ]) {
+    assert.equal(findings(expressRoute(body)).length, 1, body);
+  }
 });
 
 test('a Referer target and a second call hop are contextual', () => {
@@ -61,7 +75,7 @@ test('Remix, Next.js and NestJS redirects are recognised without installed types
     "import { redirect } from '@remix-run/node';",
     'export async function loader({ request }: { request: Request }) {',
     "  const to = new URL(request.url).searchParams.get('redirectTo');",
-    "  if (!to) throw redirect(new URL(request.url).pathname.replace('/old', '/new'));",
+    "  if (!to) throw redirect('/pages' + new URL(request.url).pathname.replace('/old', '/new'));",
     "  return redirect(to ?? '/');",
     '}',
   ].join('\n');

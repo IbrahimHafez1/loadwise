@@ -21,11 +21,11 @@ test('entry names of adm-zip, yauzl and unzipper written without a check are rep
     '}',
   ]);
   assert.equal(admZip.length, 1);
-  assert.match(admZip[0].message, /`\.\.\/\.\.\/x`/);
+  assert.match(admZip[0].message, /containment check/);
   const yauzl = findings([
-    "import yauzl from 'yauzl';",
+    "import * as yauzl from 'yauzl';",
     "import { createWriteStream } from 'fs';",
-    'declare const zipfile: any;',
+    'declare const zipfile: yauzl.ZipFile;',
     'export function unpack(destination: string) {',
     "  zipfile.on('entry', (entry: any) => {",
     '    const target = `${destination}/${entry.fileName}`;',
@@ -65,9 +65,9 @@ test('a containment check, basename, directory checks and non-archive files beha
   ]);
   assert.equal(flattened.length, 0);
   const directoryCheckOnly = findings([
-    "import yauzl from 'yauzl';",
+    "import * as yauzl from 'yauzl';",
     "import fs from 'fs';",
-    'declare const zipfile: any;',
+    'declare const zipfile: yauzl.ZipFile;',
     "zipfile.on('entry', (entry: any) => {",
     "  if (entry.fileName.endsWith('/')) fs.mkdirSync('/out/' + entry.fileName);",
     '});',
@@ -81,4 +81,46 @@ test('a containment check, basename, directory checks and non-archive files beha
   assert.equal(notArchive.length, 0);
   const extractAll = findings([...header, "new AdmZip('a.zip').extractAllTo('/out', true);"]);
   assert.equal(extractAll.length, 0);
+});
+
+test('archive entries reach a local write helper without classifying an unrelated collection', () => {
+  const header = [
+    "import Archive from 'adm-zip';",
+    "import { writeFileSync } from 'node:fs';",
+    "import { join as combine } from 'node:path';",
+    'declare const input: string, destination: string;',
+    'function save(name: string) { writeFileSync(combine(destination, name), "sample"); }',
+  ];
+  const fromArchive = findings([
+    ...header,
+    'const entries = new Archive(input).getEntries();',
+    'for (const { entryName } of entries) save(entryName);',
+  ]);
+  assert.equal(fromArchive.length, 1);
+  assert.ok(fromArchive[0].trace.length > 1);
+  const unrelated = findings([
+    ...header,
+    'declare const library: { getEntries(): { name: string }[] };',
+    'for (const entry of library.getEntries()) writeFileSync(combine(destination, entry.name), "sample");',
+  ]);
+  assert.equal(unrelated.length, 0);
+});
+
+test('JSZip filename callbacks and tar entry headers feed the same archive trace', () => {
+  const jszip = findings([
+    "import JSZip from 'jszip';",
+    "import { writeFileSync } from 'node:fs';",
+    "import { join } from 'node:path';",
+    'declare const destination: string;',
+    'new JSZip().forEach((name: string) => writeFileSync(join(destination, name), "sample"));',
+  ]);
+  assert.equal(jszip.length, 1);
+  const tar = findings([
+    "import { extract } from 'tar-stream';",
+    "import { writeFileSync } from 'node:fs';",
+    "import { join } from 'node:path';",
+    'declare const destination: string;',
+    "extract().on('entry', ({ name }: { name: string }) => writeFileSync(join(destination, name), 'sample'));",
+  ]);
+  assert.equal(tar.length, 1);
 });

@@ -58,7 +58,7 @@ test('a host chosen inside a URL template is reported, a path after a fixed orig
   assert.equal(findings(expressRoute('await fetch(new URL(req.query.next as string, process.env.API));')).length, 1);
 });
 
-test('host allowlists, validators and SSRF-filtering agents keep the request quiet', () => {
+test('an enforced exact host allowlist and SSRF-filtering agents keep the request quiet', () => {
   const allowlisted = [
     'const target = new URL(req.query.url as string);',
     "if (!ALLOWED.has(target.hostname)) return res.status(400).send('no');",
@@ -68,10 +68,29 @@ test('host allowlists, validators and SSRF-filtering agents keep the request qui
   const validated = 'const url = req.body.url; await assertPublicUrl(url); await axios.get(url);';
   assert.equal(
     findings(expressRoute(validated, 'declare function assertPublicUrl(u: string): Promise<void>;')).length,
-    0,
+    1,
   );
   const filtered = 'await axios.get(req.body.url, { httpAgent: ssrfFilter(req.body.url) });';
   assert.equal(findings(expressRoute(filtered, "import ssrfFilter from 'ssrf-req-filter';")).length, 0);
+});
+
+test('a host check must govern the same parsed URL used by the client', () => {
+  const setup = 'const target = new URL(req.query.url as string);';
+  const guard = 'if (!ALLOWED.has(target.hostname)) return;';
+  const preamble = "const ALLOWED = new Set(['api.example.com']);";
+  for (const body of [
+    `${setup} await fetch(target); ${guard}`,
+    `${setup} if (!ALLOWED.has(target.hostname)) console.warn(target); await fetch(target);`,
+    `${setup} ${guard} target.hostname = req.query.other as string; await fetch(target);`,
+    `${setup} ${guard} const alias = target; alias.hostname = req.query.other as string; await fetch(target);`,
+    `${setup} ${guard} await fetch(req.query.url as string);`,
+  ]) {
+    assert.equal(findings(expressRoute(body, preamble)).length, 1, body);
+  }
+  assert.equal(
+    findings(expressRoute(`${setup} if (ALLOWED.has(target.hostname)) await fetch(target);`, preamble)).length,
+    0,
+  );
 });
 
 test('server values, non-request calls and local fetch functions are not reported', () => {

@@ -43,15 +43,21 @@ test('basename, a containment check, a root option and server paths are not repo
   assert.equal(findings(expressRoute(contained)).length, 0);
   const relative = [
     "const full = path.resolve('/srv', req.params.name);",
-    "if (path.relative('/srv', full).startsWith('..')) throw new Error('outside');",
+    "const relative = path.relative('/srv', full);",
+    "if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('outside');",
     'fs.readFileSync(full);',
   ].join(' ');
   assert.equal(findings(expressRoute(relative)).length, 0);
+  const separateParent = relative.replace(
+    "relative.startsWith('..')",
+    "relative === '..' || relative.startsWith('..' + path.sep)",
+  );
+  assert.equal(findings(expressRoute(separateParent)).length, 0);
   const checkedHelper =
     "function storagePath(key: string) { if (key.includes('..')) throw new Error('bad key'); return path.join('/srv', key); }";
   assert.equal(
     findings(expressRoute('const full = storagePath(req.params.name); fs.readFileSync(full);', checkedHelper)).length,
-    0,
+    1,
   );
   const plainHelper = "function storagePath(key: string) { return path.join('/srv', key); }";
   assert.equal(
@@ -63,6 +69,26 @@ test('basename, a containment check, a root option and server paths are not repo
   assert.equal(findings(expressRoute("await readFile(path.join('/srv', req.user.id));")).length, 0);
   assert.equal(findings(expressRoute('storage.download(req.params.name);', 'declare const storage: any;')).length, 0);
   assert.equal(findings(expressRoute('cache.readFile(req.params.name);', 'declare const cache: any;')).length, 0);
+});
+
+test('only directory checks that govern the same resolved path quiet a finding', () => {
+  const resolved = "const full = path.resolve('/srv/files', req.params.name);";
+  const guard = "if (!full.startsWith('/srv/files' + path.sep)) return;";
+  const read = 'await readFile(full);';
+  for (const body of [
+    `${resolved} ${read} ${guard}`,
+    `${resolved} if (!full.startsWith('/srv/files')) return; ${read}`,
+    `${resolved} if (full.startsWith('/srv/files' + path.sep)) return; ${read}`,
+    `${resolved} if (!full.startsWith('/srv/files' + path.sep)) console.warn(full); ${read}`,
+    `${resolved} if (path.relative('/srv/files', full).startsWith('..')) return; ${read}`,
+    `${resolved} if (!full.startsWith('/another/location' + path.sep)) return; ${read}`,
+  ]) {
+    assert.equal(findings(expressRoute(body)).length, 1, body);
+  }
+  assert.equal(
+    findings(expressRoute(`${resolved} if (full.startsWith('/srv/files' + path.sep)) { ${read} }`)).length,
+    0,
+  );
 });
 
 test('an uploaded file name is contextual and the multer path is clean', () => {

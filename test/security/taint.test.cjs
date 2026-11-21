@@ -39,6 +39,23 @@ test('server-derived request fields and handlers that are not routes are clean',
   assert.equal(traced(helper, {}), undefined);
 });
 
+test('archive names are distinct sources through destructuring and a local call', () => {
+  const source = [
+    "import Archive from 'adm-zip';",
+    "import { join as combine } from 'node:path';",
+    sinkDeclaration,
+    'declare const archive: string, directory: string;',
+    'function record(name: string) { sink(combine(directory, name)); }',
+    'const entries = new Archive(archive).getEntries();',
+    'for (const { entryName: label } of entries) record(label);',
+  ].join('\n');
+  const result = traced(source, {}, 'archive-path');
+  assert.equal(result?.sourceKind, 'archive-entry');
+  assert.equal(result?.hops, 1);
+  assert.match(result.label, /entryName|label/);
+  assert.equal(Boolean(traced(source, {}, 'path')), false);
+});
+
 test('nest parameter decorators are sources and a parsing pipe sanitizes', () => {
   const controller = (parameter) =>
     [
@@ -122,6 +139,37 @@ test('urlControl tells a controlled path from a controlled host', () => {
   assert.equal(control("sink('https://api.example.com/items/' + req.query.id);").part, 'path');
   assert.equal(control('sink(req.query.target);').part, 'whole');
   assert.equal(control("sink('https://api.example.com/items');"), undefined);
+  assert.equal(control('const destination = `https://${req.query.host}/items`; sink(destination);').part, 'host');
+  assert.equal(control("const target = new URL('/items', req.query.base); sink(target);").part, 'whole');
+  assert.equal(control('const target = new URL(req.query.url); sink(target.pathname);').part, 'path');
+  assert.equal(control('sink(req.query.pathname);').part, 'whole');
+  assert.equal(control('sink(`/${req.query.target}`);').part, 'whole');
+});
+
+test('a local const formatter keeps its explicit path prefix in a composed URL', () => {
+  const source = expressRoute(
+    'const base = formatPath(req.params.team); sink(`${base}/edit`);',
+    'const formatPath = (team: string) => { return `/teams/${team}/documents`; };',
+  );
+  const part = withContext(
+    source,
+    stubs.express,
+    (context, file) => context.taint.urlControl(sinkArgument(file))?.part,
+  );
+  assert.equal(part, 'path');
+});
+
+test('a formatter with server data still anchors request data appended by its caller', () => {
+  const source = expressRoute(
+    'const base = formatPath("assigned-team"); sink(`${base}/${req.params.id}`);',
+    'const formatPath = (team: string) => `/teams/${team}/documents`;',
+  );
+  const part = withContext(
+    source,
+    stubs.express,
+    (context, file) => context.taint.urlControl(sinkArgument(file))?.part,
+  );
+  assert.equal(part, 'path');
 });
 
 test('isUntracedParameter is true only for a parameter with no known source', () => {
