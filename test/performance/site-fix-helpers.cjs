@@ -3,12 +3,18 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { analyzeSources } = require('../../lib/performance/projects.cjs');
+const { analyzeSources, performanceAnalyzers } = require('../../lib/performance/projects.cjs');
 const { attachSiteFixes } = require('../../lib/performance/site-fix.cjs');
+
+// Performance and security rules over one Program, as the editor runs them; the security rules' fixes are built here.
+const withSecurity = [
+  ...performanceAnalyzers,
+  { pillar: 'security', analyzeFile: require('../../lib/security/analyze.cjs').analyzeFile },
+];
 
 // Writes `files` (relative name -> contents, node_modules stubs included) to a temporary project, scans every
 // non-declaration source in it, and returns the findings with their site fixes attached.
-function scanWithFixes(context, files, { tsconfig } = {}) {
+function scanWithFixes(context, files, { tsconfig, analyzers } = {}) {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
   const root = fs.mkdtempSync(path.join(base, 'backend-perf-fix-'));
@@ -21,12 +27,12 @@ function scanWithFixes(context, files, { tsconfig } = {}) {
   let result;
   if (tsconfig) {
     fs.writeFileSync(path.join(root, 'tsconfig.json'), JSON.stringify(tsconfig));
-    result = analyzeSources({ project: path.join(root, 'tsconfig.json') });
+    result = analyzeSources({ project: path.join(root, 'tsconfig.json'), analyzers });
   } else {
     const sources = Object.keys(files)
       .filter((name) => !name.startsWith('node_modules/') && /\.[cm]?[jt]sx?$/.test(name) && !name.endsWith('.d.ts'))
       .map((name) => path.join(root, name));
-    result = analyzeSources({ files: sources });
+    result = analyzeSources({ files: sources, analyzers });
   }
   attachSiteFixes(result.findings);
   return { root, findings: result.findings };
@@ -46,4 +52,4 @@ function dedent(text) {
   return lines.map((line) => line.slice(indentation)).join('\n');
 }
 
-module.exports = { scanWithFixes, onlyChange, dedent };
+module.exports = { scanWithFixes, onlyChange, dedent, withSecurity };

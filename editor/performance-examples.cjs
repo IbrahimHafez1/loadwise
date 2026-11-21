@@ -98,10 +98,6 @@ const examples = {
     "const client = await pool.connect();\ntry {\n  await client.query('BEGIN'); await updateOrders(client); await client.query('COMMIT');\n} catch (error) { await client.query('ROLLBACK'); throw error; }\nfinally { client.release(); }",
     'Send every operation in the transaction through this client; discard an unusable connection if rollback itself fails.',
   ],
-  'pg-dynamic-query-text': [
-    "const { rows } = await client.query('SELECT id FROM users WHERE email = $1', [email]);",
-    'Bind values as parameters. For dynamic identifiers or sort directions, choose among fixed, allowlisted SQL fragments.',
-  ],
   'prisma-transaction-client-escape': [
     'await prisma.$transaction(async tx => {\n  await tx.order.create({ data: orderData });\n  await tx.auditEntry.create({ data: auditData });\n});',
     'Pass tx to any helper that participates in this transaction.',
@@ -117,14 +113,6 @@ const examples = {
   'drizzle-unfiltered-write': [
     'await db.update(orders).set(changes).where(and(scope, eq(orders.id, orderId)));',
     'Use the intended filter for this operation. Confirm explicitly if a whole-table mutation is intentional.',
-  ],
-  'prisma-scope-unverified': [
-    'const rows = await prisma.invoice.findMany({\n  where: { AND: [filter, { organizationId: currentOrganization() }] }\n});',
-    'Read example. Substitute the field and trusted scope helper declared by your policy. Protected writes must also preserve ownership in their input data.',
-  ],
-  'drizzle-scope-unverified': [
-    'const rows = await db.select().from(invoices).where(\n  and(filter, eq(invoices.organizationId, currentOrganization()))\n);',
-    'Read example. Use the actual scoped property and trusted helper declared for your table. Preserve the predicate and ownership on writes.',
   ],
 };
 

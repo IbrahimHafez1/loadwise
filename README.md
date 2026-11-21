@@ -1,11 +1,12 @@
 # Loadwise
 
-Loadwise checks a backend project before it ships. One CLI runs two checkers:
+Loadwise checks a backend project before it ships. One CLI runs three checkers:
 
 - **Performance** (`loadwise perf`): repeated database work, ORM and query integrity, blocking calls, collection complexity, migration safety, schema-aware indexes, OpenTelemetry traces, executed query plans and an optional read-only database inspection.
 - **Maintainability** (`loadwise maint`): deep nesting, branch complexity, duplicate implementations, dependency cycles and the folder, placement and data-access rules a team declares.
+- **Security** (`loadwise sec`): runtime text in SQL and the row scopes a project declares for Prisma and Drizzle queries.
 
-Both report findings with a stable `#id`, a suggested change where one is safe, and a `// loadwise-reviewed <rule-id> -- <reason>` comment to dismiss a false positive. A security checker (`loadwise sec`) is reserved for a later release.
+All three report findings with a stable `#id`, a suggested change where one is safe, and a `// loadwise-reviewed <rule-id> -- <reason>` comment to dismiss a false positive.
 
 ## Install
 
@@ -22,24 +23,24 @@ npx loadwise
 
 | Command                                                              | What it does                                                                                                                        |
 | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `loadwise` or `loadwise check [directory]`                           | Runs every checker on the directory (default: the current folder) and prints Performance, then Maintainability.                     |
+| `loadwise` or `loadwise check [directory]`                           | Runs every checker on the directory (default: the current folder) and prints Performance, Maintainability, then Security.           |
 | `loadwise check --only perf,maint`                                   | Runs only the listed checkers: a comma-separated list of `perf`, `maint` and `sec`, in any order.                                   |
 | `loadwise check --skip maint`                                        | Runs every checker except the listed ones. `--only` and `--skip` cannot be combined.                                                |
 | `loadwise perf [args...]`                                            | The full performance checker; `loadwise perf --help` lists its commands and flags. See [Performance checker](#performance-checker). |
 | `loadwise maint [args...]`                                           | The full maintainability checker; `loadwise maint --help` lists its flags. See [Maintainability checker](#maintainability-checker). |
-| `loadwise sec`                                                       | Reserved. Until security checks ship, it and `--only sec` print an error and exit 2.                                                |
+| `loadwise sec [args...]`                                             | The full security checker; `loadwise sec --help` lists its flags. See [Security checker](#security-checker).                        |
 | `loadwise agent init [--mode ask\|auto] [--hook [block\|warn\|off]]` | Writes instructions for AI coding agents and installs the git pre-commit hook.                                                      |
 
 `check` accepts these flags and passes them to every selected checker:
 
-- `--json` prints one object with a key per selected checker, `{ "performance": report, "maintainability": report }`. A checker that was skipped or could not run has `null`.
-- `--format text|json|sarif|github` picks the output; `--json` is `--format json`. `sarif` prints SARIF 2.1.0 with one run per checker for GitHub code scanning, and `github` prints `::warning`/`::error`/`::notice` workflow annotations. `loadwise perf` and `loadwise maint` accept it too. Exit codes do not depend on the format.
+- `--json` prints one object with a key per selected checker, `{ "performance": report, "maintainability": report, "security": report }`. A checker that was skipped or could not run has `null`.
+- `--format text|json|sarif|github` picks the output; `--json` is `--format json`. `sarif` prints SARIF 2.1.0 with one run per checker for GitHub code scanning, and `github` prints `::warning`/`::error`/`::notice` workflow annotations. `loadwise perf`, `loadwise maint` and `loadwise sec` accept it too. Exit codes do not depend on the format.
 - `--include-contextual` also shows lower-priority findings, each with its reason.
 - `--staged` or `--changed-since <git-ref>` reports only findings on changed lines.
 - `--fail-on contract|all` sets the exit threshold. Without it the performance checker fails on any displayed finding and the maintainability checker on contract violations only.
 - `--write-baseline [file]` records the current findings and `--baseline [file]` reports only findings not recorded. The default file is `loadwise-baseline.json` in the checked directory, with one section per checker; `loadwise perf` and `loadwise maint` take the same flags and read or write only their own section. Entries match on rule, file and flagged code (the finding id), never the line number, with a count per entry so N recorded copies allow N findings. Text output ends with `N baseline findings hidden.` and `--json` adds `baselineHidden`. Fixed findings are reported as stale (`baselineStale`) and leave the file only on the next `--write-baseline`. Not combinable with `--fix`, and `--write-baseline` not with `--staged` or `--changed-since`. `loadwise perf migrations` keeps its own per-file baseline.
 
-The performance checker uses the directory's `tsconfig.json` or `jsconfig.json`; without one, `check` looks for workspace packages (`package.json` `workspaces`, `pnpm-workspace.yaml` or `lerna.json`) and checks each one's config in one report, grouped per package; `--workspace <name|path>` (repeatable) limits every checker to some packages. With neither, `check` skips it and prints a note. `check` never changes files: each report ends with a `Fix all:` command, such as `npx loadwise perf -p tsconfig.json --fix --only <ids>`, that applies its fixes.
+The performance and security checkers use the directory's `tsconfig.json` or `jsconfig.json`; without one, `check` looks for workspace packages (`package.json` `workspaces`, `pnpm-workspace.yaml` or `lerna.json`) and checks each one's config in one report, grouped per package; `--workspace <name|path>` (repeatable) limits every checker to some packages. With neither, `check` skips their source scans and prints a note. When selected together, both checkers share a type-check unless a baseline is being written. `check` never changes files: each report ends with a `Fix all:` command, such as `npx loadwise perf -p tsconfig.json --fix --only <ids>`, that applies its fixes.
 
 Exit codes: **0** passed, **1** a checker met its exit threshold, **2** invalid input or configuration in any checker.
 
@@ -271,22 +272,21 @@ Install the application's driver declarations and generate its Prisma client bef
 
 The JS/TS checker resolves declarations from installed drivers and generated clients. Install the dependencies used by the project, including type declarations. When resolution is incomplete, some calls will be missed. The rules run locally against source and recorded evidence.
 
-| Library         | Source patterns covered                                                                                                                                                               |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Prisma          | Executed per-item operations, fetching rows only to count, filter, sort or take the first, dependent creates, transaction client use, stale numeric overwrites and opt-in row scopes. |
-| Drizzle ORM     | Executed fluent queries on the PostgreSQL, MySQL and SQLite core APIs, per-item prepared executions, and direct mutations with an absent or demonstrably ineffective predicate.       |
-| TypeORM         | Repository reads inside repeated execution and simple `find` or `findBy` calls that load entities only for their count.                                                               |
-| Sequelize       | Model reads inside repeated execution and immediate counts of simple `findAll` results.                                                                                               |
-| Mongoose        | Consumed model queries including common `lean` and `exec` chains, plus immediate counts for simple equivalent filters.                                                                |
-| Knex and Kysely | Consumed Knex builders and Kysely SELECT execution methods inside repeated work. Simple single-table queries materialized only to read their length.                                  |
-| node-postgres   | Per-item queries, client-side result processing, pool handoff, transaction commands issued through a pool, and runtime fragments composed directly into SQL text.                     |
+| Library         | Source patterns covered                                                                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Prisma          | Executed per-item operations, fetching rows only to count, filter, sort or take the first, dependent creates, transaction client use and stale numeric overwrites.              |
+| Drizzle ORM     | Executed fluent queries on the PostgreSQL, MySQL and SQLite core APIs, per-item prepared executions, and direct mutations with an absent or demonstrably ineffective predicate. |
+| TypeORM         | Repository reads inside repeated execution and simple `find` or `findBy` calls that load entities only for their count.                                                         |
+| Sequelize       | Model reads inside repeated execution and immediate counts of simple `findAll` results.                                                                                         |
+| Mongoose        | Consumed model queries including common `lean` and `exec` chains, plus immediate counts for simple equivalent filters.                                                          |
+| Knex and Kysely | Consumed Knex builders and Kysely SELECT execution methods inside repeated work. Simple single-table queries materialized only to read their length.                            |
+| node-postgres   | Per-item queries, client-side result processing, pool handoff and transaction commands issued through a pool.                                                                   |
 
 <a id="drizzle-query-in-loop"></a><a id="orm-query-in-loop"></a><a id="typeorm-transaction-in-loop"></a><a id="orm-count-materialization"></a><a id="typeorm-existence-materialization"></a><a id="typeorm-wide-projection"></a>`orm-query-in-loop`, `drizzle-query-in-loop` and `orm-count-materialization` preserve the distinction between building a lazy statement and executing it. Counts with pagination, grouping, joins, hooks or scopes need particular care. TypeORM checks also identify entity reads used only for existence (`typeorm-existence-materialization`), unused wide columns in a direct DTO projection (`typeorm-wide-projection`), and a loop calling a local private helper that starts a transaction (`typeorm-transaction-in-loop`). Before changing a projection or an existence check, verify entity-load side effects. For per-row transactions, check rollback, ordering and error reporting before batching. The adapters recognize specific typed APIs. Custom methods with the same name, raw queries and wrappers often have different semantics.
 
 | Integrity rule                                                                    | What to review                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | <a id="pg-transaction-on-pool"></a>`pg-transaction-on-pool`                       | A standalone transaction-control statement is sent to a typed pool. Use the same checked-out client for the whole transaction and release it in `finally`.                                                                                                                                                                                                                                                                                  |
-| <a id="pg-dynamic-query-text"></a>`pg-dynamic-query-text`                         | Runtime fragments enter SQL text directly. Bind data as parameters and verify how any dynamic identifiers are chosen and quoted. A finding is a code-review prompt.                                                                                                                                                                                                                                                                         |
 | <a id="prisma-transaction-client-escape"></a>`prisma-transaction-client-escape`   | A direct model operation uses the same outer client that opened an interactive transaction. Verify that the operation belongs inside that transaction.                                                                                                                                                                                                                                                                                      |
 | <a id="typeorm-transaction-client-escape"></a>`typeorm-transaction-client-escape` | An awaited write inside a TypeORM transaction goes through a repository or manager that is not bound to it, so it autocommits on another pooled connection, is not rolled back with the transaction and can block on its locks. Use the transaction's manager (`manager.getRepository(Entity)`).                                                                                                                                            |
 | <a id="prisma-dependent-writes"></a>`prisma-dependent-writes`                     | Adjacent creates pass a value from the first record into the next write. Explicit single-key nested `connect` can use a custom unique field when generated types confirm a relation. Direct scalar assignments currently recognize `parent.id` going into a field ending in `Id` or `_id`. Other scalar foreign-key conventions can be missed. If both writes must succeed together, consider a nested write or an appropriate transaction. |
@@ -303,18 +303,6 @@ For Prisma, building an array of lazy queries alone is quiet. A sequential `awai
 ### Project-defined access policy
 
 Place `backend-perf.policy.json` beside the selected project config, or pass `--policy path/to/file.json`. Explicit source-file checks discover the policy in the working directory. A policy can use just the sections the project needs (`prismaScopes`, `drizzleScopes`, `parallelReads`, and `fireAndForget`, a list of helper names that `floating-promise` accepts without an await). Duplicate JSON keys within the same object produce a configuration error. [Example policy](examples/query-policy.json)
-
-The performance and transaction rules run without any scope policy. Row-scope checks start when the project identifies the existing model or table, its scoped property, and the helper that supplies an authorized scalar. Columns such as `tenantId`, `organizationId` and `workspace_id` have no special meaning to the checker on their own. Database mappings can keep the original storage column name. [Prisma database mapping](https://www.prisma.io/docs/orm/prisma-schema/data-model/database-mapping) · [Drizzle schema declarations](https://orm.drizzle.team/docs/sql-schema-declaration)
-
-Drizzle also supports configuring quoted properties such as `"org-id"` and accessing them with brackets. In Prisma's generated filters, `AND`, `OR` and `NOT` are logical operators. If a physical column uses one of these names, configure the Prisma property that maps to it.
-
-<a id="prisma-scope-unverified"></a>`prismaScopes` maps each generated model to its own protected field and a named export from the project's trusted authorization module. With the supplied example, `db.invoice.findMany({ where: { organizationId: requireOrganization() } })` has the expected scope. Choose the names already used by the project. The scanner handles common reads, writes and upsert branches, and requires every alternative in an OR to preserve the scope. For dynamic or nested shapes it cannot establish, it emits `prisma-scope-unverified`. Proof requires strict null checks. With explicit source files and a policy, the CLI enables strict null checks for its analysis.
-
-<a id="drizzle-scope-unverified"></a>`drizzleScopes` names an exported table, its schema module, its scoped property and the trusted helper. For a direct executed query, `.where(eq(invoices.workspace_id, currentWorkspace()))` establishes the configured predicate in the example. Use the property exposed by the ORM. A project with `organizationId: text('org_id')` would configure `"field": "organizationId"`. Each table can use a different convention. A later `.where()` can replace the earlier condition. The rule checks the effective condition and can report `drizzle-scope-unverified` when a protected table appears in a recognized chain and scope, projection or write data needs review. Stored builders, prepared aliases, raw SQL and arbitrary helper-generated statements can fall outside this check.
-
-The import boundary for database modules is a maintainability rule; configure it through the `dataAccess` section of `maintainability.config.json`.
-
-These checks assume the configured helper authenticates the caller and authorizes the returned scope. Middleware, injected or previously obtained clients, raw SQL, unrecognized query shapes and database row-level policies require separate verification. A clean run only describes the covered operations.
 
 ### Async work and sorting
 
@@ -807,6 +795,47 @@ The levels and the `--min-impact` flag work as described under the performance c
 | `long-parameter-list`      | low    |
 | `unreferenced-file`        | low    |
 | `unused-export`            | low    |
+
+# Security checker
+
+`loadwise sec` reports code paths where input or missing scope can expose data: runtime text composed into SQL and, when the project declares them, Prisma and Drizzle queries that do not prove their row scope. Findings are review prompts with a location, a rule ID, a generic fix example and, where it is safe, a source-based fix.
+
+## Run it
+
+```sh
+npx loadwise sec                      # tsconfig.json or jsconfig.json in the current folder
+npx loadwise sec -p tsconfig.json --json
+npx loadwise sec src/orders.ts        # explicit files
+npx loadwise sec --staged             # only findings on staged lines
+```
+
+It accepts the source-check flags of `loadwise perf`: `--policy`, `--json`, `--include-contextual`, `--ignore`, `--fail-on`, `--fix` with `--yes` or `--only`, `--staged` and `--changed-since`. It always uses the TypeScript 6 compiler. Rules that need a package's types stay silent until the package is installed; rules that recognise a library by its import work without `node_modules`. Test, fixture, mock, example and story files are contextual: they are counted, and `--include-contextual` shows them with the reason `Test or example source.`. `--fail-on contract` enforces no security rule yet.
+
+## Rules
+
+| Rule                                                            | What to review                                                                                                                                                      |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="pg-dynamic-query-text"></a>`pg-dynamic-query-text`       | Runtime fragments enter SQL text directly. Bind data as parameters and verify how any dynamic identifiers are chosen and quoted. A finding is a code-review prompt. |
+| <a id="prisma-scope-unverified"></a>`prisma-scope-unverified`   | A Prisma read or write on a model listed in `prismaScopes` does not prove the configured scope in its filter, projection or write data.                             |
+| <a id="drizzle-scope-unverified"></a>`drizzle-scope-unverified` | A Drizzle query on a table listed in `drizzleScopes` does not prove the configured predicate, projection or write data.                                             |
+
+These rules moved from the performance checker with the same ids, so existing `// loadwise-reviewed` comments and `--ignore` flags keep working; `loadwise perf --ignore` still accepts them.
+
+Example: `pool.query('SELECT * FROM orders ORDER BY ' + req.query.sort)` reports `pg-dynamic-query-text`; `pool.query('SELECT * FROM orders WHERE id = $1', [id])` does not.
+
+## Project-defined row scopes
+
+Row-scope checks read `prismaScopes` and `drizzleScopes` from `backend-perf.policy.json`, found the same way as for the performance checker (see [Project-defined access policy](#project-defined-access-policy)). Every other rule runs without a scope policy. Row-scope checks start when the project identifies the existing model or table, its scoped property, and the helper that supplies an authorized scalar. Columns such as `tenantId`, `organizationId` and `workspace_id` have no special meaning to the checker on their own. Database mappings can keep the original storage column name. [Prisma database mapping](https://www.prisma.io/docs/orm/prisma-schema/data-model/database-mapping) · [Drizzle schema declarations](https://orm.drizzle.team/docs/sql-schema-declaration)
+
+Drizzle also supports configuring quoted properties such as `"org-id"` and accessing them with brackets. In Prisma's generated filters, `AND`, `OR` and `NOT` are logical operators. If a physical column uses one of these names, configure the Prisma property that maps to it.
+
+`prismaScopes` maps each generated model to its own protected field and a named export from the project's trusted authorization module. With the supplied example, `db.invoice.findMany({ where: { organizationId: requireOrganization() } })` has the expected scope. Choose the names already used by the project. The scanner handles common reads, writes and upsert branches, and requires every alternative in an OR to preserve the scope. For dynamic or nested shapes it cannot establish, it emits `prisma-scope-unverified`. Proof requires strict null checks. With explicit source files and a policy, the CLI enables strict null checks for its analysis.
+
+`drizzleScopes` names an exported table, its schema module, its scoped property and the trusted helper. For a direct executed query, `.where(eq(invoices.workspace_id, currentWorkspace()))` establishes the configured predicate in the example. Use the property exposed by the ORM. A project with `organizationId: text('org_id')` would configure `"field": "organizationId"`. Each table can use a different convention. A later `.where()` can replace the earlier condition. The rule checks the effective condition and can report `drizzle-scope-unverified` when a protected table appears in a recognized chain and scope, projection or write data needs review. Stored builders, prepared aliases, raw SQL and arbitrary helper-generated statements can fall outside this check.
+
+The import boundary for database modules is a maintainability rule; configure it through the `dataAccess` section of `maintainability.config.json`.
+
+These checks assume the configured helper authenticates the caller and authorizes the returned scope. Middleware, injected or previously obtained clients, raw SQL, unrecognized query shapes and database row-level policies require separate verification. A clean run only describes the covered operations.
 
 ## Developing locally
 

@@ -24,11 +24,14 @@ function loadwise(root, ...args) {
   return { code: run.status, stdout: run.stdout, stderr: run.stderr };
 }
 
-test('plain loadwise checks the current folder with both checkers in titled sections', (context) => {
+test('plain loadwise checks the current folder with every checker in titled sections', (context) => {
   const root = project(context, { 'tsconfig.json': tsconfig, 'a.ts': quietSource });
   const run = loadwise(root);
   assert.equal(run.code, 0, run.stderr);
-  assert.match(run.stdout, /^== Performance ==\n1 file\(s\) checked, 0 finding\(s\)\.\n== Maintainability ==\n/);
+  assert.match(
+    run.stdout,
+    /^== Performance ==\n1 file\(s\) checked, 0 finding\(s\)\.\n== Maintainability ==\n.*\n== Security ==\n1 file\(s\) checked, 0 finding\(s\)\.\n$/,
+  );
   assert.deepEqual(loadwise(root, 'check', '.'), run);
 });
 
@@ -44,9 +47,10 @@ test('--json prints one key per checker', (context) => {
   const root = project(context, { 'tsconfig.json': tsconfig, 'a.ts': slowSource });
   const run = loadwise(root, '--json');
   const report = JSON.parse(run.stdout);
-  assert.deepEqual(Object.keys(report), ['performance', 'maintainability']);
+  assert.deepEqual(Object.keys(report), ['performance', 'maintainability', 'security']);
   assert.equal(report.performance.findings.length, 3);
   assert.deepEqual(report.maintainability.findings, []);
+  assert.deepEqual(report.security.findings, []);
 });
 
 test('one checker with invalid configuration makes check exit 2 and its JSON report null', (context) => {
@@ -63,12 +67,16 @@ test('one checker with invalid configuration makes check exit 2 and its JSON rep
   assert.equal(report.performance.findings.length, 3);
 });
 
-test('without a tsconfig or jsconfig the performance checker is skipped with a note', (context) => {
+test('without a tsconfig or jsconfig the performance and security checkers are skipped with a note', (context) => {
   const root = project(context, { 'a.ts': quietSource });
   const run = loadwise(root, '--json');
   assert.equal(run.code, 0, run.stderr);
-  assert.match(run.stderr, /no tsconfig\.json or jsconfig\.json in .*; skipped the performance checker\./);
+  assert.match(
+    run.stderr,
+    /no tsconfig\.json or jsconfig\.json in .*; skipped the performance and security checkers\./,
+  );
   assert.equal(JSON.parse(run.stdout).performance, null);
+  assert.equal(JSON.parse(run.stdout).security, null);
 });
 
 test('--only and --skip select checkers, and --json keys follow the selection', (context) => {
@@ -76,7 +84,8 @@ test('--only and --skip select checkers, and --json keys follow the selection', 
   const keys = (...args) => Object.keys(JSON.parse(loadwise(root, '--json', ...args).stdout));
   assert.deepEqual(keys('--only', 'maint'), ['maintainability']);
   assert.deepEqual(keys('--only', 'maint,perf,maint'), ['performance', 'maintainability']);
-  assert.deepEqual(keys('--skip', 'perf'), ['maintainability']);
+  assert.deepEqual(keys('--skip', 'perf'), ['maintainability', 'security']);
+  assert.deepEqual(keys('--only', 'sec'), ['security']);
   assert.deepEqual(keys('--skip', 'sec'), ['performance', 'maintainability']);
   const maintOnly = loadwise(root, '--only', 'maint');
   assert.equal(maintOnly.code, 0, 'the performance findings are not checked');
@@ -91,20 +100,30 @@ test('invalid checker selections exit 2 and name the valid checkers', (context) 
   const both = loadwise(root, '--only', 'perf', '--skip', 'maint');
   assert.equal(both.code, 2);
   assert.match(both.stderr, /Choose either --only or --skip\./);
-  assert.equal(loadwise(root, '--skip', 'perf,maint').code, 2);
+  assert.equal(loadwise(root, '--skip', 'perf,maint,sec').code, 2);
 });
 
-test('security is reserved until it ships', (context) => {
-  const root = project(context, { 'tsconfig.json': tsconfig, 'a.ts': quietSource });
-  for (const args of [['sec'], ['--only', 'sec']]) {
-    const run = loadwise(root, ...args);
-    assert.equal(run.code, 2);
-    assert.equal(run.stderr, 'security checks are not available yet\n');
-    assert.equal(run.stdout, '');
-  }
+test('perf and sec selected together share one child whose envelope splits into two reports', (context) => {
+  const root = project(context, { 'tsconfig.json': tsconfig, 'a.ts': slowSource });
+  const run = loadwise(root, 'perf', '-p', 'tsconfig.json', '--with', 'sec', '--json');
+  assert.equal(run.code, 1, run.stderr);
+  const envelope = JSON.parse(run.stdout);
+  assert.deepEqual(Object.keys(envelope), ['performance', 'security']);
+  assert.equal(envelope.performance.code, 1);
+  assert.equal(JSON.parse(envelope.performance.stdout).findings.length, 3);
+  assert.deepEqual(envelope.security, {
+    code: 0,
+    stdout: JSON.stringify({ scannedFiles: 1, findings: [] }, null, 2) + '\n',
+  });
+  const check = JSON.parse(loadwise(root, '--json', '--only', 'perf,sec').stdout);
+  assert.deepEqual(check, {
+    performance: JSON.parse(envelope.performance.stdout),
+    security: JSON.parse(envelope.security.stdout),
+  });
+  assert.equal(loadwise(root, 'perf', '--with', 'maint').code, 2);
 });
 
-test('perf and maint pass their arguments to the full checker CLIs', (context) => {
+test('perf, maint and sec pass their arguments to the full checker CLIs', (context) => {
   const root = project(context, { 'tsconfig.json': tsconfig, 'a.ts': slowSource });
   const perf = loadwise(root, 'perf', '-p', 'tsconfig.json', '--json');
   assert.equal(perf.code, 1, perf.stderr);
@@ -114,6 +133,8 @@ test('perf and maint pass their arguments to the full checker CLIs', (context) =
   );
   assert.match(loadwise(root, 'perf', '--help').stdout, /loadwise perf /);
   assert.match(loadwise(root, 'maint', '--help').stdout, /loadwise maint /);
+  assert.match(loadwise(root, 'sec', '--help').stdout, /loadwise sec /);
+  assert.equal(loadwise(root, 'sec', '--json').code, 0);
   assert.equal(loadwise(root, 'maint', '.').code, 0);
 });
 

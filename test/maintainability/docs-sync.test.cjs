@@ -15,10 +15,7 @@ const root = path.join(__dirname, '..', '..');
 const binEntry = path.join(root, 'bin', 'loadwise.cjs');
 const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8').replaceAll('\r\n', '\n');
 // Rule tokens are compared within this checker's part of the README; commands and flags against all of it.
-const section = readme.slice(
-  readme.indexOf('\n# Maintainability checker\n'),
-  readme.indexOf('\n## Developing locally\n'),
-);
+const section = readme.slice(readme.indexOf('\n# Maintainability checker\n'), readme.indexOf('\n# Security checker\n'));
 const helpText = spawnSync(process.execPath, [binEntry, 'maint', '--help'], { encoding: 'utf8' }).stdout;
 
 const rulePattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/;

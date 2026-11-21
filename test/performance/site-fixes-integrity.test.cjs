@@ -7,7 +7,7 @@ const path = require('node:path');
 const { test } = require('node:test');
 const { analyzeSources } = require('../../lib/performance/projects.cjs');
 const { attachSiteFixes } = require('../../lib/performance/site-fix.cjs');
-const { dedent } = require('./site-fix-helpers.cjs');
+const { dedent, withSecurity } = require('./site-fix-helpers.cjs');
 
 // Scans `source` as src.ts beside the package stubs, with an optional query policy, and returns the
 // findings of `ruleId` with their site fixes attached.
@@ -20,7 +20,7 @@ function findingsFor(context, ruleId, source, stubs, policy) {
     fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
     fs.writeFileSync(path.join(root, name), contents);
   }
-  const { findings } = analyzeSources({ files: [path.join(root, 'src.ts')], policy });
+  const { findings } = analyzeSources({ files: [path.join(root, 'src.ts')], policy, analyzers: withSecurity });
   attachSiteFixes(findings);
   return findings.filter((finding) => finding.ruleId === ruleId);
 }
