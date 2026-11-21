@@ -2,7 +2,7 @@
 'use strict';
 
 const usage = `Usage:
-  loadwise [check] [directory] [--only perf,maint,sec | --skip perf,maint,sec] [--json | --format text|json|sarif|github] [--include-contextual] [--staged | --changed-since git-ref] [--fail-on contract|all] [--min-impact low|medium|high|critical] [--config loadwise.config.json] [--ignore rule-id] [--workspace name|path ...] [--baseline [file] | --write-baseline [file]]
+  loadwise [check] [directory] [--only perf,maint,sec | --skip perf,maint,sec] [--json | --format text|json|sarif|github] [--include-contextual] [--staged | --changed-since git-ref] [--fail-on contract|all] [--min-impact low|medium|high|critical] [--config loadwise.config.json] [--ignore rule-id] [--workspace name|path ...] [--online] [--baseline [file] | --write-baseline [file]]
   loadwise perf [args...]
   loadwise maint [args...]
   loadwise sec [args...]
@@ -13,11 +13,12 @@ check, the default command, runs every checker (perf: performance, maint: mainta
 loadwise.config.json in the directory (or --config <file>) sets the default checkers, ignored paths, per-rule levels (off, warn, error) and each checker's policy; flags beat it. --ignore drops a rule's findings and can repeat.
 The performance and security checkers use the directory's tsconfig.json or jsconfig.json; in a monorepo root without one it checks every workspace package's config in one report (--workspace limits the checkers to named packages or folders); with no config at all it is skipped with a note.
 --json prints one key per selected checker, { "performance": report, "maintainability": report, "security": report }; a skipped or failed checker's report is null.
+--online adds the security checker's dependency vulnerability check, which sends package names and versions from the lockfile to the OSV database; without it the check is skipped with a note.
 --format sarif prints SARIF 2.1.0 with one run per checker for GitHub code scanning; --format github prints workflow annotations (::warning, ::error); --json is --format json.
 --include-contextual, --staged, --changed-since, --fail-on and --min-impact apply to every selected checker; without --fail-on each keeps its own default.
 --write-baseline records every selected checker's current findings in one file (default loadwise-baseline.json in the checked directory, a section per checker); --baseline reports only findings not in it and prints how many were hidden ("baselineHidden" in --json). Fixed findings leave the file on the next --write-baseline.
-check never changes source files: apply fixes with the printed \`loadwise perf --fix --only id\` , \`loadwise maint --fix --only id\` and \`loadwise sec --fix --only id\` commands.
-perf, maint and sec run one checker with its full command set; \`loadwise perf --help\` , \`loadwise maint --help\` and \`loadwise sec --help\` list their commands and flags.
+check never changes source files: apply fixes with the printed \`loadwise perf --fix --only id\`, \`loadwise maint --fix --only id\` and \`loadwise sec --fix --only id\` commands.
+perf, maint and sec run one checker with its full command set; \`loadwise perf --help\`, \`loadwise maint --help\` and \`loadwise sec --help\` list their commands and flags.
 agent init writes one block of instructions for AI coding agents, covering both checkers, into AGENTS.md and imports it from CLAUDE.md.
 agent init --hook installs one git pre-commit hook that runs \`loadwise check --staged\`: block fails the commit on findings, warn only prints them, off removes the hook. --hook alone means warn.
 Exit codes: 0 passed, 1 a checker met its exit threshold, 2 invalid input or configuration in any checker.`;

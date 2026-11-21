@@ -807,6 +807,7 @@ npx loadwise sec                      # tsconfig.json or jsconfig.json in the cu
 npx loadwise sec -p tsconfig.json --json
 npx loadwise sec src/orders.ts        # explicit files
 npx loadwise sec --staged             # only findings on staged lines
+npx loadwise sec deps --online        # known-vulnerable packages in the lockfile
 ```
 
 It accepts the source-check flags of `loadwise perf`: `--policy`, `--json`, `--include-contextual`, `--ignore`, `--fail-on`, `--fix` with `--yes` or `--only`, `--staged` and `--changed-since`. It always uses the TypeScript 6 compiler. Rules that need a package's types stay silent until the package is installed; rules that recognise a library by its import work without `node_modules`. Test, fixture, mock, example and story files are contextual: they are counted, and `--include-contextual` shows them with the reason `Test or example source.`. `--fail-on contract` enforces no security rule yet.
@@ -861,6 +862,16 @@ The SQL rules report text assembled from a runtime value. When a part of that te
 These rules moved from the performance checker with the same ids, so existing `// loadwise-reviewed` comments and `--ignore` flags keep working; `loadwise perf --ignore` still accepts them.
 
 Example: `pool.query('SELECT * FROM orders ORDER BY ' + req.query.sort)` reports `pg-dynamic-query-text`; `pool.query('SELECT * FROM orders WHERE id = $1', [id])` does not.
+
+## Dependency checks
+
+`loadwise sec deps --online [directory]` reads `package-lock.json` (lockfile version 2 or 3), `pnpm-lock.yaml` or `yarn.lock` (version 1 or Berry) from the directory or the nearest parent that has one, and asks the [OSV database](https://osv.dev) (which includes the GitHub Advisory Database) about every pinned package version. It sends package names and versions and nothing else. Answers are cached for 24 hours in the `loadwise` folder of the OS cache directory. It takes `--format text|json` (or `--json`), `--include-contextual`, `--ignore` and `--fail-on`. A network failure exits 2 rather than passing.
+
+The network is opt-in: `loadwise sec --online` and `loadwise check --online` add these findings to their security report, and without `--online` they print one note that dependency checks were skipped.
+
+| Rule                             | What to review                                                                                                                                                                                                                                                                                                                |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dependency-known-vulnerability` | A locked package version has published advisories. One finding per package and version lists the advisory ids, the highest severity, the fixed version and the fix: `npm install pkg@fixed` for a direct dependency, or an overrides or resolutions entry for a transitive one. Development-only dependencies are contextual. |
 
 ## Project-defined row scopes
 
