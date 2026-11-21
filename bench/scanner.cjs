@@ -4,7 +4,7 @@ const { performance } = require('node:perf_hooks');
 const startup = performance.now();
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { withProgram } = require('../test/helpers.cjs');
+const { withProgram } = require('../test/performance/helpers.cjs');
 const { analyzeFile } = require('../lib/performance/analyze.cjs');
 const moduleLoadMs = performance.now() - startup;
 

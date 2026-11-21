@@ -75,3 +75,85 @@ test('inside a monorepo the git top-level config files are checked once, without
   assert.ok(!files.includes('docs/Dockerfile'));
   assert.equal(new Set(report.findings.map((finding) => finding.id)).size, report.findings.length);
 });
+
+test('selecting two workspace packages reports the shared root Dockerfile once', (context) => {
+  const root = repository(context, {
+    'package.json': '{"workspaces":["apps/*"]}',
+    Dockerfile: rootDockerfile,
+    'apps/first/package.json': '{"name":"first"}',
+    'apps/first/tsconfig.json': tsconfig,
+    'apps/first/app.ts': 'export const first = 1;',
+    'apps/second/package.json': '{"name":"second"}',
+    'apps/second/tsconfig.json': tsconfig,
+    'apps/second/app.ts': 'export const second = 2;',
+  });
+  const run = sec(root, '-p', '.', '--workspace', 'first', '--workspace', 'second', '--json');
+  const { findings } = JSON.parse(run.stdout);
+  assert.equal(
+    findings.filter(({ file, ruleId }) => file === 'Dockerfile' && ruleId === 'dockerfile-runs-as-root').length,
+    1,
+  );
+});
+
+test('Dockerfiles with admin in their name are checked, while minified files are skipped', (context) => {
+  const root = repository(context, {
+    'tsconfig.json': tsconfig,
+    'app.ts': 'export const app = 1;',
+    'Dockerfile.admin.worker': rootDockerfile,
+    'Dockerfile.worker.min.txt': rootDockerfile,
+  });
+  const { findings } = JSON.parse(sec(root, '--json').stdout);
+  assert.deepEqual(
+    findings.map(({ file }) => file),
+    ['Dockerfile.admin.worker'],
+  );
+});
+
+test('unchanged Dockerfiles do not contribute contextual findings to a staged scan', (context) => {
+  const root = repository(context, {
+    'tsconfig.json': tsconfig,
+    'app.ts': 'export const app = 1;',
+    'Dockerfile.dev': rootDockerfile,
+  });
+  const commit = spawnSync(
+    'git',
+    [
+      '-C',
+      root,
+      '-c',
+      'user.name=Loadwise Test',
+      '-c',
+      'user.email=loadwise@example.invalid',
+      '-c',
+      'commit.gpgsign=false',
+      'commit',
+      '-qm',
+      'fixture',
+    ],
+    { encoding: 'utf8' },
+  );
+  assert.equal(commit.status, 0, commit.stderr);
+  fs.writeFileSync(path.join(root, 'app.ts'), 'export const app = 2;');
+  const staged = spawnSync('git', ['-C', root, 'add', '--', 'app.ts'], { encoding: 'utf8' });
+  assert.equal(staged.status, 0, staged.stderr);
+  const run = sec(root, '--staged', '--json');
+  assert.equal(run.status, 0, run.stderr);
+  const report = JSON.parse(run.stdout);
+  assert.deepEqual(report.findings, []);
+  assert.equal(report.contextualFindingCount ?? 0, 0);
+});
+
+test('an infrastructure directory needs no TypeScript config for its security checks', (context) => {
+  const root = repository(context, { 'containers/Dockerfile': rootDockerfile });
+  for (const args of [['sec'], ['check', '--only', 'sec'], ['check', '--only', 'perf,sec']]) {
+    const run = spawnSync(process.execPath, [bin, ...args, '--staged', '--json'], { cwd: root, encoding: 'utf8' });
+    assert.equal(run.status, 1, run.stderr);
+    const report = JSON.parse(run.stdout);
+    const security = report.security ?? report;
+    assert.equal(security.scannedFiles, 1);
+    assert.deepEqual(
+      security.findings.map(({ ruleId }) => ruleId),
+      ['dockerfile-runs-as-root'],
+    );
+  }
+});

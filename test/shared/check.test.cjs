@@ -123,6 +123,47 @@ test('perf and sec selected together share one child whose envelope splits into 
   assert.equal(loadwise(root, 'perf', '--with', 'maint').code, 2);
 });
 
+test('changed-only scans use the selected project repository and keep caller-relative paths', (context) => {
+  const caller = project(context, {});
+  const selected = project(context, { 'tsconfig.json': tsconfig, 'app with spaces.ts': quietSource });
+  function git(...args) {
+    const run = spawnSync(
+      'git',
+      [
+        '-C',
+        selected,
+        '-c',
+        'user.name=Loadwise Test',
+        '-c',
+        'user.email=loadwise@example.invalid',
+        '-c',
+        'commit.gpgsign=false',
+        ...args,
+      ],
+      { encoding: 'utf8' },
+    );
+    assert.equal(run.status, 0, run.stderr);
+  }
+  git('init', '-q');
+  git('config', 'diff.noprefix', 'true');
+  git('add', '--', 'tsconfig.json', 'app with spaces.ts');
+  git('commit', '-qm', 'initial files');
+  fs.writeFileSync(path.join(selected, 'app with spaces.ts'), slowSource);
+  fs.writeFileSync(path.join(selected, 'Dockerfile'), 'FROM node:latest\nUSER node\n');
+  git('add', '--', 'app with spaces.ts', 'Dockerfile');
+  const relative = (file) => path.relative(caller, path.join(selected, file)).split(path.sep).join('/');
+  for (const change of [['--staged'], ['--changed-since', 'HEAD']]) {
+    const run = loadwise(caller, 'check', selected, '--only', 'perf,sec', '--json', ...change);
+    assert.equal(run.code, 1, `${change.join(' ')}\n${run.stderr}\n${run.stdout}`);
+    const { performance, security } = JSON.parse(run.stdout);
+    assert.equal(performance.findings[0].file, relative('app with spaces.ts'));
+    assert.deepEqual(
+      security.findings.map(({ file }) => file),
+      [relative('Dockerfile')],
+    );
+  }
+});
+
 test('perf, maint and sec pass their arguments to the full checker CLIs', (context) => {
   const root = project(context, { 'tsconfig.json': tsconfig, 'a.ts': slowSource });
   const perf = loadwise(root, 'perf', '-p', 'tsconfig.json', '--json');

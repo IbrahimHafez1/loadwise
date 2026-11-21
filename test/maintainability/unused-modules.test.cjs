@@ -56,6 +56,33 @@ test('type imports, namespace imports, require and literal dynamic imports count
   assert.deepEqual(findings, []);
 });
 
+test('literal browser worker modules are referenced without consuming their exports', async () => {
+  const findings = await scanProject({
+    'package.json': '{"main":"src/index.ts"}',
+    'src/index.ts': [
+      'new Worker(new URL("./jobs/background.ts", import.meta.url));',
+      'new SharedWorker(new URL("./jobs/shared.js", import.meta.url));',
+      'new URL("./jobs/url-only.ts", import.meta.url);',
+      'new Worker(new URL("./jobs/other-base.ts", configurationUrl));',
+      'function localWorker(Worker) { return new Worker(new URL("./jobs/shadowed-worker.ts", import.meta.url)); }',
+      'function localUrl(URL) { return new Worker(new URL("./jobs/shadowed-url.ts", import.meta.url)); }',
+    ].join('\n'),
+    'src/jobs/background.ts': 'self.onmessage = () => {}; export const unused = 1;',
+    'src/jobs/shared.ts': 'self.onconnect = () => {};',
+    'src/jobs/url-only.ts': 'export const unused = 1;',
+    'src/jobs/other-base.ts': 'export const unused = 1;',
+    'src/jobs/shadowed-worker.ts': 'export const unused = 1;',
+    'src/jobs/shadowed-url.ts': 'export const unused = 1;',
+  });
+  assert.deepEqual(summary(findings), [
+    'unreferenced-file src/jobs/other-base.ts',
+    'unreferenced-file src/jobs/shadowed-url.ts',
+    'unreferenced-file src/jobs/shadowed-worker.ts',
+    'unreferenced-file src/jobs/url-only.ts',
+    'unused-export src/jobs/background.ts',
+  ]);
+});
+
 test('re-exports and export-star forward use to the original module', async () => {
   const findings = await scanProject({
     'package.json': '{"main":"src/index.ts"}',
@@ -85,6 +112,105 @@ test('entry points and framework conventions are never reported', async () => {
     'src/orphan.service.ts': 'export class Orphan {}',
   });
   assert.deepEqual(summary(findings), ['unreferenced-file src/orphan.service.ts']);
+});
+
+test('literal Node entries in GitHub workflow steps count as entry points', async () => {
+  const findings = await scanProject({
+    'package.json': '{}',
+    '.github/workflows/integration.yml': [
+      'jobs:',
+      '  test:',
+      '    steps:',
+      '      - name: Start integration server',
+      '        run: |',
+      '          # node integration/comment.js',
+      '          node integration/server.js &',
+      "      - run: node 'integration/inline.cjs'",
+      '      - run: |-',
+      '          node integration/inline-block.js',
+      '      - uses: owner/action@v1',
+      '        with:',
+      '          run: node integration/input.js',
+      '      - run: node integration/custom-cwd.js',
+      '        working-directory: other',
+      '      - run: node integration/chained.js && echo done',
+      '  other:',
+      '    defaults:',
+      '      run:',
+      '        working-directory: other',
+      '    steps:',
+      '      - run: node integration/default-cwd.js',
+    ].join('\n'),
+    'integration/server.js': 'module.exports = 1;',
+    'integration/inline.cjs': 'module.exports = 2;',
+    'integration/inline-block.js': 'module.exports = 8;',
+    'integration/comment.js': 'module.exports = 3;',
+    'integration/input.js': 'module.exports = 4;',
+    'integration/custom-cwd.js': 'module.exports = 5;',
+    'integration/chained.js': 'module.exports = 6;',
+    'integration/default-cwd.js': 'module.exports = 7;',
+  });
+  assert.deepEqual(summary(findings), [
+    'unreferenced-file integration/chained.js',
+    'unreferenced-file integration/comment.js',
+    'unreferenced-file integration/custom-cwd.js',
+    'unreferenced-file integration/default-cwd.js',
+    'unreferenced-file integration/input.js',
+  ]);
+});
+
+test('inventory HTML pages use literal local script entry points', async () => {
+  const names = [
+    'support',
+    'module',
+    'bare',
+    'parent',
+    'comment',
+    'text',
+    'inert',
+    'inline',
+    'data-attribute',
+    'non-script',
+    'external',
+    'absolute',
+    'dynamic',
+    'changed-base',
+  ];
+  const findings = await scanProject({
+    'package.json': '{}',
+    'html-project/Parent Portal/page.html': [
+      '<script src="./support.js"></script>',
+      '<SCRIPT TYPE="module" src="module.js"></SCRIPT>',
+      '<script src=bare.js></script>',
+      '<script src="../js/parent.js"></script>',
+      '<!-- <script src="comment.js"></script> -->',
+      '<textarea><script src="text.js"></script></textarea>',
+      '<template><script src="inert.js"></script></template>',
+      '<script>const text = \'<script src="inline.js">\';</script>',
+      '<script data-reference=\'src="data-attribute.js"\'></script>',
+      '<script type="application/json" src="non-script.js"></script>',
+      '<script src="https://example.invalid/external.js"></script>',
+      '<script src="/absolute.js"></script>',
+      '<script src="{{ dynamic }}.js"></script>',
+    ].join('\n'),
+    'html-project/Parent Portal/changed-base.html': [
+      '<base href="/different-folder/">',
+      '<script src="changed-base.js"></script>',
+    ].join('\n'),
+    ...Object.fromEntries(
+      names.map((name) => [
+        name === 'parent' ? 'html-project/js/parent.js' : `html-project/Parent Portal/${name}.js`,
+        'const loaded = true;',
+      ]),
+    ),
+  });
+  assert.deepEqual(
+    summary(findings),
+    names
+      .slice(4)
+      .sort()
+      .map((name) => `unreferenced-file html-project/Parent Portal/${name}.js`),
+  );
 });
 
 test('a non-literal dynamic import makes findings contextual', async () => {

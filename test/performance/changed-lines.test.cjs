@@ -65,6 +65,11 @@ test('findings are kept only when their line range overlaps a changed range', ()
   assert.deepEqual(kept, [findings[1], findings[2]]);
 });
 
+test('diff headers for names with spaces exclude the Git tab separator', () => {
+  const changed = parseChangedLines('+++ b/src/with space.ts\t\n@@ -1 +1 @@\n+updated', directory);
+  assert.deepEqual(changed.get(inDirectory('src/with space.ts')), [[1, 1]]);
+});
+
 function gitRepository(context) {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });

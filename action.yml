@@ -1,12 +1,12 @@
 name: loadwise
-description: Check TypeScript and JavaScript backends for query performance, transaction usage and maintainability problems.
+description: Check TypeScript and JavaScript backends for performance, maintainability and security problems.
 branding:
   icon: check-circle
   color: blue
 
 inputs:
   checkers:
-    description: Comma-separated checkers passed to --only (perf, maint). Empty runs all of them.
+    description: Comma-separated checkers passed to --only (perf, maint, sec). Empty runs all of them.
     default: ''
   path:
     description: Directory to check, relative to the workspace.
@@ -27,6 +27,12 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v7
+      with:
+        node-version: '24'
+        package-manager-cache: false
+
     - name: Run loadwise
       id: loadwise
       shell: bash
@@ -40,27 +46,15 @@ runs:
         LOADWISE_UPLOAD_SARIF: ${{ inputs.upload-sarif }}
         LOADWISE_ANNOTATIONS: ${{ inputs.annotations }}
       run: |
-        version=$(node -p "require(process.env.LOADWISE_ACTION_PATH + '/package.json').version")
-        arguments=(check "$LOADWISE_PATH")
-        [ -n "$LOADWISE_CHECKERS" ] && arguments+=(--only "$LOADWISE_CHECKERS")
-        [ "$LOADWISE_CHANGED_ONLY" = "true" ] && [ -n "$LOADWISE_BASE_SHA" ] && arguments+=(--changed-since "$LOADWISE_BASE_SHA")
-        [ -n "$LOADWISE_FAIL_ON" ] && arguments+=(--fail-on "$LOADWISE_FAIL_ON")
-        exit_code=0
-        if [ "$LOADWISE_UPLOAD_SARIF" = "true" ]; then
-          npx --yes "@loadwise/cli@$version" "${arguments[@]}" --format sarif > "$RUNNER_TEMP/loadwise.sarif" || exit_code=$?
-        fi
-        if [ "$LOADWISE_ANNOTATIONS" = "true" ]; then
-          npx --yes "@loadwise/cli@$version" "${arguments[@]}" --format github || exit_code=$?
-        elif [ "$LOADWISE_UPLOAD_SARIF" != "true" ]; then
-          npx --yes "@loadwise/cli@$version" "${arguments[@]}" || exit_code=$?
-        fi
-        echo "exit-code=$exit_code" >> "$GITHUB_OUTPUT"
+        runtime=$(node "$LOADWISE_ACTION_PATH/scripts/stage-action.cjs")
+        npm --prefix "$runtime" ci --omit=dev --include=optional --no-audit --no-fund
+        node "$runtime/bin/github-action.cjs"
 
     - name: Upload SARIF
-      if: ${{ always() && inputs.upload-sarif == 'true' && hashFiles(format('{0}/loadwise.sarif', runner.temp)) != '' }}
+      if: ${{ always() && steps.loadwise.outputs.sarif-file != '' }}
       uses: github/codeql-action/upload-sarif@v4
       with:
-        sarif_file: ${{ runner.temp }}/loadwise.sarif
+        sarif_file: ${{ steps.loadwise.outputs.sarif-file }}
 
     - name: Apply loadwise exit code
       if: ${{ always() && steps.loadwise.outputs.exit-code != '0' }}

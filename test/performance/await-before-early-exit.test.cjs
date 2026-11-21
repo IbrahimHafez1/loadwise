@@ -46,6 +46,17 @@ test('an unassigned read and a bare return guard are reported too', () => {
   );
 });
 
+test('an elided binding slot does not hide a row used by the guard', () => {
+  assert.deepEqual(
+    reported(`export async function inspect() {
+  const [, user] = await prisma.user.findMany();
+  if (!user) return;
+  return user.name;
+}`),
+    [],
+  );
+});
+
 test('a guard that uses the read, anything derived from it, or an else branch is quiet', () => {
   const body = (statements) => `export async function run(id: string, name: string) {\n${statements}\n}`;
   assert.deepEqual(

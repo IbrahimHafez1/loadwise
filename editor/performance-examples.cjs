@@ -46,6 +46,14 @@ const examples = {
     'const total = await prisma.order.count({ where });',
     'Keep the original filters and verify that pagination or distinct rows do not change the count.',
   ],
+  'prisma-count-for-existence': [
+    'const hasOrder = (await prisma.order.findFirst({ where, select: { id: true } })) !== null;',
+    'Keep the original filter and select a small field from the actual model when you only need to know whether a row exists.',
+  ],
+  'typeorm-unused-count': [
+    'const orders = await orderRepository.find({ where, order, skip, take });',
+    'When only the rows are used, keep the original filters, ordering and pagination and choose the equivalent method that returns rows alone.',
+  ],
   'pg-first-materialization': [
     "const { rows: [first] } = await client.query(\n  'SELECT id FROM orders WHERE status = $1 ORDER BY id LIMIT 1', [status]\n);",
     'Preserve the intended ordering, filters and projection. An empty result leaves first undefined.',
