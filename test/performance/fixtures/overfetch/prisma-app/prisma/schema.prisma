@@ -1,0 +1,35 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Article {
+  id       Int       @id
+  title    String
+  summary  String    @db.VarChar(200)
+  body     String    @db.Text
+  meta     Json
+  slug     String    @unique
+  comments Comment[]
+}
+
+model Tag {
+  id   Int    @id
+  name String
+}
+
+model Comment {
+  id        Int     @id
+  articleId Int
+  article   Article @relation(fields: [articleId], references: [id])
+  replies   Reply[]
+
+  @@index([articleId])
+}
+
+model Reply {
+  id        Int     @id
+  commentId Int
+  comment   Comment @relation(fields: [commentId], references: [id])
+
+  @@index([commentId])
+}
