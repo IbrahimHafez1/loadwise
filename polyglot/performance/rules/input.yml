@@ -27,3 +27,11 @@ language: Rust
 severity: warning
 message: The parser encountered invalid or unsupported syntax.
 rule: { kind: ERROR }
+---
+id: csharp-conditional-access-in-error
+language: CSharp
+severity: hint
+message: Candidate for conditional assignment compatibility.
+rule:
+  kind: conditional_access_expression
+  inside: { kind: ERROR, stopBy: end }

@@ -25,6 +25,7 @@ test('native candidate walk visits the same syntax nodes in compiler order', { s
   const kinds = new Set([
     SyntaxKind.CallExpression,
     SyntaxKind.NewExpression,
+    SyntaxKind.ReturnStatement,
     SyntaxKind.TaggedTemplateExpression,
     SyntaxKind.BinaryExpression,
   ]);

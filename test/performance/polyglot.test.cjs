@@ -264,3 +264,46 @@ test('polyglot reports parser error nodes as invalid inputs', nativeOnly, async 
     await assert.rejects(checkPolyglot([path.join(directory, filename)]), /invalid or unsupported syntax/);
   }
 });
+
+test(
+  'polyglot keeps findings and source positions around Java varargs annotations and C# conditional writes',
+  nativeOnly,
+  async (context) => {
+    const directory = fixture(context, {
+      'Read.java': samples['Read.java']
+        .replace(
+          'class Read',
+          '@java.lang.annotation.Target(java.lang.annotation.ElementType.TYPE_USE) @interface Nullable {} class Read',
+        )
+        .replace('String[] values', 'String @Nullable ... values'),
+      'Read.cs': samples['Read.cs'].replace('cached.IsMatch(value);', 'this?.Sink = value; cached.IsMatch(value);'),
+    });
+    const report = await checkPolyglot([directory]);
+    assert.equal(report.scannedFiles, 2);
+    assert.deepEqual(
+      report.findings.map(({ ruleId, line, column }) => [ruleId, line, column]),
+      [
+        ['csharp-fixed-regex-in-loop', 6, 13],
+        ['java-fixed-regex-in-loop', 6, 13],
+      ],
+    );
+    const java = path.join(directory, 'Read.java');
+    const original = fs.readFileSync(java, 'utf8');
+    assert.match(original, /String @Nullable \.\.\. values/);
+    for (const malformed of ['org..Nullable', 'class']) {
+      fs.writeFileSync(java, original.replace('@Nullable', '@' + malformed));
+      await assert.rejects(checkPolyglot([java]), /Read\.java:.*invalid or unsupported syntax/);
+    }
+    fs.writeFileSync(java, original.replace('cached.matcher(value);', 'void ???;'));
+    await assert.rejects(checkPolyglot([java]), /Read\.java:.*invalid or unsupported syntax/);
+    const csharp = path.join(directory, 'Read.cs');
+    const conditional = fs.readFileSync(csharp, 'utf8');
+    assert.match(conditional, /this\?\.Sink = value/);
+    for (const missingValue of ['', '/* missing */']) {
+      fs.writeFileSync(csharp, `class Probe { void Run() { target?.Value = ${missingValue}; } }`);
+      await assert.rejects(checkPolyglot([csharp]), /Read\.cs:.*invalid or unsupported syntax/);
+    }
+    fs.writeFileSync(csharp, conditional.replace('cached.IsMatch(value);', 'void ???;'));
+    await assert.rejects(checkPolyglot([csharp]), /Read\.cs:.*invalid or unsupported syntax/);
+  },
+);

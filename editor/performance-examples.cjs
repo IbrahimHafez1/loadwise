@@ -231,6 +231,18 @@ const standaloneExamples = {
     code: "if (!dto.name) throw new BadRequestException('name required');\nconst user = await prisma.user.findUnique({ where: { id } });",
     note: 'Run the guard before the read it does not use. Keep the order when the read is there for its own error or timing.',
   },
+  'discarded-error-result': {
+    language: 'javascript',
+    before: 'await updateProvider();',
+    code: "const result = await updateProvider();\nif (result._tag === 'Left') return result;",
+    note: 'This fp-ts Either example forwards the failure to a caller that handles it. Keep the success path after the guard.',
+  },
+  'promise-return-escapes-catch': {
+    language: 'javascript',
+    before: 'try {\n  return loadProfile();\n} catch (error) {\n  return respondToFailure(error);\n}',
+    code: 'try {\n  return await loadProfile();\n} catch (error) {\n  return respondToFailure(error);\n}',
+    note: 'Await inside the protected try block when its catch is responsible for handling the rejection.',
+  },
   'floating-promise': {
     language: 'javascript',
     before: 'sendWelcomeEmail(user.email);',

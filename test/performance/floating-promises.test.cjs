@@ -50,6 +50,24 @@ test('thenables, unions with undefined and .then without a rejection handler are
   assert.equal(reported(`export async function run() {\n  sendEmail('a').finally(() => 1);\n}`).length, 1);
 });
 
+test('missing and nullish promise rejection handlers leave the rejection unhandled', () => {
+  const body = `export async function run() {
+    const disabledHandler = null;
+    sendEmail('a').catch();
+    sendEmail('a').catch(undefined);
+    sendEmail('a').catch((null));
+    sendEmail('a').catch(disabledHandler);
+    sendEmail('a').then(() => 1, undefined);
+    sendEmail('a').then(() => 1, void 0);
+    sendEmail('a').catch().then(undefined, console.error);
+    sendEmail('a').catch(console.error).catch();
+  }`;
+  assert.deepEqual(
+    reported(body).map((finding) => finding.line),
+    [10, 11, 12, 13, 14, 15],
+  );
+});
+
 test('await, return, void, assignment, arguments, catch and two-argument then are quiet', () => {
   const quiet = [
     "await sendEmail('a');",

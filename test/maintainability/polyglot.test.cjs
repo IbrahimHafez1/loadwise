@@ -34,6 +34,26 @@ function fixture(context) {
 
 const braced = (prefix, decision, work, suffix) => (depth) =>
   [prefix, ...Array(depth).fill(decision + ' {'), work, ...Array(depth).fill('}'), suffix].join('\n');
+
+test('polyglot compares original C# bodies after retrying conditional assignments', nativeOnly, async (context) => {
+  const { root, files, write } = fixture(context);
+  const body = `{
+    var count = total + 1;
+    if (count > limit) {
+      owner?.Value = count;
+      return count - limit;
+    }
+    return count;
+  }`;
+  write('First.cs', `class First { int Run() ${body} }`);
+  write('Second.cs', `class Second { int Run() ${body} }`);
+  write('Plain.cs', `class Plain { int Run() ${body.replace('owner?.Value', 'owner .Value')} }`);
+  const { findings, languageCounts } = await analyzePolyglot({ root, files });
+  assert.deepEqual(languageCounts, { 'C#': 3 });
+  const duplicates = findings.filter(({ ruleId }) => ruleId === 'duplicate-implementation');
+  assert.equal(duplicates.length, 1);
+  assert.deepEqual([duplicates[0].file, ...duplicates[0].related.map(({ file }) => file)], ['First.cs', 'Second.cs']);
+});
 const fixtures = [
   [
     'Python',

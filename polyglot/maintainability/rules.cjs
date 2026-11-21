@@ -1,6 +1,7 @@
 'use strict';
 
 const { duplicateRule } = require('../../lib/maintainability/polyglot-duplicates.cjs');
+const { csharpCandidate } = require('../../lib/shared/polyglot-compatibility.cjs');
 
 // Controls count only through their own statement bodies. This keeps chained alternatives and callback scopes distinct.
 const languages = [
@@ -155,7 +156,7 @@ function rulesFor(language) {
     rule: { kind: 'ERROR' },
     message: 'The parser encountered invalid or unsupported syntax.',
   };
-  return [diagnostic, parseError, duplicateRule(language)]
+  return [diagnostic, parseError, duplicateRule(language), parser === 'CSharp' && csharpCandidate]
     .filter(Boolean)
     .map((rule) => JSON.stringify(rule))
     .join('\n---\n');
