@@ -1,7 +1,7 @@
 'use strict';
 
 // Generic fix examples for security rules. Each group keeps its own [code, note] entries in lib/security/examples.
-const groups = ['moved', 'injection', 'request-forgery', 'auth-crypto', 'exposure', 'deps'];
+const groups = ['moved', 'injection', 'request-forgery', 'auth-crypto', 'exposure', 'deps', 'files'];
 const examples = Object.assign({}, ...groups.map((group) => require(`../lib/security/examples/${group}.cjs`)));
 
 function exampleFor(ruleId, languageId) {

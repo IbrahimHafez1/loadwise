@@ -63,6 +63,8 @@ test('every security rule has a short example that parses', () => {
     const example = exampleFor(rule, 'typescript');
     assert.ok(example?.code && example.note, `${rule} has no example`);
     assert.ok(example.code.split('\n').length <= maxExampleLines, `${rule} example is too long`);
+    // File rules show env, Dockerfile and compose text.
+    if (ruleInfo[rule].group === 'files') continue;
     const parsed = ts.createSourceFile('example.ts', example.code, ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
     assert.deepEqual(
       parsed.parseDiagnostics.map(({ messageText }) => messageText),
