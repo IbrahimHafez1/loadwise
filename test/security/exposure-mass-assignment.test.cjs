@@ -2,10 +2,16 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { findingsOf, defaultFindingsOf } = require('./exposure-helpers.cjs');
+const { findingsOf } = require('./exposure-helpers.cjs');
 const { lint, lintWithoutTypes, stubs } = require('./helpers.cjs');
 
 const ruleId = 'mass-assignment';
+
+function contextualFindingsOf(rule, source, files) {
+  const findings = findingsOf(rule, source, files);
+  assert.ok(findings.every(({ contextualReason }) => contextualReason));
+  return findings;
+}
 const typeormStub = {
   'node_modules/typeorm/index.d.ts': [
     'export declare class Repository<T> { save(entity: object): Promise<T>; update(id: string, values: object): Promise<void>;',
@@ -36,7 +42,7 @@ test('Prisma writes of the whole request body are reported, with and without typ
   ];
   for (const body of bodies) {
     const source = expressRoute(body, 'declare const prisma: any; declare const this_: any;');
-    assert.ok(defaultFindingsOf(ruleId, source, stubs.express).length >= 1, body);
+    assert.ok(contextualFindingsOf(ruleId, source, stubs.express).length >= 1, body);
     assert.ok(
       lintWithoutTypes(source).some((finding) => finding.ruleId === ruleId),
       body,
@@ -80,7 +86,7 @@ test('a NestJS body typed any, an interface, an alias or an undecorated class is
   ].join('\n');
   for (const type of ['any', 'CreateItem', 'ItemInput', 'Record<string, unknown>', 'PlainDto']) {
     const source = nestController(type, 'return prisma.item.create({ data: dto });', declarations);
-    assert.equal(defaultFindingsOf(ruleId, source, stubs.nest).length, 1, type);
+    assert.equal(contextualFindingsOf(ruleId, source, stubs.nest).length, 1, type);
   }
 });
 
@@ -98,7 +104,7 @@ test('a NestJS body typed with a validated DTO class is clean', () => {
   }
 });
 
-test('a body passed through a service is reported at one hop and contextual at two', () => {
+test('a body passed through a service is contextual at one or two hops', () => {
   const service = (name, body) => `class ${name} { constructor(private readonly prisma: any) {} ${body} }`;
   const oneHop = [
     "import { Controller, Post, Body } from '@nestjs/common';",
@@ -106,7 +112,7 @@ test('a body passed through a service is reported at one hop and contextual at t
     '@Controller() class ItemsController { constructor(private readonly items: ItemsService) {}',
     '  @Post() create(@Body() dto: any) { return this.items.create(dto); } }',
   ].join('\n');
-  assert.equal(defaultFindingsOf(ruleId, oneHop, stubs.nest).length, 1);
+  assert.equal(contextualFindingsOf(ruleId, oneHop, stubs.nest).length, 1);
   const twoHops = [
     "import { Controller, Post, Body } from '@nestjs/common';",
     service('Store', 'save(data: any) { return this.prisma.item.create({ data }); }'),
@@ -124,7 +130,7 @@ test('TypeORM, Mongoose and Sequelize writes of the whole body are reported when
     'await repository.save(req.body); await repository.update("1", req.body);',
     "import { Repository } from 'typeorm';\ndeclare const repository: Repository<object>;",
   );
-  assert.equal(defaultFindingsOf(ruleId, typeorm, { ...stubs.express, ...typeormStub }).length, 2);
+  assert.equal(contextualFindingsOf(ruleId, typeorm, { ...stubs.express, ...typeormStub }).length, 2);
   assert.equal(
     lintWithoutTypes(typeorm, { ...stubs.express, ...typeormStub }).filter((f) => f.ruleId === ruleId).length,
     2,
@@ -134,13 +140,13 @@ test('TypeORM, Mongoose and Sequelize writes of the whole body are reported when
     'await User.create(req.body); await User.findByIdAndUpdate("1", req.body); new User(req.body);',
     "import { Model } from 'mongoose';\ndeclare const User: Model<{ name: string }>;",
   );
-  assert.equal(defaultFindingsOf(ruleId, mongoose, { ...stubs.express, ...mongooseStub }).length, 3);
+  assert.equal(contextualFindingsOf(ruleId, mongoose, { ...stubs.express, ...mongooseStub }).length, 3);
 
   const sequelize = expressRoute(
     'await Item.create(req.body);',
     "import { Model } from 'sequelize';\ndeclare const Item: typeof Model;",
   );
-  assert.equal(defaultFindingsOf(ruleId, sequelize, { ...stubs.express, ...sequelizeStub }).length, 1);
+  assert.equal(contextualFindingsOf(ruleId, sequelize, { ...stubs.express, ...sequelizeStub }).length, 1);
 });
 
 test('Mongoose documents assigned or set from the whole body are reported', () => {
@@ -148,7 +154,7 @@ test('Mongoose documents assigned or set from the whole body are reported', () =
     'Object.assign(doc, req.body); doc.set(req.body);',
     "import { Document } from 'mongoose';\ndeclare const doc: Document;",
   );
-  assert.equal(defaultFindingsOf(ruleId, source, { ...stubs.express, ...mongooseStub }).length, 2);
+  assert.equal(contextualFindingsOf(ruleId, source, { ...stubs.express, ...mongooseStub }).length, 2);
 });
 
 test('field picks, a fields option, a schema parse and unrecognised receivers are clean', () => {

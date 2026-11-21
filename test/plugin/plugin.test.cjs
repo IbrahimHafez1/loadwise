@@ -91,6 +91,26 @@ test('findings for the edited file come back as blocking feedback with fix comma
   assert.doesNotMatch(output.reason, /zzz/);
 });
 
+test('security feedback comes from scanning the edited file and includes the sec fix command', () => {
+  const root = makeProject(`
+const path = require('node:path');
+const [, , command, file, format] = process.argv;
+const findings = command === 'sec' && file === path.join('src', 'a.ts') && format === '--json'
+  ? [{ file, line: 2, ruleId: 'bcrypt-low-cost', id: 'sec123', message: 'weak cost', fixable: true },
+     { file: 'src/other.ts', line: 1, ruleId: 'bcrypt-low-cost', id: 'sec456', message: 'other file' }]
+  : [];
+console.log(JSON.stringify({ findings }));
+process.exit(findings.length ? 1 : 0);
+`);
+  const result = runHook(root, 'src/a.ts');
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /#sec123 bcrypt-low-cost/);
+  const output = JSON.parse(result.stdout);
+  assert.equal(output.decision, 'block');
+  assert.match(output.reason, /loadwise sec --fix --only sec123/);
+  assert.doesNotMatch(output.reason, /sec456/);
+});
+
 test('a clean file produces no output', () => {
   const result = runHook(makeProject('console.log(JSON.stringify({ findings: [] }));'), 'src/a.ts');
   assert.equal(result.status, 0);

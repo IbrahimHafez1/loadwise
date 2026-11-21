@@ -38,7 +38,7 @@ npx loadwise
 - `--include-contextual` also shows lower-priority findings, each with its reason.
 - `--staged` or `--changed-since <git-ref>` reports only findings on changed lines.
 - `--fail-on contract|all` sets the exit threshold. Without it the performance checker fails on any displayed finding and the maintainability checker on contract violations only.
-- `--write-baseline [file]` records the current findings and `--baseline [file]` reports only findings not recorded. The default file is `loadwise-baseline.json` in the checked directory, with one section per checker; `loadwise perf` and `loadwise maint` take the same flags and read or write only their own section. Entries match on rule, file and flagged code (the finding id), never the line number, with a count per entry so N recorded copies allow N findings. Text output ends with `N baseline findings hidden.` and `--json` adds `baselineHidden`. Fixed findings are reported as stale (`baselineStale`) and leave the file only on the next `--write-baseline`. Not combinable with `--fix`, and `--write-baseline` not with `--staged` or `--changed-since`. `loadwise perf migrations` keeps its own per-file baseline.
+- `--write-baseline [file]` records the current findings and `--baseline [file]` reports only findings not recorded. The default file is `loadwise-baseline.json` in the checked directory, with one section per checker; `loadwise perf`, `loadwise maint` and `loadwise sec` take the same flags and read or write only their own section. Entries match on rule, file and flagged code (the finding id), never the line number, with a count per entry so N recorded copies allow N findings. Text output ends with `N baseline findings hidden.` and `--json` adds `baselineHidden`. Fixed findings are reported as stale (`baselineStale`) and leave the file only on the next `--write-baseline`. Not combinable with `--fix`, and `--write-baseline` not with `--staged` or `--changed-since`. `loadwise perf migrations` keeps its own per-file baseline.
 
 The performance and security checkers use the directory's `tsconfig.json` or `jsconfig.json`; without one, `check` looks for workspace packages (`package.json` `workspaces`, `pnpm-workspace.yaml` or `lerna.json`) and checks each one's config in one report, grouped per package; `--workspace <name|path>` (repeatable) limits every checker to some packages. With neither, `check` skips their source scans and prints a note. When selected together, both checkers share a type-check unless a baseline is being written. `check` never changes files: each report ends with a `Fix all:` command, such as `npx loadwise perf -p tsconfig.json --fix --only <ids>`, that applies its fixes.
 
@@ -132,7 +132,7 @@ npx loadwise agent init --mode auto   # auto mode: applies fixes without behavio
 /plugin install loadwise@loadwise
 ```
 
-After every `Edit`, `Write` or `MultiEdit` on a `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts` or `.cts` file, a hook runs the project's own `node_modules/.bin/loadwise` on that file (`perf` on the file, `maint` on the uncommitted changes, keeping that file's findings) with a 20 second limit. Findings go back to Claude with their ids and `loadwise perf --fix --only <id>` commands; a clean file prints nothing. The hook never downloads anything: without a local install, outside a project, on other file types, on a timeout or on any error it exits silently. The plugin also adds a `/loadwise [args]` command that runs `loadwise check`, summarizes the findings and offers fixes.
+After every `Edit`, `Write` or `MultiEdit` on a `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts` or `.cts` file, a hook runs the project's own `node_modules/.bin/loadwise` on that file (`perf` and `sec` on the file, `maint` on the uncommitted changes, keeping that file's findings) with a 20 second limit. Findings go back to Claude with their ids and `--fix --only <id>` commands for the corresponding checker; a clean file prints nothing. The hook never downloads anything: without a local install, outside a project, on other file types, on a timeout or on any error it exits silently. The plugin also adds a `/loadwise [args]` command that runs `loadwise check`, summarizes the findings and offers fixes.
 
 To turn the hook off, run `/plugin disable loadwise` (or `/plugin uninstall loadwise`).
 
@@ -538,9 +538,12 @@ Every finding carries an impact level. `--min-impact <low|medium|high|critical>`
 | `db-slow-query-plan`                  | high     |
 | `db-unindexed-foreign-key`            | high     |
 | `drizzle-query-in-loop`               | high     |
-| `drizzle-scope-unverified`            | high     |
 | `external-call-in-transaction`        | high     |
 | `find-then-create-race`               | high     |
+| `unbounded-list-query`                | high     |
+| `unbounded-module-cache`              | medium   |
+| `whole-payload-in-memory`             | medium   |
+| `list-query-overfetch`                | medium   |
 | `floating-promise`                    | high     |
 | `http-call-without-timeout`           | high     |
 | `index-missing-filter`                | high     |
@@ -568,7 +571,6 @@ Every finding carries an impact level. `--min-impact <low|medium|high|critical>`
 | `pg-sequential-scan`                  | high     |
 | `prisma-dependent-writes`             | high     |
 | `prisma-query-in-loop`                | high     |
-| `prisma-scope-unverified`             | high     |
 | `queue-add-in-loop`                   | high     |
 | `rebuild-lookup-in-loop`              | high     |
 | `redis-command-in-loop`               | high     |
@@ -597,7 +599,6 @@ Every finding carries an impact level. `--min-impact <low|medium|high|critical>`
 | `password-hash-pure-js`               | medium   |
 | `pg-count-materialization`            | medium   |
 | `pg-disk-sort`                        | medium   |
-| `pg-dynamic-query-text`               | medium   |
 | `pg-filter-materialization`           | medium   |
 | `pg-first-materialization`            | medium   |
 | `pg-top-k-materialization`            | medium   |
@@ -798,7 +799,7 @@ The levels and the `--min-impact` flag work as described under the performance c
 
 # Security checker
 
-`loadwise sec` reports code paths where input or missing scope can expose data: runtime text composed into SQL and, when the project declares them, Prisma and Drizzle queries that do not prove their row scope. Findings are review prompts with a location, a rule ID, a generic fix example and, where it is safe, a source-based fix.
+`loadwise sec` reports code paths where input or missing scope can expose data: runtime text composed into SQL and, when the project declares them, Prisma and Drizzle queries that do not prove their row scope. Findings are review prompts with a location, a rule ID, an impact level, a generic fix example and, where it is safe, a source-based fix.
 
 ## Run it
 
@@ -810,7 +811,7 @@ npx loadwise sec --staged             # only findings on staged lines
 npx loadwise sec deps --online        # known-vulnerable packages in the lockfile
 ```
 
-It accepts the source-check flags of `loadwise perf`: `--policy`, `--json`, `--include-contextual`, `--ignore`, `--fail-on`, `--fix` with `--yes` or `--only`, `--staged` and `--changed-since`. It always uses the TypeScript 6 compiler. Rules that need a package's types stay silent until the package is installed; rules that recognise a library by its import work without `node_modules`. Test, fixture, mock, example and story files are contextual: they are counted, and `--include-contextual` shows them with the reason `Test or example source.`. `--fail-on contract` enforces no security rule yet.
+It accepts the source-check flags of `loadwise perf`, including `--format`, `--min-impact`, `--baseline`, `--write-baseline`, `--loadwise-config`, `--workspace`, `--policy`, `--json`, `--include-contextual`, `--ignore`, `--fail-on`, `--fix` with `--yes` or `--only`, `--staged` and `--changed-since`. It always uses the TypeScript 6 compiler. Rules that need a package's types stay silent until the package is installed; rules that recognise a library by its import work without `node_modules`. Test, fixture, mock, example and story files are contextual: they are counted, and `--include-contextual` shows them with the reason `Test or example source.`. `--fail-on contract` enforces no security rule by default. `--fix --yes` leaves changes to ValidationPipe whitelisting for individual review because enabling it can strip undecorated DTO properties.
 
 ## Rules
 
@@ -824,7 +825,7 @@ It accepts the source-check flags of `loadwise perf`: `--policy`, `--json`, `--i
 | <a id="drizzle-sql-raw-dynamic"></a>`drizzle-sql-raw-dynamic`                     | `sql.raw` from drizzle-orm receives text built from a runtime value.                                                                                                                                                                                                                                                                                |
 | <a id="knex-raw-dynamic-text"></a>`knex-raw-dynamic-text`                         | A Knex `*Raw` fragment or `knex.raw` receives text built from a runtime value instead of `?`/`??` bindings.                                                                                                                                                                                                                                         |
 | <a id="mysql-dynamic-query-text"></a>`mysql-dynamic-query-text`                   | A `mysql`/`mysql2` `query` or `execute` receives SQL text built from a runtime value instead of `?` placeholders.                                                                                                                                                                                                                                   |
-| <a id="nosql-operator-injection"></a>`nosql-operator-injection`                   | Request data that can arrive as an object is a Mongoose or MongoDB filter, a filter value or a `$where` expression. Contextual when the project depends on express-mongo-sanitize. Fix: wrap the value in `$eq`.                                                                                                                                    |
+| <a id="nosql-operator-injection"></a>`nosql-operator-injection`                   | Request data that can arrive as an object is a Mongoose or MongoDB filter, a filter value or a `$where` expression. Contextual when applicable Express sanitizer registration is visible. Fix: wrap the value in `$eq`.                                                                                                                             |
 | <a id="prisma-raw-unsafe-dynamic"></a>`prisma-raw-unsafe-dynamic`                 | `$queryRawUnsafe`, `$executeRawUnsafe` or `Prisma.raw` receives SQL text built from a runtime value.                                                                                                                                                                                                                                                |
 | <a id="regex-from-input"></a>`regex-from-input`                                   | Request text becomes a regular expression through `RegExp`, `match`/`matchAll`/`search` on a string, or a `$regex` operand, without escaping.                                                                                                                                                                                                       |
 | <a id="sequelize-dynamic-query-text"></a>`sequelize-dynamic-query-text`           | `sequelize.query` or `literal` receives SQL text built from a runtime value instead of `replacements` or `bind`.                                                                                                                                                                                                                                    |
@@ -841,7 +842,7 @@ It accepts the source-check flags of `loadwise perf`: `--policy`, `--json`, `--i
 | <a id="insecure-random-for-secret"></a>`insecure-random-for-secret`               | `Math.random()` feeds a token, code, nonce, session or secret. Use `crypto.randomBytes`, `randomInt` or `randomUUID`; names that only end in `id` are contextual. `Math.floor(Math.random() * N)` has a source fix.                                                                                                                                 |
 | <a id="jwt-decode-for-auth"></a>`jwt-decode-for-auth`                             | `decode` (`jsonwebtoken`, `JwtService`, the jwt-decode package) has no `verify` on the same token and its result becomes `req.user`, is used in a guard or auth middleware, or filters a query. Other uses are contextual.                                                                                                                          |
 | <a id="jwt-none-algorithm"></a>`jwt-none-algorithm`                               | The `none` algorithm appears in an `algorithms` list or a `sign` call, so unsigned tokens are accepted or produced.                                                                                                                                                                                                                                 |
-| <a id="jwt-sign-without-expiry"></a>`jwt-sign-without-expiry`                     | `jsonwebtoken` `sign` with a literal payload and no `expiresIn` option or `exp` claim. A payload that is not a literal is contextual.                                                                                                                                                                                                               |
+| <a id="jwt-sign-without-expiry"></a>`jwt-sign-without-expiry`                     | `jsonwebtoken` `sign` with a literal payload and no `expiresIn` option or `exp` claim. Literal NestJS JwtService signing also uses expiry set by its bound JwtModule registration. Unresolved defaults are contextual.                                                                                                                              |
 | <a id="jwt-verify-without-algorithms"></a>`jwt-verify-without-algorithms`         | `jsonwebtoken` `verify` without `algorithms` in a literal options object. Public keys, key files and key-lookup callbacks are default; shared secrets are contextual. The fix pins the algorithm the same key signs with in the file.                                                                                                               |
 | <a id="secret-compared-non-constant-time"></a>`secret-compared-non-constant-time` | An HMAC or hash digest, or a value named like a signature, secret, token, OTP, password or CSRF token, is compared with `===` against request input. Use `crypto.timingSafeEqual`.                                                                                                                                                                  |
 | <a id="tls-verification-disabled"></a>`tls-verification-disabled`                 | A literal `rejectUnauthorized: false`, `strictSSL: false` or `NODE_TLS_REJECT_UNAUTHORIZED = '0'`. Under a non-production guard it is contextual; database `ssl` options count too.                                                                                                                                                                 |
@@ -877,9 +878,63 @@ Example: `pool.query('SELECT * FROM orders ORDER BY ' + req.query.sort)` reports
 
 The network is opt-in: `loadwise sec --online` and `loadwise check --online` add these findings to their security report, and without `--online` they print one note that dependency checks were skipped.
 
-| Rule                             | What to review                                                                                                                                                                                                                                                                                                                |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `dependency-known-vulnerability` | A locked package version has published advisories. One finding per package and version lists the advisory ids, the highest severity, the fixed version and the fix: `npm install pkg@fixed` for a direct dependency, or an overrides or resolutions entry for a transitive one. Development-only dependencies are contextual. |
+| Rule                                                                        | What to review                                                                                                                                                                                                                                                                                                                |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="dependency-known-vulnerability"></a>`dependency-known-vulnerability` | A locked package version has published advisories. One finding per package and version lists the advisory ids, the highest severity, the fixed version and the fix: `npm install pkg@fixed` for a direct dependency, or an overrides or resolutions entry for a transitive one. Development-only dependencies are contextual. |
+
+## Security impact levels
+
+`--min-impact` sets the minimum level to report. Dependency findings use the advisory severity.
+
+| Rule                                | Impact                                      |
+| ----------------------------------- | ------------------------------------------- |
+| `pg-dynamic-query-text`             | medium                                      |
+| `prisma-scope-unverified`           | high                                        |
+| `drizzle-scope-unverified`          | high                                        |
+| `code-injection`                    | critical                                    |
+| `command-injection`                 | critical                                    |
+| `drizzle-sql-raw-dynamic`           | critical                                    |
+| `knex-raw-dynamic-text`             | critical                                    |
+| `mysql-dynamic-query-text`          | critical                                    |
+| `nosql-operator-injection`          | high                                        |
+| `prisma-raw-unsafe-dynamic`         | critical                                    |
+| `regex-from-input`                  | medium                                      |
+| `sequelize-dynamic-query-text`      | critical                                    |
+| `template-injection`                | critical                                    |
+| `typeorm-dynamic-query-text`        | critical                                    |
+| `open-redirect`                     | medium                                      |
+| `path-traversal`                    | high                                        |
+| `ssrf-request-url`                  | high                                        |
+| `upload-client-filename`            | medium                                      |
+| `zip-slip-extraction`               | high                                        |
+| `bcrypt-low-cost`                   | medium                                      |
+| `hardcoded-secret`                  | critical                                    |
+| `insecure-cipher`                   | medium                                      |
+| `insecure-random-for-secret`        | high                                        |
+| `jwt-decode-for-auth`               | high                                        |
+| `jwt-none-algorithm`                | critical                                    |
+| `jwt-sign-without-expiry`           | medium                                      |
+| `jwt-verify-without-algorithms`     | high                                        |
+| `secret-compared-non-constant-time` | medium                                      |
+| `tls-verification-disabled`         | high                                        |
+| `weak-password-hash`                | high                                        |
+| `cookie-missing-security-flags`     | high                                        |
+| `cors-credentials-any-origin`       | high                                        |
+| `error-stack-in-response`           | medium                                      |
+| `graphql-introspection-enabled`     | medium                                      |
+| `mass-assignment`                   | high                                        |
+| `nest-validation-without-whitelist` | medium                                      |
+| `prototype-pollution`               | high                                        |
+| `reflected-xss-response`            | low                                         |
+| `secret-in-log`                     | high                                        |
+| `xml-external-entities`             | medium                                      |
+| `dependency-known-vulnerability`    | Advisory severity (medium when unavailable) |
+| `committed-secret`                  | critical                                    |
+| `compose-hardcoded-secret`          | high                                        |
+| `dockerfile-add-remote-url`         | medium                                      |
+| `dockerfile-runs-as-root`           | medium                                      |
+| `dockerfile-secret-in-build`        | high                                        |
+| `dockerfile-unpinned-base-image`    | low                                         |
 
 ## Project-defined row scopes
 

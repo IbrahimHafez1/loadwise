@@ -28,9 +28,20 @@ function withProgram(source, files, callback, compilerOptions = {}) {
   }
   const host = ts.createCompilerHost(options, true);
   const original = { ...host };
-  host.readFile = (name) => overlay.get(normalize(name)) ?? original.readFile(name);
-  host.fileExists = (name) => overlay.has(normalize(name)) || original.fileExists(name);
-  host.directoryExists = (name) => directories.has(normalize(name)) || original.directoryExists(name);
+  const bundledLibs = normalize(path.dirname(ts.getDefaultLibFilePath(options)));
+  // Packages must come from the fixture. Real ancestor installs would change an untyped test run.
+  const allowPhysical = (name) => {
+    const absolute = normalize(name);
+    return (
+      !absolute.split(path.sep).includes('node_modules') ||
+      absolute === bundledLibs ||
+      absolute.startsWith(bundledLibs + path.sep)
+    );
+  };
+  host.readFile = (name) => overlay.get(normalize(name)) ?? (allowPhysical(name) ? original.readFile(name) : undefined);
+  host.fileExists = (name) => overlay.has(normalize(name)) || (allowPhysical(name) && original.fileExists(name));
+  host.directoryExists = (name) =>
+    directories.has(normalize(name)) || (allowPhysical(name) && original.directoryExists(name));
   host.realpath = (name) => (overlay.has(normalize(name)) ? name : original.realpath(name));
   host.getSourceFile = (name, version, ...args) =>
     overlay.has(normalize(name))

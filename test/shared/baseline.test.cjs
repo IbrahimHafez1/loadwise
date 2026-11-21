@@ -149,7 +149,7 @@ test('check writes one section per pillar and reads them back', (context) => {
   assert.equal(written.code, 0, written.stderr);
   const { version, pillars } = readBaseline(root);
   assert.equal(version, 1);
-  assert.deepEqual(Object.keys(pillars), ['maintainability', 'performance']);
+  assert.deepEqual(Object.keys(pillars), ['maintainability', 'performance', 'security']);
   assert.equal(
     pillars.performance.findings.reduce((total, { count }) => total + count, 0),
     3,

@@ -12,8 +12,14 @@ const jwtTypes = {
   ].join('\n'),
 };
 const nestJwtTypes = {
-  'node_modules/@nestjs/jwt/index.d.ts':
-    'export declare class JwtService { decode(token: string): any; verify(token: string): any; sign(payload: object): string }',
+  'node_modules/@nestjs/jwt/index.d.ts': [
+    'export declare class JwtModule { static register(options: object): object; }',
+    'export declare class JwtService {',
+    '  decode(token: string): any; verify(token: string): any;',
+    '  sign(payload: object, options?: object): string; signAsync(payload: object, options?: object): Promise<string>;',
+    '}',
+  ].join('\n'),
+  'node_modules/@nestjs/common/index.d.ts': 'export declare function Module(metadata: object): ClassDecorator;',
 };
 
 function summary(findings, ruleId) {
@@ -194,4 +200,75 @@ test('jwt-sign-without-expiry is default for literal payloads, contextual otherw
     [5, true],
   ]);
   assert.deepEqual(summary(untyped, 'jwt-sign-without-expiry'), summary(typed, 'jwt-sign-without-expiry'));
+});
+
+test('jwt-sign-without-expiry applies only the Nest registration of the signing provider', () => {
+  const source = [
+    "import { JwtService } from '@nestjs/jwt';",
+    'export class ScopedService {',
+    '  constructor(private readonly jwt: JwtService) {}',
+    '  issue() { return this.jwt.sign({ sub: "user" }); }',
+    '}',
+    'export class OtherService {',
+    '  constructor(private readonly jwt: JwtService) {}',
+    '  issue() { return this.jwt.signAsync({ sub: "user" }); }',
+    '  short() { return this.jwt.sign({ sub: "user" }, { expiresIn: "30s" }); }',
+    '  claim() { return this.jwt.sign({ sub: "user", exp: 42 }); }',
+    '}',
+  ].join('\n');
+  const files = {
+    ...nestJwtTypes,
+    'scoped.module.ts': [
+      "import { Module as NestModule } from '@nestjs/common';",
+      "import { JwtModule as Tokens } from '@nestjs/jwt';",
+      "import { ScopedService as Provider } from './main';",
+      'const signOptions = { expiresIn: "15m" };',
+      'const options = { signOptions };',
+      '@NestModule({ imports: [Tokens.register(options)], providers: [Provider] })',
+      'export class ScopedModule {}',
+    ].join('\n'),
+    'other.module.ts': [
+      "import { Module } from '@nestjs/common';",
+      "import * as jwt from '@nestjs/jwt';",
+      "import { OtherService } from './main';",
+      '@Module({ imports: [jwt.JwtModule.register({})], providers: [OtherService] })',
+      'export class OtherModule {}',
+    ].join('\n'),
+  };
+  const { typed, untyped } = lintBothWays(source, files);
+  assert.deepEqual(summary(typed, 'jwt-sign-without-expiry'), [[8, false]]);
+  assert.deepEqual(summary(untyped, 'jwt-sign-without-expiry'), [[8, false]]);
+});
+
+test('jwt-sign-without-expiry is contextual when the injected Nest configuration cannot be resolved', () => {
+  const source = [
+    "import { Module } from '@nestjs/common';",
+    "import { JwtService } from '@nestjs/jwt';",
+    'export class Service {',
+    '  constructor(private readonly jwt: JwtService) {}',
+    '  issue() { return this.jwt.sign({ sub: "user" }); }',
+    '}',
+    'const JwtModule = { register: (options: object) => options };',
+    '@Module({ imports: [JwtModule.register({ signOptions: { expiresIn: 60 } })], providers: [Service] })',
+    'export class AuthModule {}',
+  ].join('\n');
+  assert.deepEqual(summary(lint(source, nestJwtTypes), 'jwt-sign-without-expiry'), [[5, true]]);
+});
+
+test('jwt-sign-without-expiry does not rely on an imported default when a local provider overrides JwtService', () => {
+  const source = [
+    "import { Module } from '@nestjs/common';",
+    "import { JwtModule, JwtService as TokenService } from '@nestjs/jwt';",
+    'export class Service {',
+    '  constructor(private readonly jwt: TokenService) {}',
+    '  issue() { return this.jwt.sign({ sub: "user" }); }',
+    '}',
+    '@Module({',
+    '  imports: [JwtModule.register({ signOptions: { expiresIn: 60 } })],',
+    '  providers: [Service, { provide: TokenService, useValue: localService }],',
+    '})',
+    'export class AuthModule {}',
+    'declare const localService: TokenService;',
+  ].join('\n');
+  assert.deepEqual(summary(lint(source, nestJwtTypes), 'jwt-sign-without-expiry'), [[5, true]]);
 });

@@ -80,6 +80,30 @@ test('a rule without a registered description is summarized by the first sentenc
   assert.equal(sarif.runs[0].tool.driver.rules[0].shortDescription.text, 'One.');
 });
 
+test('SARIF registers every security rule and formats security findings at warning or note level', () => {
+  const { securityRules } = require('../../lib/security/rule-ids.cjs');
+  const { descriptionByRule: securityDescriptions } = require('../../lib/security/rule-descriptions.cjs');
+  assert.deepEqual(Object.keys(securityDescriptions).sort(), [...securityRules].sort());
+  const findings = securityRules.map((ruleId) => ({
+    file: 'a.ts',
+    ruleId,
+    message: 'Finding details.',
+  }));
+  findings.push({ ...findings[0], contextualReason: 'reviewed' });
+  const [run] = JSON.parse(formatSarif([{ pillar: 'security', root, report: { findings } }])).runs;
+  for (const { id, shortDescription, helpUri } of run.tool.driver.rules) {
+    assert.match(shortDescription.text, /^[^\n]{10,140}\.$/);
+    assert.equal(shortDescription.text, securityDescriptions[id]);
+    assert.equal(helpUri, `https://github.com/IbrahimHafez1/loadwise#${id}`);
+  }
+  assert.deepEqual(
+    run.tool.driver.rules.map(({ id }) => id),
+    securityRules,
+  );
+  assert.ok(run.results.slice(0, -1).every(({ level }) => level === 'warning'));
+  assert.equal(run.results.at(-1).level, 'note');
+});
+
 test('github escaping follows the workflow command rules', () => {
   assert.equal(escapeData('100%\r\nnext: a,b'), '100%25%0D%0Anext: a,b');
   assert.equal(escapeProperty('a:b,c%\n'), 'a%3Ab%2Cc%25%0A');
@@ -152,7 +176,7 @@ test('check --format sarif prints one run per checker and keeps the exit code', 
   const sarif = JSON.parse(run.stdout);
   assert.deepEqual(
     sarif.runs.map((sarifRun) => sarifRun.automationDetails.id),
-    ['loadwise/performance/', 'loadwise/maintainability/'],
+    ['loadwise/performance/', 'loadwise/maintainability/', 'loadwise/security/'],
   );
   assert.equal(sarif.runs[0].results.length, 3);
   for (const result of sarif.runs[0].results) {

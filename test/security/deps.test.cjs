@@ -362,7 +362,7 @@ test('sec deps --online prints findings with an exit code of 1, and --format jso
   assert.equal(text.code, 1);
   assert.match(
     text.lines[0],
-    /package\.json:4:1 \[dependency-known-vulnerability #[0-9a-f]{12}\] alpha@1\.0\.0 has 1 known vulnerability/,
+    /package\.json:4:1 \[dependency-known-vulnerability #[0-9a-f]{12}\] high: alpha@1\.0\.0 has 1 known vulnerability/,
   );
   assert.match(text.lines.at(-1), /1 file\(s\) checked, 1 finding\(s\)\./);
   const json = await captured(() => depsMain(['--online', '--format', 'json', root], options));

@@ -40,6 +40,32 @@ test('generated-source advisories stay retrievable and contract thresholds are i
   assert.equal(run('--include-contextual').status, 0);
 });
 
+test('ignore globs that leave no sources return a successful empty report', (context) => {
+  const run = workspace(context, {
+    'source.ts': 'export const importedValue = 1;',
+    'loadwise.config.json': JSON.stringify({ ignore: ['source.ts'] }),
+  });
+  const result = run();
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stderr,
+    /every source file matches "ignore" in .*loadwise\.config\.json; no files were left to check/,
+  );
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.scannedFiles, 0);
+  assert.deepEqual(report.findings, []);
+});
+
+test('a project without supported sources still fails when ignore globs match no sources', (context) => {
+  const run = workspace(context, {
+    'notes.txt': 'Nothing to check.',
+    'loadwise.config.json': JSON.stringify({ ignore: ['source.ts'] }),
+  });
+  const result = run();
+  assert.equal(result.status, 2, result.stderr);
+  assert.match(result.stderr, /No supported source files or placement rules/);
+});
+
 test('imports a graph from any language, enforces configured boundaries and validates the evidence', (context) => {
   const files = ['domain/order.ex', 'http/handler.dart'];
   const edges = [

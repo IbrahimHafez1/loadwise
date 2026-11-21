@@ -74,9 +74,11 @@ test('rules off drops a rule, warn keeps it without failing, error keeps it', (c
 
 test('error counts under --fail-on contract while plain findings do not', (context) => {
   const base = { 'tsconfig.json': tsconfig, 'a.ts': slowSource };
-  assert.equal(perfRun(project(context, base), '--fail-on', 'contract').code, 0);
+  const ordinary = perfRun(project(context, base), '--fail-on', 'contract');
+  assert.equal(ordinary.code, 0, ordinary.stderr);
   const promoted = project(context, { ...base, 'loadwise.config.json': { rules: { [perfRules[1]]: 'error' } } });
-  assert.equal(perfRun(promoted, '--fail-on', 'contract').code, 1);
+  const enforced = perfRun(promoted, '--fail-on', 'contract');
+  assert.equal(enforced.code, 1, enforced.stderr);
 });
 
 test('ignore excludes paths from every checker and overrides change rules for matching files', (context) => {
@@ -278,7 +280,9 @@ test('invalid configuration exits 2 and names every bad key', (context) => {
 test('the shipped schema lists exactly the registered rule ids and config keys', () => {
   const schemaFile = path.resolve(__dirname, '../../schema/loadwise.config.schema.json');
   const schema = JSON.parse(fs.readFileSync(schemaFile, 'utf8'));
-  assert.deepEqual([...schema.properties.rules.propertyNames.enum].sort(), [...registeredRuleIds()].sort());
+  const ruleIds = [...registeredRuleIds()].sort();
+  assert.deepEqual([...schema.properties.rules.propertyNames.enum].sort(), ruleIds);
+  assert.deepEqual([...schema.properties.overrides.items.properties.rules.propertyNames.enum].sort(), ruleIds);
   assert.deepEqual(Object.keys(schema.properties).sort(), [
     '$schema',
     'checkers',

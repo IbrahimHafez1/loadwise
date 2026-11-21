@@ -3,6 +3,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { findingsOf, defaultFindingsOf } = require('./exposure-helpers.cjs');
+const { withProgram } = require('../performance/helpers.cjs');
 
 const ruleId = 'secret-in-log';
 const scope = (statement) =>
@@ -75,4 +76,30 @@ test('metadata names, plurals, literals, masked values, numbers and other receiv
 test('a number or boolean typed value is clean even with a secret-like name', () => {
   const source = 'declare const token: number; declare const cookie: boolean;\nconsole.log(token, cookie);';
   assert.equal(findingsOf(ruleId, source).length, 0);
+});
+
+test('only a newly generated credential deliberately printed by a CLI command is skipped', () => {
+  const source = [
+    "import { CommandRunner } from 'nest-commander';",
+    'declare const service: { generateApiKeyToken(): Promise<{ token: string }> };',
+    'class KeyCommand extends CommandRunner {',
+    '  private logger: any;',
+    '  async run(receivedToken: { token: string }) {',
+    '    const generated = await service.generateApiKeyToken();',
+    '    this.logger.log(generated.token);',
+    '    this.logger.error(receivedToken.token);',
+    '  }',
+    '}',
+  ].join('\n');
+  const filename = 'create-key.command.ts';
+  const findings = withProgram('', { [filename]: source }, (program) => {
+    const command = program.getSourceFiles().find((file) => file.fileName.endsWith(filename));
+    return require('../../lib/security/analyze.cjs')
+      .analyzeFile(program, command)
+      .filter((finding) => finding.ruleId === ruleId);
+  });
+  assert.deepEqual(
+    findings.map(({ line }) => line),
+    [8],
+  );
 });

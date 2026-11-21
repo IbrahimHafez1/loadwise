@@ -334,4 +334,54 @@ describe('loadwise perf contracts: command line and check', () => {
       ['api-removed-operation'],
     );
   });
+
+  test('check reports child project contracts relative to the invoking directory in every format', (context) => {
+    const child = 'services/api';
+    const contract = `${child}/openapi.json`;
+    const next = JSON.parse(openApi());
+    delete next.paths['/users'].delete;
+    const root = repository(
+      context,
+      {
+        [contract]: openApi(),
+        [`${child}/tsconfig.json`]: '{"include":["*.ts"]}',
+        [`${child}/a.ts`]: 'export const answer = 1;\n',
+      },
+      { [contract]: JSON.stringify(next, null, 2) },
+    );
+    const direct = contracts(path.join(root, child));
+    assert.equal(direct.code, 1, direct.stderr);
+    const [finding] = direct.report.findings;
+    assert.equal(finding.file, 'openapi.json');
+
+    function check(...args) {
+      const run = spawnSync(process.execPath, [BIN, 'check', child, '--changed-since', 'HEAD', ...args], {
+        cwd: root,
+        encoding: 'utf8',
+      });
+      assert.equal(run.status, 1, run.stderr);
+      return run.stdout;
+    }
+
+    const report = JSON.parse(check('--json'));
+    assert.deepEqual(report.performance.findings, [{ ...finding, file: contract }]);
+    const sarif = JSON.parse(check('--format', 'sarif'));
+    const [result] = sarif.runs[0].results;
+    assert.equal(result.locations[0].physicalLocation.artifactLocation.uri, contract);
+    assert.match(check(), /^services\/api\/openapi\.json:\d+:\d+ /m);
+  });
+
+  test('combined source checkers still compare API contracts in a project without a TS config', (context) => {
+    const next = JSON.parse(openApi());
+    delete next.paths['/users'].delete;
+    const root = repository(context, { 'openapi.json': openApi() }, { 'openapi.json': JSON.stringify(next, null, 2) });
+    const run = spawnSync(process.execPath, [BIN, 'check', '--only', 'perf,sec', '--changed-since', 'HEAD', '--json'], {
+      cwd: root,
+      encoding: 'utf8',
+    });
+    assert.equal(run.status, 1, run.stderr);
+    const { performance, security } = JSON.parse(run.stdout);
+    assert.equal(performance.findings[0].ruleId, 'api-removed-operation');
+    assert.equal(security, null);
+  });
 });

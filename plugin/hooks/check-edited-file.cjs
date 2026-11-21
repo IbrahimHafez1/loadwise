@@ -88,6 +88,7 @@ function main() {
   const timeoutMs = Number(process.env.LOADWISE_HOOK_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS;
   const deadline = Date.now() + timeoutMs;
   const perfReport = runLoadwise(local.binary, ['perf', relativeFile, '--json'], local.projectRoot, deadline);
+  const secReport = runLoadwise(local.binary, ['sec', relativeFile, '--json'], local.projectRoot, deadline);
   // maint has no explicit-file mode, so scan the uncommitted changes and keep this file's findings.
   const maintReport = runLoadwise(
     local.binary,
@@ -98,6 +99,7 @@ function main() {
   const findings = [
     ...findingsFor(perfReport, relativeFile, 'perf'),
     ...findingsFor(maintReport, relativeFile, 'maint'),
+    ...findingsFor(secReport, relativeFile, 'sec'),
   ];
   if (findings.length === 0) return;
 

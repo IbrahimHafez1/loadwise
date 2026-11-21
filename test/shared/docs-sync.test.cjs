@@ -63,6 +63,7 @@ test('every rule id has exactly one README anchor', () => {
   const ruleIds = [
     ...Object.keys(require('../../lib/performance/rule-ids.cjs').impactByRule),
     ...Object.keys(require('../../lib/maintainability/rule-ids.cjs').impactByRule),
+    ...require('../../lib/security/rule-ids.cjs').securityRules,
   ].filter((ruleId) => ruleId !== 'syntax-error');
   const anchorCount = (ruleId) => readme.split(`<a id="${ruleId}"></a>`).length - 1;
   assert.deepEqual(

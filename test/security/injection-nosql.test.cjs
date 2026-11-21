@@ -143,7 +143,7 @@ test('the $eq fix wraps a filter value and a shorthand property, and the fixed c
   );
 });
 
-test('a project depending on express-mongo-sanitize makes the finding contextual', (context) => {
+test('only registered Express middleware makes a NoSQL finding contextual', (context) => {
   const files = {
     'src.ts': route('User.find(req.query);').replace("'./models/user'", "'./models/user.js'"),
     'models/user.ts': userModel['models/user.ts'],
@@ -151,7 +151,20 @@ test('a project depending on express-mongo-sanitize makes the finding contextual
     ...stubs.express,
     ...mongoose,
   };
-  const { findings } = scanWithFixes(context, files, { analyzers: withSecurity });
-  const [finding] = findings.filter((item) => item.ruleId === ruleId);
-  assert.match(finding.contextualReason, /express-mongo-sanitize/);
+  function reason(setup) {
+    const { findings } = scanWithFixes(context, { ...files, 'setup.ts': setup }, { analyzers: withSecurity });
+    return findings.find((finding) => finding.ruleId === ruleId).contextualReason;
+  }
+  const setup = [
+    "import express from 'express';",
+    "import sanitize from 'express-mongo-sanitize';",
+    'const app = express();',
+  ].join('\n');
+  assert.equal(reason(setup), undefined);
+  assert.equal(
+    reason(setup + '\nconst unrelated = { use(callback: unknown) {} };\nunrelated.use(sanitize());'),
+    undefined,
+  );
+  assert.equal(reason(setup + '\napp.use(sanitize.sanitize({}));'), undefined);
+  assert.match(reason(setup + '\napp.use(sanitize());'), /express-mongo-sanitize/);
 });

@@ -69,6 +69,26 @@ test('numeric conversions, allowlist guards and String() for NoSQL sanitize', ()
   assert.ok(traced(expressRoute('sink(req.body.n);'), stubs.express, 'nosql'));
 });
 
+test('string method aliases sanitize NoSQL values while object methods of the same name do not', () => {
+  const stringMethod = expressRoute('const value = req.body.name.trim(); sink(value);');
+  assert.equal(Boolean(traced(stringMethod, stubs.express, 'nosql')), false);
+  assert.equal(traced(stringMethod).label, 'req.body.name');
+  const objectMethod = expressRoute('sink((req.body as { slice(): object }).slice());');
+  assert.ok(traced(objectMethod, stubs.express, 'nosql'));
+});
+
+test('regex escaping sanitizes only the escaped part and only for regex sinks', () => {
+  const metacharacters = /[.*+?^${}()|[\]\\]/g;
+  const preamble = `const escapePattern = (text: string) => text.replace(${metacharacters}, '\\\\$&');`;
+  const source = expressRoute('const escaped = escapePattern(req.query.term); sink(escaped);', preamble);
+  assert.equal(Boolean(traced(source, stubs.express, 'regex')), false);
+  assert.equal(traced(source).label, 'req.query.term');
+  const mixed = expressRoute('sink(escapePattern(req.query.term) + req.query.suffix);', preamble);
+  assert.equal(traced(mixed, stubs.express, 'regex').label, 'req.query.suffix');
+  const partial = expressRoute("sink(req.query.term.replace(/[a-z]/g, '\\\\$&'));");
+  assert.equal(traced(partial, stubs.express, 'regex').label, 'req.query.term');
+});
+
 test('a spread request body is whole and an unknown sink kind is rejected', () => {
   assert.equal(traced(expressRoute('sink({ ...req.body });'), stubs.express, 'mass-assignment').whole, true);
   assert.throws(() => traced(expressRoute('sink(req.body);'), stubs.express, 'xpath'), /Unknown sink kind: xpath/);
@@ -84,6 +104,14 @@ test('callers are followed for two hops and a third hop stays silent', () => {
     'outer',
   );
   assert.equal(traced(threeHops), undefined);
+});
+
+test('the trace keeps a request field read after crossing a call boundary', () => {
+  const source = expressRoute('format(req.body);', 'function format(payload: any) { sink(payload.profile.name); }');
+  const result = traced(source);
+  assert.equal(result.label, 'req.body.profile.name');
+  assert.equal(result.hops, 1);
+  assert.equal(result.steps.at(-1).text, 'payload.profile.name');
 });
 
 test('urlControl tells a controlled path from a controlled host', () => {
