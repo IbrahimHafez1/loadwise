@@ -318,6 +318,8 @@ Place `backend-perf.policy.json` beside the selected project config, or pass `--
 | <a id="floating-promise"></a>`floating-promise`                               | A promise-returning call is a bare statement in an async function or request handler, or `array.forEach(async ...)` runs awaits nobody waits for. Returning, awaiting, using `void`, or attaching a rejection callback suppresses the bare-call warning. Omitted or nullish callbacks do not handle rejections. Test files and helpers listed under `fireAndForget` in the policy are skipped. |
 | <a id="discarded-error-result"></a>`discarded-error-result`                   | A call discards a typed `fp-ts` `Either` or `neverthrow` `Result`. This includes async calls, standalone `await` and explicit `void`. Check the failure branch or return the result to a caller that handles it.                                                                                                                                                                               |
 | <a id="promise-return-escapes-catch"></a>`promise-return-escapes-catch`       | An async function returns a typed promise directly from the `try` block of a `try`/`catch`. A rejection can bypass that catch. Use `return await` when the catch owns the failure.                                                                                                                                                                                                             |
+| <a id="return-in-finally"></a>`return-in-finally`                             | A return in `finally` can replace an earlier return value or suppress a thrown error. Keep cleanup in `finally` and return from `try`, `catch`, or after the statement.                                                                                                                                                                                                                        |
+| <a id="return-newline"></a>`return-newline`                                   | A line break immediately after `return` ends the statement before an apparent object or parenthesized return value. Start the expression on the same line as `return`.                                                                                                                                                                                                                         |
 
 The example policy declares that `fetchUser` and `fetchPosts` from `@app/reads` may start together. Only group operations whose ordering, shared connections, rate limits and failure effects your project has reviewed. With that declaration, the checker can flag the pair below. Ordinary adjacent calls such as `saveSettings()` followed by `reloadSettings()` carry no such contract.
 
@@ -553,6 +555,8 @@ Every finding carries an impact level. `--min-impact <low|medium|high|critical>`
 | `floating-promise`                    | high     |
 | `discarded-error-result`              | high     |
 | `promise-return-escapes-catch`        | high     |
+| `return-in-finally`                   | high     |
+| `return-newline`                      | high     |
 | `http-call-without-timeout`           | high     |
 | `index-missing-filter`                | high     |
 | `index-missing-foreign-key`           | high     |

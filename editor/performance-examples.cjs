@@ -243,6 +243,18 @@ const standaloneExamples = {
     code: 'try {\n  return await loadProfile();\n} catch (error) {\n  return respondToFailure(error);\n}',
     note: 'Await inside the protected try block when its catch is responsible for handling the rejection.',
   },
+  'return-in-finally': {
+    language: 'javascript',
+    before: 'try {\n  return readValue();\n} finally {\n  return release();\n}',
+    code: 'try {\n  return readValue();\n} finally {\n  release();\n}',
+    note: 'Keep cleanup in finally so the caller receives the original return value or error.',
+  },
+  'return-newline': {
+    language: 'javascript',
+    before: 'function read() {\n  return\n    ({ value: 1 });\n}',
+    code: 'function read() {\n  return { value: 1 };\n}',
+    note: 'Start the expression on the same line as return to prevent automatic semicolon insertion.',
+  },
   'floating-promise': {
     language: 'javascript',
     before: 'sendWelcomeEmail(user.email);',
