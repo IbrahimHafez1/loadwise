@@ -28,17 +28,20 @@ async function run() {
   if (upload || annotate) args.push('--format', upload ? 'sarif' : 'github');
   args.push('--', LOADWISE_PATH || '.');
 
-  function actionFormats(format, entries) {
-    if (upload) {
-      const directory = fs.mkdtempSync(path.join(RUNNER_TEMP, 'loadwise-report-'));
-      const sarifFile = path.join(directory, 'loadwise.sarif');
-      fs.writeFileSync(sarifFile, renderReports(format, entries));
-      fs.appendFileSync(GITHUB_OUTPUT, `sarif-file=${sarifFile}\n`);
-    }
+  let reportsForUpload;
+  function actionFormats(_format, entries) {
+    if (upload && entries.some(({ report }) => report)) reportsForUpload = entries;
     return annotate ? renderReports('github', entries) : '';
   }
 
-  return runCheck(args, undefined, actionFormats);
+  const exitCode = await runCheck(args, undefined, actionFormats);
+  if (reportsForUpload && exitCode !== 2) {
+    const directory = await fs.promises.mkdtemp(path.join(RUNNER_TEMP, 'loadwise-report-'));
+    const sarifFile = path.join(directory, 'loadwise.sarif');
+    await fs.promises.writeFile(sarifFile, renderReports('sarif', reportsForUpload));
+    await fs.promises.appendFile(GITHUB_OUTPUT, `sarif-file=${sarifFile}\n`);
+  }
+  return exitCode;
 }
 
 run()

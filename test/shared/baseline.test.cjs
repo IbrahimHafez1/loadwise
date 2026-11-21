@@ -169,3 +169,72 @@ test('perf reads and writes only its own section', (context) => {
   assert.equal(run.code, 0, run.stderr);
   assert.match(run.stdout, /3 baseline findings hidden\./);
 });
+
+test('an explicit file scan still hides accepted findings and leaves stale counts unknown', (context) => {
+  const root = project(context, { 'tsconfig.json': tsconfig, 'a.ts': slowSource, 'b.ts': slowSource });
+  const written = loadwise(root, 'perf', '--write-baseline');
+  assert.equal(written.code, 0, written.stderr);
+  const partial = loadwise(root, 'perf', 'a.ts', '--baseline', '--json');
+  assert.equal(partial.code, 0, partial.stderr);
+  const report = JSON.parse(partial.stdout);
+  assert.equal(report.baselineHidden, 3);
+  assert.equal(report.baselineStale, null);
+  const text = loadwise(root, 'perf', 'a.ts', '--baseline').stdout;
+  assert.doesNotMatch(text, /fixed findings|run --write-baseline/i);
+});
+
+test('changed-line scans leave stale counts unknown for all three checkers', (context) => {
+  const root = project(context, {
+    'tsconfig.json': tsconfig,
+    'a.ts': slowSource,
+    'b.ts': complexFunction('dispatch'),
+    Dockerfile: 'FROM node:22\n',
+  });
+  function git(...args) {
+    const run = spawnSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true });
+    assert.equal(run.status, 0, run.stderr);
+  }
+  git('init', '--quiet');
+  git('add', '.');
+  git(
+    '-c',
+    'user.name=fixture',
+    '-c',
+    'user.email=fixture@example.test',
+    '-c',
+    'commit.gpgSign=false',
+    'commit',
+    '-qm',
+    'fixture',
+  );
+  const written = loadwise(root, 'check', '--write-baseline');
+  assert.equal(written.code, 0, written.stderr);
+  fs.appendFileSync(path.join(root, 'a.ts'), '\n// A change outside the recorded findings.\n');
+  git('add', 'a.ts');
+  for (const scope of [['--staged'], ['--changed-since', 'HEAD']]) {
+    const scan = loadwise(root, 'check', '--baseline', '--json', ...scope);
+    assert.equal(scan.code, 0, scan.stderr);
+    for (const report of Object.values(JSON.parse(scan.stdout))) {
+      assert.equal(report.baselineHidden, 0);
+      assert.equal(report.baselineStale, null);
+    }
+  }
+});
+
+test('scanning one workspace keeps findings in the other workspace out of the stale count', (context) => {
+  const root = project(context, { 'package.json': JSON.stringify({ workspaces: ['packages/*'] }) });
+  for (const name of ['first', 'second']) {
+    const directory = path.join(root, 'packages', name);
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(path.join(directory, 'package.json'), JSON.stringify({ name }));
+    fs.writeFileSync(path.join(directory, 'tsconfig.json'), tsconfig);
+    fs.writeFileSync(path.join(directory, 'index.ts'), slowSource);
+  }
+  const written = loadwise(root, 'check', '--only', 'perf', '--write-baseline');
+  assert.equal(written.code, 0, written.stderr);
+  const partial = loadwise(root, 'check', '--only', 'perf', '--workspace', 'first', '--baseline', '--json');
+  assert.equal(partial.code, 0, partial.stderr);
+  const { performance } = JSON.parse(partial.stdout);
+  assert.equal(performance.baselineHidden, 3);
+  assert.equal(performance.baselineStale, null);
+});

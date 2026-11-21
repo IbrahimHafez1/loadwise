@@ -72,6 +72,24 @@ test('snapshots replace stale markers and discard traversal paths and invalid so
   assert.equal(byUri.size, 0);
 });
 
+test('project rule levels override default contract severity unless an editor severity is set', () => {
+  const { vscode, collection, root, uri } = fixture();
+  const site = { file: 'app.py', line: 1, column: 1, message: 'Review this operation.' };
+  const findings = [
+    { ...site, ruleId: 'data-access-boundary' },
+    { ...site, ruleId: 'file-placement', level: 'warn' },
+    { ...site, ruleId: 'deep-nesting', level: 'error' },
+  ];
+  const { Error: error, Warning: warning } = vscode.DiagnosticSeverity;
+  publish(vscode, collection, root, 'loadwise maint', findings);
+  assert.deepEqual(
+    collection.get(uri).map((diagnostic) => diagnostic.severity),
+    [error, warning, error],
+  );
+  publish(vscode, collection, root, 'loadwise maint', findings, { severity: 'warning' });
+  assert.ok(collection.get(uri).every((diagnostic) => diagnostic.severity === warning));
+});
+
 function getHover(vscode, document, diagnostic) {
   vscode.MarkdownString = class {
     parts = [];

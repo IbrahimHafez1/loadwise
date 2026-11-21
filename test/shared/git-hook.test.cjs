@@ -8,6 +8,7 @@ const path = require('node:path');
 const test = require('node:test');
 
 const bin = path.resolve(__dirname, '../../bin/loadwise.cjs');
+require('./history-test-state.cjs').isolateHistory();
 const blockMarker = '# >>> loadwise pre-commit';
 const hasSh = spawnSync('sh', ['-c', 'exit 0']).status === 0;
 

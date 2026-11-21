@@ -124,6 +124,17 @@ test('branded scalar IDs and satisfies annotations retain their original provena
   );
 });
 
+test('only static promise method names are known to preserve the scoped query', () => {
+  assert.deepEqual(
+    flagged([
+      'const then = "items";',
+      'db.invoice.findMany({ where: { tenantId } })[then]();',
+      'db.invoice.findMany({ where: { tenantId } })["then"](() => {});',
+    ]),
+    [2],
+  );
+});
+
 test('marks absent, unverifiable or non-positive proof for review', () => {
   const cases = [
     'db.invoice.findMany();',

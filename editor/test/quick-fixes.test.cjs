@@ -234,6 +234,40 @@ test('apply all fixes builds one edit and skips stale and overlapping fixes', as
   assert.equal(fixAll.edit.operations.length, 2, 'the fix-all action carries its edit for code actions on save');
 });
 
+test('bulk and on-save actions reserve review-only edits for explicit individual Apply', async () => {
+  const editor = fakeEditor(new Map([[ordersFile, 'one();\ntwo();']]));
+  const safe = fixed(1, 'one();', 'ONE();');
+  const reviewed = fixed(2, 'two();', 'TWO();');
+  reviewed.fix.requiresReview = true;
+  const duplicate = fixed(2, 'two();', 'TWO();');
+  publish(editor.vscode, editor.collection, root, 'loadwise perf', [safe, reviewed, duplicate]);
+  const provider = registerQuickFixes(editor.vscode, { diagnosticsFor: (uri) => editor.byUri.get(uri) ?? [] }).at(-1);
+  const document = { uri: ordersFile };
+  const line = new Range(1, 0, 1, 0);
+  await editor.commands.get('loadwise.applyAllFixes')(ordersFile);
+  assert.deepEqual(
+    editor.appliedEdits[0].operations.map(({ text }) => text),
+    ['ONE();'],
+  );
+  assert.match(editor.messages[0][1], /1 fix\(es\) require individual review/);
+  const onSave = { only: editor.vscode.CodeActionKind.SourceFixAll };
+  const [action] = await provider.provideCodeActions(document, line, onSave);
+  assert.deepEqual(
+    action.edit.operations.map(({ text }) => text),
+    ['ONE();'],
+  );
+
+  publish(editor.vscode, editor.collection, root, 'loadwise perf', [reviewed]);
+  assert.deepEqual(await provider.provideCodeActions(document, line, onSave), []);
+  const [individual] = provider.provideCodeActions(document, line, {});
+  assert.equal(individual.isPreferred, false);
+  await editor.commands.get(individual.command.command)(...individual.command.arguments);
+  assert.deepEqual(
+    editor.appliedEdits[1].operations.map(({ text }) => text),
+    ['TWO();'],
+  );
+});
+
 test('a fix that creates a file applies with its other changes, and never overwrites an existing file', async () => {
   const migration = path.join(root, 'migrations', '001_orders_index.sql');
   const files = new Map([[ordersFile, 'await repo.find({ where: { customerId } });']]);

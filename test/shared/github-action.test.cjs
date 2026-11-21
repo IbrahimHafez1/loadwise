@@ -36,6 +36,7 @@ function fixture(context) {
   const invocationLog = path.join(directory, 'invocations');
   const outputFile = path.join(directory, 'step-outputs');
   const observer = path.join(directory, 'observe.cjs');
+  fs.mkdirSync(path.join(directory, '.git'));
   fs.mkdirSync(project);
   fs.writeFileSync(
     observer,
@@ -46,6 +47,7 @@ function fixture(context) {
   fs.copyFileSync(path.join(repository, 'examples/slow.ts'), path.join(project, 'slow.ts'));
   fs.writeFileSync(path.join(project, 'tsconfig.json'), '{"include":["*.ts"]}');
   return {
+    project,
     run(overrides = {}) {
       const result = runNode(runner, [], {
         cwd: directory,
@@ -123,4 +125,31 @@ test('invalid options report exit code 2 and no SARIF to upload', (context) => {
   assert.match(stderr, /Unknown --only name/);
   assert.deepEqual(outputs, { 'exit-code': '2' });
   assert.deepEqual(invocations, []);
+});
+
+test('a checker failure preserves its exit code and withholds incomplete SARIF', (context) => {
+  const actionRun = fixture(context);
+  fs.writeFileSync(path.join(actionRun.project, 'tsconfig.json'), '{');
+  const { outputs } = actionRun.run({ LOADWISE_CHECKERS: 'perf,maint' });
+  assert.deepEqual(outputs, { 'exit-code': '2' });
+});
+
+test('a skipped checker exits successfully without scheduling an empty SARIF upload', (context) => {
+  const actionRun = fixture(context);
+  const directory = path.join(actionRun.project, 'docs');
+  fs.mkdirSync(directory);
+  const { outputs } = actionRun.run({ LOADWISE_PATH: directory });
+  assert.deepEqual(outputs, { 'exit-code': '0' });
+});
+
+test('a completed clean scan uploads its empty results', (context) => {
+  const actionRun = fixture(context);
+  fs.writeFileSync(path.join(actionRun.project, 'slow.ts'), 'export const version = 1;\n');
+  const { outputs } = actionRun.run();
+  assert.equal(outputs['exit-code'], '0');
+  const sarif = JSON.parse(fs.readFileSync(outputs['sarif-file'], 'utf8'));
+  assert.deepEqual(
+    sarif.runs.map(({ results }) => results),
+    [[]],
+  );
 });

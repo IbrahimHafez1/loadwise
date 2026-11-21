@@ -46,6 +46,31 @@ function project(context, text = source) {
   return { root, run, scan };
 }
 
+test('automatic mode and changed-lines bulk guidance reserve a reviewed fix for individual application', async (context) => {
+  const { applyFixes, applyChosenFixes } = require('../../lib/maintainability/fix-cli.cjs');
+  const { printChangedFindings } = require('../../lib/maintainability/changed-output.cjs');
+  const root = tempRoot(context);
+  const file = 'work.js';
+  const filename = path.join(root, file);
+  fs.writeFileSync(filename, 'original();\n');
+  const finding = {
+    id: 'reviewed',
+    ruleId: 'deep-control-flow',
+    file,
+    line: 1,
+    fix: { requiresReview: true, changes: [{ file, line: 1, before: 'original();', after: 'reviewed();' }] },
+  };
+  const log = context.mock.method(console, 'log', () => {});
+  printChangedFindings([finding, { ...finding, id: 'other' }], 'npx loadwise maint');
+  const output = log.mock.calls.map((call) => call.arguments[0]).join('\n');
+  assert.match(output, /--fix --only reviewed/);
+  assert.doesNotMatch(output, /^Fix all:/m);
+  assert.equal(await applyFixes([finding], root, { all: true }), 0);
+  assert.equal(fs.readFileSync(filename, 'utf8'), 'original();\n');
+  assert.equal(applyChosenFixes([finding], [finding.id], root, { json: true }), 0);
+  assert.equal(fs.readFileSync(filename, 'utf8'), 'reviewed();\n');
+});
+
 test('ids survive a line inserted above the finding and findings carry fixable', (context) => {
   const { root, scan } = project(context);
   const before = scan();

@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { lint } = require('./helpers.cjs');
+const { scanWithFixes } = require('./site-fix-helpers.cjs');
 
 const ruleId = 'promise-return-escapes-catch';
 const declarations = `declare function loadValue(): Promise<string>;
@@ -14,6 +15,33 @@ declare function releaseResource(): void;
 function reported(source) {
   return lint(declarations + source).filter((finding) => finding.ruleId === ruleId);
 }
+
+test('reviewed return await catches the rejection and withholds edits across cleanup boundaries', async (context) => {
+  const source = `async function respond(load: () => Promise<string>) {
+    try {
+      return load();
+    } catch {
+      return "handled";
+    }
+  }`;
+  const cleanup = `async function cleanup(load: () => Promise<string>, release: () => void) {
+    try { return load(); } catch { return "handled"; } finally { release(); }
+  }`;
+  const findings = scanWithFixes(context, { 'src.ts': source + '\n' + cleanup }).findings.filter(
+    (finding) => finding.ruleId === ruleId,
+  );
+  assert.equal(findings.length, 2);
+  assert.equal(findings[0].fix.requiresReview, true);
+  assert.equal(findings[1].fix, undefined);
+  const [change] = findings[0].fix.changes;
+  const fixed = source.replace(change.before, () => change.after);
+  const load = (text) => new Function(require('typescript').transpile(text) + '\nreturn respond;')();
+  const failure = () => Promise.reject(new Error('unavailable'));
+  await assert.rejects(load(source)(failure), /unavailable/);
+  assert.equal(await load(fixed)(failure), 'handled');
+  assert.equal(await load(fixed)(() => Promise.resolve('ok')), 'ok');
+  assert.deepEqual(reported(fixed), []);
+});
 
 test('returns of standard promises and PromiseLike values can bypass a local catch', () => {
   const findings = reported(`async function load() {

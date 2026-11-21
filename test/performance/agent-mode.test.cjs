@@ -74,6 +74,95 @@ test('--fix --only applies just the listed fix without a terminal', (context) =>
   );
 });
 
+test('fix commands reuse the JS engine when auto falls back on a removed compiler option', (context) => {
+  const { root, run } = project(context);
+  fs.writeFileSync(path.join(root, 'tsconfig.json'), '{"compilerOptions":{"baseUrl":"."},"files":["slow.ts"]}');
+  const report = run(['-p', 'tsconfig.json']);
+  assert.equal(report.status, 1, report.stderr);
+  const command = report.stdout.match(/^Fix all: npx loadwise perf (.+)$/m)?.[1];
+  assert.match(command ?? '', /--engine js --fix --only /);
+  const fixed = run(command.split(' '));
+  assert.equal(fixed.status, 0, fixed.stdout + fixed.stderr);
+  assert.doesNotMatch(fixed.stderr, /cannot load this project/);
+});
+
+test('the suggested lookup fix preserves strict equality and first-match results', (context) => {
+  const { root, run, scan } = project(context);
+  const { transpileModule, ModuleKind } = require('typescript');
+  const names = (moduleName) => {
+    const source = fs.readFileSync(path.join(root, 'slow.ts'), 'utf8');
+    const filename = path.join(root, moduleName);
+    fs.writeFileSync(
+      filename,
+      transpileModule(source, { compilerOptions: { module: ModuleKind.CommonJS } }).outputText,
+    );
+    const ids = [NaN, -0, 7, 99];
+    const customers = [
+      { id: NaN, name: 'unmatchable' },
+      { id: 0, name: 'zero' },
+      { id: 7, name: 'first' },
+      { id: 7, name: 'duplicate' },
+    ];
+    return require(filename).visibleNames(
+      ids.map((customerId) => ({ customerId })),
+      customers,
+      { body: { allowed: ids } },
+    );
+  };
+  const before = names('original.cjs');
+  assert.deepEqual(before, ['Unknown', 'zero', 'first', 'Unknown']);
+  const lookup = scan().find(({ ruleId }) => ruleId === 'array-repeated-find');
+  const result = run(['slow.ts', '--fix', '--only', lookup.id]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(names('fixed.cjs'), before);
+});
+
+test('a printed command reruns the same scan when its file and policy paths contain shell characters', (context) => {
+  const { root, run } = project(context);
+  const filename = "customer's $orders & team’s history.ts";
+  fs.renameSync(path.join(root, 'slow.ts'), path.join(root, filename));
+  fs.writeFileSync(
+    path.join(root, 'review policy.json'),
+    '{"parallelReads":[{"from":"app/reads","exports":["readA","readB"]}]}',
+  );
+  fs.writeFileSync(path.join(root, 'custom config.json'), '{}');
+  fs.writeFileSync(path.join(root, 'schema.json'), JSON.stringify({ version: 1, dialect: 'postgres', tables: {} }));
+  const inputs = [
+    filename,
+    '--policy',
+    'review policy.json',
+    '--loadwise-config',
+    'custom config.json',
+    '--schema',
+    'schema.json',
+    '--engine',
+    'js',
+  ];
+  const report = run(inputs);
+  assert.equal(report.status, 1, report.stderr);
+  const command = report.stdout.match(/^Fix all: npx loadwise (.+)$/m)?.[1];
+  assert.ok(command, report.stdout);
+  for (const option of ['--policy', '--loadwise-config', '--schema', '--engine js'])
+    assert.ok(command.includes(option));
+  const windows = process.platform === 'win32';
+  const shell = windows ? 'powershell.exe' : '/bin/sh';
+  const shellArgs = windows
+    ? [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        '& $env:LOADWISE_TEST_NODE $env:LOADWISE_TEST_CLI ' + command + '\nexit $LASTEXITCODE',
+      ]
+    : ['-c', '"$LOADWISE_TEST_NODE" "$LOADWISE_TEST_CLI" ' + command];
+  const fixed = spawnSync(shell, shellArgs, {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, LOADWISE_TEST_NODE: process.execPath, LOADWISE_TEST_CLI: bin },
+  });
+  assert.equal(fixed.status, 0, fixed.stderr);
+  assert.equal(run(inputs).status, 0);
+});
+
 test('--fix --only reports an unknown id and exits 2', (context) => {
   const { run, scan } = project(context);
   const [chosen] = scan();
@@ -109,6 +198,39 @@ test('--fix --only treats a change made by an earlier id in the run as success',
     alreadyApplied: [{ id: ids[1], status: 'already applied' }],
     failed: [],
   });
+});
+
+test('Prisma schema findings from a workspace scan can be fixed and rescanned in that workspace', (context) => {
+  const root = tempRoot(context);
+  fs.writeFileSync(path.join(root, 'package.json'), '{"workspaces":["packages/*"]}');
+  const schemaFixture = path.join(__dirname, 'fixtures/schema/prisma-shop/prisma/schema.prisma');
+  for (const name of ['alpha', 'beta']) {
+    const directory = path.join(root, 'packages', name);
+    fs.mkdirSync(path.join(directory, 'prisma'), { recursive: true });
+    fs.writeFileSync(path.join(directory, 'package.json'), JSON.stringify({ name }));
+    fs.writeFileSync(path.join(directory, 'tsconfig.json'), '{"files":["index.ts"]}');
+    fs.writeFileSync(path.join(directory, 'index.ts'), 'export const value = 1;');
+    fs.copyFileSync(schemaFixture, path.join(directory, 'prisma/schema.prisma'));
+  }
+  const alpha = path.join(root, 'packages/alpha');
+  const run = (cwd, ...args) => spawnSync(process.execPath, [bin, ...args], { cwd, encoding: 'utf8' });
+  const scan = (cwd, ...args) => {
+    const result = run(cwd, ...args, '--json');
+    assert.ok([0, 1].includes(result.status), result.stderr);
+    return JSON.parse(result.stdout);
+  };
+  const selection = ['-p', '.', '--workspace', 'alpha'];
+  const combined = scan(root, 'check', '--only', 'perf,sec', '--workspace', 'alpha').performance;
+  assert.equal(combined.findings.length, 1);
+  const [finding] = combined.findings;
+  assert.equal(finding.ruleId, 'index-missing-foreign-key');
+  assert.ok(finding.fixable);
+  assert.equal(scan(alpha, 'perf').findings.length, 1);
+  assert.equal(scan(root, 'perf', ...selection).findings[0]?.id, finding.id);
+  const fixed = run(root, 'perf', ...selection, '--fix', '--only', finding.id);
+  assert.equal(fixed.status, 0, fixed.stdout + fixed.stderr);
+  assert.equal(scan(alpha, 'perf').findings.length, 0);
+  assert.equal(scan(root, 'perf', '--workspace', 'beta').findings.length, 1);
 });
 
 test('migration findings carry ids in JSON and text', (context) => {

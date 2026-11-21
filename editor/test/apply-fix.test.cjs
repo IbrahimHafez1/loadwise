@@ -35,6 +35,16 @@ test('edited code refuses the stale fix instead of guessing', () => {
   assert.match(applyChangesToText(edited, [change]).error, /changed since the scan/);
 });
 
+test('a shifted fix with two matching source blocks asks for a rescan', () => {
+  const change = { line: 2, before: 'read();', after: 'await read();' };
+  assert.match(applyChangesToText('read();\n// changed\nread();', [change]).error, /changed since the scan/);
+});
+
+test('a replacement beside the same rewritten line still applies to the flagged line', () => {
+  const change = { line: 2, before: 'read();', after: 'await read();' };
+  assert.equal(applyChangesToText('await read();\nread();', [change]).text, 'await read();\nawait read();');
+});
+
 test('an insertion that is already present is not inserted twice', () => {
   const entity = ['@Entity()', 'export class Order {}'].join('\n');
   const change = { line: 1, before: '@Entity()', after: "@Index(['status'])\n@Entity()" };

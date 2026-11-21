@@ -385,6 +385,26 @@ test('Prisma scope without an in-scope value of that name gets no fix', (context
   assert.equal(finding.fix, undefined);
 });
 
+test('scope fixes require an initialized binding from the configured authorization helper', (context) => {
+  const source = [
+    "import { PrismaClient } from '@prisma/client';",
+    "import { requireTenantId as currentTenant } from '@app/auth';",
+    'const db = new PrismaClient();',
+    'export function list(input: string) {',
+    '  const tenantId = currentTenant();',
+    '  { db.invoice.findMany({}); }',
+    '  { const tenantId = String(input); db.invoice.findMany({}); }',
+    '  { db.invoice.findMany({}); const tenantId = currentTenant(); }',
+    '  for (const tenantId of [input]) { db.invoice.findMany({}); }',
+    '}',
+  ].join('\n');
+  const findings = findingsFor(context, 'prisma-scope-unverified', source, scopeStubs, prismaPolicy);
+  assert.deepEqual(
+    findings.map((finding) => Boolean(finding.fix)),
+    [true, false, false, false],
+  );
+});
+
 const drizzleStubs = {
   'node_modules/drizzle-orm/pg-core/db.d.ts': `
     export class Query extends Promise<unknown> {
@@ -435,7 +455,7 @@ test('Drizzle scope adds eq(table.field, value) to the query and imports what it
   assert.equal(findingsFor(context, 'drizzle-scope-unverified', fixed, drizzleStubs, drizzlePolicy).length, 0);
 });
 
-test('Drizzle same-boolean update skips rows that already hold the value', (context) => {
+test('Drizzle same-boolean update skips rows that already hold the value only after review', async (context) => {
   const source = [
     "import type { Database } from 'drizzle-orm/pg-core/db';",
     "import { invoices } from '@app/schema';",
@@ -452,6 +472,9 @@ test('Drizzle same-boolean update skips rows that already hold the value', (cont
     ),
   );
   assert.match(finding.fix.note, /affected-row count/);
+  assert.equal(finding.fix.requiresReview, true);
+  await require('../../lib/performance/fix-cli.cjs').applyFixes([finding], { all: true });
+  assert.equal(fs.readFileSync(finding.file, 'utf8'), source);
   assert.equal(findingsFor(context, 'drizzle-unfiltered-write', fixed, drizzleStubs).length, 0);
 });
 

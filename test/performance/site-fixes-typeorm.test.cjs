@@ -44,11 +44,11 @@ export async function check() {
   );
   assert.deepEqual(onlyChange(inline), {
     before: 'if (await repo.findOne({ where: { id: 1 } })) return 1;',
-    after: 'if (await repo.exists({ where: { id: 1 } })) return 1;',
+    after: "if (await repo[typeof repo.exists === 'function' ? 'exists' : 'findOne']({ where: { id: 1 } })) return 1;",
   });
   assert.deepEqual(onlyChange(direct), {
     before: 'return !(await repo.findOneBy({ id: 2 }));',
-    after: 'return !(await repo.existsBy({ id: 2 }));',
+    after: "return !(await repo[typeof repo.existsBy === 'function' ? 'existsBy' : 'findOneBy']({ id: 2 }));",
   });
 });
 
@@ -65,7 +65,7 @@ export async function check() {
   );
   assert.deepEqual(onlyChange(finding), {
     before: 'const found = await repo.findOneBy({ id: 5 });',
-    after: 'const found = await repo.existsBy({ id: 5 });',
+    after: "const found = await repo[typeof repo.existsBy === 'function' ? 'existsBy' : 'findOneBy']({ id: 5 });",
   });
 });
 
@@ -81,6 +81,72 @@ export async function check() {
     'typeorm-existence-materialization',
   );
   assert.deepEqual(findings, []);
+});
+
+test('guarded existence query uses one call with the same receiver and evaluates its filter once', async (context) => {
+  const source = `import { Repository } from 'typeorm';
+declare const repo: Repository<object>;
+declare function filter(): object;
+async function present() {
+  const found = await repo.findOne({ where: { id: filter() } });
+  return found != null;
+}`;
+  const [finding] = fixesFor(context, source, 'typeorm-existence-materialization');
+  assert.equal(finding.fix.requiresReview, true);
+  const rewritten = finding.fix.changes.reduce(
+    (text, change) => text.replace(change.before, () => change.after),
+    source,
+  );
+  const run = new Function(
+    'repo',
+    'filter',
+    rewritten.slice(rewritten.indexOf('async function present')) + ';return present();',
+  );
+  for (const [fast, value, expected] of [
+    [true, false, false],
+    [true, true, true],
+    [false, {}, true],
+    [false, null, false],
+    [false, undefined, false],
+  ]) {
+    let argumentsBuilt = 0;
+    let calls = 0;
+    const repository = {
+      [fast ? 'exists' : 'findOne'](argument) {
+        assert.equal(this, repository);
+        assert.deepEqual(argument, { where: { id: 'scope' } });
+        calls++;
+        return Promise.resolve(value);
+      },
+    };
+    assert.equal(
+      await run(repository, () => {
+        argumentsBuilt++;
+        return 'scope';
+      }),
+      expected,
+    );
+    assert.equal(argumentsBuilt, 1);
+    assert.equal(calls, 1);
+  }
+});
+
+test('repeatable-looking getters and factory-call receivers do not receive method dispatch edits', (context) => {
+  const diagnostics = fixesFor(
+    context,
+    `import { Repository } from 'typeorm';
+declare function acquire(): Repository<object>;
+class Client {
+  get repo() { return acquire(); }
+  async load() {
+    if (await acquire().findOne({ where: { id: 1 } })) return true;
+    if (await this.repo.findOne({ where: { id: 2 } })) return true;
+  }
+}`,
+    'typeorm-existence-materialization',
+  );
+  assert.equal(diagnostics.length, 2);
+  assert.ok(diagnostics.every((finding) => !finding.fix));
 });
 
 test('wide projection adds select to the options object or creates it for a bare find', (context) => {
@@ -234,18 +300,12 @@ export async function looseNull() {
     'typeorm-existence-materialization',
   );
   assert.equal(findings.length, 5);
-  const rewritten = findings.map((finding) => finding.fix.changes.map((change) => change.after).join('\n'));
-  assert.match(rewritten[0], /existsBy\(\{ id: 1 \}\)/);
-  assert.match(rewritten[1], /existsBy\(\{ id: 2 \}\)/);
-  for (const [index, id] of [
-    [2, 3],
-    [3, 4],
-    [4, 5],
-  ]) {
-    assert.ok(rewritten[index].includes(`existsBy({ id: ${id} })`));
-    assert.match(rewritten[index], /return found;/);
-    assert.doesNotMatch(rewritten[index], /null|undefined/);
-  }
+  const rewritten = findings.map((finding) => finding.fix?.changes.map((change) => change.after).join('\n'));
+  assert.match(rewritten[0], /'existsBy' : 'findOneBy'\]\(\{ id: 1 \}\)/);
+  assert.match(rewritten[1], /'existsBy' : 'findOneBy'\]\(\{ id: 2 \}\)/);
+  assert.equal(rewritten[2], undefined);
+  assert.equal(rewritten[3], undefined);
+  assert.match(rewritten[4], /return !!found;/);
 });
 
 test('existence read whose entity is used after the next-statement return test gets no site fix', (context) => {

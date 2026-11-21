@@ -4,20 +4,41 @@ Loadwise checks a backend project before it ships. One CLI runs three checkers:
 
 - **Performance** (`loadwise perf`): repeated database work, ORM and query integrity, blocking calls, collection complexity, migration safety, schema-aware indexes, OpenTelemetry traces, executed query plans and an optional read-only database inspection.
 - **Maintainability** (`loadwise maint`): deep nesting, branch complexity, duplicate implementations, dependency cycles and the folder, placement and data-access rules a team declares.
-- **Security** (`loadwise sec`): runtime text in SQL and the row scopes a project declares for Prisma and Drizzle queries.
+- **Security** (`loadwise sec`) checks request data reaching sensitive operations, authentication and cryptography, exposed credentials, Docker and Compose configuration, declared row scopes, and optionally dependency advisories.
 
-All three report findings with a stable `#id`, a suggested change where one is safe, and a `// loadwise-reviewed <rule-id> -- <reason>` comment to dismiss a false positive.
+Each finding has a stable `#id` for review. Where a checker can generate an edit, it shows the diff and any assumptions to verify. Supported source rules accept a `loadwise-reviewed` comment with a reason for intentional code.
 
 ## Install
 
-Use Node.js 22 or later. From your application directory:
+Use Node.js 22 or later. For this private preview, use the npm archive provided by the package owner. If you have the checkout, run `npm pack /path/to/loadwise` from your application directory to create the archive there. Install the filename that npm prints. For version 0.4.1-preview.15, run:
 
 ```sh
-npm i -D @loadwise/cli
-npx loadwise
+npm install --save-dev ./loadwise-cli-0.4.1-preview.15.tgz
+npx loadwise --version
 ```
 
-`npx loadwise` checks the current folder with every checker and prints one titled report per checker.
+**With an AI coding agent**, say **“Run Loadwise”** in your project chat. The agent can run the installed CLI directly. It should check the findings against the code, explain what it would fix or leave alone and why, and let you choose before making edits. [Active-agent workflow and optional MCP setup](#using-loadwise-with-an-active-coding-agent)
+
+**Working manually**, run `npx loadwise check` to see recommendations or `npx loadwise fix --yes` to apply eligible fixes. In VS Code or Cursor, you can also review findings on hover and apply individual fixes inline with the editor extension. [Editor setup and shortcuts](#editor)
+
+### Try a finding and a fix
+
+From the directory where you installed Loadwise, copy the bundled example to a disposable file and scan it. The copy command refuses to overwrite an existing file.
+
+```sh
+node -e "require('node:fs').copyFileSync('node_modules/@loadwise/cli/examples/slow.ts', 'loadwise-demo.ts', require('node:fs').constants.COPYFILE_EXCL)"
+npx loadwise perf loadwise-demo.ts
+npx loadwise explain array-repeated-membership
+```
+
+The sample reports three findings and exits 1. The membership finding shows repeated array searches for allowed customer IDs. Read its diff and note, then replace `FINDING_ID` below with the ID printed after `#` on that finding.
+
+```sh
+npx loadwise perf loadwise-demo.ts --fix --only FINDING_ID
+npx loadwise perf loadwise-demo.ts
+```
+
+The second scan should report two findings. Remove the disposable copy when finished. In your own application, install its dependencies and generate any ORM client it uses, then run `npx loadwise check` from its root. Check the coverage notes for skipped inputs. Start with `--min-impact high` to triage a large report, then run without that filter to review the rest.
 
 ## Commands
 
@@ -29,7 +50,57 @@ npx loadwise
 | `loadwise perf [args...]`                                            | The full performance checker; `loadwise perf --help` lists its commands and flags. See [Performance checker](#performance-checker). |
 | `loadwise maint [args...]`                                           | The full maintainability checker; `loadwise maint --help` lists its flags. See [Maintainability checker](#maintainability-checker). |
 | `loadwise sec [args...]`                                             | The full security checker; `loadwise sec --help` lists its flags. See [Security checker](#security-checker).                        |
-| `loadwise agent init [--mode ask\|auto] [--hook [block\|warn\|off]]` | Writes instructions for AI coding agents and installs the git pre-commit hook.                                                      |
+| `loadwise explain <rule-id>`                                         | Shows the default impact, a description and an example change when available. Works offline.                                        |
+| `loadwise fix --yes`                                                 | Scans the current project once and applies eligible edits across the configured checkers.                                           |
+| `loadwise agent init [--mode ask\|auto] [--hook [block\|warn\|off]]` | Writes project instructions for coding agents. Use `--hook` to configure a pre-commit hook.                                         |
+
+Choose the checkers by name, separated by spaces. With no names, Loadwise uses the project's configured checkers.
+
+```bash
+npx loadwise fix --all                            # all generated edits, including review suggestions
+npx loadwise fix --all performance                # performance only
+npx loadwise fix --all performance security       # performance and security
+npx loadwise fix --yes maintainability            # automatic maintainability edits only
+```
+
+Manual findings have no generated edit. With `--all`, inspect the resulting diff and run the project's tests, especially for schema changes and edits that alter application behavior.
+
+### Project-specific fixes
+
+For private TypeScript applications that control their consumers, Loadwise includes a compiler-backed recipe for unused type exports:
+
+```bash
+npx loadwise fix --all --recipe verified-private-types
+```
+
+This applies the usual generated fixes and also considers making locally used type declarations private. It checks the proposed type edits against the application with the bundled TypeScript compiler before offering them. The extra compilation takes time, and can verify only consumers included in the project. Omit this recipe when other repositories import your types.
+
+If your project has a policy for a manual finding, you can encode it once in a local CommonJS recipe and share the file with your team. Run it alongside the built-in fixes for the selected checkers:
+
+```bash
+npx loadwise fix --all maintainability --recipe ./loadwise-fixes.cjs
+```
+
+For example, suppose a failed cache refresh in one maintenance script must fail the job. This recipe handles an empty catch at that specific site:
+
+```js
+module.exports = {
+  'maint/swallowed-error'({ finding, source }) {
+    if (finding.file !== 'scripts/refresh-cache.ts') return null;
+    const before = source.split(/\r?\n/)[finding.line - 1];
+    if (before?.trim() !== '} catch {}') return null;
+    return [{
+      line: finding.line,
+      before,
+      after: before.replace('catch {}', "catch (error) { throw new Error('Cache refresh failed', { cause: error }); }"),
+    }];
+  },
+};
+```
+
+Keys use `perf`, `maint`, or `sec` followed by the rule ID from the report. A handler receives the finding and the source file text. Return exact, whole-line replacements in that file or return `null` to leave the site manual. Loadwise tries recipes only where it has no built-in fix. It validates the proposed edits together before writing. Recipe files execute as local JavaScript, so run only recipes you trust and keep handlers free of side effects.
+
+To apply automatic fixes across your project, run `npx loadwise fix --yes` from its root. Performance and security share a type-check when both are selected. The command lists manual changes and findings that need individual review by location and ID. A fix that touches lines reserved for review also requires individual review. Loadwise checks the remaining edits together before writing and exits 2 if a selected checker fails or is skipped, source lines have changed, or automatic fixes conflict. A successful application exits 0 even when manual findings remain. Review the diff, run your tests, and use `npx loadwise check` to see what remains.
 
 `check` accepts these flags and passes them to every selected checker:
 
@@ -37,10 +108,10 @@ npx loadwise
 - `--format text|json|sarif|github` picks the output; `--json` is `--format json`. `sarif` prints SARIF 2.1.0 with one run per checker for GitHub code scanning, and `github` prints `::warning`/`::error`/`::notice` workflow annotations. `loadwise perf`, `loadwise maint` and `loadwise sec` accept it too. Exit codes do not depend on the format.
 - `--include-contextual` also shows lower-priority findings, each with its reason.
 - `--staged` or `--changed-since <git-ref>` reports only findings on changed lines.
-- `--fail-on contract|all` sets the exit threshold. Without it the performance checker fails on any displayed finding and the maintainability checker on contract violations only.
-- `--write-baseline [file]` records the current findings and `--baseline [file]` reports only findings not recorded. The default file is `loadwise-baseline.json` in the checked directory, with one section per checker; `loadwise perf`, `loadwise maint` and `loadwise sec` take the same flags and read or write only their own section. Entries match on rule, file and flagged code (the finding id), never the line number, with a count per entry so N recorded copies allow N findings. Text output ends with `N baseline findings hidden.` and `--json` adds `baselineHidden`. Fixed findings are reported as stale (`baselineStale`) and leave the file only on the next `--write-baseline`. Not combinable with `--fix`, and `--write-baseline` not with `--staged` or `--changed-since`. `loadwise perf migrations` keeps its own per-file baseline.
+- `--fail-on contract|all` sets the exit threshold. By default, performance and security fail on displayed findings, and a full maintainability scan fails on contract violations. Changed-line maintainability scans fail on any displayed finding. Configured rule levels can change these defaults.
+- `--write-baseline [file]` records the current findings and `--baseline [file]` reports only findings not recorded. The default file is `loadwise-baseline.json` in the checked directory, with one section per checker; `loadwise perf`, `loadwise maint` and `loadwise sec` take the same flags and read or write only their own section. Entries match on rule, file and flagged code (the finding id), never the line number, with a count per entry so N recorded copies allow N findings. Text output ends with `N baseline findings hidden.` and `--json` adds `baselineHidden`. A full comparison reports the number of unmatched entries in `baselineStale`. A partial comparison, such as a changed-line or single-file scan, reports `null` because unscanned findings may still exist. Refresh the baseline using its original scope and settings. Not combinable with `--fix`, and `--write-baseline` not with `--staged` or `--changed-since`. `loadwise perf migrations` keeps its own per-file baseline.
 
-The performance and security checkers use the directory's `tsconfig.json` or `jsconfig.json`; without one, `check` looks for workspace packages (`package.json` `workspaces`, `pnpm-workspace.yaml` or `lerna.json`) and checks each one's config in one report, grouped per package; `--workspace <name|path>` (repeatable) limits every checker to some packages. With neither, `check` skips their source scans and prints a note. The security checker can still scan Dockerfiles, Compose files and tracked environment files. When selected together, both checkers share a type-check unless a baseline is being written. `check` never changes files: each report ends with a `Fix all:` command, such as `npx loadwise perf -p tsconfig.json --fix --only <ids>`, that applies its fixes.
+The performance and security checkers use the directory's `tsconfig.json` or `jsconfig.json`; without one, `check` looks for workspace packages (`package.json` `workspaces`, `pnpm-workspace.yaml` or `lerna.json`) and checks each one's config in one report, grouped per package; `--workspace <name|path>` (repeatable) limits every checker to some packages. For a standalone package with a `package.json` and JavaScript sources only, `check` and `fix` infer source files using the project inventory without writing a config. A mixed JavaScript/TypeScript project still needs a source config. For a JavaScript file without a project config, use `npx loadwise perf path/to/file.js` and `npx loadwise sec path/to/file.js`. For Python, Go, Java, C# or Rust performance checks, run `npx loadwise perf polyglot src` explicitly. The security checker can still scan Dockerfiles, Compose files and tracked environment files. When selected together, both checkers share a type-check unless a baseline is being written. Source scans are read-only. When fixes are available, text reports include a `Fix all:` command, such as `npx loadwise perf -p tsconfig.json --fix --only <ids>`, that applies its fixes.
 
 Exit codes: **0** passed, **1** a checker met its exit threshold, **2** invalid input or configuration in any checker.
 
@@ -114,14 +185,52 @@ The action installs its locked runtime dependencies in a runner temporary direct
 
 ## Use with AI coding agents
 
-Any agent that runs shell commands and reads an instructions file (Claude Code, Cursor, Codex, Copilot agent, Windsurf, Gemini CLI) can drive both checkers.
+Ask your coding agent to run Loadwise. On its first check or fix, the CLI gives a recognized agent the review workflow on stderr. A check lets the agent inspect every scoped finding, earlier edit, caller and test. A fix request also lets it apply or adapt justified changes. The agent can read the full workflow with `loadwise agent instructions`. The first run works in a fresh checkout and leaves project instruction files and Git hooks alone.
+
+Loadwise recognizes agent shell markers from Codex, Claude Code, Cursor, Gemini CLI and GitHub Copilot, as well as tools that identify themselves with `AI_AGENT`. An integration that supplies no marker can set `LOADWISE_AGENT=1` in its tool subprocess. Set `LOADWISE_AGENT=0` on a command to disable detection. Commands typed in plain Git Bash or an ordinary IDE terminal run normally. A shell opened inside an agent can inherit its markers.
+
+Agent-run CLI fixes save their actual edited hunks locally from the first fix. For earlier fixes and saved review decisions, run `loadwise agent history` from the checked project, optionally with a checker name such as `maintainability`. History stays under the user's local state directory and can include excerpts of project source. For unrecorded edits, including edits made on another machine, use an earlier report or a known diff.
+
+For persistent project instructions, or to have a future agent review fixes you run manually in a terminal, use the optional setup command. It updates the managed section of `AGENTS.md`, imports it from `CLAUDE.md` and enables history for manual CLI fixes too.
 
 ```sh
-npx loadwise agent init               # ask mode: the agent waits for approval before changing code
-npx loadwise agent init --mode auto   # auto mode: applies fixes without behaviour caveats, asks about the rest
+npx loadwise agent init
 ```
 
-`agent init` writes one marked block into `AGENTS.md` at the project root and adds one `@AGENTS.md` line to `CLAUDE.md`, creating either file if needed. Rerunning it replaces the block and leaves your other text alone; blocks written by earlier releases of either checker are replaced by the single loadwise block. The block tells the agent to run `npx loadwise --json` after changing code (or `--only perf` / `--only maint` for one checker), review each finding by id, apply fixes with `--fix --only <id>`, and report a table of what it did. In both modes the agent asks before changing `duplicate-implementation` or `dependency-cycle` findings, which are design decisions. The mode is one line in the block, so you can edit it later.
+Agents use the original scan, the relevant history and the rescan to check that every finding has a disposition. The outcomes file is an object with an `outcomes` array. Each entry supplies `checker`, `id`, `status` and specific `evidence`. Supported statuses are `fixed`, `verified`, `intentional`, `false-positive` and `deferred`. For a narrower request, provide only the authorized findings in those reports. With a local Loadwise installation, the commands below run from the project root; put report files in a local scratch directory.
+
+```sh
+npx loadwise agent verify --outcomes outcomes.json before.json history.json after.json
+npx loadwise agent verify --save --outcomes outcomes.json before.json history.json after.json
+```
+
+The first command checks coverage. The second also retains successful review decisions for the next session in a recognized agent session or an explicitly initialized checkout. A missing decision or skipped checker is reported as incomplete. A reasoned deferral counts as reviewed and stays visible as deferred. Code review and relevant tests establish whether a change works.
+
+For a standalone JSON scan, pass its checker name, for example `npx loadwise agent verify --checker maint --outcomes outcomes.json maint-scan.json`. Use `perf` for performance, migrations and database reports, `maint` for maintainability, and `sec` for security. Use one checker per invocation for unlabelled standalone reports. Combined scans and history keep their original checker selection.
+
+To read or save the same brief yourself, use the same checker names as the fix request:
+
+```sh
+npx loadwise fix --handoff maintainability > loadwise-manual.md
+```
+
+### Using Loadwise with an active coding agent
+
+Ask the agent you are already working with to check the project with Loadwise. A shell-capable agent can run `npx loadwise check --json` and review the findings directly in the conversation. Ask it to verify findings against your code, suggest improvements, or implement the changes you choose. A check is read-only. A request to apply fixes can use `npx loadwise fix --yes --json` and review the actual edits and remaining findings in the same chat.
+
+For an agent that uses Model Context Protocol (MCP), install Loadwise in the project, then run:
+
+```bash
+npx loadwise agent mcp --print-config
+```
+
+Register the printed command and arguments as a local stdio server named `loadwise` in the agent. The agent can call `loadwise_check` to run a fresh offline scan and review the findings during the current turn. It can read larger reports in pages with `loadwise_read_report`. Loadwise does not start a chat or send findings to another session.
+
+If you ran a terminal command yourself and want to share it later, use `npx loadwise check --review` or `npx loadwise fix --yes --review`. Paste the printed handoff into the chat you choose, or attach the report. The optional `loadwise agent pending` command and MCP tool `loadwise_list_reports` list saved reports for that project.
+
+### Using Loadwise without AI
+
+Run `npx loadwise check` to see findings or `npx loadwise fix --yes` to scan and apply automatic fixes. With editor diagnostics enabled, hover over a finding to see its recommendation. The optional editor extension adds inline **Apply fix**, Quick Fix, and **Apply all fixes in this file**. Findings that require judgment remain available for manual review. [Editor setup](#editor)
 
 ### Claude Code plugin
 
@@ -132,7 +241,7 @@ npx loadwise agent init --mode auto   # auto mode: applies fixes without behavio
 /plugin install loadwise@loadwise
 ```
 
-After every `Edit`, `Write` or `MultiEdit` on a `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts` or `.cts` file, a hook runs the project's own `node_modules/.bin/loadwise` on that file (`perf` and `sec` on the file, `maint` on the uncommitted changes, keeping that file's findings) with a 20 second limit. Findings go back to Claude with their ids and `--fix --only <id>` commands for the corresponding checker; a clean file prints nothing. The hook never downloads anything: without a local install, outside a project, on other file types, on a timeout or on any error it exits silently. The plugin also adds a `/loadwise [args]` command that runs `loadwise check`, summarizes the findings and offers fixes.
+After every `Edit`, `Write` or `MultiEdit` on a `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts` or `.cts` file, a hook runs the project's locally installed `@loadwise/cli` on that file (`perf` and `sec` on the file, `maint` on the uncommitted changes, keeping that file's findings) with a 20 second limit. Findings go back to Claude with their ids and `--fix --only <id>` commands for the corresponding checker; a clean file prints nothing. The hook never downloads anything: without a local install, outside a project, on other file types, on a timeout or on any error it exits silently. The plugin also adds a `/loadwise [args]` command for read-only checks and a `/loadwise fix [checker names]` workflow for agent-reviewed remediation.
 
 To turn the hook off, run `/plugin disable loadwise` (or `/plugin uninstall loadwise`).
 
@@ -144,7 +253,7 @@ npx loadwise agent init --hook warn    # findings are printed, the commit goes t
 npx loadwise agent init --hook off     # removes only this block
 ```
 
-The hook runs `loadwise check --staged` from the project folder, so every tool that commits through git sees findings from both checkers on the staged lines. It writes a marked block into the hooks folder (honouring `core.hooksPath`) or into `.husky/pre-commit` when `.husky/` exists, appends to a hook you already have, and rerunning it replaces only its own block, including blocks written by earlier releases. With lefthook it edits nothing and prints the command to add. `git commit --no-verify` skips the hook.
+The hook runs `loadwise check --staged` from the project folder, so every tool that commits through git sees findings from the selected checkers on the staged lines. It writes a marked block into the hooks folder (honouring `core.hooksPath`) or into `.husky/pre-commit` when `.husky/` exists, appends to a hook you already have, and rerunning it replaces only its own block, including blocks written by earlier releases. With lefthook it edits nothing and prints the command to add. `git commit --no-verify` skips the hook.
 
 ## Editor
 
@@ -225,31 +334,31 @@ The default `--fail-on all` applies to the displayed findings. For a complete ad
 
 Run in the directory containing `tsconfig.json` or `jsconfig.json`, pass `-p path/to/config.json`, or give explicit JS/TS files. A project check scans the config's input files and follows project references. Declaration files supply types. A standalone file check uses ES2022 and NodeNext compiler defaults. Use a project config for aliases, custom libraries and JS projects with `allowJs`.
 
-| JS/TS rule                                                                                                                                                                                                                                                                     | Trigger and review                                                                                                                                                                                               |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| <a id="pg-query-in-loop"></a><a id="prisma-query-in-loop"></a>`pg-query-in-loop`, `prisma-query-in-loop`                                                                                                                                                                       | Per-item queries. Consider a parameterized set query, relation load or bulk write if ordering and transaction behavior permit it. Prisma can already batch compatible `findUnique` calls.                        |
-| <a id="pg-count-materialization"></a><a id="prisma-count-materialization"></a>`pg-count-materialization`, `prisma-count-materialization`                                                                                                                                       | Counting an immediately loaded result. Use a database count with equivalent predicates and handle its return type.                                                                                               |
-| <a id="pg-first-materialization"></a><a id="prisma-first-materialization"></a>`pg-first-materialization`, `prisma-first-materialization`                                                                                                                                       | Reading only index zero from an unbounded result. Preserve ordering and empty-result behavior when limiting the query.                                                                                           |
-| <a id="pg-filter-materialization"></a><a id="prisma-filter-materialization"></a>`pg-filter-materialization`, `prisma-filter-materialization`                                                                                                                                   | Applying a literal equality filter in JS after loading an unbounded result. Check database collation and null semantics before moving the predicate.                                                             |
-| <a id="pg-top-k-materialization"></a><a id="prisma-top-k-materialization"></a>`pg-top-k-materialization`, `prisma-top-k-materialization`                                                                                                                                       | Sorting an unbounded result with a numeric comparator to keep the top rows. Use database ordering and a limit with a stable tie-breaker.                                                                         |
-| <a id="rebuild-lookup-in-loop"></a><a id="array-repeated-membership"></a><a id="array-repeated-find"></a>`array-repeated-membership`, `array-repeated-find`, `rebuild-lookup-in-loop`                                                                                          | Repeated linear lookups or rebuilt indexes. Reuse a Set or Map if inputs are stable and enough lookups justify construction. Preserve first-match semantics with duplicate keys.                                 |
-| <a id="reduce-copy-accumulator"></a><a id="loop-copy-accumulator"></a><a id="filter-for-existence"></a>`reduce-copy-accumulator`, `loop-copy-accumulator`, `filter-for-existence`                                                                                              | Copying a growing result or allocating a filtered array for a boolean test. Consider a private accumulator or a short-circuiting predicate.                                                                      |
-| <a id="pg-unreleased-checkout"></a><a id="pool-created-per-request-or-item"></a>`pool-created-per-request-or-item`, `pg-unreleased-checkout`                                                                                                                                   | A recognized pg, Prisma, MongoDB or Redis client/pool is created on a repeated path, or a chained pg checkout loses the client reference. Scope reuse to the right credentials and release checked-out clients.  |
-| <a id="node-sync-crypto-in-async"></a><a id="node-sync-process-in-async"></a><a id="node-sync-fs-in-async"></a><a id="node-sync-compression-in-async"></a>`node-sync-fs-in-async`, `node-sync-compression-in-async`, `node-sync-crypto-in-async`, `node-sync-process-in-async` | A recognized synchronous API blocks an async function. Examples include `readFileSync`, `gzipSync`, `scryptSync` and `execFileSync`.                                                                             |
-| <a id="redis-command-in-loop"></a>`redis-command-in-loop`                                                                                                                                                                                                                      | A per-key Redis or Valkey command on a repeated path. Use a multi-key command or a bounded pipeline if cluster slots, ordering and error handling permit it. SCAN cursor loops are skipped.                      |
-| <a id="password-hash-sync-in-async"></a>`password-hash-sync-in-async`                                                                                                                                                                                                          | `hashSync`, `compareSync` or `genSaltSync` from bcrypt or bcryptjs in an async function blocks the event loop for the whole hash. Use the promise form.                                                          |
-| <a id="serial-awaits-in-literal"></a>`serial-awaits-in-literal`                                                                                                                                                                                                                | An array or object literal awaits two or more values one after another, so it takes the sum of the waits. Use `Promise.all` unless a later call needs the side effects of an earlier one.                        |
-| <a id="queue-add-in-loop"></a>`queue-add-in-loop`                                                                                                                                                                                                                              | `queue.add` on a recognized job queue runs once per item, one Redis round trip each. Collect the jobs and call `addBulk`, unless a later job needs the earlier job's result or id.                               |
-| <a id="redis-keys-command"></a>`redis-keys-command`                                                                                                                                                                                                                            | `keys()` on a recognized ioredis or node-redis client blocks Redis while it scans the keyspace. Iterate with `SCAN` (`scanStream` or `scanIterator`) and account for duplicates and changing keys.               |
-| <a id="service-query-in-loop"></a>`service-query-in-loop`                                                                                                                                                                                                                      | A call in a loop reaches several database operations through a project function, so the loop pays round trips for every item. Add a batch variant. Test, seed, benchmark and script sources get a softer note.   |
-| <a id="http-call-without-timeout"></a>`http-call-without-timeout`                                                                                                                                                                                                              | A `fetch` or axios call has no `signal` or `timeout`, so a hung upstream holds the request. Set a timeout or an abort signal.                                                                                    |
-| <a id="upload-without-size-limit"></a>`upload-without-size-limit`                                                                                                                                                                                                              | A multer or Nest upload interceptor has no `limits.fileSize`, so one large upload can exhaust memory. A global `MulterModule.register({ limits })` set elsewhere is not visible to the check.                    |
-| <a id="password-hash-pure-js"></a>`password-hash-pure-js`                                                                                                                                                                                                                      | `bcryptjs` hashes in pure JavaScript and costs tens to hundreds of milliseconds of main-thread CPU per call. Use native `bcrypt`, `@node-rs/bcrypt` or `argon2`. Reported once per file; test files are skipped. |
-| <a id="external-call-in-transaction"></a>`external-call-in-transaction`                                                                                                                                                                                                        | An external call is awaited inside a database transaction callback, holding the connection and locks until it returns. Move it before the transaction or after commit; side effects cannot roll back.            |
-| <a id="unbounded-list-query"></a>`unbounded-list-query`                                                                                                                                                                                                                        | A Prisma, TypeORM, Drizzle or pg list query has no `take` or `limit` and its rows are returned from a request handler. Unique-key lookups are skipped; one-hop service findings require contextual mode.         |
-| <a id="unbounded-module-cache"></a>`unbounded-module-cache`                                                                                                                                                                                                                    | A module-level or singleton-service `Map`, `Set` or object is filled by dynamic key inside functions and never deleted from, cleared or size-checked. The key space may still be small.                          |
-| <a id="whole-payload-in-memory"></a>`whole-payload-in-memory`                                                                                                                                                                                                                  | A handler reads a request-chosen path with `fs.readFile`, or a download or stream is buffered whole only to be written out. Stream it with `pipeline`. The `Response` check needs fetch types.                   |
-| <a id="list-query-overfetch"></a>`list-query-overfetch`                                                                                                                                                                                                                        | A Prisma `findMany` or TypeORM `find` without `select` loads `Json`, `Bytes` or text columns, or relations two levels deep. Column checks need a parseable schema; pages up to 100 rows skip them.               |
+| JS/TS rule                                                                                                                                                                                                                                                                     | Trigger and review                                                                                                                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="pg-query-in-loop"></a><a id="prisma-query-in-loop"></a>`pg-query-in-loop`, `prisma-query-in-loop`                                                                                                                                                                       | Per-item queries. Consider a parameterized set query, relation load or bulk write if ordering and transaction behavior permit it. Prisma can already batch compatible `findUnique` calls.                                   |
+| <a id="pg-count-materialization"></a><a id="prisma-count-materialization"></a>`pg-count-materialization`, `prisma-count-materialization`                                                                                                                                       | Counting an immediately loaded result. Use a database count with equivalent predicates and handle its return type.                                                                                                          |
+| <a id="pg-first-materialization"></a><a id="prisma-first-materialization"></a>`pg-first-materialization`, `prisma-first-materialization`                                                                                                                                       | Reading only index zero from an unbounded result. Preserve ordering and empty-result behavior when limiting the query.                                                                                                      |
+| <a id="pg-filter-materialization"></a><a id="prisma-filter-materialization"></a>`pg-filter-materialization`, `prisma-filter-materialization`                                                                                                                                   | Applying a literal equality filter in JS after loading an unbounded result. Check database collation and null semantics before moving the predicate.                                                                        |
+| <a id="pg-top-k-materialization"></a><a id="prisma-top-k-materialization"></a>`pg-top-k-materialization`, `prisma-top-k-materialization`                                                                                                                                       | Sorting an unbounded result with a numeric comparator to keep the top rows. Use database ordering and a limit with a stable tie-breaker.                                                                                    |
+| <a id="rebuild-lookup-in-loop"></a><a id="array-repeated-membership"></a><a id="array-repeated-find"></a>`array-repeated-membership`, `array-repeated-find`, `rebuild-lookup-in-loop`                                                                                          | Repeated linear lookups or rebuilt indexes. Reuse a Set or Map if inputs are stable and enough lookups justify construction. Preserve first-match semantics with duplicate keys.                                            |
+| <a id="reduce-copy-accumulator"></a><a id="loop-copy-accumulator"></a><a id="filter-for-existence"></a>`reduce-copy-accumulator`, `loop-copy-accumulator`, `filter-for-existence`                                                                                              | Copying a growing result or allocating a filtered array for a boolean test. Consider a private accumulator or a short-circuiting predicate.                                                                                 |
+| <a id="pg-unreleased-checkout"></a><a id="pool-created-per-request-or-item"></a>`pool-created-per-request-or-item`, `pg-unreleased-checkout`                                                                                                                                   | A recognized pg, Prisma, MongoDB or Redis client/pool is created on a repeated path, or a chained pg checkout loses the client reference. Scope reuse to the right credentials and release checked-out clients.             |
+| <a id="node-sync-crypto-in-async"></a><a id="node-sync-process-in-async"></a><a id="node-sync-fs-in-async"></a><a id="node-sync-compression-in-async"></a>`node-sync-fs-in-async`, `node-sync-compression-in-async`, `node-sync-crypto-in-async`, `node-sync-process-in-async` | A recognized synchronous API blocks an async function. Examples include `readFileSync`, `gzipSync`, `scryptSync` and `execFileSync`.                                                                                        |
+| <a id="redis-command-in-loop"></a>`redis-command-in-loop`                                                                                                                                                                                                                      | A per-key Redis or Valkey command on a repeated path. Use a multi-key command or a bounded pipeline if cluster slots, ordering and error handling permit it. SCAN cursor loops are skipped.                                 |
+| <a id="password-hash-sync-in-async"></a>`password-hash-sync-in-async`                                                                                                                                                                                                          | `hashSync`, `compareSync` or `genSaltSync` from bcrypt or bcryptjs in an async function blocks the event loop for the whole hash. Use the promise form.                                                                     |
+| <a id="serial-awaits-in-literal"></a>`serial-awaits-in-literal`                                                                                                                                                                                                                | An array or object awaits multiple values in order. The `Promise.all` edit requires review for shared resources, concurrency limits and failure ordering.                                                                   |
+| <a id="queue-add-in-loop"></a>`queue-add-in-loop`                                                                                                                                                                                                                              | `queue.add` on a recognized job queue runs once per item, one Redis round trip each. Collect the jobs and call `addBulk`, unless a later job needs the earlier job's result or id.                                          |
+| <a id="redis-keys-command"></a>`redis-keys-command`                                                                                                                                                                                                                            | `keys()` on a recognized ioredis or node-redis client blocks Redis while it scans the keyspace. Iterate with `SCAN` (`scanStream` or `scanIterator`) after reviewing duplicate keys, iteration order and concurrent writes. |
+| <a id="service-query-in-loop"></a>`service-query-in-loop`                                                                                                                                                                                                                      | A call in a loop reaches several database operations through a project function, so the loop pays round trips for every item. Add a batch variant. Test, seed, benchmark and script sources get a softer note.              |
+| <a id="http-call-without-timeout"></a>`http-call-without-timeout`                                                                                                                                                                                                              | A `fetch` or axios call has no `signal` or `timeout`, so a hung upstream holds the request. Set a timeout or an abort signal.                                                                                               |
+| <a id="upload-without-size-limit"></a>`upload-without-size-limit`                                                                                                                                                                                                              | A multer or Nest upload interceptor has no `limits.fileSize`, so one large upload can exhaust memory. A global `MulterModule.register({ limits })` set elsewhere is not visible to the check.                               |
+| <a id="password-hash-pure-js"></a>`password-hash-pure-js`                                                                                                                                                                                                                      | `bcryptjs` hashes in pure JavaScript and costs tens to hundreds of milliseconds of main-thread CPU per call. Use native `bcrypt`, `@node-rs/bcrypt` or `argon2`. Reported once per file; test files are skipped.            |
+| <a id="external-call-in-transaction"></a>`external-call-in-transaction`                                                                                                                                                                                                        | An external call is awaited inside a database transaction callback, holding the connection and locks until it returns. Move it before the transaction or after commit; side effects cannot roll back.                       |
+| <a id="unbounded-list-query"></a>`unbounded-list-query`                                                                                                                                                                                                                        | A Prisma, TypeORM, Drizzle or pg list query has no `take` or `limit` and its rows are returned from a request handler. Unique-key lookups are skipped; one-hop service findings require contextual mode.                    |
+| <a id="unbounded-module-cache"></a>`unbounded-module-cache`                                                                                                                                                                                                                    | A module-level or singleton-service `Map`, `Set` or object is filled by dynamic key inside functions and never deleted from, cleared or size-checked. The key space may still be small.                                     |
+| <a id="whole-payload-in-memory"></a>`whole-payload-in-memory`                                                                                                                                                                                                                  | A handler reads a request-chosen path with `fs.readFile`, or a download or stream is buffered whole only to be written out. Stream it with `pipeline`. The `Response` check needs fetch types.                              |
+| <a id="list-query-overfetch"></a>`list-query-overfetch`                                                                                                                                                                                                                        | A Prisma `findMany` or TypeORM `find` without `select` loads `Json`, `Bytes` or text columns, or relations two levels deep. Column checks need a parseable schema; pages up to 100 rows skip them.                          |
 
 Source diagnostics include a one-based line and column. Repeat `--ignore RULE` to omit specific JS/TS rules from a run. Keep your project's own type check in CI.
 
@@ -320,6 +429,9 @@ Place `backend-perf.policy.json` beside the selected project config, or pass `--
 | <a id="promise-return-escapes-catch"></a>`promise-return-escapes-catch`       | An async function returns a typed promise directly from the `try` block of a `try`/`catch`. A rejection can bypass that catch. Use `return await` when the catch owns the failure.                                                                                                                                                                                                             |
 | <a id="return-in-finally"></a>`return-in-finally`                             | A return in `finally` can replace an earlier return value or suppress a thrown error. Keep cleanup in `finally` and return from `try`, `catch`, or after the statement.                                                                                                                                                                                                                        |
 | <a id="return-newline"></a>`return-newline`                                   | A line break immediately after `return` ends the statement before an apparent object or parenthesized return value. Start the expression on the same line as `return`.                                                                                                                                                                                                                         |
+| <a id="drizzle-write-preflight"></a>`drizzle-write-preflight`                 | An existence check immediately precedes a write on the same key. Review the database constraint or affected-row count alongside the intended error response when requests race.                                                                                                                                                                                                                |
+| <a id="drizzle-last-insert-id"></a>`drizzle-last-insert-id`                   | A MySQL insert is followed by a separate query for the last generated ID. Review using the insert result directly, especially when the database handle uses a connection pool.                                                                                                                                                                                                                 |
+| <a id="repeated-workbook-decode"></a>`repeated-workbook-decode`               | Sibling awaits pass the same input to ExcelJS workbook decoding directly or through same-file private methods or functions. Share a parsed workbook when its readers can safely use the same state.                                                                                                                                                                                            |
 
 The example policy declares that `fetchUser` and `fetchPosts` from `@app/reads` may start together. Only group operations whose ordering, shared connections, rate limits and failure effects your project has reviewed. With that declaration, the checker can flag the pair below. Ordinary adjacent calls such as `saveSettings()` followed by `reloadSettings()` carry no such contract.
 
@@ -341,10 +453,10 @@ Where a rule has a safe rewrite for the flagged code, the finding carries a conc
 
 ```sh
 npx loadwise perf -p tsconfig.json --fix         # asks y/n/a/q for each fix; needs a terminal
-npx loadwise perf -p tsconfig.json --fix --yes   # applies every fix without asking
+npx loadwise perf -p tsconfig.json --fix --yes   # applies eligible fixes without asking
 ```
 
-`--fix` answers are **y**es, **n**o, **a**ll remaining and **q**uit. Without a terminal it requires `--yes`. `--fix` cannot be combined with `--watch`, or with `--json` except with `--only`, and `--yes` is valid only with `--fix`. A fix applies only where the original lines still exist, so code that changed since the scan is refused and a change already in the file is reported as already applied. A fix never overwrites an existing file. Review the diff and run your tests afterwards.
+`--fix` answers are **y**es, **n**o, **a**ll remaining and **q**uit. Without a terminal it requires `--yes`. `--fix` cannot be combined with `--watch`, or with `--json` except with `--only`, and `--yes` is valid only with `--fix`. A fix applies only where the original lines still exist, so code that changed since the scan is refused and a change already in the file is reported as already applied. A fix never overwrites an existing file. Review the diff and run your tests afterwards. Rewrites that narrow a whole-table Drizzle update to rows with differing values require individual review because the change can affect locking, triggers and affected-row counts. Upload size limits also require individual review. The 10 MiB example can reject valid uploads, so check the endpoint's file requirements and any existing gateway or Multer limits before applying it.
 
 ## Apply fixes by id
 
@@ -400,7 +512,7 @@ Commit the baseline. `--baseline FILE` reads or writes another path. Exit codes 
 
 ## API contract safety
 
-`npx loadwise perf contracts [--changed-since REF] [--json]` compares the working tree with the merge base of `REF` (default `HEAD`) and flags changes that break API clients. It reads files and git history only. `loadwise check --changed-since REF` runs it too and adds its findings to the performance report. Every finding is enforced, because it describes a change you are about to ship; exit code 1 means a breaking change, 2 invalid input. Use a full-history checkout (`fetch-depth: 0`) so the ref resolves.
+`npx loadwise perf contracts [--changed-since REF] [--json]` compares the working tree with the merge base of `REF` (default `HEAD`) and flags changes that break API clients. `loadwise check --changed-since REF` includes the same findings in the performance report. Both commands respect workspace selection, ignored paths and rules, configured rule levels, and minimum impact. Visible breaking changes fail by default. Rules set to warn appear in the report and do not fail the check. Invalid input exits 2. Use a full-history checkout (`fetch-depth: 0`) so the ref resolves.
 
 It compares three kinds of source:
 
@@ -557,6 +669,9 @@ Every finding carries an impact level. `--min-impact <low|medium|high|critical>`
 | `promise-return-escapes-catch`        | high     |
 | `return-in-finally`                   | high     |
 | `return-newline`                      | high     |
+| `drizzle-write-preflight`             | medium   |
+| `drizzle-last-insert-id`              | medium   |
+| `repeated-workbook-decode`            | medium   |
 | `http-call-without-timeout`           | high     |
 | `index-missing-filter`                | high     |
 | `index-missing-foreign-key`           | high     |
@@ -689,6 +804,7 @@ Sentry also has an N+1 detector that considers sequential spans and their total 
 | <a id="folder-boundary"></a><a id="file-placement"></a>`folder-boundary` and `file-placement`   | An import crosses a boundary declared by the team, or a filename suffix occurs outside its allowed folders. Both policies are opt-in.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | <a id="data-access-boundary"></a>`data-access-boundary`                                         | A JS/TS file outside the approved paths imports a configured database driver or ORM module at runtime. Static imports, re-exports, `import x = require()`, literal dynamic imports and unshadowed `require()` calls are checked. The policy is opt-in via `dataAccess`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | <a id="query-mutates-state"></a>`query-mutates-state`                                           | A JS/TS class instance method marked `/** @maintainabilityQuery */` writes directly through `this`. Assignments, increments, deletes and destructuring writes are covered. Mutations through aliases or arbitrary helper calls require review.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| <a id="sql-insert-truncated-at-semicolon"></a>`sql-insert-truncated-at-semicolon`               | An INSERT dump parser ends its captured values at the next semicolon, which can occur inside quoted data. Use a parser for the dump dialect and test a quoted semicolon.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | <a id="swallowed-error"></a>`swallowed-error`                                                   | A JS/TS `catch` block in non-test code is empty, or only calls `console.*`, `logger.*` or `this.logger.*` while the code after the `try` carries on as if it had succeeded. A comment inside the block, an optional `require()` or `import()` probe, a cleanup in a `finally` or `catch` block, and a `try` made only of `close`, `destroy`, `release`-style calls are accepted. A catch that rethrows, returns or records a failure is not reported.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | <a id="unused-export"></a><a id="unreferenced-file"></a>`unused-export` and `unreferenced-file` | An export no scanned file imports, and a source file nothing imports that is not an entry point. Static, type-only, `require()`, literal dynamic imports, `export … from` and `export *` count as use. An unshadowed `new Worker(new URL('./worker.ts', import.meta.url))` or `SharedWorker` counts as loading the file. A namespace import or `require()` uses the whole module. Entry points are `package.json` `main`, `module`, `bin`, `exports` and script paths, literal Node commands in GitHub Actions job steps, local script references in HTML, `nest-cli.json` entry files, `project.json` commands, `tsconfig` `files`, tests, scripts, configuration, migrations, entities, seeds, route folders (`pages/`, `routes/`, and `app/` in Next or Remix projects) and `main`/`index` files at a package root. A non-literal `import()` or `require()` makes findings contextual, project-wide when the specifier is unknown and for one folder when it starts with a relative path. Skipped in `--staged` and `--changed-since` runs, which do not see the whole project. When adopting loadwise on an existing codebase, record the current findings once with `loadwise check --write-baseline` and check with `--baseline`, so only new unused exports and files are reported. |
 | <a id="large-module"></a>`large-module`                                                         | A JS/TS file has more than 600 lines of code, not counting comments and blank lines. Generated and test files are skipped. Override with `limits.largeModuleLines`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
@@ -785,7 +901,7 @@ npx loadwise maint --staged .
 npx loadwise maint --changed-since <git-ref> .
 ```
 
-`--staged` reports only findings on lines added or changed in `git diff --cached`; `--changed-since <git-ref>` does the same for the working tree against that ref. A function-level finding (`high-branch-complexity`, `deep-control-flow`) is kept when a changed line falls anywhere inside its function. Text output is one block per finding (`path:line [rule-id #id] message`, then a `fix:` command when a rewrite exists and a `dismiss:` comment to paste above the line), ending with `N new finding(s) in changed lines.`. `--json` works too, with the same shape filtered. With no changed JS/TS files it prints nothing and exits 0 before TypeScript loads. In these modes `--fail-on` defaults to `all`, so the exit code is 1 whenever a finding remains.
+`--staged` reports only findings on lines added or changed in `git diff --cached`; `--changed-since <git-ref>` does the same for the working tree against that ref. A JS/TS function-level finding (`high-branch-complexity`, `deep-control-flow`) is kept when a changed line falls anywhere inside its function. In other supported languages, deep nesting is reported when its flagged line changes. Text output is one block per finding (`path:line [rule-id #id] message`, then a `fix:` command when a rewrite exists and a `dismiss:` comment for a reviewable JS/TS finding), ending with `N new finding(s) in changed lines.`. `--json` works too, with the same shape filtered. Changed files in any supported source language are checked. With `--changed-since`, untracked source files count as entirely new. When no supported source changed, text output is empty and the checker exits 0 before loading TypeScript. In these modes `--fail-on` defaults to `all`, so the exit code is 1 whenever a finding remains.
 
 Only the changed files are analysed, while imports still resolve through the whole project. When as many files changed as the full scan's parallel threshold (600), the full scan runs instead and its findings are filtered to the changed lines, so every rule applies. Otherwise rules that need every file are limited: `duplicate-implementation` is skipped and `dependency-cycle` only sees cycles made of changed files' imports. Boundary and placement rules still run. Analysis reads working-tree files, so a file with unstaged edits can report shifted lines.
 
@@ -793,23 +909,24 @@ Only the changed files are analysed, while imports still resolve through the who
 
 The levels and the `--min-impact` flag work as described under the performance checker's impact levels.
 
-| Rule                       | Impact |
-| -------------------------- | ------ |
-| `dependency-cycle`         | high   |
-| `data-access-boundary`     | medium |
-| `duplicate-implementation` | medium |
-| `folder-boundary`          | medium |
-| `high-branch-complexity`   | medium |
-| `large-class`              | medium |
-| `large-module`             | medium |
-| `query-mutates-state`      | medium |
-| `swallowed-error`          | medium |
-| `syntax-error`             | medium |
-| `deep-control-flow`        | low    |
-| `file-placement`           | low    |
-| `long-parameter-list`      | low    |
-| `unreferenced-file`        | low    |
-| `unused-export`            | low    |
+| Rule                                | Impact |
+| ----------------------------------- | ------ |
+| `dependency-cycle`                  | high   |
+| `data-access-boundary`              | medium |
+| `duplicate-implementation`          | medium |
+| `folder-boundary`                   | medium |
+| `high-branch-complexity`            | medium |
+| `large-class`                       | medium |
+| `large-module`                      | medium |
+| `query-mutates-state`               | medium |
+| `sql-insert-truncated-at-semicolon` | high   |
+| `swallowed-error`                   | medium |
+| `syntax-error`                      | medium |
+| `deep-control-flow`                 | low    |
+| `file-placement`                    | low    |
+| `long-parameter-list`               | low    |
+| `unreferenced-file`                 | low    |
+| `unused-export`                     | low    |
 
 # Security checker
 
@@ -969,6 +1086,8 @@ These checks assume the configured helper authenticates the caller and authorize
 Use Node.js 22.12+ for the development tools and run `npm ci --include=optional`. Open this repository folder as a trusted workspace in VS Code or Cursor and enable the recommended Prettier extension. Saving a supported file formats it with the repository settings.
 
 Run `npm run format` to format files, `npm run lint` for correctness checks, or `npm run check` to verify formatting, lint and tests together.
+
+From this checkout, run `node bin/loadwise.cjs check` to scan Loadwise itself. The root `jsconfig.json` selects implementation files for performance and security checks so the deliberately slow examples and benchmark workloads keep their intended behavior.
 
 ## License
 

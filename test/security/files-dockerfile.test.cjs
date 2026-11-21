@@ -16,8 +16,9 @@ test('Dockerfile names are recognised', () => {
   assert.ok(!isDockerfile('README.md'));
 });
 
-test('a final stage without USER runs as root; a later non-root USER is fine', () => {
+test('an inherited image user calls for verification and an explicit non-root USER passes', () => {
   assert.deepEqual(rules('FROM node:22\nCMD ["node"]'), ['dockerfile-runs-as-root:1']);
+  assert.match(checkDockerfile('Dockerfile', 'FROM company/runtime:1')[0].message, /inherits its user/);
   assert.deepEqual(rules('FROM node:22\nUSER node\nCMD ["node"]'), []);
   assert.deepEqual(rules('FROM node:22\nUSER app:app\nUSER 1000'), []);
 });

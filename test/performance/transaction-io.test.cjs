@@ -1,6 +1,9 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const { spawnSync } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
 const { test } = require('node:test');
 const { lint } = require('./helpers.cjs');
 
@@ -118,6 +121,7 @@ test('moves a plain awaited call to after the transaction', (context) => {
     '  });',
   ]);
   assert.match(finding.fix.note, /after the transaction commits/);
+  assert.equal(finding.fix.requiresReview, true);
   assert.equal(onlyChange(finding).after, ['});', 'await fetch(String(id));'].join('\n'));
 });
 
@@ -190,6 +194,7 @@ test('moves a first-step call before the transaction, keeping its result for the
     '  });',
   ]);
   assert.match(finding.fix.note, /just before the transaction opens/);
+  assert.equal(finding.fix.requiresReview, true);
   assert.deepEqual(onlyChange(finding), {
     before: [
       'await dataSource.transaction(async (manager) => {',
@@ -206,6 +211,33 @@ test('moves a first-step call before the transaction, keeping its result for the
       '  const limit = 5;',
     ].join('\n'),
   });
+});
+
+test('fix --yes leaves both sides of a transaction boundary intact', (context) => {
+  const source = [
+    ...fixHeader,
+    'export async function notify(endpoint: string) {',
+    '  await dataSource.transaction(async (manager) => {',
+    '    await fetch(endpoint);',
+    "    await manager.query('select 1');",
+    '  });',
+    '  await dataSource.transaction(async (manager) => {',
+    "    await manager.query('insert into notices default values');",
+    '    await fetch(endpoint);',
+    '  });',
+    '}',
+  ].join('\n');
+  const { root } = scanWithFixes(context, {
+    'a.ts': source,
+    'globals.d.ts': files['globals.d.ts'],
+    'node_modules/typeorm/index.d.ts': files['node_modules/typeorm/index.d.ts'],
+    'tsconfig.json': JSON.stringify({ compilerOptions: { target: 'ES2022', types: [] }, include: ['*.ts'] }),
+  });
+  const cli = path.join(__dirname, '../../bin/loadwise.cjs');
+  const result = spawnSync(process.execPath, [cli, 'fix', '--yes'], { cwd: root, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /0 automatic fix\(es\) in 0 file\(s\), 0 manual, 2 requiring individual review/);
+  assert.equal(fs.readFileSync(path.join(root, 'a.ts'), 'utf8'), source);
 });
 
 test('keeps a first-step call in place when the outer function already uses its name or reads a callback value', (context) => {

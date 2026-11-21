@@ -118,6 +118,19 @@ test('github annotations use warning, error for contract findings and notice for
   ]);
 });
 
+test('configured levels override the default and contextual levels in both CI formats', () => {
+  const findings = [
+    { ...performanceReport.findings[2], level: 'error' },
+    { ...performanceReport.findings[1], level: 'warn' },
+  ];
+  const configured = [{ pillar: 'performance', root, report: { findings } }];
+  assert.deepEqual(
+    JSON.parse(formatSarif(configured)).runs[0].results.map(({ level }) => level),
+    ['error', 'warning'],
+  );
+  assert.match(formatGithub(configured), /^::error .*\n::warning /);
+});
+
 test('github annotations escape paths and messages', () => {
   const report = { findings: [{ file: 'we:ird,name.ts', line: 1, column: 1, ruleId: 'r', message: 'a\nb%' }] };
   assert.equal(
@@ -146,6 +159,8 @@ test('sarif has one run per reported pillar with rules, levels, locations and fi
   assert.deepEqual(performance.results[0].partialFingerprints, { 'loadwise/findingId/v1': 'aaa111' });
   assert.deepEqual(performance.results[0].locations[0].physicalLocation.region, { startLine: 3, startColumn: 5 });
   assert.equal(performance.results[0].locations[0].physicalLocation.artifactLocation.uri, 'a.ts');
+  const { uriBaseId } = performance.results[0].locations[0].physicalLocation.artifactLocation;
+  assert.ok(performance.originalUriBaseIds[uriBaseId].description.text);
   assert.equal(maintainability.results[0].level, 'error');
 });
 
@@ -157,6 +172,32 @@ test('sarif locations are relative to the repository root, not the scanned folde
     formatSarif([{ pillar: 'performance', root: path.join(repository, 'services', 'api'), report: performanceReport }]),
   );
   assert.equal(sarif.runs[0].results[0].locations[0].physicalLocation.artifactLocation.uri, 'services/api/a.ts');
+});
+
+test('scanning another checkout locates source findings in the checked repository', (context) => {
+  const caller = project(context, {});
+  const repository = project(context, {});
+  const directory = path.join(repository, 'example app');
+  fs.mkdirSync(path.join(repository, '.git'));
+  fs.mkdirSync(directory);
+  fs.writeFileSync(path.join(directory, 'tsconfig.json'), tsconfig);
+  fs.writeFileSync(path.join(directory, 'a.ts'), slowSource);
+  fs.writeFileSync(path.join(directory, 'Dockerfile'), 'FROM node:22\n');
+  const github = loadwise(caller, 'check', directory, '--only', 'perf,sec', '--format', 'github');
+  assert.equal(github.code, 1, github.stderr);
+  assert.match(github.stdout, /file=example app\/a\.ts,/);
+  assert.match(github.stdout, /file=example app\/Dockerfile,/);
+  for (const [command, file] of [
+    ['perf', 'a.ts'],
+    ['sec', 'Dockerfile'],
+  ]) {
+    const result = loadwise(caller, command, '-p', directory, '--format', 'sarif');
+    assert.equal(result.code, 1, result.stderr);
+    const locations = JSON.parse(result.stdout).runs[0].results.map(
+      (finding) => finding.locations[0].physicalLocation.artifactLocation.uri,
+    );
+    assert.ok(locations.includes(`example%20app/${file}`), locations.join(', '));
+  }
 });
 
 test('resolveFormat treats --json as --format json and rejects conflicts', () => {

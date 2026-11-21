@@ -70,6 +70,51 @@ test('pnpm-workspace.yaml lists quoted globs and negations', (context) => {
   assert.deepEqual(names(root), ['keep']);
 });
 
+test('check scans pnpm packages listed at the same indentation as the packages key', (context) => {
+  const root = monorepo(context, {
+    'pnpm-workspace.yaml': "packages:\n- 'packages/*'\n- '!packages/skip'\nonlyBuiltDependencies:\n- unrelated\n",
+    ...packageFiles('packages/api', 'api', slowSource),
+    ...packageFiles('packages/skip', 'skip', slowSource),
+    ...packageFiles('unrelated', 'unrelated', slowSource),
+  });
+  const run = loadwise(root, 'check', '--only', 'perf,sec', '--json');
+  assert.equal(run.code, 1, run.stderr);
+  const { performance, security } = JSON.parse(run.stdout);
+  assert.equal(performance.scannedFiles, 1);
+  assert.equal(security.scannedFiles, 1);
+  assert.deepEqual([...new Set(performance.findings.map(({ file }) => file))], ['packages/api/index.ts']);
+});
+
+test('invalid workspace manifests explain why discovery could not run', (context) => {
+  const root = monorepo(context, { 'package.json': '{"workspaces":', ...packageFiles('packages/api', 'api') });
+  const run = loadwise(root, 'check', '--only', 'perf');
+  assert.equal(run.code, 2, run.stderr);
+  assert.match(run.stderr, /Invalid JSON in .*package\.json/);
+  fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ workspaces: [42] }));
+  const invalidPattern = loadwise(root, 'check', '--only', 'perf');
+  assert.equal(invalidPattern.code, 2, invalidPattern.stderr);
+  assert.match(invalidPattern.stderr, /workspaces.*package\.json.*non-empty strings/);
+});
+
+test('unsupported inline pnpm globs exit 2 and explain the supported layout', (context) => {
+  const root = monorepo(context, {
+    'pnpm-workspace.yaml': "packages: ['packages/*']\n",
+    ...packageFiles('packages/api', 'api', slowSource),
+  });
+  const run = loadwise(root, 'check', '--only', 'perf,sec');
+  assert.equal(run.code, 2, run.stderr);
+  assert.match(run.stderr, /pnpm-workspace\.yaml.*own "- pattern" line/);
+});
+
+test('explicit workspace selectors report an error when no typed workspace can run', (context) => {
+  const root = monorepo(context, { 'package.json': { name: 'plain' }, 'index.ts': quietSource });
+  for (const checkers of ['perf', 'sec', 'perf,sec']) {
+    const run = loadwise(root, 'check', '--only', checkers, '--workspace', 'missing', '--json');
+    assert.equal(run.code, 2, checkers);
+    assert.match(run.stderr, /--workspace/);
+  }
+});
+
 test('a package without a config is noted and skipped', (context) => {
   const root = monorepo(context, {
     'package.json': { workspaces: ['packages/*'] },

@@ -22,6 +22,19 @@ function findings(source, files = stubs.express) {
   return lintBothWays(source, files).typed.filter((finding) => finding.ruleId === ruleId);
 }
 
+test('a previously reviewed generated-filename guard keeps its reason on the file read', () => {
+  const body = [
+    'const filename = req.params.name;',
+    'const match = allowedName.exec(filename);',
+    'if (!match) return;',
+    '// loadwise-reviewed path-traversal -- The complete stored filename is validated before opening.',
+    "await readFile(path.join('/srv/files', filename));",
+  ].join('\n');
+  const result = findings(expressRoute(body, 'const allowedName = /^([0-9]+)-[a-f0-9-]{36}\\.(pdf|png|jpg)$/;'));
+  assert.equal(result.length, 1);
+  assert.match(result[0].contextualReason, /complete stored filename/);
+});
+
 test('a request value in an fs path or a rootless sendFile is reported', () => {
   const [direct] = findings(expressRoute("await readFile(path.join('/srv/files', req.params.name));"));
   assert.match(direct.message, /includes `req\.params\.name`/);

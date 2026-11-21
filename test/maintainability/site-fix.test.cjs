@@ -168,7 +168,8 @@ test('high-branch-complexity fix applies every exact simplification and reports 
   const source = [
     'function score(input) {',
     '  let points = 0;',
-    '  if (!input.name) input.name = "anonymous";',
+    '  const record = input;',
+    '  if (!record.name) record.name = "anonymous";',
     '  if (input.blocked) return -1;',
     '  if (input.deleted) return -1;',
     '  const verified = input.email ? true : false;',
@@ -181,9 +182,9 @@ test('high-branch-complexity fix applies every exact simplification and reports 
   const [finding] = findingsOf(directory).filter((item) => item.ruleId === 'high-branch-complexity');
   assert.match(finding.fix.note, /from 17 to 14\./);
   const text = fixedFiles(directory, finding.fix)['score.cjs'];
-  assert.match(text, /input\.name \|\|= "anonymous";/);
+  assert.match(text, /record\.name \|\|= "anonymous";/);
   assert.match(text, /if \(input\.blocked \|\| input\.deleted\) return -1;/);
-  assert.match(text, /const verified = Boolean\(input\.email\);/);
+  assert.match(text, /const verified = !!input\.email;/);
   const rewritten = load(text).score;
   const original = load(source).score;
   for (const input of [{ level: 3, email: 'x' }, { blocked: true }, { deleted: 1, name: 'n' }, { level: 10 }]) {
@@ -191,6 +192,88 @@ test('high-branch-complexity fix applies every exact simplification and reports 
     const second = { ...input };
     assert.equal(rewritten(first), original(second));
     assert.deepEqual(first, second);
+  }
+});
+
+test('literal cases that repeat the default preserve decoding and its side effects', (context) => {
+  const source = [
+    'function decode(input) {',
+    '  const character = input.value;',
+    '  let decoded = "";',
+    '  let consumed = 0;',
+    '  if (character === "x") {',
+    '    decoded += "x";',
+    '    consumed += 2;',
+    '  } else if (character === "y") {',
+    '    decoded += "y";',
+    '    consumed += 2;',
+    '  } else if (character === "n") {',
+    '    decoded += "\\n";',
+    '    consumed += 2;',
+    '  } else {',
+    '    decoded += character;',
+    '    consumed += 2;',
+    '  }',
+    ...Array.from({ length: 11 }, (_, index) => `  if (consumed === ${index + 5}) return ${index};`),
+    '  return [decoded, consumed];',
+    '}',
+    'module.exports = { decode };',
+  ].join('\n');
+  const directory = project(context, { 'decode.cjs': source });
+  const [finding] = ruleFindings(directory, 'high-branch-complexity');
+  const rewritten = fixedFiles(directory, finding.fix)['decode.cjs'];
+  assert.doesNotMatch(rewritten, /character === "[xy]"/);
+  assert.match(rewritten, /if \(character === "n"\)/);
+  for (const value of ['x', 'y', 'n', 'z', undefined]) {
+    let reads = 0;
+    const input = {
+      get value() {
+        reads++;
+        return value;
+      },
+    };
+    assert.deepEqual(load(rewritten).decode(input), load(source).decode(input));
+    assert.equal(reads, 2);
+  }
+  for (const unsafe of [
+    source.replace('const character', 'let character'),
+    source.replace('else if (character === "n")', 'else if (input.value === "n")'),
+    source.replace('else if (character === "n")', 'else if (character === "x")'),
+    source.replace('    decoded += "x";', '    /* keep this explanation */ decoded += "x";'),
+    source.replace('    decoded += "x";', '    decoded += "X";'),
+  ]) {
+    fs.writeFileSync(path.join(directory, 'decode.cjs'), unsafe);
+    const [remaining] = ruleFindings(directory, 'high-branch-complexity');
+    const text = remaining.fix ? fixedFiles(directory, remaining.fix)['decode.cjs'] : unsafe;
+    assert.match(text, /character === "x"/);
+  }
+});
+
+test('branch rewrites preserve a getter that rebinds its receiver and native boolean coercion', (context) => {
+  const source = [
+    'function update(value, Boolean) {',
+    '  const replacement = {};',
+    '  let current = { get name() { current = replacement; return ""; } };',
+    '  if (!current.name) current.name = "assigned";',
+    '  const active = value ? true : false;',
+    '  let selected = "";',
+    '  const scope = { get selected() { delete this.selected; return ""; } };',
+    '  with (scope) {',
+    '    if (!selected) selected = "assigned";',
+    '  }',
+    ...Array.from({ length: 13 }, (_, index) => `  if (value === ${index}) return ${index};`),
+    '  return [replacement.name, selected, active];',
+    '}',
+    'module.exports = { update };',
+  ].join('\n');
+  const directory = project(context, { 'update.cjs': source });
+  const [finding] = ruleFindings(directory, 'high-branch-complexity');
+  const rewritten = fixedFiles(directory, finding.fix)['update.cjs'];
+  assert.match(rewritten, /if \(!current\.name\) current\.name = "assigned"/);
+  assert.match(rewritten, /if \(!selected\) selected = "assigned"/);
+  for (const value of ['', 'truthy']) {
+    const blocked = () => assert.fail('the original expression never calls Boolean');
+    assert.deepEqual(load(rewritten).update(value, blocked), load(source).update(value, blocked));
   }
 });
 
@@ -338,6 +421,79 @@ test('deep-control-flow guard clause drops the jump it would leave unreachable',
   for (const stored of inputs)
     for (const strict of [true, false])
       assert.equal(rewritten(stored && { ...stored }, strict), original(stored && { ...stored }, strict));
+});
+
+test('a guard keeps the fallback only when the hoisted try or catch can reach it', (context) => {
+  const source = [
+    'function parse(value, type) {',
+    '  switch (type) {',
+    '    case "json":',
+    '    case "array": {',
+    '      if (typeof value === "string") {',
+    '        try {',
+    '          return JSON.parse(value);',
+    '        } catch {',
+    '          // A comma-separated list is also accepted for arrays.',
+    '          if (type === "array") {',
+    '            return value',
+    '              .split(",")',
+    '              .map((part) => part.trim())',
+    '              .filter((part) => part.length > 0);',
+    '          }',
+    '          return null;',
+    '        }',
+    '      }',
+    '      return Array.isArray(value) ? value : false;',
+    '    }',
+    '  }',
+    '}',
+    'module.exports = { parse };',
+  ].join('\n');
+  const fallback = 'return Array.isArray(value) ? value : false;';
+  for (const [variant, expected] of [
+    [source, 1],
+    [source.replace('          return null;', ''), 2],
+  ]) {
+    const root = project(context, { 'parse.cjs': variant });
+    const [finding] = ruleFindings(root, 'deep-control-flow');
+    const rewritten = fixedFiles(root, finding.fix)['parse.cjs'];
+    assert.match(rewritten, /if \(typeof value !== "string"\) return Array/);
+    assert.equal(rewritten.split(fallback).length - 1, expected);
+    const original = load(variant).parse;
+    const modified = load(rewritten).parse;
+    for (const type of ['array', 'json'])
+      for (const value of ['[2]', 'a,b', [3], null]) assert.deepEqual(modified(value, type), original(value, type));
+  }
+});
+
+test('a guard cannot move fallback evaluation inside an enclosing try', (context) => {
+  const source = [
+    'function visit(enabled, groups, fallback) {',
+    '  try {',
+    '    if (enabled) {',
+    '      for (const group of groups) {',
+    '        for (const item of group) {',
+    '          if (item.active) item.seen = true;',
+    '        }',
+    '      }',
+    '    }',
+    '  } catch {',
+    '    return "caught";',
+    '  }',
+    '  return fallback();',
+    '}',
+    'module.exports = { visit };',
+  ].join('\n');
+  const root = project(context, { 'visit.cjs': source });
+  const [finding] = ruleFindings(root, 'deep-control-flow');
+  const rewritten = finding.fix ? fixedFiles(root, finding.fix)['visit.cjs'] : source;
+  assert.throws(
+    () =>
+      load(rewritten).visit(false, [], () => {
+        throw Error('outside the catch');
+      }),
+    /outside the catch/,
+  );
 });
 
 test('negated guard conditions use De Morgan instead of a double negation', (context) => {
@@ -551,6 +707,18 @@ const typedGroups = (guard, use) =>
   ].join('\n');
 
 const lookupModule = 'export function lookup(key: string): string {\n  return key;\n}\n';
+
+test('bulk fix exits 2 and asks for a fresh scan when an earlier edit shifts an ambiguous hunk', (context) => {
+  const first = typedGroups('const name = this.current?.name;\n    if (!name) return;', 'name');
+  const second = first.slice(first.indexOf('export class')).replace('class Tally', 'class Summary');
+  const directory = project(context, { 'tally.ts': first + second, 'lookup.ts': lookupModule });
+  const fixed = run(directory, '--fix', '--yes', '--ignore', 'duplicate-implementation');
+  assert.equal(fixed.status, 2, fixed.stderr || fixed.stdout);
+  assert.match(fixed.stdout, /Applied 1 of 2 automatic fix\(es\), 1 could not be applied/);
+  assert.match(fixed.stdout, /Run the same scan again/);
+  const remaining = ruleFindings(directory, 'deep-control-flow');
+  assert.equal(remaining.length, 1);
+});
 
 function typeErrors(file, text) {
   const ts = require('typescript');

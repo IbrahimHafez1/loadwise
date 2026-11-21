@@ -90,6 +90,14 @@ test('insecure-random-for-secret reports Math.random flowing into tokens, codes 
   assert.deepEqual(summary(untyped, 'insecure-random-for-secret'), summary(typed, 'insecure-random-for-secret'));
 });
 
+test('random value flow survives type-only assertions and satisfies expressions', () => {
+  const { typed, untyped } = lintBothWays(
+    'export const resetToken = (<number>(Math.random() satisfies number)).toString(36);',
+  );
+  assert.deepEqual(lines(typed, 'insecure-random-for-secret'), [1]);
+  assert.deepEqual(summary(untyped, 'insecure-random-for-secret'), summary(typed, 'insecure-random-for-secret'));
+});
+
 test('insecure-random-for-secret is contextual for plain identifiers and silent for non-secret names', () => {
   const findings = lint(
     [

@@ -20,6 +20,8 @@ function readStdin() {
 function findLocalBinary(startDirectory) {
   let directory = startDirectory;
   for (;;) {
+    const entry = path.join(directory, 'node_modules', '@loadwise', 'cli', 'bin', 'loadwise.cjs');
+    if (fs.existsSync(entry)) return { projectRoot: directory, binary: entry };
     const candidate = path.join(directory, 'node_modules', '.bin', 'loadwise');
     if (fs.existsSync(candidate)) return { projectRoot: directory, binary: candidate };
     const parent = path.dirname(directory);
@@ -29,13 +31,12 @@ function findLocalBinary(startDirectory) {
 }
 
 function launcherFor(binary, args) {
+  if (binary.endsWith('.cjs')) return { command: process.execPath, args: [binary, ...args] };
   const firstLine = fs.readFileSync(binary, 'utf8').split('\n', 1)[0];
   if (firstLine.startsWith('#!') && firstLine.includes('node')) {
-    return { command: process.execPath, args: [binary, ...args], shell: false };
+    return { command: process.execPath, args: [binary, ...args] };
   }
-  // npm's Windows shim for a package bin is a .cmd file next to the sh script.
-  if (process.platform === 'win32') return { command: `${binary}.cmd`, args, shell: true };
-  return { command: binary, args, shell: false };
+  return { command: binary, args };
 }
 
 function runLoadwise(binary, args, cwd, deadline) {
@@ -46,7 +47,6 @@ function runLoadwise(binary, args, cwd, deadline) {
     cwd,
     encoding: 'utf8',
     timeout: remaining,
-    shell: launcher.shell,
     windowsHide: true,
     maxBuffer: MAX_OUTPUT_BYTES,
   });
@@ -65,12 +65,16 @@ function findingsFor(report, relativeFile, checkerCommand) {
     .map((finding) => ({ ...finding, checkerCommand }));
 }
 
-function formatFeedback(relativeFile, findings) {
+function formatFeedback(projectRoot, relativeFile, findings) {
+  const sourceArgument = "'./" + relativeFile.split(path.sep).join('/').replaceAll("'", "'\\''") + "'";
   const lines = findings.map((finding) => {
-    const fixCommand = finding.fixable ? ` Fix: loadwise ${finding.checkerCommand} --fix --only ${finding.id}` : '';
-    return `- #${finding.id} ${finding.ruleId} at ${relativeFile}:${finding.line}: ${finding.message}${fixCommand}`;
+    const target = finding.checkerCommand === 'maint' ? '.' : sourceArgument;
+    const action = finding.fixable
+      ? ` ${finding.fix?.requiresReview ? 'Review-marked fix' : 'Fix'} from ${projectRoot}: npx loadwise ${finding.checkerCommand} ${target} --fix --only ${finding.id}`
+      : ' Manual finding. On an authorized fix request, inspect the callers, implement a justified edit here and run the relevant tests.';
+    return `- #${finding.id} ${finding.ruleId} at ${relativeFile}:${finding.line}: ${finding.message}${action}`;
   });
-  return `loadwise found ${findings.length} issue(s) in ${relativeFile}. Review each one; apply a fix only when it is correct for this code.\n${lines.join('\n')}`;
+  return `loadwise found ${findings.length} issue(s) in ${relativeFile}. Check each finding against the actual code, callers and tests. Apply or adapt a justified change within the user's request. Keep intentional behavior and explain why.\n${lines.join('\n')}`;
 }
 
 function main() {
@@ -103,7 +107,9 @@ function main() {
   ];
   if (findings.length === 0) return;
 
-  process.stdout.write(JSON.stringify({ decision: 'block', reason: formatFeedback(relativeFile, findings) }));
+  process.stdout.write(
+    JSON.stringify({ decision: 'block', reason: formatFeedback(local.projectRoot, relativeFile, findings) }),
+  );
 }
 
 try {

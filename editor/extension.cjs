@@ -27,7 +27,7 @@ const sourceSuffixes = new Set(
 const sourceGlob = '**/*.{' + [...sourceSuffixes].join(',') + '}';
 // Inputs besides source files that change findings. A change restarts the incremental watcher as well.
 const configGlob =
-  '**/{schema.prisma,package.json,tsconfig*.json,jsconfig*.json,maintainability.config.json,backend-perf.policy.json,*.sql,migrations}';
+  '**/{schema.prisma,package.json,tsconfig*.json,jsconfig*.json,loadwise.config.json,maintainability.config.json,backend-perf.policy.json,*.sql,migrations}';
 const ignored = new Set(
   '.git node_modules dist build coverage .next .nuxt .venv venv __pycache__ target vendor'.split(' '),
 );
@@ -138,16 +138,7 @@ function monitor(folder, extensionPath, output, { publishOptions, onStatus }) {
       .findFiles(new vscode.RelativePattern(folder, glob), excludeGlob, 1)
       .then((files) => files.length > 0);
   }
-  async function scan(version, scanSignal) {
-    const restart = restartRequested;
-    restartRequested = false;
-    if (restart) watchUnavailable = false;
-    const settings = vscode.workspace.getConfiguration('loadwise', folder.uri);
-    if (!settings.get('enabled', true) || !vscode.workspace.isTrusted) {
-      stopWatch();
-      for (const id of collections.keys()) clear(id);
-      return;
-    }
+  async function workspaceScanTasks(settings) {
     const explicitProject = settings.get('project', '');
     const project = explicitProject || (await firstExisting(root, ['tsconfig.json', 'jsconfig.json']));
     const hasMaintainabilityInput =
@@ -158,6 +149,19 @@ function monitor(folder, extensionPath, output, { publishOptions, onStatus }) {
       { id: maint, source: maint, args: hasMaintainabilityInput ? ['maint', '.'] : null },
       { id: perf + '-polyglot', source: perf, args: hasPolyglotInput ? ['perf', 'polyglot', '.'] : null },
     ];
+    return { project, tasks };
+  }
+  async function scan(version, scanSignal) {
+    const restart = restartRequested;
+    restartRequested = false;
+    if (restart) watchUnavailable = false;
+    const settings = vscode.workspace.getConfiguration('loadwise', folder.uri);
+    if (!settings.get('enabled', true) || !vscode.workspace.isTrusted) {
+      stopWatch();
+      for (const id of collections.keys()) clear(id);
+      return;
+    }
+    const { project, tasks } = await workspaceScanTasks(settings);
     for (const { id, source, args, watch } of tasks) {
       if (signal.signal.aborted || version !== revision) return;
       if (!args) {
@@ -243,8 +247,7 @@ function monitor(folder, extensionPath, output, { publishOptions, onStatus }) {
       return { scanning: scanning || Boolean(perfWatch?.pending), findings, lastScan };
     },
     scanNow() {
-      revision++;
-      abortStaleScan();
+      schedule({ restart: true });
       return start();
     },
     dispose() {

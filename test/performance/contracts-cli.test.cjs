@@ -113,6 +113,35 @@ describe('loadwise perf contracts: OpenAPI', () => {
     assert.deepEqual(run.report.findings, []);
   });
 
+  test('reports body requiredness including a referenced OpenAPI body and an inherited Swagger body', (context) => {
+    const open = {
+      openapi: '3.0.0',
+      paths: { '/orders': { post: { requestBody: { $ref: '#/components/requestBodies/Order' } } } },
+      components: { requestBodies: { Order: { content: { 'application/json': { schema: { type: 'object' } } } } } },
+    };
+    const swagger = {
+      swagger: '2.0',
+      paths: { '/orders': { parameters: [{ $ref: '#/parameters/Order' }], post: {} } },
+      parameters: { Order: { name: 'order', in: 'body', schema: { type: 'object' }, required: true } },
+    };
+    const nextOpen = structuredClone(open);
+    nextOpen.components.requestBodies.Order.required = true;
+    const nextSwagger = structuredClone(swagger);
+    nextSwagger.paths['/orders'].post.parameters = [{ $ref: '#/parameters/Order' }];
+    const root = repository(
+      context,
+      { 'openapi.json': JSON.stringify(open), 'swagger.json': JSON.stringify(swagger) },
+      {
+        'openapi.json': JSON.stringify(nextOpen),
+        'swagger.json': JSON.stringify(nextSwagger),
+      },
+    );
+    const { report } = contracts(root);
+    assert.equal(report.findings.length, 1);
+    assert.equal(report.findings[0].ruleId, 'api-required-input');
+    assert.match(report.findings[0].message, /request body of POST \/orders is now required/);
+  });
+
   test('additive changes pass, and YAML documents are skipped with a note', (context) => {
     const next = JSON.parse(openApi());
     next.components.schemas.User.properties.name = { type: 'string' };
@@ -129,6 +158,17 @@ describe('loadwise perf contracts: OpenAPI', () => {
 });
 
 describe('loadwise perf contracts: GraphQL SDL', () => {
+  test('removing defaults makes non-null inputs required but keeps nullable inputs optional', (context) => {
+    const old = 'type Query { f(limit: Int! = 1, optional: Int = 1): Int } input Options { active: Boolean! = true }';
+    const next = 'type Query { f(limit: Int!, optional: Int): Int } input Options { active: Boolean! }';
+    const root = repository(context, { 'schema.graphql': old }, { 'schema.graphql': next });
+    const { report } = contracts(root);
+    assert.equal(report.findings.length, 2);
+    assert.ok(report.findings.every(({ ruleId }) => ruleId === 'api-required-input'));
+    assert.ok(report.findings.some(({ message }) => message.includes('Argument Query.f(limit) lost its default')));
+    assert.ok(report.findings.some(({ message }) => message.includes('Input field Options.active lost its default')));
+  });
+
   const oldSchema = `
     "A user"
     type Query {
@@ -278,9 +318,11 @@ describe('loadwise perf contracts: DTO unknown input and inheritance', () => {
     const files = {
       'src/x.controller.ts': controller.replace('./dto', './child'),
       'src/base.ts': 'export class Base { id: string; age: number; }',
-      'src/child.ts': "import { Base } from './base';\nexport class CreateDto extends Base { name: string; }",
+      'src/child.ts': 'import { Base } from "./base";\nexport class CreateDto extends Base { name: string; }',
+      'src/obsolete.controller.ts': 'export class ObsoleteController {}',
     };
     const root = repository(context, files, { 'src/base.ts': 'export class Base { age: string; extra: string; }' });
+    fs.unlinkSync(path.join(root, 'src/obsolete.controller.ts'));
     const messages = contracts(root).report.findings.map(({ message }) => message);
     assert.equal(messages.length, 2);
     assert.match(messages.join('\n'), /Property CreateDto\.age changed type from number to string/);
@@ -332,6 +374,50 @@ describe('loadwise perf contracts: command line and check', () => {
     assert.deepEqual(
       report.performance.findings.map(({ ruleId }) => ruleId),
       ['api-removed-operation'],
+    );
+  });
+
+  test('combined checks apply workspace, impact, rule and path filters to API contracts', (context) => {
+    const next = JSON.parse(openApi());
+    delete next.paths['/users'].delete;
+    delete next.components.schemas.User.properties.email;
+    const original = {
+      'package.json': JSON.stringify({ workspaces: ['packages/*'] }),
+    };
+    const changed = {};
+    for (const name of ['api', 'other']) {
+      const folder = `packages/${name}`;
+      original[`${folder}/package.json`] = JSON.stringify({ name });
+      original[`${folder}/tsconfig.json`] = '{"include":["*.ts"]}';
+      original[`${folder}/app.ts`] = 'export const answer = 42;\n';
+      original[`${folder}/openapi.json`] = openApi();
+      changed[`${folder}/openapi.json`] = JSON.stringify(next, null, 2);
+    }
+    const root = repository(context, original, changed);
+    const check = (...args) =>
+      spawnSync(process.execPath, [BIN, 'check', '--only', 'perf,sec', '--changed-since', 'HEAD', '--json', ...args], {
+        cwd: root,
+        encoding: 'utf8',
+      });
+    const scoped = check('--workspace', 'other', '--min-impact', 'critical');
+    assert.equal(scoped.status, 1, scoped.stderr);
+    assert.deepEqual(
+      JSON.parse(scoped.stdout).performance.findings.map(({ file, ruleId }) => [file, ruleId]),
+      [['packages/other/openapi.json', 'api-removed-operation']],
+    );
+    write(
+      root,
+      'loadwise.config.json',
+      JSON.stringify({
+        ignore: ['packages/api/**'],
+        rules: { 'api-removed-field': 'warn' },
+      }),
+    );
+    const warnings = check('--ignore', 'api-removed-operation');
+    assert.equal(warnings.status, 0, warnings.stderr);
+    assert.deepEqual(
+      JSON.parse(warnings.stdout).performance.findings.map(({ file, ruleId, level }) => [file, ruleId, level]),
+      [['packages/other/openapi.json', 'api-removed-field', 'warn']],
     );
   });
 

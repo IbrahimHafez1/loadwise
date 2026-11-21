@@ -6,7 +6,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync, spawnSync } = require('node:child_process');
 const ts = require('typescript');
-const { scanWithFixes, onlyChange, withSecurity } = require('../performance/site-fix-helpers.cjs');
+const {
+  assertReportedWithoutFix,
+  scanWithFixes,
+  onlyChange,
+  withSecurity,
+} = require('../performance/site-fix-helpers.cjs');
 const { stubs } = require('./helpers.cjs');
 
 const cli = path.resolve(__dirname, '../../bin/loadwise.cjs');
@@ -22,13 +27,71 @@ function fixesFor(context, ruleId, source, filename = 'app.ts') {
 }
 
 function assertNoFix(context, ruleId, source) {
-  const findings = fixesFor(context, ruleId, source);
-  assert.ok(findings.length > 0, 'rule should report');
-  assert.deepEqual(
-    findings.map((finding) => finding.fix),
-    findings.map(() => undefined),
-  );
+  assertReportedWithoutFix(fixesFor(context, ruleId, source));
 }
+
+test('database TLS literal opt-outs have a reviewed edit; type assertions stay manual', (context) => {
+  const findings = fixesFor(
+    context,
+    'tls-verification-disabled',
+    [
+      "const enabled = process.env.DB_SSL === 'true';",
+      'export const config = { ssl: enabled ? { rejectUnauthorized: (false as const) } : false };',
+      'export function options(value: string) {',
+      "  if (value === 'true') return { rejectUnauthorized: false };",
+      '  return { rejectUnauthorized: true };',
+      '}',
+    ].join('\n'),
+  );
+  assert.deepEqual(
+    findings.map(({ line }) => line),
+    [2, 4],
+  );
+  for (const finding of findings) {
+    assert.equal(finding.contextualReason, undefined);
+    assert.match(finding.message, /trusted CA/);
+  }
+  assert.equal(findings[0].fix, undefined);
+  assert.equal(findings[1].fix.requiresReview, true);
+  assert.match(findings[1].fix.changes[0].after, /rejectUnauthorized: true/);
+});
+
+test('mysql2 TLS options check hostname verification for the installed driver', (context) => {
+  const source = [
+    "const mysql = require('mysql2/promise');",
+    "mysql.createConnection({ ssl: process.env.DB_SSL === 'true' ? {} : undefined });",
+    "mysql.createPool({ ssl: { ca: 'private CA' } });",
+    'mysql.createConnection({ ssl: { verifyIdentity: false } });',
+    'mysql.createPool({ ssl: { rejectUnauthorized: false } });',
+    'mysql.createPool({ ssl: { rejectUnauthorized: true, verifyIdentity: true } });',
+    'mysql.createPool({ ssl: { ...settings } });',
+    'mysql.createPool({ ssl: { [option]: true } });',
+    'mysql.createPool({ ssl: {}, ...settings });',
+    "require('other-db').createPool({ ssl: {} });",
+    'mysql.createPool({});',
+    'mysql.createPool({ ssl: { verifyIdentity } });',
+    'mysql.createPool({ ssl: { get verifyIdentity() { return true; } } });',
+    'mysql.extension().createPool({ ssl: {} });',
+  ].join('\n');
+  for (const version of ['3.16.0', '4.0.0']) {
+    const { findings } = scanWithFixes(
+      context,
+      {
+        'migration.js': source,
+        'node_modules/mysql2/package.json': JSON.stringify({ name: 'mysql2', version }),
+      },
+      { analyzers: withSecurity },
+    );
+    const tls = findings.filter(({ ruleId }) => ruleId === 'tls-verification-disabled');
+    assert.deepEqual(
+      tls.map(({ line }) => line),
+      version === '3.16.0' ? [2, 3, 4, 5] : [4, 5],
+    );
+    assert.ok(tls.filter(({ line }) => line < 4).every(({ fix }) => fix === undefined));
+    assert.ok(tls.filter(({ line }) => line >= 4).every(({ fix }) => fix?.requiresReview));
+    assert.match(tls[0].message, /hostname/);
+  }
+});
 
 test('bcrypt-low-cost replaces a literal cost with 12', (context) => {
   const [finding] = fixesFor(
@@ -58,6 +121,7 @@ test('jwt-verify-without-algorithms pins the algorithm the same key signs with',
     '',
   ].join('\n');
   const [finding] = fixesFor(context, 'jwt-verify-without-algorithms', source);
+  assert.equal(finding.fix.requiresReview, true);
   assert.deepEqual(onlyChange(finding), {
     before: 'export const check = (token: string, secret: string) => jwt.verify(token, secret);',
     after:
@@ -97,6 +161,28 @@ test('jwt-verify-without-algorithms offers no fix when no sign call or conflicti
       '',
     ].join('\n'),
   );
+});
+
+test('JWT algorithm hints require a matching receiver and key expression and an unambiguous signed algorithm', (context) => {
+  const signers = [
+    'other.sign({}, settings.secret, {})',
+    'jwt.sign({}, alternate.secret, {})',
+    'jwt.sign({}, settings.secret, { ...options })',
+    'jwt.sign({}, settings.secret, { algorithm })',
+    'jwt.sign({}, settings.secret, { header: options })',
+    'jwt.sign({}, settings.secret, { algorithm: "none" })',
+  ];
+  for (const signer of signers)
+    assertNoFix(
+      context,
+      'jwt-verify-without-algorithms',
+      [
+        "import jwt from 'jsonwebtoken';",
+        'declare const settings: any, alternate: any, other: any, algorithm: any, options: any;',
+        'export const issue = () => ' + signer + ';',
+        'export const check = (token: string) => jwt.verify(token, settings.secret);',
+      ].join('\n'),
+    );
 });
 
 test('insecure-random-for-secret rewrites Math.floor(Math.random() * N) to randomInt(N) and adds the import', (context) => {

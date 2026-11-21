@@ -12,7 +12,13 @@ const severityNames = { error: 'Error', warning: 'Warning', information: 'Inform
 const staleFixMessage = 'The code changed since the last scan. Save the file to rescan, then try again.';
 const polyglotLanguages = new Set(['python', 'go', 'java', 'csharp', 'rust', 'php', 'ruby', 'kotlin', 'c', 'cpp']);
 
-const contracts = new Set(['pg-transaction-on-pool', 'folder-boundary', 'file-placement', 'query-mutates-state']);
+const contracts = new Set([
+  'pg-transaction-on-pool',
+  'folder-boundary',
+  'file-placement',
+  'query-mutates-state',
+  'data-access-boundary',
+]);
 
 const advice = new Map([
   [
@@ -106,6 +112,7 @@ function fixComparison(fix) {
     note: (
       (fix.note ?? '') +
       more +
+      (fix.requiresReview ? ' Review this change and apply it individually.' : '') +
       ' Click Apply fix above the line, or press Ctrl+Alt+. (the same keys on every OS).'
     ).trim(),
   };
@@ -167,13 +174,18 @@ function workspaceFix(rootPath, fix) {
     if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return;
     changes.push({ ...change, filename });
   }
-  return { changes, note: typeof fix.note === 'string' ? fix.note : undefined };
+  return {
+    changes,
+    note: typeof fix.note === 'string' ? fix.note : undefined,
+    requiresReview: fix.requiresReview === true,
+  };
 }
 
 // Every finding is an optional suggestion: a warning by default, an error for a declared contract, unless the
 // loadwise.severity setting picks one level for all of them.
-function severityFor(vscode, ruleId, setting) {
-  const name = severityNames[setting] ?? (contracts.has(ruleId) ? 'Error' : 'Warning');
+function severityFor(vscode, finding, setting) {
+  const isError = finding.level === 'error' || (finding.level !== 'warn' && contracts.has(finding.ruleId));
+  const name = severityNames[setting] ?? (isError ? 'Error' : 'Warning');
   return vscode.DiagnosticSeverity[name];
 }
 
@@ -217,7 +229,7 @@ function publish(vscode, collection, rootPath, source, findings, { isDismissed, 
     const message = readable(
       [finding.message, advice.get(finding.ruleId), finding.contextualReason].filter(Boolean).join('\n'),
     );
-    const diagnostic = new vscode.Diagnostic(site.range, message, severityFor(vscode, finding.ruleId, severitySetting));
+    const diagnostic = new vscode.Diagnostic(site.range, message, severityFor(vscode, finding, severitySetting));
     const anchor = {
       line: finding.line,
       column: finding.column,
@@ -333,22 +345,34 @@ function claim(claimed, operation) {
   else taken.rows.push([operation.firstRow, operation.lastRow]);
 }
 
+// Identical rewrites can come from several findings. Any request for review applies to the shared rewrite.
+function bulkFixesFor(diagnostics) {
+  const unique = new Map();
+  for (const diagnostic of diagnostics) {
+    const fix = anchors.get(diagnostic)?.fix;
+    if (!fix) continue;
+    const key = JSON.stringify(fix.changes);
+    if (!unique.has(key) || fix.requiresReview) unique.set(key, fix);
+  }
+  const eligible = [...unique.values()].filter((fix) => !fix.requiresReview);
+  return { eligible, reviewCount: unique.size - eligible.length };
+}
+
 // Every applicable fix in one WorkspaceEdit, so one undo reverts them all. Stale fixes, fixes that would create an
 // existing file, and fixes overlapping an earlier one are skipped whole.
 async function fixAllEdit(vscode, fixes) {
   const openDocument = cachedOpener(vscode);
-  const unique = new Map(fixes.map((fix) => [JSON.stringify(fix.changes), fix]));
   const edit = new vscode.WorkspaceEdit();
   const claimed = new Map();
   let applied = 0;
-  for (const fix of unique.values()) {
+  for (const fix of fixes) {
     const plan = await planFix(vscode, fix, openDocument);
     if (plan.error || plan.operations.some((operation) => overlaps(claimed, operation))) continue;
     for (const operation of plan.operations) claim(claimed, operation);
     addOperations(vscode, edit, plan.operations);
     applied++;
   }
-  return { edit, applied, skipped: unique.size - applied };
+  return { edit, applied, skipped: fixes.length - applied };
 }
 
 // The lightbulb appears with the cursor anywhere on a flagged line, not only on the reported token.
@@ -363,7 +387,6 @@ function registerQuickFixes(vscode, { diagnosticsFor, dismissals, onDismissed })
   const applyAllTitle = 'Apply all Loadwise fixes in this file';
   const fixAllKind = vscode.CodeActionKind.SourceFixAll.append('loadwise');
   const issuesIn = (uri) => [...diagnosticsFor(uri)].filter((diagnostic) => anchors.has(diagnostic));
-  const fixesIn = (uri) => issuesIn(uri).flatMap((diagnostic) => anchors.get(diagnostic).fix ?? []);
   const applyOne = vscode.commands.registerCommand(applyCommand, async (fix) => {
     const result = await fixEdit(vscode, fix);
     if (result.error) {
@@ -374,18 +397,19 @@ function registerQuickFixes(vscode, { diagnosticsFor, dismissals, onDismissed })
   });
   const applyAll = vscode.commands.registerCommand(applyAllCommand, async (uri) => {
     const target = uri ?? vscode.window.activeTextEditor?.document.uri;
-    const fixes = target ? fixesIn(target) : [];
-    if (!fixes.length) {
+    const { eligible, reviewCount } = bulkFixesFor(target ? issuesIn(target) : []);
+    if (!eligible.length && !reviewCount) {
       vscode.window.showInformationMessage('Loadwise has no fixes for this file.');
       return;
     }
-    const { edit, applied, skipped } = await fixAllEdit(vscode, fixes);
+    const { edit, applied, skipped } = await fixAllEdit(vscode, eligible);
     if (applied) await vscode.workspace.applyEdit(edit);
     const summary = 'Loadwise applied ' + applied + ' fix(es)';
-    if (!skipped) vscode.window.showInformationMessage(summary + '.');
+    const reviewNote = reviewCount ? ' ' + reviewCount + ' fix(es) require individual review.' : '';
+    if (!skipped) vscode.window.showInformationMessage(summary + '.' + reviewNote);
     else
       vscode.window.showWarningMessage(
-        summary + '; skipped ' + skipped + ' stale, overlapping or existing-file fix(es).',
+        summary + '; skipped ' + skipped + ' stale, overlapping or existing-file fix(es).' + reviewNote,
       );
   });
   const dismiss = vscode.commands.registerCommand(dismissCommand, async (entry) => {
@@ -437,7 +461,7 @@ function registerQuickFixes(vscode, { diagnosticsFor, dismissals, onDismissed })
         action.command = { command, title, arguments: [argument] };
         actions.push(action);
       };
-      if (fix) addAction('Apply fix: ' + diagnostic.code, applyCommand, fix, true);
+      if (fix) addAction('Apply fix: ' + diagnostic.code, applyCommand, fix, !fix.requiresReview);
       addAction('Dismiss this finding (' + diagnostic.code + ')', dismissCommand, dismissal);
       if (fileWide.has(diagnostic.code)) continue;
       fileWide.add(diagnostic.code);
@@ -446,7 +470,7 @@ function registerQuickFixes(vscode, { diagnosticsFor, dismissals, onDismissed })
         ruleId: dismissal.ruleId,
       });
     }
-    if (actions.length && issues.filter((issue) => anchors.get(issue).fix).length > 1) {
+    if (actions.length && bulkFixesFor(issues).eligible.length > 1) {
       const action = new vscode.CodeAction(applyAllTitle, vscode.CodeActionKind.QuickFix);
       action.command = { command: applyAllCommand, title: applyAllTitle, arguments: [document.uri] };
       actions.push(action);
@@ -455,7 +479,7 @@ function registerQuickFixes(vscode, { diagnosticsFor, dismissals, onDismissed })
   }
   // Runs for "Fix All" and editor.codeActionsOnSave, so it carries the edit itself instead of a command.
   async function fixAll(document) {
-    const fixes = fixesIn(document.uri);
+    const { eligible: fixes } = bulkFixesFor(issuesIn(document.uri));
     if (!fixes.length) return [];
     const { edit, applied } = await fixAllEdit(vscode, fixes);
     if (!applied) return [];
@@ -488,10 +512,11 @@ function registerCodeLenses(vscode, diagnosticsFor) {
         if (!vscode.workspace.getConfiguration('loadwise', document.uri).get('codeLens', true)) return [];
         const fixable = [...diagnosticsFor(document.uri)].filter((diagnostic) => anchors.get(diagnostic)?.fix);
         const lenses = [];
-        if (fixable.length > 1) {
+        const bulkCount = bulkFixesFor(fixable).eligible.length;
+        if (bulkCount > 1) {
           lenses.push(
             new vscode.CodeLens(new vscode.Range(0, 0, 0, 0), {
-              title: '$(wrench) Apply all ' + fixable.length + ' Loadwise fixes in this file',
+              title: '$(wrench) Apply all ' + bulkCount + ' Loadwise fixes in this file',
               command: 'loadwise.applyAllFixes',
               arguments: [document.uri],
             }),
@@ -551,14 +576,7 @@ function registerExamples(vscode, diagnosticsFor) {
               (comparison.kind === 'source' ? 'Current code' : 'Flagged line') + ' (' + issue.code + ')',
             );
             content.appendCodeblock(comparison.before, document.languageId);
-            if (comparison.kind === 'review') content.appendText('Review: ' + comparison.inline);
-            else {
-              content.appendText(comparison.kind === 'source' ? 'Suggested rewrite' : 'Illustrative alternative');
-              content.appendCodeblock(
-                comparison.after,
-                comparison.language ?? example?.language ?? document.languageId,
-              );
-            }
+            appendComparisonOutcome(comparison, content, example, document);
           } else {
             content.appendText('Illustrative alternative (' + issue.code + ')');
             content.appendCodeblock(example.code, example.language);
@@ -584,6 +602,14 @@ function registerExamples(vscode, diagnosticsFor) {
       },
     },
   );
+}
+
+function appendComparisonOutcome(comparison, content, example, document) {
+  if (comparison.kind === 'review') content.appendText('Review: ' + comparison.inline);
+  else {
+    content.appendText(comparison.kind === 'source' ? 'Suggested rewrite' : 'Illustrative alternative');
+    content.appendCodeblock(comparison.after, comparison.language ?? example?.language ?? document.languageId);
+  }
 }
 
 module.exports = { publish, registerCodeLenses, registerExamples, registerQuickFixes, refreshDocument, workspaceFix };

@@ -69,6 +69,18 @@ test('hooks.json runs the hook script after Edit, Write and MultiEdit', () => {
   assert.deepEqual(entry.hooks[0].args, ['${CLAUDE_PLUGIN_ROOT}/hooks/check-edited-file.cjs']);
 });
 
+test('the slash command reviews candidates before targeted fixes and checks already applied changes', () => {
+  const command = fs.readFileSync(path.join(repositoryRoot, 'plugin', 'commands', 'loadwise.md'), 'utf8');
+  assert.match(command, /Keep checks and handoff-only requests read-only/);
+  assert.match(command, /On every run, review all in-scope findings/);
+  assert.match(command, /loadwise agent verify --outcomes/);
+  assert.match(command, /fix performance security` starts with `loadwise check --only perf,sec --json/);
+  assert.match(command, /Evaluate both generated and manual findings against the actual code, callers and tests/);
+  assert.match(command, /explicit flags/i);
+  assert.match(command, /command the user already ran, inspect every applied hunk/);
+  assert.match(command, /review-marked and manual findings even when none are manual/);
+});
+
 test('a non-TS/JS file is skipped silently', () => {
   const result = runHook(makeProject(FAKE_WITH_FINDINGS), 'src/notes.md');
   assert.equal(result.status, 0);
@@ -87,7 +99,7 @@ test('findings for the edited file come back as blocking feedback with fix comma
   const output = JSON.parse(result.stdout);
   assert.equal(output.decision, 'block');
   assert.match(output.reason, /#abc123 array-repeated-find at src[\\/]a\.ts:3/);
-  assert.match(output.reason, /loadwise perf --fix --only abc123/);
+  assert.match(output.reason, /npx loadwise perf '\.\/src\/a\.ts' --fix --only abc123/);
   assert.doesNotMatch(output.reason, /zzz/);
 });
 
@@ -107,7 +119,7 @@ process.exit(findings.length ? 1 : 0);
   assert.match(result.stdout, /#sec123 bcrypt-low-cost/);
   const output = JSON.parse(result.stdout);
   assert.equal(output.decision, 'block');
-  assert.match(output.reason, /loadwise sec --fix --only sec123/);
+  assert.match(output.reason, /npx loadwise sec '\.\/src\/a\.ts' --fix --only sec123/);
   assert.doesNotMatch(output.reason, /sec456/);
 });
 
@@ -115,6 +127,29 @@ test('a clean file produces no output', () => {
   const result = runHook(makeProject('console.log(JSON.stringify({ findings: [] }));'), 'src/a.ts');
   assert.equal(result.status, 0);
   assert.equal(result.stdout, '');
+});
+
+test('the installed npm entry receives a filename with spaces as one argument', () => {
+  const root = makeProject();
+  const relativeFile = path.join('src', 'order details.ts');
+  fs.writeFileSync(path.join(root, relativeFile), 'export const total = 1;');
+  const entryDirectory = path.join(root, 'node_modules', '@loadwise', 'cli', 'bin');
+  fs.mkdirSync(entryDirectory, { recursive: true });
+  fs.writeFileSync(
+    path.join(entryDirectory, 'loadwise.cjs'),
+    `
+const [, , command, file, format] = process.argv;
+const findings = command === 'perf' && file === ${JSON.stringify(relativeFile)} && format === '--json'
+  ? [{ file, line: 1, ruleId: 'array-repeated-find', id: 'order123', message: 'slow find' }]
+  : [];
+console.log(JSON.stringify({ findings }));
+`,
+  );
+  const result = runHook(root, relativeFile);
+  assert.equal(result.status, 0);
+  const feedback = JSON.parse(result.stdout).reason;
+  assert.match(feedback, /#order123/);
+  assert.match(feedback, /Manual finding\. On an authorized fix request/);
 });
 
 test('a hung loadwise is cut off by the timeout and the hook still exits 0', () => {

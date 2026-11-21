@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const ts = require('typescript');
 const { analyzeSources } = require('../../lib/performance/projects.cjs');
 const { validateParallelReads } = require('../../lib/performance/parallel-reads.cjs');
 const { attachSiteFixes } = require('../../lib/performance/site-fix.cjs');
@@ -32,7 +33,7 @@ function assertNoFix(context, ruleId, source, filename) {
 
 const membership = 'array-repeated-membership';
 
-test('includes inside filter hoists a Set before the statement', (context) => {
+test('includes inside filter caches a Set at the first membership check', (context) => {
   const { change } = changeFor(
     context,
     membership,
@@ -42,8 +43,9 @@ test('includes inside filter hoists a Set before the statement', (context) => {
   );
   assert.deepEqual(change, {
     before: `return rows.filter((row) => allowedIds.includes(row.id));`,
-    after: `const allowedIdsSet = new Set(allowedIds);
-return rows.filter((row) => allowedIdsSet.has(row.id));`,
+    after: `const buildAllowedIdsSet = () => new Set(allowedIds);
+let allowedIdsSet: ReturnType<typeof buildAllowedIdsSet>;
+return rows.filter((row) => (allowedIdsSet ??= buildAllowedIdsSet()).has(row.id));`,
   });
 });
 
@@ -65,9 +67,10 @@ test('includes inside for-of keeps the loop indentation and avoids name clashes'
   assert.deepEqual(change, {
     before: `for (const row of rows) {
   if (ids.includes(row)) total++;`,
-    after: `const idsSet2 = new Set(ids);
+    after: `const buildIdsSet2 = () => new Set(ids);
+let idsSet2: ReturnType<typeof buildIdsSet2>;
 for (const row of rows) {
-  if (idsSet2.has(row)) total++;`,
+  if ((idsSet2 ??= buildIdsSet2()).has(row)) total++;`,
   });
 });
 
@@ -81,10 +84,10 @@ export function keep(rows: string[]) {
   return rows.map((row) => blocked.includes(row));
 }`,
   );
-  assert.equal(change.after.split('\n')[0], 'const blockedSet = new Set(blocked);');
+  assert.equal(change.after.split('\n')[0], 'const buildBlockedSet = () => new Set(blocked);');
 });
 
-test('an expression-bodied arrow function gets a block body that builds the Set first', (context) => {
+test('an expression-bodied arrow function gets a block body with a local cache', (context) => {
   const { change } = changeFor(
     context,
     membership,
@@ -93,8 +96,9 @@ test('an expression-bodied arrow function gets a block body that builds the Set 
   assert.equal(
     change.after,
     `export const pick = (rows: { id: number }[], ids: number[]) => {
-  const idsSet = new Set(ids);
-  return rows.filter((row) => idsSet.has(row.id));
+  const buildIdsSet = () => new Set(ids);
+  let idsSet: ReturnType<typeof buildIdsSet>;
+  return rows.filter((row) => (idsSet ??= buildIdsSet()).has(row.id));
 };`,
   );
   const { change: ownLine } = changeFor(
@@ -106,8 +110,9 @@ test('an expression-bodied arrow function gets a block body that builds the Set 
   assert.equal(
     ownLine.after,
     `export const shares = (left: string[], right: string[]): boolean => {
-  const rightSet = new Set(right);
-  return left.some((value) => value !== '' && rightSet.has(value));
+  const buildRightSet = () => new Set(right);
+  let rightSet: ReturnType<typeof buildRightSet>;
+  return left.some((value) => value !== '' && (rightSet ??= buildRightSet()).has(value));
 };`,
   );
 });
@@ -122,8 +127,9 @@ test('nested iteration callbacks hoist the Set before the outer statement', (con
 }`,
   );
   assert.deepEqual(change.after.split('\n'), [
-    'const wantedSet = new Set(wanted);',
-    'return drugs.some((drug) => drug.parts.some((part) => (table[part] ?? []).some((cls) => wantedSet.has(cls))));',
+    'const buildWantedSet = () => new Set(wanted);',
+    'let wantedSet: ReturnType<typeof buildWantedSet>;',
+    'return drugs.some((drug) => drug.parts.some((part) => (table[part] ?? []).some((cls) => (wantedSet ??= buildWantedSet()).has(cls))));',
   ]);
 });
 
@@ -136,11 +142,12 @@ test('a property chain receiver is hoisted only when nothing in the statement gu
   return result;
 }`,
   );
-  assert.deepEqual(change.after.split('\n').slice(0, 2), [
-    'const permissionsSet = new Set(actor.permissions);',
-    "const result = keys.includes('*') || !keys.every((key) => permissionsSet.has(key));",
+  assert.deepEqual(change.after.split('\n'), [
+    'const buildPermissionsSet = () => new Set(actor.permissions);',
+    'let permissionsSet: ReturnType<typeof buildPermissionsSet>;',
+    "const result = keys.includes('*') || !keys.every((key) => (permissionsSet ??= buildPermissionsSet()).has(key));",
   ]);
-  assert.match(note, /`actor\.permissions` is now read even when the iteration does not run/);
+  assert.match(note, /first membership check/);
 });
 
 test('a chain root that the statement only tests is read with optional chaining', (context) => {
@@ -152,11 +159,12 @@ test('a chain root that the statement only tests is read with optional chaining'
   return false;
 }`,
   );
-  assert.deepEqual(change.after.split('\n').slice(0, 2), [
-    'const namesSet = new Set(existing?.names);',
-    'if (existing && names.every((name) => namesSet.has(name))) return true;',
+  assert.deepEqual(change.after.split('\n'), [
+    'const buildNamesSet = () => new Set(existing?.names);',
+    'let namesSet: ReturnType<typeof buildNamesSet>;',
+    'if (existing && names.every((name) => (namesSet ??= buildNamesSet()).has(name))) return true;',
   ]);
-  assert.match(note, /empty when `existing` is not set/);
+  assert.match(note, /first membership check/);
   assertNoFix(
     context,
     membership,
@@ -185,8 +193,8 @@ test('lookups on one array in sibling statements share one Set, with the same fi
   assert.ok(first);
   for (const changes of others) assert.deepEqual(changes, first);
   assert.equal(first.length, 1);
-  assert.equal(first[0].after.match(/const tokensSet = new Set\(tokens\);/g).length, 1);
-  assert.equal(first[0].after.match(/tokensSet\.has/g).length, 3);
+  assert.equal(first[0].after.match(/const buildTokensSet = \(\) => new Set\(tokens\);/g).length, 1);
+  assert.equal(first[0].after.match(/\(tokensSet \?\?= buildTokensSet\(\)\)\.has/g).length, 3);
   assertNoFix(
     context,
     membership,
@@ -223,13 +231,14 @@ export function link(orders: { itemId: string }[], items: Item[]) {
   );
   assert.deepEqual(change, {
     before: `return orders.map((order) => items.find((item) => item.id === order.itemId));`,
-    after: `const itemsById = new Map(items.map((item) => [item.id, item] as const).reverse());
-return orders.map((order) => itemsById.get(order.itemId));`,
+    after: `const buildItemsById = () => new Map<unknown, (typeof items)[number]>(items.map((item) => [item.id, item] as const).filter(([key]) => !Number.isNaN(key)).reverse());
+let itemsById: ReturnType<typeof buildItemsById>;
+return orders.map((order) => (itemsById ??= buildItemsById()).get(order.itemId));`,
   });
   assert.match(note, /first duplicate wins/);
 });
 
-test('find in a JavaScript for-of loop builds the Map without a tuple assertion', (context) => {
+test('find in a JavaScript for-of loop preserves the tuple type for checked JavaScript', (context) => {
   const { change } = changeFor(
     context,
     find,
@@ -249,9 +258,10 @@ export function link(orders, items) {
   assert.deepEqual(change, {
     before: `for (const order of orders) {
   found.push(items.find((item) => order.itemId === item.id));`,
-    after: `const itemsById = new Map(items.map((item) => [item.id, item]).reverse());
+    after: `const buildItemsById = () => /** @type {Map<unknown, (typeof items)[number]>} */ (new Map(items.map((item) => /** @type {const} */ ([item.id, item])).filter(([key]) => !Number.isNaN(key)).reverse()));
+/** @type {ReturnType<typeof buildItemsById>} */ let itemsById;
 for (const order of orders) {
-  found.push(itemsById.get(order.itemId));`,
+  found.push((itemsById ??= buildItemsById()).get(order.itemId));`,
   });
 });
 
@@ -265,6 +275,109 @@ export function link(orders: { itemId: string }[], items: Item[]) {
 }`,
   );
 });
+
+test('a discriminating equality still reports repeated find and keeps its narrowed result type', (context) => {
+  const [finding] = findingsFor(
+    context,
+    find,
+    `type Animal = {kind: 'dog', bark: string} | {kind: 'cat', age: number};
+export function dogs(rows: {kind: 'dog'}[], animals: Animal[]) {
+  return rows.map(row => animals.find(animal => animal.kind === row.kind)?.bark);
+}`,
+  );
+  assert.ok(finding.narrowsFindResult);
+  assert.equal(finding.fix, undefined);
+});
+
+test('Map and Set indexes are built once on demand and preserve inferred types in TS and checked JS', (context) => {
+  const body = `  const visible = rows.filter(id => id !== 0 && allowed.includes(id));
+  return visible.map(id => customers.find(customer => customer.id === id)?.name);
+}`;
+  const tsSource = `type ReturnType = string;
+export function names(rows: (number | string)[], allowed: (number | string)[], customers: {id: number, name: string}[]) {
+${body}`;
+  const jsSource = `/**
+ * @param {(number | string)[]} rows
+ * @param {(number | string)[]} allowed
+ * @param {{id: number, name: string}[]} customers
+ */
+export function names(rows, allowed, customers) {
+${body}`;
+  const options = {
+    strict: true,
+    allowJs: true,
+    checkJs: true,
+    noEmit: true,
+    skipLibCheck: true,
+    types: [],
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.CommonJS,
+  };
+  for (const [filename, source] of [
+    ['app.ts', tsSource],
+    ['app.js', jsSource],
+  ]) {
+    const { root, findings } = scanWithFixes(context, { [filename]: source });
+    const target = path.join(root, filename);
+    let rewritten = source;
+    for (const rule of [membership, find]) {
+      const fix = findings.find((finding) => finding.ruleId === rule).fix;
+      assert.ok(fix && !fix.requiresReview);
+      for (const change of fix.changes) rewritten = rewritten.replace(change.before, () => change.after);
+    }
+    fs.writeFileSync(target, rewritten);
+    const program = ts.createProgram([target], options);
+    const diagnostics = ts.getPreEmitDiagnostics(program);
+    assert.deepEqual(
+      diagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')),
+      [],
+    );
+    const checker = program.getTypeChecker();
+    const declaration = program.getSourceFile(target).statements.find(ts.isFunctionDeclaration);
+    assert.equal(
+      checker.typeToString(checker.getReturnTypeOfSignature(checker.getSignatureFromDeclaration(declaration))),
+      '(string | undefined)[]',
+    );
+    const original = executableNames(source);
+    const fixed = executableNames(rewritten);
+    for (const rows of [[], Array(3), [0, 0]]) {
+      assert.deepEqual(countLookupReads(original, rows), { names: [], reads: 0, setBuilds: 0 });
+      assert.deepEqual(countLookupReads(fixed, rows), { names: [], reads: 0, setBuilds: 0 });
+    }
+    const rows = [1, 1, 1, NaN];
+    const expected = countLookupReads(original, rows).names;
+    assert.deepEqual(expected, ['first', 'first', 'first', undefined]);
+    assert.deepEqual(countLookupReads(fixed, rows), { names: expected, reads: 3, setBuilds: 1 });
+  }
+});
+
+function executableNames(source) {
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+  });
+  const exports = {};
+  new Function('exports', compiled.outputText)(exports);
+  return exports.names;
+}
+
+function countLookupReads(namesFor, rows) {
+  let reads = 0;
+  let setBuilds = 0;
+  const customers = ['first', 'second', 'NaN'].map((name, index) => ({
+    name,
+    get id() {
+      reads++;
+      return index === 2 ? NaN : 1;
+    },
+  }));
+  const allowed = new Proxy([1, NaN], {
+    get(target, key, receiver) {
+      if (key === Symbol.iterator) setBuilds++;
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  return { names: namesFor(rows, allowed, customers), reads, setBuilds };
+}
 
 const existence = 'filter-for-existence';
 

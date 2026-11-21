@@ -107,3 +107,90 @@ test('invalid JSONC, unsupported versions, duplicates and malformed task lists f
   }
   assert.deepEqual(fs.readdirSync(path.dirname(filename)), ['tasks.json']);
 });
+
+function legacyWatcher(current) {
+  const legacy = structuredClone(current);
+  legacy.label = 'Backend Checkers: Watch';
+  legacy.args = ['${workspaceFolder}/node_modules/backend-perf-check/bin/backend-perf-check.cjs', 'editor', 'watch'];
+  Object.assign(legacy.problemMatcher, { owner: 'backend-checkers', source: 'Backend Checkers' });
+  Object.assign(legacy.problemMatcher.background, {
+    beginsPattern: '^Backend Checkers: scan started$',
+    endsPattern: '^Backend Checkers: scan finished$',
+  });
+  return legacy;
+}
+
+test('setup upgrades the old generated watcher in place, preserving comments, options and custom tasks', (context) => {
+  const { root, filename } = workspace(context);
+  setupEditor(root);
+  const current = JSON.parse(fs.readFileSync(filename)).tasks[0];
+  const legacy = legacyWatcher(current);
+  const custom = { ...legacy, options: { cwd: './api' }, label: 'Watch API' };
+  const initial = JSON.stringify({ tasks: [custom, legacy], inputs: [] }, null, 2)
+    .replace('"Backend Checkers: Watch"', '/* old watcher */ "Backend Checkers: Watch"')
+    .replaceAll('\n', '\r\n');
+  fs.writeFileSync(filename, '\uFEFF' + initial);
+  assert.equal(setupEditor(root).changed, true);
+  const migrated = fs.readFileSync(filename, 'utf8');
+  assert.ok(migrated.startsWith('\uFEFF'));
+  assert.ok(migrated.includes('/* old watcher */ "Loadwise: Watch"'));
+  assert.doesNotMatch(migrated, /(?<!\r)\n/);
+  const result = ts.parseConfigFileTextToJson(filename, migrated);
+  assert.equal(result.error, undefined);
+  assert.deepEqual(result.config, { version: '2.0.0', tasks: [custom, current], inputs: [] });
+  assert.equal(setupEditor(root).changed, false);
+});
+
+test(
+  'bounded Windows sharing retries preserve concurrent editor task changes',
+  { skip: process.platform !== 'win32' },
+  (context) => {
+    const { root, filename } = workspace(context, '{}');
+    const rename = fs.renameSync;
+    const sharingError = Object.assign(new Error('sharing violation'), { code: 'EPERM' });
+    let attempts = 0;
+    let editDuringRetry = false;
+    let persistentlyLocked = false;
+    context.mock.method(fs, 'renameSync', (from, to) => {
+      if (to === filename && (attempts++ === 0 || persistentlyLocked)) {
+        if (editDuringRetry) fs.writeFileSync(filename, '{"owner": "concurrent change"}');
+        throw sharingError;
+      }
+      return rename(from, to);
+    });
+    assert.equal(setupEditor(root).changed, true);
+    assert.equal(attempts, 2);
+    attempts = 0;
+    editDuringRetry = true;
+    fs.writeFileSync(filename, '{}');
+    assert.throws(() => setupEditor(root), /changed during setup/);
+    assert.equal(attempts, 1);
+    assert.deepEqual(JSON.parse(fs.readFileSync(filename)), { owner: 'concurrent change' });
+    attempts = 0;
+    editDuringRetry = false;
+    persistentlyLocked = true;
+    assert.throws(
+      () => setupEditor(root),
+      (error) => error === sharingError,
+    );
+    assert.equal(attempts, 4);
+    assert.deepEqual(JSON.parse(fs.readFileSync(filename)), { owner: 'concurrent change' });
+  },
+);
+
+test('an existing current watcher replaces only an exact legacy generator task, including at either end', (context) => {
+  const { root, filename } = workspace(context);
+  setupEditor(root);
+  const current = JSON.parse(fs.readFileSync(filename)).tasks[0];
+  const legacy = legacyWatcher(current);
+  const custom = { ...legacy, presentation: { ...legacy.presentation, reveal: 'always' } };
+  for (const tasks of [
+    [legacy, custom, current],
+    [custom, current, legacy],
+  ]) {
+    fs.writeFileSync(filename, JSON.stringify({ version: '2.0.0', tasks }));
+    assert.equal(setupEditor(root).changed, true);
+    assert.deepEqual(JSON.parse(fs.readFileSync(filename)).tasks, [custom, current]);
+    assert.equal(setupEditor(root).changed, false);
+  }
+});

@@ -27,6 +27,7 @@ test('a redirect to a request-supplied URL is reported in each response form', (
   assert.equal(findings(expressRoute('res.status(302).redirect(req.body.next);')).length, 1);
   assert.equal(findings(expressRoute("res.setHeader('Location', req.query.to as string); res.end();")).length, 1);
   assert.equal(findings(expressRoute('res.writeHead(302, { Location: req.query.to });')).length, 1);
+  assert.equal(findings(expressRoute('res.writeHead(302, "Found", { lOcAtIoN: req.query.to });')).length, 1);
   assert.equal(findings(expressRoute('res.redirect(`https://${req.query.domain}/home`);')).length, 1);
 });
 

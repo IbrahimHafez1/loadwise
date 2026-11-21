@@ -20,14 +20,53 @@ function project(context, files) {
 }
 
 function loadwise(root, ...args) {
-  const run = spawnSync(process.execPath, [cli, ...args], { cwd: root, encoding: 'utf8', windowsHide: true });
+  const run = spawnSync(process.execPath, [cli, ...args], {
+    cwd: root,
+    encoding: 'utf8',
+    windowsHide: true,
+    env: { ...process.env, LOADWISE_AGENT: '0' },
+  });
   return { code: run.status, stdout: run.stdout, stderr: run.stderr };
 }
+
+test('standalone JavaScript packages share inferred sources and respect staged-only scans', (context) => {
+  const source = "process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';\n";
+  const root = project(context, {
+    'package.json': '{}',
+    'connection.cjs': source,
+    'entry.mjs': 'export const count = 1;\n',
+  });
+  fs.mkdirSync(path.join(root, 'dist'));
+  fs.writeFileSync(path.join(root, 'dist', 'generated.ts'), 'export {};');
+  const all = loadwise(root, 'check', '--json');
+  const { performance, security } = JSON.parse(all.stdout);
+  assert.equal(performance.scannedFiles, 2, all.stderr);
+  assert.equal(security.scannedFiles, 2);
+  assert.ok(security.findings.some(({ ruleId }) => ruleId === 'tls-verification-disabled'));
+  const fix = loadwise(root, 'fix', '--all');
+  assert.equal(fix.code, 0, fix.stderr);
+  assert.equal(fs.existsSync(path.join(root, 'jsconfig.json')), false);
+  assert.equal(fs.readFileSync(path.join(root, 'connection.cjs'), 'utf8'), source);
+  const git = (...args) => assert.equal(spawnSync('git', args, { cwd: root }).status, 0);
+  git('init', '--quiet');
+  git('add', 'entry.mjs');
+  const staged = loadwise(root, 'check', '--only', 'perf,sec', '--staged', '--json');
+  assert.equal(staged.code, 0, staged.stderr);
+  assert.deepEqual(JSON.parse(staged.stdout).security.findings, []);
+});
+
+test('adding a TypeScript implementation file keeps a configless mixed project out of inferred JS bulk mode', (context) => {
+  const root = project(context, { 'package.json': '{}', 'index.js': 'module.exports = {};', 'impl.ts': 'export {};' });
+  const fix = loadwise(root, 'fix', '--all');
+  assert.equal(fix.code, 2, fix.stdout + fix.stderr);
+  assert.match(fix.stderr, /did not complete/);
+});
 
 test('plain loadwise checks the current folder with every checker in titled sections', (context) => {
   const root = project(context, { 'tsconfig.json': tsconfig, 'a.ts': quietSource });
   const run = loadwise(root);
   assert.equal(run.code, 0, run.stderr);
+  assert.doesNotMatch(run.stderr, /agent instructions/);
   assert.match(
     run.stdout,
     /^== Performance ==\n1 file\(s\) checked, 0 finding\(s\)\.\n== Maintainability ==\n.*\n== Security ==\n1 file\(s\) checked, 0 finding\(s\)\.\n$/,
@@ -39,7 +78,7 @@ test('a performance finding exits 1 and prints the per-checker fix command inste
   const root = project(context, { 'tsconfig.json': tsconfig, 'a.ts': slowSource });
   const run = loadwise(root, 'check');
   assert.equal(run.code, 1, run.stderr);
-  assert.match(run.stdout, /Fix all: npx loadwise perf -p tsconfig\.json --fix --only [0-9a-f,]+\n/);
+  assert.match(run.stdout, /Fix all: npx loadwise perf -p tsconfig\.json --engine js --fix --only [0-9a-f,]+\n/);
   assert.equal(fs.readFileSync(path.join(root, 'a.ts'), 'utf8'), slowSource);
 });
 

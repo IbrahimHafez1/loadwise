@@ -1,6 +1,7 @@
 'use strict';
 
 // Fails when the README's security section, `loadwise sec --help`, the rule registry or the examples drift apart.
+const { readRuleTokens } = require('../shared/read-rule-tokens.cjs');
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
@@ -17,15 +18,7 @@ const section = readme.slice(readme.indexOf('\n# Security checker\n'), readme.in
 const helpText = spawnSync(process.execPath, [path.join(root, 'bin', 'loadwise.cjs'), 'sec', '--help'], {
   encoding: 'utf8',
 }).stdout;
-const rulePattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/;
 const maxExampleLines = 6;
-
-function readRuleTokens(markdown) {
-  const prose = markdown.replace(/```[\s\S]*?```/g, '');
-  return new Set(
-    [...prose.matchAll(/`([^`\n]+)`/g)].map((match) => match[1]).filter((token) => rulePattern.test(token)),
-  );
-}
 
 test('the README has a security section after the maintainability section', () => {
   assert.ok(section.length > 1000, 'missing "# Security checker" before "## Developing locally"');

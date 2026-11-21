@@ -106,10 +106,16 @@ def build(output):
         root = Path(temp)
         stage = root / "extension"
         stage.mkdir()
-        for source in [*EDITOR.glob("*.cjs"), EDITOR / "package.json", EDITOR / "README.md"]:
-            shutil.copyfile(source, stage / source.name)
-        shutil.copytree(EDITOR / "licenses", stage / "licenses")
         stage_checker(PACKAGE_ROOT, stage, "@loadwise/cli", "loadwise")
+        for source in [*EDITOR.glob("*.cjs"), EDITOR / "package.json", EDITOR / "README.md"]:
+            # Shared editor modules can import the checker's library relative to their packaged location.
+            bundled = Path("tools/loadwise/editor") / source.name
+            if (stage / bundled).is_file():
+                (stage / source.name).write_text(f"module.exports = require('./{bundled.as_posix()}');\n", encoding="utf-8")
+            else:
+                shutil.copyfile(source, stage / source.name)
+        shutil.copytree(EDITOR / "licenses", stage / "licenses")
+        subprocess.run(["node", "-e", "require('./diagnostics.cjs')"], cwd=stage, check=True)
         lock = json.loads((PACKAGE_ROOT / "package-lock.json").read_bytes())["packages"]
         executables = stage_runtime(root, stage, lock)
         output.parent.mkdir(parents=True, exist_ok=True)

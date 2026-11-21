@@ -1,6 +1,7 @@
 'use strict';
 
 // Fails when the README's performance section, `loadwise perf --help` or the rule registry drift apart.
+const { readRuleTokens } = require('../shared/read-rule-tokens.cjs');
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
@@ -17,14 +18,6 @@ const section = readme.slice(
   readme.indexOf('\n# Maintainability checker\n'),
 );
 const helpText = spawnSync(process.execPath, [binEntry, 'perf', '--help'], { encoding: 'utf8' }).stdout;
-
-const rulePattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/;
-
-function readRuleTokens(markdown) {
-  const prose = markdown.replace(/```[\s\S]*?```/g, '');
-  const tokens = [...prose.matchAll(/`([^`\n]+)`/g)].map((match) => match[1]);
-  return new Set(tokens.filter((token) => rulePattern.test(token)));
-}
 
 function sourceFiles(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

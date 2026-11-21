@@ -70,6 +70,21 @@ test('env templates are checked for token formats only', () => {
   assert.deepEqual(ruleIds(checkSecrets('.env.sample', `AWS_KEY=${awsKey}`)), ['committed-secret']);
 });
 
+test('only default credentials on a local host get the local-service exception', () => {
+  const findingsFor = (credentials, host) => checkSecrets('.env', `DATABASE_URL=postgres://${credentials}@${host}/app`);
+  for (const [credentials, host] of [
+    ['postgres:postgres', 'db.internal'],
+    ['postgres:postgres', '[2001:db8::1]'],
+    [`app:${realPassword}`, 'localhost'],
+  ]) {
+    const findings = findingsFor(credentials, host);
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].contextualReason, undefined);
+  }
+  assert.match(findingsFor('postgres:postgres', '[::1]')[0].contextualReason, /local service/);
+  assert.deepEqual(findingsFor('app:changeme', 'localhost'), []);
+});
+
 test('a test env file is contextual', () => {
   const [finding] = checkSecrets('.env.test', `JWT_SECRET=${realPassword}`);
   assert.equal(finding.contextualReason, 'Test environment file.');

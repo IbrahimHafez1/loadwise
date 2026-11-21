@@ -35,6 +35,8 @@ function kind(value) {
 function fakeVscode(root, settings) {
   const output = [];
   const collections = [];
+  const commands = new Map();
+  const watchers = new Map();
   const statusItem = { show() {}, dispose() {} };
   const disposable = () => ({ dispose() {} });
   const uriOf = (fsPath) => ({ fsPath, scheme: 'file', toString: () => fsPath });
@@ -71,7 +73,12 @@ function fakeVscode(root, settings) {
       createOutputChannel: () => ({ appendLine: (line) => output.push(line), show() {}, dispose() {} }),
       createStatusBarItem: () => statusItem,
     },
-    commands: { registerCommand: disposable },
+    commands: {
+      registerCommand(name, handler) {
+        commands.set(name, handler);
+        return disposable();
+      },
+    },
     languages: {
       registerHoverProvider: disposable,
       registerCodeLensProvider: disposable,
@@ -102,9 +109,12 @@ function fakeVscode(root, settings) {
       getConfiguration: () => ({ get: (key, fallback) => settings[key] ?? fallback }),
       getWorkspaceFolder: () => folder,
       findFiles: async () => [],
-      createFileSystemWatcher: () => ({
+      createFileSystemWatcher: (glob) => ({
         onDidCreate: disposable,
-        onDidChange: disposable,
+        onDidChange(handler) {
+          watchers.set(glob, handler);
+          return disposable();
+        },
         onDidDelete: disposable,
         dispose() {},
       }),
@@ -117,7 +127,7 @@ function fakeVscode(root, settings) {
     },
   };
   const diagnosticsIn = (file) => collections.flatMap((collection) => collection.byUri.get(file) ?? []);
-  return { vscode, output, statusItem, diagnosticsIn };
+  return { vscode, output, statusItem, diagnosticsIn, commands, watchers };
 }
 
 async function until(predicate, what) {
@@ -183,6 +193,28 @@ test('when watch mode exits, full rescans take over', async () => {
   try {
     await until(() => extension.diagnosticsIn(extension.file).length === 1, 'the fallback scan');
     assert.ok(extension.output.some((line) => line.includes('Falling back to full rescans')));
+  } finally {
+    extension.stop();
+  }
+});
+
+test('manual refresh and project rule changes each rerun the performance watcher', async () => {
+  const extension = startExtension(`
+const fs = require('node:fs');
+console.log(JSON.stringify({ findings: fs.existsSync('loadwise.config.json') ? [] : [${JSON.stringify(finding)}] }));
+if (process.argv.includes('--watch')) setInterval(() => {}, 1000);
+`);
+  try {
+    await until(() => extension.diagnosticsIn(extension.file).length === 1, 'initial finding');
+    const config = path.join(extension.root, 'loadwise.config.json');
+    fs.writeFileSync(config, '{}');
+    await extension.commands.get('loadwise.scan')();
+    await until(() => extension.diagnosticsIn(extension.file).length === 0, 'manual refresh');
+    fs.unlinkSync(config);
+    const configWatcher = [...extension.watchers].find(([glob]) => glob.includes('loadwise.config.json'));
+    assert.ok(configWatcher, 'the extension watches the unified config');
+    configWatcher[1](extension.vscode.Uri.file(config));
+    await until(() => extension.diagnosticsIn(extension.file).length === 1, 'config change refresh');
   } finally {
     extension.stop();
   }

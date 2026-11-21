@@ -1,5 +1,6 @@
 'use strict';
 
+const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -52,4 +53,12 @@ function dedent(text) {
   return lines.map((line) => line.slice(indentation)).join('\n');
 }
 
-module.exports = { scanWithFixes, onlyChange, dedent, withSecurity };
+function assertReportedWithoutFix(findings) {
+  assert.ok(findings.length > 0, 'rule should report');
+  assert.deepEqual(
+    findings.map((finding) => finding.fix),
+    findings.map(() => undefined),
+  );
+}
+
+module.exports = { assertReportedWithoutFix, scanWithFixes, onlyChange, dedent, withSecurity };

@@ -96,7 +96,30 @@ test('--staged exits before loading TypeScript when nothing is staged', (context
   const result = run('--staged', '--json');
   assert.equal(result.status, 0);
   assert.deepEqual(JSON.parse(result.stdout), { scannedFiles: 0, findings: [] });
-  assert.equal(run('--staged').stdout.trim(), 'No changed JavaScript or TypeScript files.');
+  assert.equal(run('--staged').stdout.trim(), 'No changed files to check.');
+  assert.equal(run('--staged', '--engine', 'unknown').status, 2);
+  assert.equal(run('--staged', '--with', 'unknown').status, 2);
+});
+
+test('combined changed scans return one correctly formatted report for each selected checker', (context) => {
+  const { root, git, run } = gitRepository(context);
+  const empty = run('--staged', '--with=sec', '--json');
+  assert.equal(empty.status, 0, empty.stderr);
+  const expected = { code: 0, stdout: '{"scannedFiles":0,"findings":[]}\n' };
+  assert.deepEqual(JSON.parse(empty.stdout), { performance: expected, security: expected });
+  for (const staged of [false, true]) {
+    if (staged) {
+      fs.appendFileSync(path.join(root, 'other.ts'), 'export const next = 2;\n');
+      git('add', 'other.ts');
+    }
+    const result = run('--staged', '--with=sec', '--format', 'sarif');
+    assert.equal(result.status, 0, result.stderr);
+    const reports = JSON.parse(result.stdout);
+    for (const report of [reports.performance, reports.security]) {
+      assert.equal(report.code, 0);
+      assert.equal(JSON.parse(report.stdout).version, '2.1.0');
+    }
+  }
 });
 
 test('--staged ignores findings on unchanged lines and prints fix and dismiss commands for changed ones', (context) => {
@@ -116,6 +139,7 @@ test('--staged ignores findings on unchanged lines and prints fix and dismiss co
   const noisy = run('--staged', '-p', 'tsconfig.json', '--engine', 'js');
   assert.equal(noisy.status, 1);
   assert.match(noisy.stdout, /^slow\.ts:\d+ \[[a-z-]+ #[0-9a-f]{12}\] /m);
+  assert.match(noisy.stdout, /fix: +npx loadwise perf -p tsconfig\.json --engine js --fix --only [0-9a-f]+/);
   assert.match(noisy.stdout, /dismiss: \/\/ loadwise-reviewed [a-z-]+ -- <reason>/);
   assert.match(
     noisy.stdout,
@@ -134,6 +158,22 @@ test('--changed-since compares the working tree with a ref', (context) => {
   const files = new Set(JSON.parse(result.stdout).findings.map(({ file }) => file));
   assert.deepEqual([...files], ['fresh.ts']);
   assert.equal(git('status', '--short').stdout.includes('fresh.ts'), true);
+});
+
+test('a staged Prisma schema is checked for foreign keys even when no TypeScript changed', (context) => {
+  const { root, git, run } = gitRepository(context);
+  const schema = path.join(root, 'schema.prisma');
+  fs.copyFileSync(path.join(__dirname, 'fixtures/schema/prisma-shop/prisma/schema.prisma'), schema);
+  git('add', 'schema.prisma');
+  const staged = run('--staged', '--json');
+  assert.equal(staged.status, 1, staged.stderr);
+  const [finding] = JSON.parse(staged.stdout).findings;
+  assert.equal(finding.ruleId, 'index-missing-foreign-key');
+  assert.equal(finding.file, 'schema.prisma');
+  const fix = run('--fix', '--only', finding.id);
+  assert.equal(fix.status, 0, fix.stdout + fix.stderr);
+  git('add', 'schema.prisma');
+  assert.equal(run('--staged', '--json').status, 0);
 });
 
 test('--staged rejects explicit files and a missing git repository', (context) => {

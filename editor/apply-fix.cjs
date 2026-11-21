@@ -11,30 +11,31 @@ function splitLines(text) {
   return text.split(/\r?\n/);
 }
 
-// The row where `before` starts, nearest to the reported line, or -1.
+// Prefer the reported row. After a shift, only a unique nearby match identifies the intended edit.
 function locateChange(lines, change) {
   const expected = splitLines(change.before);
   const reported = change.line - 1;
   const matchesAt = (row) => expected.every((line, offset) => lines[row + offset] === line);
-  for (let distance = 0; distance <= maxLineDrift; distance++) {
-    for (const row of distance ? [reported - distance, reported + distance] : [reported]) {
-      if (row >= 0 && row + expected.length <= lines.length && matchesAt(row)) return row;
-    }
+  if (matchesAt(reported)) return reported;
+  const last = Math.min(lines.length - expected.length, reported + maxLineDrift);
+  let match = -1;
+  for (let row = Math.max(0, reported - maxLineDrift); row <= last; row++) {
+    if (!matchesAt(row)) continue;
+    if (match !== -1) return -1;
+    match = row;
   }
-  return -1;
-}
-
-function blockAround(lines, row, block) {
-  for (let start = Math.max(0, row - block.length); start <= row; start++) {
-    if (block.every((line, offset) => lines[start + offset] === line)) return true;
-  }
-  return false;
+  return match;
 }
 
 // Two findings can share one change, such as the same missing index or the same batched helper. An insertion keeps
 // the original lines, so the rewritten block around them means this change is already in the file.
 function isChangeApplied(lines, row, change) {
-  return blockAround(lines, row, splitLines(change.after));
+  const beforeLength = splitLines(change.before).length;
+  const after = splitLines(change.after);
+  for (let start = Math.max(0, row + beforeLength - after.length); start <= row; start++) {
+    if (after.every((line, offset) => lines[start + offset] === line)) return true;
+  }
+  return false;
 }
 
 // `import { a, b } from 'module';` on one line: the text before the names, the names, and the rest.
@@ -72,12 +73,14 @@ function mergeNamedImport(lines, change) {
 }
 
 // Returns the new text, or { error } when the code no longer matches the scan.
-function applyChangesToText(text, changes) {
+function applyChangesToText(text, changes, { exactLocation = false, capture } = {}) {
   const newline = text.includes('\r\n') ? '\r\n' : '\n';
   const lines = splitLines(text);
   const located = [];
   for (const change of changes) {
     const row = locateChange(lines, change);
+    if (exactLocation && row !== change.line - 1)
+      return { error: `the code at line ${change.line} changed since the scan` };
     if (row === -1) {
       const merged = mergeNamedImport(lines, change);
       if (merged?.applied) continue;
@@ -87,7 +90,10 @@ function applyChangesToText(text, changes) {
       }
       return { error: `the code at line ${change.line} changed since the scan` };
     }
-    if (isChangeApplied(lines, row, change)) continue;
+    if (isChangeApplied(lines, row, change)) {
+      if (exactLocation) return { error: `the change at line ${change.line} is already in the file` };
+      continue;
+    }
     located.push({ row, removed: splitLines(change.before).length, added: splitLines(change.after) });
   }
   if (!located.length) return { error: alreadyApplied };
@@ -95,7 +101,10 @@ function applyChangesToText(text, changes) {
   for (let index = 1; index < located.length; index++) {
     if (located[index].row + located[index].removed > located[index - 1].row) return { error: 'overlapping changes' };
   }
-  for (const { row, removed, added } of located) lines.splice(row, removed, ...added);
+  for (const { row, removed, added } of located) {
+    const original = lines.splice(row, removed, ...added);
+    capture?.({ file: changes[0].file, line: row + 1, before: original.join('\n'), after: added.join('\n') });
+  }
   return { text: lines.join(newline) };
 }
 
@@ -118,7 +127,7 @@ function readIfExists(readFile, file) {
 
 // Groups a fix's changes by file and applies them through the given file accessors. `readFile` throws an ENOENT
 // error (or returns undefined) for a missing file; `writeFile` creates the parent folders of a new file.
-function applyFix(fix, { readFile, writeFile }) {
+function applyFix(fix, { readFile, writeFile }, options) {
   const byFile = new Map();
   for (const change of fix.changes) {
     if (!byFile.has(change.file)) byFile.set(change.file, []);
@@ -130,10 +139,13 @@ function applyFix(fix, { readFile, writeFile }) {
     if (created && changes.length > 1) return { error: `${file}: a new file cannot take other changes` };
     const currentText = readIfExists(readFile, file);
     if (!created && currentText === undefined) return { error: `${file}: the file no longer exists` };
-    const result = created ? createdFileText(changes[0], currentText) : applyChangesToText(currentText, changes);
+    const result = created
+      ? createdFileText(changes[0], currentText)
+      : applyChangesToText(currentText, changes, options);
     // A file another fix already changed the same way, such as a shared batch helper, needs no write.
-    if (result.error === alreadyApplied) continue;
+    if (result.error === alreadyApplied && !options?.exactLocation) continue;
     if (result.error) return { error: `${file}: ${result.error}` };
+    if (created) options?.capture?.(changes[0]);
     updates.push([file, result.text]);
   }
   if (!updates.length) return { error: alreadyApplied };

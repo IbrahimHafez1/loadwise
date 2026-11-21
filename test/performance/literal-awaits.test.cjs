@@ -39,6 +39,12 @@ test('awaits that all run on the same transaction client are quiet', () => {
     [],
   );
   assert.equal(run('return db.transaction(async (manager) => ({ x: await c(manager), y: await a() }));').length, 1);
+  assert.deepEqual(
+    run(
+      'return db.transaction(async (manager: any) => ({ x: await manager.read(), y: await manager.repo().count() }));',
+    ),
+    [],
+  );
 });
 
 test('array fix wraps the calls in Promise.all', (context) => {
@@ -47,6 +53,7 @@ test('array fix wraps the calls in Promise.all', (context) => {
   });
   const [finding] = scanned.filter((entry) => entry.ruleId === rule);
   assert.equal(onlyChange(finding).after, 'const [x, y] = await Promise.all([a(), b()]);');
+  assert.equal(finding.fix.requiresReview, true);
 });
 
 test('array fix adds parentheses when the literal is a receiver', (context) => {
@@ -154,6 +161,7 @@ test('reads on the same model are still started together', (context) => {
     '  return { rows: await users.findMany(), total: await users.count() };',
   );
   assert.match(onlyChange(finding).after, /await Promise\.all\(\[users\.findMany\(\), users\.count\(\)\]\)/);
+  assert.equal(finding.fix.requiresReview, true);
 });
 
 test('no fix when a write precedes a read it may affect, or in a test file', (context) => {

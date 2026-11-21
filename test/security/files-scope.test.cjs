@@ -7,10 +7,12 @@ const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
 const { reviewedReason } = require('../../lib/security/files/review-directive.cjs');
+const { listProjectFiles, searchTrackedText } = require('../../lib/security/files/project-files.cjs');
 
 const bin = path.resolve(__dirname, '../../bin/loadwise.cjs');
 const tsconfig = '{"compilerOptions":{"types":[]},"include":["*.ts"]}';
 const rootDockerfile = 'FROM node:22\nCMD ["node"]\n';
+const syntheticToken = 'ghp_' + 'q7Zr3KvX9mBw2LdT5nYc8HfJ4sGa1PeU6oIy';
 
 function repository(context, files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-scope-'));
@@ -46,6 +48,69 @@ test('a reviewed Dockerfile finding is contextual and the full report hides it b
   assert.equal(sec(root).status, 0);
   const shown = JSON.parse(sec(root, '--json', '--include-contextual').stdout);
   assert.equal(shown.findings[0].contextualReason, 'Reviewed in source: one-off job image');
+});
+
+test('tracked source tokens accept the advertised // directive only in a real comment', (context) => {
+  const root = repository(context, {
+    'tsconfig.json': tsconfig,
+    'app.ts': [
+      '// loadwise-reviewed committed-secret -- retired fixture',
+      `export const retired = '${syntheticToken}';`,
+      'export const template = `',
+      '// loadwise-reviewed committed-secret -- inside a literal',
+      syntheticToken,
+      '`;',
+    ].join('\n'),
+  });
+  const run = sec(root, '--json');
+  const secrets = JSON.parse(run.stdout).findings.filter(({ ruleId }) => ruleId === 'committed-secret');
+  assert.deepEqual(
+    secrets.map(({ line }) => line),
+    [5],
+  );
+  const contextual = JSON.parse(sec(root, '--json', '--include-contextual').stdout);
+  const reviewed = contextual.findings.find(({ ruleId, line }) => ruleId === 'committed-secret' && line === 2);
+  assert.equal(reviewed?.contextualReason, 'Reviewed in source: retired fixture');
+});
+
+test('a failed Git token prefilter falls back to tracked files', (context) => {
+  const root = repository(context, { 'tsconfig.json': tsconfig, 'app.ts': 'export {};', 'notes.txt': syntheticToken });
+  fs.writeFileSync(path.join(root, '.env'), 'JWT_SECRET=' + syntheticToken);
+  const config = spawnSync('git', ['-C', root, 'config', 'grep.threads', 'invalid']);
+  assert.equal(config.status, 0);
+  const run = sec(root, '--json');
+  assert.equal(run.status, 1, run.stderr);
+  const secrets = JSON.parse(run.stdout).findings.filter(({ ruleId }) => ruleId === 'committed-secret');
+  assert.deepEqual(
+    secrets.map(({ file }) => file),
+    ['notes.txt'],
+  );
+  assert.ok(!run.stdout.includes(syntheticToken));
+});
+
+test('file checks leave ignored paths out of Git search, findings and scanned-file counts', (context) => {
+  const root = repository(context, {
+    'loadwise.config.json': JSON.stringify({ ignore: ['generated[old]'] }),
+    'generated[old]/Dockerfile': rootDockerfile,
+    'generated[old]/notes.txt': syntheticToken,
+    Dockerfile: rootDockerfile,
+    'app.txt': syntheticToken,
+  });
+  const ignoredDirectory = path.join(root, 'generated[old]');
+  const { exclusions } = listProjectFiles(
+    root,
+    (file) => file === ignoredDirectory || file.startsWith(ignoredDirectory + path.sep),
+  );
+  assert.deepEqual([...searchTrackedText(root, syntheticToken, exclusions)], [path.join(root, 'app.txt')]);
+  for (const args of [[], ['--staged']]) {
+    const run = sec(root, '--json', ...args);
+    assert.equal(run.status, 1, run.stderr);
+    const report = JSON.parse(run.stdout);
+    const files = report.findings.map(({ file }) => file).sort();
+    assert.deepEqual(files, ['Dockerfile', 'app.txt']);
+    // A staged scan also reads the added config file.
+    assert.equal(report.scannedFiles, args.length ? 3 : 2);
+  }
 });
 
 test('--staged prints a # dismiss command for Dockerfile and env findings', (context) => {

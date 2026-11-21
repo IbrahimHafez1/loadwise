@@ -10,6 +10,19 @@ const extract = (text, file = 'migration.ts') => extractCodeFile(text, { file, d
 const summary = (operation) => [operation.kind, operation.table, operation.line, operation.column];
 
 describe('TypeORM extraction', () => {
+  test('local bindings shadow a same-name outer migration helper or SQL constant', () => {
+    for (const [parameters, setup] of [
+      ['queryRunner, sql', ''],
+      ['queryRunner', 'let sql = getSql();'],
+      ['queryRunner, values', 'const {sql} = values;'],
+    ]) {
+      const source = `const sql = 'DROP TABLE users'; export async function up(${parameters}) { ${setup} await queryRunner.query(sql); }`;
+      assert.deepEqual(extract(source).units[0].operations, []);
+    }
+    const source =
+      "function migrate(queryRunner) { return queryRunner.query('DROP TABLE users'); } export async function up(queryRunner, migrate) { await migrate(queryRunner); }";
+    assert.deepEqual(extract(source).units[0].operations, []);
+  });
   before(() => prepareDialect('postgres'));
 
   test('reads queryRunner.query literals in up() only, with exact positions', () => {

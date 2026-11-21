@@ -106,7 +106,7 @@ test('--staged reports a function finding for an edit inside it and exits 1', (c
   const result = run(root, '--staged', '.');
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout, /^app\.js:\d+ \[deep-control-flow #[0-9a-f]+\]/m);
-  assert.match(result.stdout, /^ {2}fix: {5}npx loadwise maint --fix --only [0-9a-f]+$/m);
+  assert.match(result.stdout, /^ {2}fix: {5}npx loadwise maint --staged --fix --only [0-9a-f]+$/m);
   assert.match(result.stdout, /^ {2}dismiss: \/\/ loadwise-reviewed deep-control-flow -- <reason>$/m);
   assert.match(result.stdout, /^1 new finding\(s\) in changed lines\. Apply fixes, then `git add`/m);
 });
@@ -118,6 +118,29 @@ test('--staged ignores an edit outside the flagged function and prints nothing',
   const result = run(root, '--staged', '.');
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.equal(result.stdout, '');
+});
+
+test('printed fix commands retain the scan directory, custom config and changed range', (context) => {
+  const root = tempRepo(context);
+  const directory = 'service api';
+  fs.mkdirSync(path.join(root, directory));
+  fs.writeFileSync(path.join(root, directory, 'app.js'), deepFunction + '\n');
+  fs.writeFileSync(path.join(root, 'scan config.json'), '{}');
+  git(root, 'add', directory);
+  const inputs = [directory, '--loadwise-config', 'scan config.json'];
+  const scoped = run(root, ...inputs, '--changed-since', 'HEAD');
+  assert.equal(scoped.status, 1, scoped.stderr);
+  const fix = scoped.stdout.match(
+    /^ {2}fix: {5}npx loadwise maint 'service api' --loadwise-config 'scan config\.json' --changed-since HEAD --fix --only ([0-9a-f]+)$/m,
+  );
+  assert.ok(fix, scoped.stdout);
+  assert.match(
+    run(root, ...inputs).stdout,
+    /^Fix all: npx loadwise maint 'service api' --loadwise-config 'scan config\.json' --fix --only /m,
+  );
+  const applied = run(root, ...inputs, '--changed-since', 'HEAD', '--fix', '--only', fix[1], '--json');
+  assert.equal(applied.status, 0, applied.stderr);
+  assert.deepEqual(JSON.parse(applied.stdout).applied, [fix[1]]);
 });
 
 test('--changed-since compares the working tree with a ref and supports --json', (context) => {
@@ -150,16 +173,72 @@ test('the fast path returns before TypeScript loads', (context) => {
   });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, '');
+  const empty = run(root, '--staged', '--json');
+  assert.equal(empty.status, 0, empty.stderr);
+  assert.deepEqual(JSON.parse(empty.stdout), {
+    mode: 'source',
+    scannedFiles: 0,
+    findings: [],
+    contractFindingCount: 0,
+  });
+  const sarif = run(root, '--staged', '--format', 'sarif');
+  assert.equal(sarif.status, 0, sarif.stderr);
+  assert.deepEqual(JSON.parse(sarif.stdout).runs[0].results, []);
+  assert.equal(run(root, '--staged', '--fix', '--only', 'missing').status, 2);
 });
 
 test('a newly added file counts every line as changed', (context) => {
   const root = tempRepo(context);
   fs.writeFileSync(path.join(root, 'added.js'), deepFunction.replace('label', 'other') + '\n');
+  const untracked = run(root, '--changed-since', 'HEAD', '--json');
+  assert.equal(untracked.status, 1, untracked.stderr);
+  assert.ok(JSON.parse(untracked.stdout).findings.some((finding) => finding.file === 'added.js'));
+  assert.equal(run(root, '--staged', '.').stdout, '');
   git(root, 'add', 'added.js');
   const result = run(root, '--staged', '.');
   assert.equal(result.status, 1, result.stdout);
   assert.match(result.stdout, /^added\.js:/m);
   assert.doesNotMatch(result.stdout, /^app\.js:/m);
+});
+
+test('changed mode scans a staged Python file and skips unchanged and ignored sources', (context) => {
+  try {
+    if (!require('@ast-grep/cli/postinstall.js').resolveBinaryPath())
+      return context.skip('Optional parser unavailable');
+  } catch (error) {
+    if (error.code === 'MODULE_NOT_FOUND') return context.skip('Optional parser unavailable');
+    throw error;
+  }
+  const root = tempRepo(context);
+  const nested = [
+    'def run(ok):',
+    '    if ok:',
+    '        if ok:',
+    '            if ok:',
+    '                if ok:',
+    '                    pass',
+    '',
+  ].join('\n');
+  fs.writeFileSync(path.join(root, 'loadwise.config.json'), '{"ignore":["ignored.py"]}');
+  fs.writeFileSync(path.join(root, 'ignored.py'), 'def @@@:\n');
+  fs.writeFileSync(path.join(root, 'changed.py'), nested);
+  git(root, 'add', 'changed.py', 'ignored.py');
+  for (const flags of [['--staged'], ['--changed-since', 'HEAD']]) {
+    const result = run(root, ...flags, '--json');
+    assert.equal(result.status, 1, result.stderr || result.stdout);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.scannedFiles, 1);
+    assert.equal(report.dependencyFiles, 0);
+    assert.deepEqual(
+      report.findings.map(({ file, line, ruleId }) => [file, line, ruleId]),
+      [['changed.py', 5, 'deep-control-flow']],
+    );
+  }
+  assert.doesNotMatch(run(root, '--staged').stdout, /dismiss:/);
+  fs.writeFileSync(path.join(root, 'changed.py'), 'def @@@:\n');
+  const invalid = run(root, '--changed-since', 'HEAD', '--json');
+  assert.equal(invalid.status, 2);
+  assert.match(invalid.stderr, /changed\.py/);
 });
 
 test('many changed files fall back to the full scan, which keeps cross-file rules', async (context) => {
@@ -175,4 +254,28 @@ test('many changed files fall back to the full scan, which keeps cross-file rule
   assert.equal(perFile.scannedFiles, 2);
   assert.ok(!perFile.findings.some((finding) => finding.ruleId === 'duplicate-implementation'));
   assert.ok(fullScan.findings.some((finding) => finding.ruleId === 'duplicate-implementation'));
+});
+
+test('workspace counts describe the selected files in both full and changed scans', (context) => {
+  const root = tempRepo(context);
+  fs.writeFileSync(path.join(root, 'package.json'), '{"workspaces":["packages/*"]}');
+  const folder = path.join(root, 'packages', 'api');
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(folder, 'package.json'), '{"name":"api"}');
+  fs.writeFileSync(path.join(folder, 'index.ts'), 'export function start() {}\n');
+  git(root, 'add', '.');
+  git(root, 'commit', '-q', '-m', 'workspace');
+  fs.writeFileSync(path.join(folder, 'helper.js'), 'module.exports = 1;\n');
+  git(root, 'add', '.');
+  for (const [flags, expected] of [
+    [[], { JavaScript: 1, TypeScript: 1 }],
+    [['--staged'], { JavaScript: 1 }],
+  ]) {
+    const result = run(root, '--workspace', 'api', '--json', ...flags);
+    assert.ok(result.status === 0 || result.status === 1, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.deepEqual(report.languageCounts, expected);
+    assert.equal(report.scannedFiles, Object.keys(expected).length);
+    assert.equal(report.dependencyFiles, report.scannedFiles);
+  }
 });

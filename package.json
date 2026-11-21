@@ -1,7 +1,7 @@
 {
   "name": "@loadwise/cli",
-  "version": "0.4.0",
-  "description": "Check backend query performance, transaction usage and query policies, and review source complexity, duplicate implementations and project-defined architecture, from one CLI.",
+  "version": "0.4.1-preview.15",
+  "description": "Find backend performance, maintainability and security issues, review suggested fixes, and check changed code locally or in CI.",
   "license": "UNLICENSED",
   "author": "Ibrahim Hafez",
   "repository": {
@@ -30,6 +30,7 @@
     "architecture",
     "dependency-cycle",
     "static-analysis",
+    "security",
     "cli",
     "vscode"
   ],
@@ -39,6 +40,7 @@
   "files": [
     "bin/",
     "lib/",
+    "plugin/",
     "polyglot/",
     "schema/",
     "examples/",
@@ -46,6 +48,7 @@
     "editor/control-flow-comparison.cjs",
     "editor/finding-comparison.cjs",
     "editor/performance-examples.cjs",
+    "editor/standalone-performance-examples.cjs",
     "editor/perf-site-comparison.cjs",
     "editor/maintainability-examples.cjs",
     "editor/security-examples.cjs",
@@ -62,7 +65,7 @@
     "format:check": "prettier --cache --check .",
     "lint": "oxlint --deny-warnings .",
     "check": "npm run format:check && npm run lint && npm test",
-    "test": "node --test --test-concurrency=2 test/performance/*.test.cjs test/maintainability/*.test.cjs test/security/*.test.cjs test/shared/*.test.cjs test/plugin/*.test.cjs editor/test/*.test.cjs",
+    "test": "node --require ./test/manual-session.cjs --test --test-concurrency=2 test/performance/*.test.cjs test/maintainability/*.test.cjs test/security/*.test.cjs test/shared/*.test.cjs test/plugin/*.test.cjs editor/test/*.test.cjs",
     "bench:patterns": "node bench/patterns.cjs",
     "bench:scan": "node bench/scanner.cjs",
     "bench:security": "node bench/security.cjs",

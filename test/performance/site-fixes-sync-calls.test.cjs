@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { scanWithFixes, onlyChange } = require('./site-fix-helpers.cjs');
+const { assertReportedWithoutFix, scanWithFixes, onlyChange } = require('./site-fix-helpers.cjs');
 
 const bcryptTypes = `
   export function hashSync(data: string, rounds: number): string;
@@ -29,12 +29,7 @@ function changeFor(context, ruleId, source) {
 }
 
 function assertNoFix(context, ruleId, source) {
-  const findings = fixesFor(context, ruleId, source);
-  assert.ok(findings.length > 0, 'rule should report');
-  assert.deepEqual(
-    findings.map((finding) => finding.fix),
-    findings.map(() => undefined),
-  );
+  assertReportedWithoutFix(fixesFor(context, ruleId, source));
 }
 
 const fsRule = 'node-sync-fs-in-async';

@@ -313,6 +313,51 @@ describe('Postgres column rules', () => {
     assert.deepEqual(rules(checkSql('CREATE TABLE t (a int);\nALTER TABLE t ALTER COLUMN a TYPE bigint;')), []);
   });
 
+  test('a validated check follows a renamed column and cannot protect a later column with its old name', () => {
+    const registry = createPostgresRegistry();
+    const run = (sql) => checkSql(withLockTimeout(sql), 'sql', registry);
+    run('ALTER TABLE orders ADD CONSTRAINT nn CHECK (state IS NOT NULL);');
+    run('ALTER TABLE orders RENAME COLUMN state TO status;');
+    run('ALTER TABLE orders ADD COLUMN state text;');
+    assert.deepEqual(rules(run('ALTER TABLE orders ALTER COLUMN status SET NOT NULL;')), []);
+    assert.deepEqual(rules(run('ALTER TABLE orders ALTER COLUMN state SET NOT NULL;')), [
+      'migration-set-not-null-scan',
+    ]);
+    run('ALTER TABLE orders DROP COLUMN status;');
+    run('ALTER TABLE orders ADD COLUMN status text;');
+    assert.deepEqual(rules(run('ALTER TABLE orders ALTER COLUMN status SET NOT NULL;')), [
+      'migration-set-not-null-scan',
+    ]);
+  });
+
+  test('validation follows a renamed constraint and dropping the last proof restores the scan warning', () => {
+    const registry = createPostgresRegistry();
+    const run = (sql) => checkSql(withLockTimeout(sql), 'sql', registry);
+    run('ALTER TABLE orders ADD CONSTRAINT nn CHECK (state IS NOT NULL) NOT VALID;');
+    run('ALTER TABLE orders RENAME CONSTRAINT nn TO renamed_nn;');
+    run('ALTER TABLE orders VALIDATE CONSTRAINT renamed_nn;');
+    run('ALTER TABLE orders ADD CONSTRAINT another_nn CHECK (state IS NOT NULL);');
+    run('ALTER TABLE orders DROP CONSTRAINT another_nn;');
+    assert.deepEqual(rules(run('ALTER TABLE orders ALTER COLUMN state SET NOT NULL;')), []);
+    run('ALTER TABLE orders ALTER COLUMN state DROP NOT NULL;');
+    run('ALTER TABLE orders DROP CONSTRAINT renamed_nn;');
+    assert.deepEqual(rules(run('ALTER TABLE orders ALTER COLUMN state SET NOT NULL;')), [
+      'migration-set-not-null-scan',
+    ]);
+  });
+
+  test('an unnamed proof is no longer certain after dropping an untracked constraint name', () => {
+    const registry = createPostgresRegistry();
+    const run = (sql) => checkSql(withLockTimeout(sql), 'sql', registry);
+    run('ALTER TABLE orders ADD CHECK (state IS NOT NULL);');
+    assert.deepEqual(rules(run('ALTER TABLE orders ALTER COLUMN state SET NOT NULL;')), []);
+    run('ALTER TABLE orders ALTER COLUMN state DROP NOT NULL;');
+    run('ALTER TABLE orders DROP CONSTRAINT orders_state_check;');
+    assert.deepEqual(rules(run('ALTER TABLE orders ALTER COLUMN state SET NOT NULL;')), [
+      'migration-set-not-null-scan',
+    ]);
+  });
+
   test('SET NOT NULL scans unless a validated CHECK (col IS NOT NULL) exists', () => {
     const findings = checkSql(withLockTimeout('ALTER TABLE "Order" ALTER COLUMN "state" SET NOT NULL;'));
     assert.deepEqual(rules(findings), ['migration-set-not-null-scan']);

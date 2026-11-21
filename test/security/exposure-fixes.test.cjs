@@ -50,6 +50,7 @@ test('ValidationPipe gains whitelist: true and the note warns about stripped pro
     const result = afterFix(context, 'nest-validation-without-whitelist', `${header}export const pipe = ${before};`);
     assert.ok(result.fixedSource.includes(after), result.fixedSource);
     assert.match(result.finding.fix.note, /stripped/);
+    assert.equal(result.finding.fix.requiresReview, true);
     const remaining = fixedFinding(context, 'nest-validation-without-whitelist', result.fixedSource);
     assert.ok(!remaining || remaining.contextualReason, before);
   }

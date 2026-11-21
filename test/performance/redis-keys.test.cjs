@@ -38,6 +38,8 @@ export async function purge(tenant: string) {
   return keys.length;
 }`,
   );
+  assert.equal(finding.fix.requiresReview, true);
+  assert.match(finding.fix.note, /cursor steps/);
   assert.deepEqual(onlyChange(finding), {
     before: 'const keys = await redis.keys(`tenant:${tenant}:*`);',
     after:
@@ -96,6 +98,7 @@ test('keys awaited inside an expression are collected on the line above', (conte
 }
 declare function expect(value: unknown): { toEqual(expected: unknown): void };`,
   );
+  assert.ok(findings.every((finding) => finding.fix.requiresReview));
   const [first, second] = findings.map(onlyChange);
   assert.equal(
     first.after,
@@ -127,6 +130,7 @@ test('a keys call returned from a map callback becomes an async collector', (con
 }`,
   );
   const { after } = onlyChange(finding);
+  assert.equal(finding.fix.requiresReview, true);
   assert.match(after, /patterns\.map\(async \(pattern\) => \{/);
   assert.match(
     after,

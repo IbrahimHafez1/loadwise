@@ -114,7 +114,7 @@ function kinds(names) {
   return names.length === 1 ? { kind: names[0] } : { any: names.map((kind) => ({ kind })) };
 }
 
-function rulesFor(language) {
+function rulesFor(language, { includeDuplicates = true } = {}) {
   const { parser, controls, bodies, boundaries } = byLanguage.get(language);
   const block = kinds(bodies);
   if (language === 'Kotlin') block.has = { kind: 'statements' };
@@ -156,7 +156,7 @@ function rulesFor(language) {
     rule: { kind: 'ERROR' },
     message: 'The parser encountered invalid or unsupported syntax.',
   };
-  return [diagnostic, parseError, duplicateRule(language), parser === 'CSharp' && csharpCandidate]
+  return [diagnostic, parseError, includeDuplicates && duplicateRule(language), parser === 'CSharp' && csharpCandidate]
     .filter(Boolean)
     .map((rule) => JSON.stringify(rule))
     .join('\n---\n');

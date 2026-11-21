@@ -66,6 +66,10 @@ test('unattended security fixes leave ValidationPipe whitelisting for individual
     ({ ruleId }) => ruleId === 'nest-validation-without-whitelist',
   );
   assert.equal(finding?.fixable, true);
+  const report = run(directory, 'sec');
+  assert.equal(report.status, 1, report.stderr);
+  assert.doesNotMatch(report.stdout, /^Fix all:/m);
+  assert.ok(report.stdout.includes('--fix --only ' + finding.id));
   const bulk = run(directory, 'sec', '--fix', '--yes');
   assert.equal(bulk.status, 0, bulk.stderr);
   assert.equal(fs.readFileSync(file, 'utf8'), source);

@@ -73,6 +73,50 @@ const prismaOrder = { declarationFile: 'schema.prisma', declarationLine: 5, decl
 const orderDeclared = 'Model `Order` is declared here.';
 const studentDeclared = { declarationFile: 'entities.ts', declarationLine: 4, declarationColumn: 14 };
 
+const drizzleTable = `import { mysqlTable, index, int, varchar } from 'drizzle-orm/mysql-core';
+export const orders = mysqlTable(
+  'orders',
+  { id: int('id'), status: varchar('status', { length: 24 }) },
+  (row) => [
+    index('by_id').on(row.id), // keep this index
+  ],
+);
+`;
+
+function drizzleOrderFinding(root) {
+  return finding(root, {
+    declarationFile: 'orders.ts',
+    declarationLine: 2,
+    declarationColumn: 23,
+    declarationMessage: 'Table `orders` is declared here.',
+    suggestion: "index('orders_status_id_idx').on(table.status, table.id)",
+  });
+}
+
+test('Drizzle: previews an additive composite index using the actual callback parameter and preserves the prior index', (context) => {
+  const root = project(context, { 'orders.ts': drizzleTable });
+  const fix = fixOf(drizzleOrderFinding(root));
+  assert.equal(fix.requiresReview, true);
+  assert.equal(fix.changes.length, 1);
+  assert.equal(fix.changes[0].before, '  ],');
+  assert.equal(fix.changes[0].after, "    index('orders_status_id_idx').on(row.status, row.id),\n  ],");
+});
+
+test('Drizzle: skips already-covered keys, occupied names, unknown extras, oversized text and unbound imports', (context) => {
+  const sources = [
+    drizzleTable.replace('row.id),', 'row.status, row.id),'),
+    drizzleTable.replace('by_id', 'ORDERS_STATUS_ID_IDX'),
+    drizzleTable.replace("index('by_id').on(row.id)", '...extraIndexes(row)'),
+    drizzleTable.replace('length: 24', 'length: 4096'),
+    drizzleTable.replace("'drizzle-orm/mysql-core'", "'./custom-schema'"),
+    drizzleTable.replace(', index,', ', type index,'),
+  ];
+  for (const source of sources) {
+    const root = project(context, { 'orders.ts': source });
+    assert.equal(fixOf(drizzleOrderFinding(root)), undefined);
+  }
+});
+
 test('Prisma: the index is inserted before the closing brace with the field indentation', (context) => {
   const root = project(context, { 'schema.prisma': prismaSchema });
   const result = fixOf(

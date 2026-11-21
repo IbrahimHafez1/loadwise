@@ -162,6 +162,29 @@ test('a unique index that is a prefix of a wider index is not a duplicate', () =
   assert.deepEqual(byRule(findings, 'db-duplicate-index'), []);
 });
 
+test('retains covering, differently sorted or collated, protected, and unavailable indexes', () => {
+  const base = index('orders', 'plain', ['code'], { key_semantics: ['42:100:0'] });
+  for (const extra of [
+    { duplicate_comparable: false },
+    { key_semantics: ['42:200:0'] },
+    { key_semantics: ['42:100:2'] },
+    { key_semantics: ['71:100:0'] },
+    { is_usable: false },
+  ]) {
+    const alternate = { ...base, ...extra, index_name: 'alternate' };
+    for (const indexes of [
+      [base, alternate],
+      [alternate, base],
+    ]) {
+      const findings = findingsFor({ tables: [table('orders')], indexes });
+      assert.deepEqual(byRule(findings, 'db-duplicate-index'), []);
+    }
+  }
+  const protectedIndex = { ...base, index_name: 'replica_identity', is_protected: true, idx_scan: '0' };
+  const findings = findingsFor({ tables: [table('orders')], indexes: [base, protectedIndex] });
+  assert.ok(findings.every(({ suggestion }) => !suggestion?.includes('"replica_identity"')));
+});
+
 test('seq-scan-heavy tables need size, more seq than index scans and repeated full reads', () => {
   const heavy = table('events', { seq_scan: '1204', seq_tup_read: '48160000', idx_scan: '3', n_live_tup: '40000' });
   const [finding] = byRule(findingsFor({ tables: [heavy] }), 'db-seq-scan-heavy-table');

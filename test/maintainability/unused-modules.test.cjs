@@ -25,6 +25,148 @@ async function scanProject(files) {
 
 const summary = (findings) => findings.map((finding) => `${finding.ruleId} ${finding.file}`).sort();
 
+const privateApp = {
+  'package.json': '{"private":true}',
+  'src/index.ts': 'import { run } from "./helpers"; run();',
+  'src/helpers.ts': [
+    'export interface Payload { id: string }',
+    'export type Options = { retry: boolean };',
+    'export function run(): string { const p: Payload = {id: "x"}; const o: Options = {retry:true}; return o.retry ? p.id : ""; }',
+  ].join('\n'),
+};
+
+test('offers only export removal for private-app types with local consumers', async () => {
+  const findings = await scanProject(privateApp);
+  assert.equal(findings.length, 2);
+  for (const finding of findings) {
+    assert.equal(finding.fix.requiresReview, true);
+    const [change] = finding.fix.changes;
+    assert.equal(change.file, 'src/helpers.ts');
+    assert.equal(change.before, 'export ' + change.after);
+    assert.equal(change.before, privateApp[change.file].split('\n')[change.line - 1]);
+  }
+  const source = privateApp['src/helpers.ts'].replace(/^export (interface|type)/gm, '$1');
+  assert.deepEqual(await scanProject({ ...privateApp, 'src/helpers.ts': source }), []);
+});
+
+test('withholds export removal for public or published APIs and ambiguous imports', async () => {
+  for (const extra of [
+    { 'package.json': '{}' },
+    { 'package.json': '{"private":true,"types":"./dist/public.d.ts"}' },
+    { 'src/barrel.ts': 'export * from "./helpers";' },
+    { 'src/barrel.ts': 'export type { Payload as PublicData, Options } from "./helpers";' },
+    { 'src/external.ts': 'import type {Payload, Options as Policy} from "unknown-alias/helpers";' },
+    { 'src/external.ts': 'import type * as Lib from "./unknown";' },
+    { 'src/augment.ts': 'declare module "./helpers" { interface Payload { value: string } }\nexport {};' },
+  ]) {
+    const findings = await scanProject({ ...privateApp, ...extra });
+    assert.ok(!findings.some((item) => item.fix), JSON.stringify(extra));
+  }
+});
+
+test('withholds export removal for merged, shadowed, unused, ambient and sole module declarations', async () => {
+  for (const source of [
+    'export interface Payload {}\nexport interface Payload { id: string }\nexport function run(p?: Payload) {}',
+    'export type Payload = string;\nexport function run<Payload>(p?: Payload) {}',
+    'export type Payload = string;\nexport function run() {}',
+    'export declare interface Payload {}\nexport function run(p?: Payload) {}',
+    'export type Payload = string;\nfunction run(p?: Payload) {}',
+    'export interface Payload {id: string}\nconst p: Payload = {id:"x"};\nexport function run() { return p; }',
+    'export interface Payload {id: string}\nexport function run() { const p: Payload = {id:"x"}; return p; }',
+    'export interface Payload {id: string}\nexport interface Response { result: Payload }\nexport function run() {}',
+  ]) {
+    const findings = await scanProject({
+      ...privateApp,
+      'src/index.ts': 'import "./helpers";',
+      'src/helpers.ts': source,
+    });
+    assert.ok(!findings.some((item) => item.fix), source);
+  }
+});
+
+test('reviews direct internal function calls and primitive constants, leaving runtime APIs intact by default', async () => {
+  const source = [
+    'export function clamp(value: number) { return Math.min(value, 10); }',
+    'export const LIMIT = 5;',
+    'export function run(value: number): number { return clamp(value) < LIMIT ? 0 : 1; }',
+  ].join('\n');
+  const findings = await scanProject({ ...privateApp, 'src/helpers.ts': source });
+  assert.equal(findings.filter((item) => item.fix?.requiresReview).length, 2);
+  for (const specifier of ['../dist/helpers.js', 'unresolved-alias']) {
+    const actual = await scanProject({
+      ...privateApp,
+      'src/helpers.ts': source,
+      'job.cjs': `require('${specifier}');`,
+    });
+    assert.ok(!actual.some((item) => item.fix), specifier);
+  }
+  for (const extra of [
+    'export const exposed = {clamp, LIMIT};',
+    'console.log(module.exports);',
+    'export function shadow(clamp: () => void, LIMIT: number) { clamp(); return LIMIT; }',
+  ]) {
+    const actual = await scanProject({ ...privateApp, 'src/helpers.ts': source + '\n' + extra });
+    assert.ok(!actual.some((item) => item.fix), extra);
+  }
+});
+
+test('Node shebangs mark executable files as entries', async () => {
+  const findings = await scanProject({
+    'package.json': '{}',
+    'deploy/env.cjs': '#!/usr/bin/env node\nvoid 0;',
+    'deploy/flags.js': '#!/usr/bin/env -S node --no-warnings\nexport * from "./api.js";',
+    'deploy/absolute.js': '#!/usr/local/bin/node\nvoid 0;',
+    'deploy/api.js': 'export const ready = true;',
+    'deploy/other.js': '#!/usr/bin/env node-helper\nvoid 0;',
+    'deploy/comment.js': '// #!/usr/bin/env node\nvoid 0;',
+  });
+  assert.deepEqual(summary(findings), ['unreferenced-file deploy/comment.js', 'unreferenced-file deploy/other.js']);
+});
+
+test('a package Docker build traces a literal Node command to its copied local script', async () => {
+  const findings = await scanProject({
+    'package.json': '{"scripts":{"image":"docker build -f docker/Dockerfile -t worker ./backend"}}',
+    'docker/Dockerfile': [
+      'FROM node:22',
+      'WORKDIR /app',
+      'COPY package.json ./',
+      'RUN npm install --omit=dev',
+      'COPY tasks/report.cjs ./workers/',
+      '# CMD ["node", "tasks/container-only.cjs"]',
+      'CMD ["node", "./workers/report.cjs", "nightly"]',
+    ].join('\n'),
+    'backend/tasks/report.cjs': 'module.exports = 1;',
+    'backend/tasks/container-only.cjs': 'module.exports = 2;',
+    'tasks/report.cjs': 'module.exports = 3;',
+  });
+  assert.deepEqual(summary(findings), [
+    'unreferenced-file backend/tasks/container-only.cjs',
+    'unreferenced-file tasks/report.cjs',
+  ]);
+});
+
+test('image entry points need a literal Node command and traceable local file', () => {
+  const { dockerNodeEntry, localDockerBuild } = require('../../lib/maintainability/docker-entry-points.cjs');
+  const known = new Set(['ops/job.js']);
+  const dockerfile = ['FROM node:22', 'WORKDIR /app', 'COPY ops/job.js ./'];
+  const entry = (...lines) => dockerNodeEntry([...dockerfile, ...lines].join('\n'), '.', known);
+  assert.equal(entry('ENTRYPOINT ["node","job.js"]'), 'ops/job.js');
+  for (const lines of [
+    ['CMD ["node","other.js"]'],
+    ['CMD ["node","$FILE.js"]'],
+    ['CMD ["node","--require","job.js"]'],
+    ['CMD ["node","node_modules/pkg/job.js"]'],
+    ['CMD node job.js'],
+    ['ENTRYPOINT ["other"]', 'CMD ["node","job.js"]'],
+    ['RUN npm install some-package', 'CMD ["node","job.js"]'],
+    ['COPY --from=build /out/job.js ./', 'CMD ["node","job.js"]'],
+    ['FROM node:22', 'WORKDIR /app', 'CMD ["node","job.js"]'],
+  ])
+    assert.equal(entry(...lines), undefined, lines.join('\n'));
+  assert.equal(localDockerBuild('docker build "$CONTEXT"', '.'), undefined);
+  assert.equal(localDockerBuild('docker build ../outside', '.'), undefined);
+});
+
 test('an export nothing imports and a file nothing imports are reported', async () => {
   const findings = await scanProject({
     'package.json': '{"main":"src/index.ts"}',
@@ -265,4 +407,13 @@ test('a package.json exports wildcard publishes every file it matches', async ()
     'src/internal/orphan.ts': 'export const lonely = 1;',
   });
   assert.deepEqual(summary(findings), ['unreferenced-file src/internal/orphan.ts']);
+});
+
+test('every wildcard in an export target uses the same subpath, including build-to-source paths', async () => {
+  const findings = await scanProject({
+    'package.json': '{"exports":{"./features/*":"./dist/features/*/load-*.js"}}',
+    'src/features/orders/load-orders.ts': 'export const load = 1;',
+    'src/features/orders/load-other.ts': 'export const other = 2;',
+  });
+  assert.deepEqual(summary(findings), ['unreferenced-file src/features/orders/load-other.ts']);
 });

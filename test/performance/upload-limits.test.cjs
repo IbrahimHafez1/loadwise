@@ -1,7 +1,9 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const test = require('node:test');
+const { applyFixes } = require('../../lib/performance/fix-cli.cjs');
 const { scanWithFixes, onlyChange } = require('./site-fix-helpers.cjs');
 
 const files = {
@@ -20,16 +22,18 @@ function scan(context, source) {
   );
 }
 
-test('reports an interceptor without options and adds the options argument', (context) => {
-  const findings = scan(
-    context,
-    `import { FileInterceptor } from '@nestjs/platform-express';\nexport const a = FileInterceptor('file');\n`,
-  );
+test('previews the upload size policy and leaves the endpoint unchanged under --fix --yes', async (context) => {
+  const source = `import { FileInterceptor } from '@nestjs/platform-express';\nexport const a = FileInterceptor('file');\n`;
+  const findings = scan(context, source);
   assert.equal(findings.length, 1);
   assert.equal(
     onlyChange(findings[0]).after,
     `export const a = FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } });`,
   );
+  assert.equal(findings[0].fix.requiresReview, true);
+  assert.match(findings[0].fix.note, /10 MiB.*example/);
+  await applyFixes(findings, { all: true });
+  assert.equal(fs.readFileSync(findings[0].file, 'utf8'), source);
 });
 
 test('adds limits to a literal without them, and fileSize to limits without it', (context) => {
@@ -41,6 +45,7 @@ export const b = FilesInterceptor('files', 3, { limits: { files: 3 } });
 `,
   );
   assert.equal(findings.length, 2);
+  assert.ok(findings.every((finding) => finding.fix.requiresReview));
   assert.match(onlyChange(findings[0]).after, /\{ dest: 'x', limits: \{ fileSize: 10 \* 1024 \* 1024 \} \}/);
   assert.match(onlyChange(findings[1]).after, /\{ limits: \{ files: 3, fileSize: 10 \* 1024 \* 1024 \} \}/);
 });
