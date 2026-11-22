@@ -71,7 +71,7 @@ function execute(input) {
   return exported.config.fields;
 }
 
-test('two duplicated column callbacks apply together and keep their behavior and independent identities', (context) => {
+test('two duplicated column callbacks apply together, keep their behavior and reference one shared helper', (context) => {
   const { findings, directory, filename } = proposed(context);
   assert.ok(findings.every((finding) => finding.fix?.requiresReview));
   assert.equal(applyBulkFixes(findings, directory).changedFiles, 0);
@@ -79,8 +79,10 @@ test('two duplicated column callbacks apply together and keep their behavior and
   const original = execute(source),
     updated = execute(fs.readFileSync(filename, 'utf8'));
   for (const key of ['parse', 'format']) {
-    assert.notEqual(updated[0][key], updated[1][key]);
-    assert.equal(updated[0][key].name, original[0][key].name);
+    // Sharing one function across fields is safe: it reads no `this` or `arguments`, takes the callback's one
+    // parameter, and each field is still its own property that can be replaced independently.
+    assert.equal(updated[0][key], updated[1][key]);
+    assert.equal(updated[0][key].name, 'config' + key[0].toUpperCase() + key.slice(1));
     assert.equal(updated[0][key].length, original[0][key].length);
     for (const value of [1, null, ' 22 ']) assert.equal(updated[0][key](value), original[0][key](value));
     updated[0][key] = () => false;

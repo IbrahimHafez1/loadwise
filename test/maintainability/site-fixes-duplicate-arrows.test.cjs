@@ -87,7 +87,7 @@ test('arrow sharing refuses signature differences, changed literals, recursion, 
     moduleSource.replaceAll('const domain = settings.domain;', 'const domain = getAccessOptions(expiry).domain;'),
     moduleSource.replaceAll(signature, 'async ' + signature),
     moduleSource.replaceAll('expiry: string', "expiry: string = '1'"),
-    moduleSource + '\nconst getAccessOptionsImplementation = 2;',
+    moduleSource + '\nconst getOptions = 1;\nconst getAccessOptionsImplementation = 2;',
     moduleSource.replaceAll('settings.secure;', "eval('settings.secure');"),
     moduleSource.replaceAll('settings.secure;', 'this.secure;'),
   ];

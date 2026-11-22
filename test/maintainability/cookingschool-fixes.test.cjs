@@ -1,0 +1,183 @@
+'use strict';
+
+// Fix shapes found in a NestJS backend: identical private controller methods, a forwarded type with no consumers,
+// and the naming and placement of shared duplicate helpers.
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const test = require('node:test');
+const ts = require('typescript');
+const { applyFix } = require('../../editor/apply-fix.cjs');
+const { applyChangesToText } = require('../../lib/maintainability/apply-fix.cjs');
+const { buildFix, createFileCache, attachSiteFixes } = require('../../lib/maintainability/site-fix.cjs');
+const { scan } = require('../../lib/maintainability/scan.cjs');
+const { applyBulkFixes } = require('../../lib/shared/fix.cjs');
+
+function writeProject(context, files) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-cookingschool-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  for (const [name, text] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
+    fs.writeFileSync(path.join(root, name), text);
+  }
+  return root;
+}
+
+// A duplicate-implementation finding over every line in `files` that contains `marker`.
+function duplicateFinding(files, marker) {
+  const sites = Object.entries(files).flatMap(([file, text]) =>
+    text
+      .split('\n')
+      .flatMap((line, index) =>
+        line.includes(marker) ? [{ file, line: index + 1, column: line.indexOf(marker) + 1 }] : [],
+      ),
+  );
+  return { ...sites[0], related: sites.slice(1), ruleId: 'duplicate-implementation' };
+}
+
+function applyTo(root, fix) {
+  const result = applyFix(fix, {
+    readFile: (file) => fs.readFileSync(path.join(root, file), 'utf8'),
+    writeFile: (file, text) => {
+      fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      fs.writeFileSync(path.join(root, file), text);
+    },
+  });
+  assert.equal(result.error, undefined);
+}
+
+function typeErrors(root, files) {
+  const options = { strict: true, noUnusedLocals: true, noEmit: true, target: ts.ScriptTarget.ES2022, types: [] };
+  const program = ts.createProgram(
+    files.map((file) => path.join(root, file)),
+    options,
+  );
+  return ts.getPreEmitDiagnostics(program).map((item) => ts.flattenDiagnosticMessageText(item.messageText, ' '));
+}
+
+function compileAll(root, files) {
+  for (const file of files) {
+    const source = fs.readFileSync(path.join(root, file), 'utf8');
+    const output = ts.transpileModule(source, {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    }).outputText;
+    fs.writeFileSync(path.join(root, file.replace(/\.ts$/, '.js')), output);
+  }
+}
+
+const languageMethod = [
+  '  private detectLanguage(request: Request): string {',
+  "    const header = request.headers['accept-language'];",
+  "    const lang = header?.split(',')[0]?.toLowerCase();",
+  '    if (lang && SUPPORTED.includes(lang)) return lang;',
+  "    return 'en';",
+  '  }',
+].join('\n');
+
+function controller(name, depth, method = languageMethod, extra = '') {
+  const up = '../'.repeat(depth);
+  return [
+    `import { SUPPORTED } from '${up}languages';`,
+    `import type { Request } from '${up}http';`,
+    extra,
+    `export class ${name} {`,
+    "  prefix = 'hello';",
+    method,
+    '',
+    '  greet(request: Request): string {',
+    "    return 'hello:' + this.detectLanguage(request);",
+    '  }',
+    '}',
+    '',
+  ].join('\n');
+}
+
+const support = {
+  'src/http.ts': 'export interface Request { headers: Record<string, string | undefined> }\n',
+  'src/languages.ts': "export const SUPPORTED: string[] = ['en', 'ar'];\n",
+};
+const controllers = {
+  'src/orders/orders.controller.ts': controller('OrdersController', 1),
+  'src/users/users.controller.ts': controller('UsersController', 1),
+  'src/users/admin/admin.controller.ts': controller('AdminController', 2),
+};
+
+test('identical private methods across files delegate to one exported function that type-checks', (context) => {
+  const files = { ...support, ...controllers };
+  const root = writeProject(context, files);
+  const fix = buildFix(duplicateFinding(controllers, 'detectLanguage(request: Request)'), createFileCache(root));
+  assert.ok(fix, 'expected a fix');
+  assert.equal(fix.requiresReview, true);
+  const created = fix.changes.find((change) => change.create);
+  assert.equal(created.file, 'src/detect-language.ts');
+  assert.match(
+    created.after,
+    /^import type \{ Request \} from '\.\/http';\nimport \{ SUPPORTED \} from '\.\/languages';/,
+  );
+  assert.match(created.after, /\nexport function detectLanguage\(request: Request\): string \{\n {2}const header/);
+  applyTo(root, fix);
+  const admin = fs.readFileSync(path.join(root, 'src/users/admin/admin.controller.ts'), 'utf8');
+  assert.doesNotMatch(admin, /SUPPORTED/);
+  assert.match(admin, /import \{ detectLanguage \} from '\.\.\/\.\.\/detect-language';/);
+  assert.match(
+    admin,
+    /private detectLanguage\(request: Request\): string \{\n {4}return detectLanguage\(request\);\n {2}\}/,
+  );
+  const all = [...Object.keys(files), created.file];
+  assert.deepEqual(typeErrors(root, all), []);
+  compileAll(root, all);
+  for (const [file, name] of [
+    ['src/orders/orders.controller.js', 'OrdersController'],
+    ['src/users/admin/admin.controller.js', 'AdminController'],
+  ]) {
+    const instance = new (require(path.join(root, file))[name])();
+    assert.equal(instance.greet({ headers: { 'accept-language': 'AR,en' } }), 'hello:ar');
+    assert.equal(instance.greet({ headers: {} }), 'hello:en');
+  }
+});
+
+test('private methods that read this, differ, or use a module-private name keep their own bodies', (context) => {
+  const variants = [
+    languageMethod.replace("return 'en';", 'return this.prefix;'),
+    languageMethod.replace("return 'en';", "return 'ar';"),
+    languageMethod.replace("return 'en';", 'return fallback;'),
+    languageMethod.replace("    return 'en';", "    // Arabic speakers fall back to English.\n    return 'en';"),
+  ];
+  for (const method of variants) {
+    const changed = {
+      ...controllers,
+      'src/users/users.controller.ts': controller('UsersController', 1, method, "const fallback = 'en';"),
+    };
+    if (method.includes('fallback'))
+      for (const file of Object.keys(changed))
+        changed[file] = controller('Controller', file.split('/').length - 2, method, "const fallback = 'en';");
+    const root = writeProject(context, { ...support, ...changed });
+    const finding = duplicateFinding(changed, 'detectLanguage(request: Request)');
+    assert.equal(buildFix(finding, createFileCache(root)), undefined, method);
+  }
+});
+
+async function unusedExportFindings(context, adjust) {
+  const root = writeProject(context, {
+    'package.json': '{"private":true}',
+    'src/index.ts': "import { run } from './adjust';\nrun();\n",
+    'src/schema.ts': 'export type Pending = { id: string };\nexport const unit = 1;\n',
+    'src/adjust.ts': adjust,
+  });
+  const report = await scan(root, { exclude: [], boundaries: [], placement: [] });
+  return report.findings.filter((finding) => finding.ruleId === 'unused-export' && finding.file === 'src/adjust.ts');
+}
+
+const reexporting = [
+  "import { unit } from './schema';",
+  "import type { Pending } from './schema';",
+  '',
+  'export type { Pending };',
+  '',
+  'export function run(): number {',
+  '  return unit;',
+  '}',
+  '',
+].join('\n');
+

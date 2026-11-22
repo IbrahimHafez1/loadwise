@@ -48,7 +48,7 @@ test('duplicate sibling modules share a closed helper without importing each oth
   const fix = build();
   assert.equal(fix.requiresReview, true);
   const created = fix.changes.find((change) => change.create);
-  assert.equal(created.file, 'shared-parse-items.ts');
+  assert.equal(created.file, 'parse-items.ts');
   assert.match(created.after, /^\/\/ Handle an optional JSON field/);
   const result = applyFix(fix, {
     readFile: (file) => fs.readFileSync(path.join(root, file), 'utf8'),
@@ -86,6 +86,6 @@ test('sibling extraction refuses captures, type dependencies, escaping identity,
     assert.equal(fixture(context, source).build(), undefined);
   }
   const { root, build } = fixture(context);
-  fs.writeFileSync(path.join(root, 'shared-parse-items.js'), 'module.exports = {};');
+  fs.writeFileSync(path.join(root, 'parse-items.js'), 'module.exports = {};');
   assert.equal(build(), undefined);
 });
