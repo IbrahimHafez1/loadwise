@@ -11,6 +11,7 @@ const { ensureLoaded, parseStatements, splitStatements } = require('../../lib/pe
 const { changedFilesSince } = require('../../lib/performance/migrations/enforce.cjs');
 const performanceChangedLines = require('../../lib/performance/changed-lines.cjs');
 const maintainabilityChangedLines = require('../../lib/maintainability/changed-lines.cjs');
+const { compareOpenApi } = require('../../lib/performance/contracts/openapi.cjs');
 
 function temporaryRepository(context) {
   const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-improve-sql-')));
@@ -164,3 +165,52 @@ describe('changed lines with quoted git paths', () => {
   });
 });
 
+describe('OpenAPI numeric widening and narrowing', () => {
+  function documentWith({ requestType, responseType, parameterType }) {
+    return JSON.stringify({
+      openapi: '3.0.0',
+      paths: {
+        '/items': {
+          post: {
+            parameters: [{ in: 'query', name: 'limit', schema: { type: parameterType } }],
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: { type: 'object', properties: { price: { type: requestType } } },
+                },
+              },
+            },
+            responses: {
+              200: {
+                content: {
+                  'application/json': {
+                    schema: { type: 'object', properties: { total: { type: responseType } } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  test('widening a request integer to number and narrowing a response number to integer are not breaking', () => {
+    const findings = compareOpenApi(
+      documentWith({ requestType: 'integer', responseType: 'number', parameterType: 'integer' }),
+      documentWith({ requestType: 'number', responseType: 'integer', parameterType: 'number' }),
+    );
+    assert.deepEqual(findings, []);
+  });
+
+  test('narrowing a request number to integer and widening a response integer to number still break', () => {
+    const findings = compareOpenApi(
+      documentWith({ requestType: 'number', responseType: 'integer', parameterType: 'number' }),
+      documentWith({ requestType: 'integer', responseType: 'number', parameterType: 'integer' }),
+    );
+    assert.deepEqual(
+      findings.map((finding) => finding.ruleId),
+      ['api-type-changed', 'api-type-changed', 'api-type-changed'],
+    );
+  });
+});
