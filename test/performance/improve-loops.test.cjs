@@ -93,10 +93,23 @@ const pgFiles = {
     'export declare class Pool { query(text: string, values?: unknown[]): Promise<unknown>; }',
 };
 
-function lintMilliseconds(source, files) {
-  const started = process.hrtime.bigint();
-  lint(source, files);
-  return Number(process.hrtime.bigint() - started) / 1e6;
+// Counts the child walks the whole analysis makes, through private copies of the rules that see a counting
+// compiler; unlike a stopwatch this does not depend on how busy the machine is.
+function childWalks(source, files) {
+  const ts = require('typescript');
+  const { requireWithSyntax } = require('../../lib/performance/compiler.cjs');
+  let walks = 0;
+  const countingSyntax = Object.create(ts, {
+    forEachChild: {
+      value(...args) {
+        walks++;
+        return ts.forEachChild(...args);
+      },
+    },
+  });
+  const { analyzeFile } = requireWithSyntax(require.resolve('../../lib/performance/analyze.cjs'), countingSyntax);
+  withProgram(source, files, (program, sourceFile) => analyzeFile(program, sourceFile));
+  return walks;
 }
 
 function countedLoop(queryCount) {
@@ -119,13 +132,17 @@ ${queries.join('\n')}
 `;
 }
 
-test('many queries in one loop body do not rescan the body once per query', () => {
-  lintMilliseconds(countedLoop(10), pgFiles);
-  const small = lintMilliseconds(countedLoop(200), pgFiles);
-  const large = lintMilliseconds(countedLoop(800), pgFiles);
-  // Four times the queries is about four times the linear work; a per-query rescan of the body grows with the square.
-  assert.ok(large / small < 6, `analysis grew ${(large / small).toFixed(1)}x`);
-});
+// The walk count is engine independent, and the counting copies run on the JS compiler.
+test(
+  'many queries in one loop body do not rescan the body once per query',
+  { skip: process.env.PERF_CHECK_TEST_NATIVE === '1' },
+  () => {
+    const small = childWalks(countedLoop(200), pgFiles);
+    const large = childWalks(countedLoop(800), pgFiles);
+    // Four times the queries is about four times the linear work; a per-query rescan of the body grows with the square.
+    assert.ok(large / small < 6, `analysis grew ${(large / small).toFixed(1)}x`);
+  },
+);
 
 // Runs one call rule over every call in the file and counts the checker requests it makes; on the native
 // engine each request is a synchronous round trip.
