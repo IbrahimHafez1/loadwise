@@ -2,7 +2,8 @@
 
 // Scores loadwise against the hand-labelled corpus in bench/corpus and fails on regressions.
 // Usage: node scripts/score-corpus.cjs [--from <dir>] [--loadwise <dir>] [--corpus <dir>] [--repos a,b]
-//        [--write-scores] [--json]
+//        [--write-scores] [--json] [--scorecard]
+// --scorecard needs no scan: it reads the label files and bench/corpus/scores.json and writes scorecard.md.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -12,6 +13,18 @@ const CORPUS_DIR = path.join(__dirname, '..', 'bench', 'corpus');
 const MANIFEST_PATH = path.join(CORPUS_DIR, 'manifest.json');
 const LABELS_DIR = path.join(CORPUS_DIR, 'labels');
 const SCORES_PATH = path.join(CORPUS_DIR, 'scores.json');
+const SCORECARD_PATH = path.join(CORPUS_DIR, 'scorecard.md');
+const FLOOR_EXCEPTIONS_PATH = path.join(CORPUS_DIR, 'precision-floor-exceptions.json');
+const LIB_DIR = path.join(__dirname, '..', 'lib');
+const PRECISION_FLOOR = 0.8;
+const MINIMUM_LABELS_FOR_FLOOR = 10;
+const MEASURED_LABEL_COUNT = 10;
+const PILLAR_LIB_DIRS = {
+  perf: path.join(LIB_DIR, 'performance'),
+  maint: path.join(LIB_DIR, 'maintainability'),
+  sec: path.join(LIB_DIR, 'security'),
+};
+const STATUS_ORDER = ['unmeasured', 'thin', 'measured'];
 const RUN_TIMEOUT_MS = 20 * 60 * 1000;
 const MAX_OUTPUT_BYTES = 1024 * 1024 * 1024;
 const GIT_TIMEOUT_MS = 30 * 1000;
@@ -217,8 +230,134 @@ function formatRuleTable(rules) {
   return [line('rule', columns), ...rows].join('\n');
 }
 
+function readAllLabels() {
+  return fs
+    .readdirSync(LABELS_DIR)
+    .filter((name) => name.endsWith('.json'))
+    .flatMap((name) => readJson(path.join(LABELS_DIR, name)));
+}
+
+function registeredRules() {
+  const perf = require('../lib/performance/rule-ids.cjs');
+  const maint = require('../lib/maintainability/rule-ids.cjs');
+  const sec = require('../lib/security/rule-ids.cjs');
+  return {
+    perf: { ruleIds: [...perf.knownRules], impactByRule: perf.impactByRule },
+    maint: { ruleIds: [...maint.knownRules], impactByRule: maint.impactByRule },
+    sec: { ruleIds: sec.securityRules, impactByRule: sec.impactByRule },
+  };
+}
+
+// Fix builders are exported by rule id from each pillar's site-fixes modules (see lib/*/site-fix.cjs).
+function fixRuleIds(pillar) {
+  const directory = path.join(PILLAR_LIB_DIRS[pillar], 'site-fixes');
+  const ruleIds = new Set();
+  for (const name of fs.readdirSync(directory).filter((file) => file.endsWith('.cjs'))) {
+    for (const [ruleId, build] of Object.entries(require(path.join(directory, name)))) {
+      if (typeof build === 'function') ruleIds.add(ruleId);
+    }
+  }
+  return ruleIds;
+}
+
+function countLabels(labels) {
+  const counts = {};
+  for (const { pillar, ruleId, verdict } of labels) {
+    const entry = (counts[ruleKey(pillar, ruleId)] ??= { tp: 0, fp: 0, missed: 0 });
+    if (verdict in entry) entry[verdict]++;
+  }
+  return counts;
+}
+
+function classifyStatus(labelTotal) {
+  if (labelTotal === 0) return 'unmeasured';
+  return labelTotal >= MEASURED_LABEL_COUNT ? 'measured' : 'thin';
+}
+
+function buildScorecard(registry, labelCounts, storedRules, fixIdsByPillar) {
+  const scorecard = {};
+  for (const [pillar, { ruleIds, impactByRule }] of Object.entries(registry)) {
+    scorecard[pillar] = ruleIds.map((ruleId) => {
+      const key = ruleKey(pillar, ruleId);
+      const { tp, fp, missed } = labelCounts[key] ?? { tp: 0, fp: 0, missed: 0 };
+      return {
+        pillar,
+        ruleId,
+        impact: impactByRule[ruleId] ?? '-',
+        tp,
+        fp,
+        missed,
+        precision: storedRules[key]?.precision ?? null,
+        recall: storedRules[key]?.recall ?? null,
+        hasFix: fixIdsByPillar[pillar].has(ruleId),
+        status: classifyStatus(tp + fp + missed),
+      };
+    });
+  }
+  return scorecard;
+}
+
+// Unmeasured rules first, then the lowest precision; rules without a precision follow the measured ones.
+function compareScorecardRows(left, right) {
+  const statusGap = Number(right.status === 'unmeasured') - Number(left.status === 'unmeasured');
+  if (statusGap !== 0) return statusGap;
+  const leftPrecision = left.precision ?? Infinity;
+  const rightPrecision = right.precision ?? Infinity;
+  if (leftPrecision !== rightPrecision) return leftPrecision < rightPrecision ? -1 : 1;
+  return left.ruleId.localeCompare(right.ruleId);
+}
+
+const percentText = (value) => (value === null ? '-' : `${(value * 100).toFixed(0)}%`);
+
+function statusSummary(rows) {
+  const counts = Object.fromEntries(STATUS_ORDER.map((status) => [status, 0]));
+  for (const row of rows) counts[row.status]++;
+  return `${rows.length} rules: ${counts.measured} measured, ${counts.thin} thin, ${counts.unmeasured} unmeasured`;
+}
+
+function formatScorecard(scorecard) {
+  const header = '| Rule | Impact | TP | FP | Missed | Precision | Recall | Fix | Status |';
+  const divider = '| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |';
+  const sections = Object.entries(scorecard).map(([pillar, rows]) => {
+    const lines = [...rows].sort(compareScorecardRows).map((row) => {
+      const cells = [row.ruleId, row.impact, row.tp, row.fp, row.missed, percentText(row.precision)];
+      cells.push(percentText(row.recall), row.hasFix ? 'yes' : 'no', row.status);
+      return `| ${cells.join(' | ')} |`;
+    });
+    return [`## ${pillar}`, '', statusSummary(rows), '', header, divider, ...lines].join('\n');
+  });
+  return ['# Rule scorecard', '', ...sections].join('\n\n') + '\n';
+}
+
+function writeScorecard() {
+  const registry = registeredRules();
+  const fixIdsByPillar = Object.fromEntries(Object.keys(PILLARS).map((pillar) => [pillar, fixRuleIds(pillar)]));
+  const stored = readJson(SCORES_PATH);
+  const scorecard = buildScorecard(registry, countLabels(readAllLabels()), stored.rules, fixIdsByPillar);
+  fs.writeFileSync(SCORECARD_PATH, formatScorecard(scorecard));
+  console.log(`Wrote ${path.relative(process.cwd(), SCORECARD_PATH)}`);
+  return 0;
+}
+
+// Only default-level findings are scored into tp/fp (contextual ones are counted separately), so the floor
+// judges exactly the findings users see by default.
+function findBelowFloor(rules, exceptions) {
+  const excepted = new Set(exceptions.map((exception) => exception.rule));
+  return Object.keys(rules)
+    .sort()
+    .filter((key) => {
+      const { tp, fp, precision } = rules[key];
+      return tp + fp >= MINIMUM_LABELS_FOR_FLOOR && precision < PRECISION_FLOOR && !excepted.has(key);
+    });
+}
+
+function readFloorExceptions() {
+  return fs.existsSync(FLOOR_EXCEPTIONS_PATH) ? readJson(FLOOR_EXCEPTIONS_PATH) : [];
+}
+
 function main(argv) {
   const options = parseArgs(argv);
+  if (options.scorecard) return writeScorecard();
   const manifest = readJson(MANIFEST_PATH);
   const wanted = options.repos ? new Set(options.repos.split(',')) : null;
   const repos = manifest.repos.filter((repo) => !wanted || wanted.has(repo.name));
@@ -239,10 +378,11 @@ function main(argv) {
   const compareMetrics = JSON.stringify(scanned) === JSON.stringify(baseline.scanned);
   const regressions = findRegressions(current, baseline, { compareMetrics });
   const deltas = countDeltas(current, baseline);
-  const exitCode = regressions.length > 0 ? 1 : 0;
+  const belowFloor = findBelowFloor(current.rules, readFloorExceptions());
+  const exitCode = regressions.length > 0 || belowFloor.length > 0 ? 1 : 0;
 
   if (options.json) {
-    console.log(JSON.stringify({ scanned, skipped, rules: current.rules, deltas, regressions }, null, 2));
+    console.log(JSON.stringify({ scanned, skipped, rules: current.rules, deltas, regressions, belowFloor }, null, 2));
     return exitCode;
   }
   console.log(formatRuleTable(current.rules));
@@ -251,9 +391,22 @@ function main(argv) {
     console.log('Scanned set differs from the baseline: rule metrics not compared, label checks apply.');
   for (const { rule, before, after } of deltas) console.log(`count delta ${rule}: ${before} -> ${after}`);
   for (const regression of regressions) console.log(`REGRESSION ${regression}`);
+  if (belowFloor.length > 0) console.log(`Below precision floor (${PRECISION_FLOOR}):`);
+  for (const key of belowFloor) console.log(`  ${key} precision ${current.rules[key].precision}`);
   return exitCode;
 }
 
 if (require.main === module) process.exitCode = main(process.argv.slice(2));
 
-module.exports = { normalizeFile, scoreUnits, findRegressions, countDeltas, labelStates };
+module.exports = {
+  normalizeFile,
+  scoreUnits,
+  findRegressions,
+  countDeltas,
+  labelStates,
+  classifyStatus,
+  buildScorecard,
+  findBelowFloor,
+  PRECISION_FLOOR,
+  MINIMUM_LABELS_FOR_FLOOR,
+};

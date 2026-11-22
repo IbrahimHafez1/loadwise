@@ -3,7 +3,11 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
+  MINIMUM_LABELS_FOR_FLOOR,
+  PRECISION_FLOOR,
+  classifyStatus,
   countDeltas,
+  findBelowFloor,
   findRegressions,
   labelStates,
   normalizeFile,
@@ -82,4 +86,34 @@ test('countDeltas lists only rules whose default finding count changed', () => {
   const current = score([finding(1)], []);
   assert.deepEqual(countDeltas(current, baseline), [{ rule: 'perf/floating-promise', before: 2, after: 1, delta: -1 }]);
   assert.deepEqual(countDeltas(baseline, baseline), []);
+});
+
+test('classifyStatus separates unmeasured, thin and measured rules by label count', () => {
+  assert.equal(classifyStatus(0), 'unmeasured');
+  assert.equal(classifyStatus(1), 'thin');
+  assert.equal(classifyStatus(9), 'thin');
+  assert.equal(classifyStatus(10), 'measured');
+});
+
+const floorStats = (tp, fp) => ({ tp, fp, precision: tp / (tp + fp) });
+const underFloorFp = Math.ceil(MINIMUM_LABELS_FOR_FLOOR * (1 - PRECISION_FLOOR)) + 1;
+
+test('findBelowFloor fails a rule with enough labels and precision under the floor', () => {
+  const rules = { 'perf/floating-promise': floorStats(MINIMUM_LABELS_FOR_FLOOR - underFloorFp, underFloorFp) };
+  assert.deepEqual(findBelowFloor(rules, []), ['perf/floating-promise']);
+});
+
+test('findBelowFloor ignores rules with too few labels or precision at the floor', () => {
+  const fewLabels = floorStats(0, MINIMUM_LABELS_FOR_FLOOR - 1);
+  const atFloor = floorStats(
+    MINIMUM_LABELS_FOR_FLOOR * PRECISION_FLOOR,
+    MINIMUM_LABELS_FOR_FLOOR * (1 - PRECISION_FLOOR),
+  );
+  assert.deepEqual(findBelowFloor({ 'perf/a': fewLabels, 'perf/b': atFloor }, []), []);
+});
+
+test('findBelowFloor honours the exceptions list', () => {
+  const rules = { 'perf/floating-promise': floorStats(0, MINIMUM_LABELS_FOR_FLOOR) };
+  const exceptions = [{ rule: 'perf/floating-promise', reason: 'known' }];
+  assert.deepEqual(findBelowFloor(rules, exceptions), []);
 });

@@ -1,0 +1,38 @@
+[
+  {
+    "rule": "maint/unreferenced-file",
+    "reason": "Precision 0.3846 over 13 labels when the floor was introduced; raise precision or relabel, then remove this entry."
+  },
+  {
+    "rule": "perf/array-repeated-find",
+    "reason": "Precision 0.7692 over 13 labels when the floor was introduced; raise precision or relabel, then remove this entry."
+  },
+  {
+    "rule": "perf/floating-promise",
+    "reason": "Precision 0.7 over 10 labels when the floor was introduced; raise precision or relabel, then remove this entry."
+  },
+  {
+    "rule": "perf/http-call-without-timeout",
+    "reason": "Precision 0.6429 over 14 labels when the floor was introduced; raise precision or relabel, then remove this entry."
+  },
+  {
+    "rule": "perf/node-sync-fs-in-async",
+    "reason": "Precision 0.1333 over 15 labels when the floor was introduced; raise precision or relabel, then remove this entry."
+  },
+  {
+    "rule": "perf/reduce-copy-accumulator",
+    "reason": "Precision 0.3077 over 13 labels when the floor was introduced; raise precision or relabel, then remove this entry."
+  },
+  {
+    "rule": "sec/committed-secret",
+    "reason": "Precision 0.4 over 10 labels when the floor was introduced; raise precision or relabel, then remove this entry."
+  },
+  {
+    "rule": "sec/compose-hardcoded-secret",
+    "reason": "Precision 0 over 10 labels when the floor was introduced; raise precision or relabel, then remove this entry."
+  },
+  {
+    "rule": "sec/dockerfile-runs-as-root",
+    "reason": "Precision 0.4 over 10 labels when the floor was introduced; raise precision or relabel, then remove this entry."
+  }
+]

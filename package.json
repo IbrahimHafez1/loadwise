@@ -67,6 +67,7 @@
     "check": "npm run format:check && npm run lint && npm test",
     "test": "node --require ./test/manual-session.cjs --test --test-concurrency=2 test/performance/*.test.cjs test/maintainability/*.test.cjs test/security/*.test.cjs test/shared/*.test.cjs test/plugin/*.test.cjs editor/test/*.test.cjs",
     "bench:corpus": "node scripts/score-corpus.cjs",
+    "bench:scorecard": "node scripts/score-corpus.cjs --scorecard",
     "bench:patterns": "node bench/patterns.cjs",
     "bench:scan": "node bench/scanner.cjs",
     "bench:security": "node bench/security.cjs",
