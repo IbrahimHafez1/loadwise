@@ -25,8 +25,9 @@ const twoMutatingQueries = [
 
 test('text output prints the Fix block once per rule', (context) => {
   const result = runInWorkspace(context, twoMutatingQueries);
-  const findingLines = result.stdout.split('\n').filter((line) => line.includes('[query-mutates-state #'));
-  assert.equal(findingLines.length, 2);
+  // The two findings share one reason, so it prints once above their two locations.
+  assert.match(result.stdout, /^\[query-mutates-state\] \w+: .*\(2 findings\)$/m);
+  assert.equal(result.stdout.match(/^ {2}\S+:\d+:\d+ #\w+$/gm).length, 2);
   assert.equal(result.stdout.split('  Fix:').length - 1, 1);
   assert.match(result.stdout, /    - \/\*\* @maintainabilityQuery \*\//);
   assert.match(result.stdout, /    \+ current\(\) \{ return this\.count; \}/);
