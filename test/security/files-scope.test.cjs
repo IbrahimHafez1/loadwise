@@ -222,3 +222,14 @@ test('an infrastructure directory needs no TypeScript config for its security ch
     );
   }
 });
+
+test('a tracked source folder named like build output is scanned; build output at the root is not', (context) => {
+  const root = repository(context, {
+    'src/build/settings.yaml': `token: ${syntheticToken}\n`,
+    'dist/settings.yaml': `token: ${syntheticToken}\n`,
+  });
+  const files = listProjectFiles(root).files.map((file) => path.relative(root, file).split(path.sep).join('/'));
+  assert.ok(files.includes('src/build/settings.yaml'));
+  assert.ok(!files.includes('dist/settings.yaml'));
+});
+

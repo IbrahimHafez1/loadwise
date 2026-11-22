@@ -161,3 +161,22 @@ test('conditional package imports respect the usage-site resolution mode', (cont
   assert.equal(resolve('#impl', filename, parsed.statements[0].moduleSpecifier), 'esm.ts');
   assert.equal(resolve('#impl', filename, parsed.statements[1].moduleReference.expression), 'cjs.ts');
 });
+
+test('build-output folder names are skipped only at the root or beside a manifest, not as source folders', (context) => {
+  const root = fixture(context, {
+    'build/out.ts': '',
+    'packages/app/package.json': '{}',
+    'packages/app/dist/out.ts': '',
+    'packages/app/src/index.ts': '',
+    'src/build/plan.ts': '',
+    'src/vendor/client.ts': '',
+    'src/coverage/report.ts': '',
+  });
+  assert.deepEqual(listFiles(root), [
+    'packages/app/package.json',
+    'packages/app/src/index.ts',
+    'src/build/plan.ts',
+    'src/coverage/report.ts',
+    'src/vendor/client.ts',
+  ]);
+});
