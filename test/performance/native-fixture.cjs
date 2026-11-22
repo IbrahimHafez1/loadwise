@@ -5,11 +5,23 @@ const { requireNative } = require('../../lib/performance/native-runtime.cjs');
 const { API, ModuleKind, ModuleResolutionKind } = requireNative('typescript/sync');
 const { ScriptTarget } = requireNative('typescript/ast');
 const { createFileSystemWithLib } = requireNative('typescript/fs');
-const { selectNativeSyntax } = require('../../lib/performance/compiler.cjs');
+const { requireWithSyntax, selectNativeSyntax } = require('../../lib/performance/compiler.cjs');
 const { adaptProgram } = require('../../lib/performance/native-checker.cjs');
 
-selectNativeSyntax(require('../../lib/performance/native-syntax.cjs'));
-const { analyzeFile } = require('../../lib/performance/analyze.cjs');
+const nativeSyntax = require('../../lib/performance/native-syntax.cjs');
+const analyzePath = require.resolve('../../lib/performance/analyze.cjs');
+
+// A suite that already loaded the TypeScript 6 rules (to build its own programs) cannot switch the process to the
+// native syntax, so the rules are loaded as private copies instead.
+function loadAnalyzeFile() {
+  try {
+    selectNativeSyntax(nativeSyntax);
+    return require(analyzePath).analyzeFile;
+  } catch {
+    return requireWithSyntax(analyzePath, nativeSyntax).analyzeFile;
+  }
+}
+const analyzeFile = loadAnalyzeFile();
 
 function lint(source, files, policy) {
   const root = path.join(__dirname, 'virtual-project');
