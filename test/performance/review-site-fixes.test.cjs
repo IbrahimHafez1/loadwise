@@ -43,3 +43,21 @@ export async function run(queue: Queue, ids: string[]) {
   assert.ok(finding);
   assert.equal(finding.fix, undefined);
 });
+
+const ioredisStub = `export class Redis {
+  keys(pattern: string): Promise<string[]>;
+  scanStream(options: object): AsyncIterable<string[]>;
+}`;
+
+test('redis keys rewrite keeps the export modifier of the declaration', (context) => {
+  const { findings } = scanWithFixes(context, {
+    'node_modules/ioredis/index.d.ts': ioredisStub,
+    'src/cache.ts': `import { Redis } from 'ioredis';
+declare const redis: Redis;
+export const sessionKeys = await redis.keys('session:*');
+`,
+  });
+  const finding = findings.find((entry) => entry.ruleId === 'redis-keys-command');
+  assert.ok(finding?.fix);
+  assert.match(onlyChange(finding).after, /^export const sessionKeys: string\[\] = \[\];\nfor await/);
+});
