@@ -172,6 +172,22 @@ emitter.on('c', async () => {
   assert.deepEqual(findings, []);
 });
 
+test('ignores a worker thread message handler, whose crash the parent receives as an error event', () => {
+  const worker = `declare const require: any;
+const { parentPort } = require('node:worker_threads');
+parentPort.on('message', async () => {
+  await load();
+});
+`;
+  assert.deepEqual(callbackFindings(worker), []);
+  const unrelated = `declare const parentPort: any;
+parentPort.on('message', async () => {
+  await load();
+});
+`;
+  assert.equal(callbackFindings(unrelated).length, 1);
+});
+
 test('the callback fix logs with console.error, or logger when the file has one', onBundledEngine, (context) => {
   const source = `setTimeout(async () => {
   await load();
