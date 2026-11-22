@@ -187,3 +187,37 @@ test('taint through an object literal stays with the field it came from', () => 
   ]);
 });
 
+test('a URL template that starts with a constant origin fixes the host', () => {
+  const rules = new Set(['ssrf-request-url']);
+  const fixed = route(
+    'await fetch(`${DRIVE_FILES_URL}/${req.query.file_id}?alt=media`);',
+    "const DRIVE_FILES_URL = 'https://www.googleapis.com/drive/v3/files';",
+  );
+  assert.deepEqual(ruleFindings(fixed, rules), []);
+  const open = route('await fetch(`${SCHEME}${req.query.host}/files`);', "const SCHEME = 'https://';");
+  assert.deepEqual(ruleFindings(open, rules), [['ssrf-request-url', 5, 'D']]);
+});
+
+test('a redirect to a relative literal path with request data after it is not an open redirect', () => {
+  const rules = new Set(['open-redirect']);
+  const relative = route(
+    [
+      'res.redirect(303, `./callback?${new URLSearchParams(req.body)}`);',
+      "res.redirect('original?' + new URLSearchParams(req.query).toString());",
+      "res.redirect('../login#' + req.query.state);",
+    ].join('\n'),
+  );
+  assert.deepEqual(ruleFindings(relative, rules), []);
+  const open = route(
+    [
+      'res.redirect(`${req.query.next}?code=1`);',
+      "res.redirect(' /' + req.query.next);",
+      "res.redirect('/' + req.query.next);",
+    ].join('\n'),
+  );
+  assert.deepEqual(ruleFindings(open, rules), [
+    ['open-redirect', 5, 'D'],
+    ['open-redirect', 6, 'D'],
+    ['open-redirect', 7, 'D'],
+  ]);
+});
