@@ -254,3 +254,15 @@ test('the missing-package note says source models are recognised at reduced prec
   }
   assert.match(formatMissingPackagesNote('pg'), /were skipped/);
 });
+
+test('A decorator outside the Nest injection list on a parameter does not break the fallback', () => {
+  const found = fallbacks(
+    `import { DataSource } from 'typeorm';
+     import { InjectDataSource } from '@nestjs/typeorm';
+     export class Service {
+       constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
+       async run() { await this.dataSource.query('select 1'); }
+     }`,
+  );
+  assert.equal(found['this.dataSource.query'], undefined);
+});
