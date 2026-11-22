@@ -56,6 +56,32 @@ test('ignore globs that leave no sources return a successful empty report', (con
   assert.deepEqual(report.findings, []);
 });
 
+test('a file that does not parse is skipped, listed in skippedFiles and makes the run exit 2', (context) => {
+  const run = workspace(context, {
+    'good.ts': 'export const goodValue = 1;',
+    'broken.ts': 'export const = ;',
+  });
+  const result = run();
+  assert.equal(result.status, 2, result.stderr);
+  assert.match(result.stderr, /broken\.ts:1:\d+ .* Skipped that file, which does not parse/);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.skippedFiles.length, 1);
+  assert.equal(report.skippedFiles[0].file, 'broken.ts');
+  assert.match(report.skippedFiles[0].reason, /^1:\d+ /);
+});
+
+test('an unparsable file named in ignore is not parsed and does not cause exit 2', (context) => {
+  const run = workspace(context, {
+    'good.ts': 'export const goodValue = 1;',
+    'broken-fixture.ts': 'export const = ;',
+    'loadwise.config.json': JSON.stringify({ ignore: ['broken-fixture.ts'] }),
+  });
+  const result = run();
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stderr, /does not parse/);
+  assert.equal(JSON.parse(result.stdout).skippedFiles, undefined);
+});
+
 test('a project without supported sources still fails when ignore globs match no sources', (context) => {
   const run = workspace(context, {
     'notes.txt': 'Nothing to check.',

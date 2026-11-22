@@ -146,6 +146,10 @@ test('scanning on worker threads gives the same result as a single thread, also 
     const reports = [];
     for (const parallelFrom of [Infinity, 1]) reports.push(await scan(root, policy, { parallelFrom }));
     assert.deepEqual(reports[1], reports[0]);
+    assert.deepEqual(
+      reports[0].skippedFiles.map((skipped) => skipped.file),
+      ['f10.ts', 'f30.ts'],
+    );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
