@@ -61,3 +61,46 @@ export const sessionKeys = await redis.keys('session:*');
   assert.ok(finding?.fix);
   assert.match(onlyChange(finding).after, /^export const sessionKeys: string\[\] = \[\];\nfor await/);
 });
+
+// A fix that is withheld leaves the finding reported, with nothing to apply.
+function assertNoFix(findings, ruleId) {
+  const reported = findings.filter((entry) => entry.ruleId === ruleId);
+  assert.ok(reported.length > 0, `${ruleId} should report`);
+  assert.deepEqual(
+    reported.map((entry) => entry.fix),
+    reported.map(() => undefined),
+  );
+}
+
+const pageCountFiles = {
+  'node_modules/typeorm/index.d.ts': `export class Repository<T> {
+  find(options?: object): Promise<T[]>;
+  count(options?: object): Promise<number>;
+  findAndCount(options?: object): Promise<[T[], number]>;
+}`,
+};
+const pageCountHeader = "import { Repository } from 'typeorm';\ndeclare const repo: Repository<object>;\n";
+
+test('count then page rewrite is not offered for exported bindings', (context) => {
+  const { findings } = scanWithFixes(context, {
+    ...pageCountFiles,
+    'src/list.ts': `${pageCountHeader}export const total = await repo.count();
+export const items = await repo.find({ skip: 0, take: 10 });
+`,
+  });
+  assertNoFix(findings, 'count-then-page-serial');
+});
+
+test('count then page rewrite is not offered over a comment between the two reads', (context) => {
+  const { findings } = scanWithFixes(context, {
+    ...pageCountFiles,
+    'src/list.ts': `${pageCountHeader}export async function list() {
+  const total = await repo.count();
+  // one page of rows
+  const items = await repo.find({ skip: 0, take: 10 });
+  return { items, total };
+}
+`,
+  });
+  assertNoFix(findings, 'count-then-page-serial');
+});
