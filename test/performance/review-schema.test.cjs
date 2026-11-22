@@ -82,3 +82,18 @@ test('DTO: widening a request type or narrowing a response type is not a breakin
   assert.deepEqual(dtoTypeChanges('string', 'string | null', ['input', 'output']), ['api-type-changed']);
   assert.deepEqual(dtoTypeChanges('number', 'string', ['input']), ['api-type-changed']);
 });
+
+test('OpenAPI: locating thousands of findings in a large document stays linear', () => {
+  const paths = {};
+  for (let index = 0; index < 8000; index++) {
+    paths['/items' + index] = { get: { responses: { 200: { description: 'ok' } } } };
+  }
+  const oldText = JSON.stringify({ openapi: '3.0.0', paths }, null, 2).replaceAll('\n', '\r\n');
+  const started = process.hrtime.bigint();
+  const findings = compareOpenApi(oldText, JSON.stringify({ openapi: '3.0.0', paths: {} }));
+  const elapsedMilliseconds = Number(process.hrtime.bigint() - started) / 1e6;
+  assert.equal(findings.length, 8000);
+  assert.deepEqual([findings[0].line, findings[0].column], [5, 14]);
+  assert.deepEqual([findings.at(-1).line, findings.at(-1).column], [71996, 14]);
+  assert.ok(elapsedMilliseconds < 2000, `took ${Math.round(elapsedMilliseconds)} ms`);
+});
