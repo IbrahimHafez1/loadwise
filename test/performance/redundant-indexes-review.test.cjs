@@ -163,6 +163,54 @@ test('migrations: a renamed table keeps its indexes under the new name', () => {
   assert.match(findings[0].message, /on `orders`/);
 });
 
+test('migrations: a dropped column takes its indexes with it', () => {
+  const findings = schemaFindings({
+    'migrations/001_init.sql': [
+      'CREATE INDEX orders_a_idx ON orders (a);',
+      'CREATE INDEX orders_ab_idx ON orders (a, b);',
+      'CREATE INDEX orders_c_idx ON orders (c);',
+      'CREATE INDEX orders_cd_idx ON orders (c, d);',
+    ].join('\n'),
+    'migrations/002_drop.sql': 'ALTER TABLE orders DROP COLUMN IF EXISTS a;\n',
+  });
+  assert.deepEqual(
+    findings.map(({ file, line }) => [file, line]),
+    [['001_init.sql', 3]],
+  );
+});
+
+test('migrations: a knex dropColumn takes its indexes with it', () => {
+  const findings = schemaFindings({
+    'migrations/001_init.sql':
+      'CREATE INDEX orders_a_idx ON orders (a);\nCREATE INDEX orders_ab_idx ON orders (a, b);\n',
+    'migrations/002_drop.js':
+      "exports.up = (knex) => knex.schema.alterTable('orders', (table) => { table.dropColumn('a'); });\n",
+  });
+  assert.deepEqual(findings, []);
+});
+
+test('migrations: MySQL RENAME TABLE moves the indexes of every renamed pair', () => {
+  const findings = schemaFindings(
+    {
+      'migrations/001_init.sql': [
+        'CREATE INDEX old_a_idx ON old_orders (a);',
+        'CREATE INDEX other_a_idx ON old_items (a);',
+      ].join('\n'),
+      'migrations/002_rename.sql': 'RENAME TABLE old_orders TO orders, `old_items` TO `items`;\n',
+      'migrations/003_index.sql':
+        'CREATE INDEX orders_ab_idx ON orders (a, b);\nCREATE INDEX items_ab_idx ON items (a, b);\n',
+    },
+    'mysql',
+  );
+  assert.deepEqual(
+    findings.map(({ file, line }) => [file, line]),
+    [
+      ['001_init.sql', 1],
+      ['001_init.sql', 2],
+    ],
+  );
+});
+
 test('Prisma: a redundant index is reported once, at schema.prisma rather than in its migration', () => {
   const findings = schemaFindings({
     'prisma/schema.prisma': `datasource db {
