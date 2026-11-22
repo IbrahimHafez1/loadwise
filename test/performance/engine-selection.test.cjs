@@ -64,11 +64,12 @@ test('auto matches the JS engine on a compatible project and uses native', { ski
   const auto = run(['-p', 'tsconfig.json', '--json'], ['--require', './probe.config.cjs']);
   const js = run(['-p', 'tsconfig.json', '--json', '--engine', 'js']);
   assert.equal(auto.status, 1, auto.stderr);
-  assert.deepEqual(JSON.parse(auto.stdout), JSON.parse(js.stdout));
+  assert.deepEqual({ ...JSON.parse(auto.stdout), engine: undefined }, { ...JSON.parse(js.stdout), engine: undefined });
+  assert.equal(JSON.parse(auto.stdout).engine, 'native');
   assert.equal(auto.stderr, 'native loaded');
   assert.deepEqual(
-    JSON.parse(run(['flag.ts', '--json']).stdout),
-    JSON.parse(run(['flag.ts', '--json', '--engine', 'js']).stdout),
+    { ...JSON.parse(run(['flag.ts', '--json']).stdout), engine: undefined },
+    { ...JSON.parse(run(['flag.ts', '--json', '--engine', 'js']).stdout), engine: undefined },
   );
 });
 

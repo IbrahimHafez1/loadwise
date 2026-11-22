@@ -84,7 +84,10 @@ test('default solution follows references and honors JS config inputs and rule e
   assert.equal(JSON.parse(finding.stdout).findings[0].ruleId, 'node-sync-fs-in-async');
   const ignored = run(['-p', '.', '--ignore', 'node-sync-fs-in-async', '--json'], directory);
   assert.equal(ignored.status, 0, ignored.stderr);
-  assert.deepEqual(JSON.parse(ignored.stdout), { scannedFiles: 1, findings: [] });
+  assert.deepEqual(
+    { ...JSON.parse(ignored.stdout), engine: undefined },
+    { scannedFiles: 1, findings: [], engine: undefined },
+  );
 });
 
 test('bad code, missing files, invalid configs and unknown rules fail with exit 2', (context) => {
@@ -108,7 +111,10 @@ test('contextual findings are counted by default and retrievable at their origin
   });
   const checked = run(['service.js', '--json'], directory);
   assert.equal(checked.status, 0, checked.stderr);
-  assert.deepEqual(JSON.parse(checked.stdout), { scannedFiles: 1, findings: [], contextualFindingCount: 1 });
+  assert.deepEqual(
+    { ...JSON.parse(checked.stdout), engine: undefined },
+    { scannedFiles: 1, findings: [], contextualFindingCount: 1, engine: undefined },
+  );
   const full = run(['service.js', '--json', '--include-contextual'], directory);
   assert.equal(full.status, 1, full.stderr);
   const { findings, contextualFindingCount } = JSON.parse(full.stdout);
@@ -118,7 +124,10 @@ test('contextual findings are counted by default and retrievable at their origin
   const contract = run(['service.js', '--include-contextual', '--fail-on', 'contract'], directory);
   assert.equal(contract.status, 0, contract.stderr);
   const ignored = run(['service.js', '--json', '--include-contextual', '--ignore', 'node-sync-fs-in-async'], directory);
-  assert.deepEqual(JSON.parse(ignored.stdout), { scannedFiles: 1, findings: [] });
+  assert.deepEqual(
+    { ...JSON.parse(ignored.stdout), engine: undefined },
+    { scannedFiles: 1, findings: [], engine: undefined },
+  );
 });
 
 test('help respects option terminators and cannot hide a missing option value', (context) => {

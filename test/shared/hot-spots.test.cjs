@@ -41,7 +41,10 @@ test('a missing package base is dropped by the native engine instead of falling 
   const auto = run('auto');
   assert.doesNotMatch(auto.stderr, /TypeScript 7 cannot load this project/);
   const javascript = run('js');
-  assert.equal(native.stdout, javascript.stdout);
-  assert.equal(auto.stdout, javascript.stdout);
+  // The report names its engine, so the engines are compared on everything else.
+  const withoutEngine = (engineRun) => ({ ...JSON.parse(engineRun.stdout), engine: undefined });
+  assert.deepEqual(withoutEngine(native), withoutEngine(javascript));
+  assert.deepEqual(withoutEngine(auto), withoutEngine(javascript));
+  assert.equal(JSON.parse(auto.stdout).engine, 'native');
   assert.equal(JSON.parse(native.stdout).scannedFiles, 1);
 });
