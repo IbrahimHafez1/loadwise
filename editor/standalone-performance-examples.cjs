@@ -150,6 +150,12 @@ const standaloneExamples = {
     code: "const keys = [];\nfor await (const batch of redis.scanStream({ match: 'session:*', count: 100 })) keys.push(...batch);",
     note: 'KEYS blocks every Redis client while it walks the whole keyspace; SCAN works in small steps.',
   },
+  'redis-incr-then-expire': {
+    language: 'javascript',
+    before: 'const hits = await redis.incr(key);\nif (hits === 1) await redis.expire(key, 60);',
+    code: "const [[, hits]] = await redis.multi().incr(key).expire(key, 60, 'NX').exec();",
+    note: 'Two round trips, and a crash between them leaves the counter with no TTL. One MULTI sends both; NX needs Redis 7+.',
+  },
   'unbounded-list-query': {
     language: 'javascript',
     before: 'return prisma.order.findMany({ where: { userId } });',
