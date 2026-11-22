@@ -4,7 +4,15 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
 const { applyFixes } = require('../../lib/performance/fix-cli.cjs');
-const { scanWithFixes, onlyChange } = require('./site-fix-helpers.cjs');
+const { scanWithFixes, dedent } = require('./site-fix-helpers.cjs');
+
+// The fix adds the size constant after the imports and then edits the call, as two hunks.
+function callChange(finding) {
+  assert.equal(finding.fix.changes.length, 2);
+  const [declaration, call] = finding.fix.changes;
+  assert.ok(declaration.after.includes('const MAX_UPLOAD_FILE_SIZE_BYTES = 10 * 1024 * 1024;'));
+  return { before: dedent(call.before), after: dedent(call.after) };
+}
 
 const files = {
   'node_modules/@nestjs/platform-express/index.d.ts': `
@@ -27,11 +35,11 @@ test('previews the upload size policy and leaves the endpoint unchanged under --
   const findings = scan(context, source);
   assert.equal(findings.length, 1);
   assert.equal(
-    onlyChange(findings[0]).after,
-    `export const a = FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } });`,
+    callChange(findings[0]).after,
+    `export const a = FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_FILE_SIZE_BYTES } });`,
   );
   assert.equal(findings[0].fix.requiresReview, true);
-  assert.match(findings[0].fix.note, /10 MiB.*example/);
+  assert.match(findings[0].fix.note, /placeholder.*real upload/);
   await applyFixes(findings, { all: true });
   assert.equal(fs.readFileSync(findings[0].file, 'utf8'), source);
 });
@@ -46,8 +54,8 @@ export const b = FilesInterceptor('files', 3, { limits: { files: 3 } });
   );
   assert.equal(findings.length, 2);
   assert.ok(findings.every((finding) => finding.fix.requiresReview));
-  assert.match(onlyChange(findings[0]).after, /\{ dest: 'x', limits: \{ fileSize: 10 \* 1024 \* 1024 \} \}/);
-  assert.match(onlyChange(findings[1]).after, /\{ limits: \{ files: 3, fileSize: 10 \* 1024 \* 1024 \} \}/);
+  assert.match(callChange(findings[0]).after, /\{ dest: 'x', limits: \{ fileSize: MAX_UPLOAD_FILE_SIZE_BYTES \} \}/);
+  assert.match(callChange(findings[1]).after, /\{ limits: \{ files: 3, fileSize: MAX_UPLOAD_FILE_SIZE_BYTES \} \}/);
 });
 
 test('adds the property on its own line in a multi-line literal', (context) => {
@@ -59,7 +67,7 @@ export const a = FileInterceptor('file', {
 });
 `,
   );
-  assert.match(onlyChange(findings[0]).after, /dest: 'x',\nlimits: \{ fileSize: 10 \* 1024 \* 1024 \},/);
+  assert.match(callChange(findings[0]).after, /dest: 'x',\nlimits: \{ fileSize: MAX_UPLOAD_FILE_SIZE_BYTES \},/);
 });
 
 test('reports multer() without limits', (context) => {
