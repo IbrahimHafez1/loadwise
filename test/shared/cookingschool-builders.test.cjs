@@ -151,3 +151,51 @@ test('deep-control-flow guards keep a negated comparison when the operand may be
   assert.match(untyped, /if \(!rowImages \|\| !\(rowImages\.length > 0\)\) continue;/);
 });
 
+const packetRecord = [
+  'interface Packet {',
+  ...Array.from({ length: 21 }, (_, index) => `  field${index}: string;`),
+  '}',
+].join('\n');
+const packetModule = [
+  "import { Injectable } from '@nestjs/common';",
+  "import { helper } from './helper';",
+  '',
+  packetRecord,
+  '',
+  'export function inspect(packet: Packet) { return helper(packet.field0); }',
+  '',
+].join('\n');
+
+function largeModuleFix(context, text, linesOfCode) {
+  const root = temporaryProject(context, { 'package.json': '{}', 'api.ts': text });
+  const message = `This module has ${linesOfCode} lines of code (limit 600, comments and blank lines excluded).`;
+  return buildFix({ file: 'api.ts', line: 1, column: 1, ruleId: 'large-module', message }, createFileCache(root));
+}
+
+test('large-module imports the record in the import block with the neighbouring extension style', (context) => {
+  const fix = largeModuleFix(context, packetModule, 610);
+  assert.ok(fix);
+  const after = appliedText(fix, packetModule);
+  assert.ok(
+    after.startsWith(
+      "import { Injectable } from '@nestjs/common';\nimport { helper } from './helper';\n" +
+        "import type { Packet } from './api.types';\n\nexport function inspect",
+    ),
+    after,
+  );
+  const constants = ['const first = 1;', 'const second = 2;', 'const third = 3;', 'const fourth = 4;'].join('\n');
+  const distant = packetModule.replace('\n\ninterface', '\n\n' + constants + '\ninterface');
+  const distantAfter = appliedText(largeModuleFix(context, distant, 610), distant);
+  assert.match(
+    distantAfter,
+    /common';\n\/\/ Loadwise large-module[^\n]*\nimport type \{ Packet \} from '\.\/api\.types';\nimport \{ helper \}/,
+  );
+  assert.match(distantAfter, /const fourth = 4;\n\nexport function inspect/);
+  const esmModule = packetModule.replace("'./helper'", "'./helper.js'");
+  assert.match(appliedText(largeModuleFix(context, esmModule, 610), esmModule), /from '\.\/api\.types\.js';/);
+});
+
+test('large-module keeps a record whose move leaves the module over the line limit', (context) => {
+  assert.equal(largeModuleFix(context, packetModule, 1700), undefined);
+});
+
