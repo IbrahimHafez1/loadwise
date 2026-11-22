@@ -165,3 +165,25 @@ test('sequelize.escape output is fixed text; private fields assigned only fixed 
   assert.deepEqual(sqlFindings(route('', onlyFixed)), []);
 });
 
+test('taint through an object literal stays with the field it came from', () => {
+  const source = route(
+    ["store({ filename: req.body.name, sourcePath: '/tmp/upload' });", 'storeAll({ ...req.body });'].join('\n'),
+    [
+      "import { readFile } from 'fs/promises';",
+      'async function store(opts: { filename: string; sourcePath: string }) {',
+      '  await readFile(opts.sourcePath);',
+      '  const { sourcePath } = opts;',
+      '  await readFile(sourcePath);',
+      '  await readFile(opts.filename);',
+      '}',
+      'async function storeAll(opts: { sourcePath: string }) {',
+      '  await readFile(opts.sourcePath);',
+      '}',
+    ].join('\n'),
+  );
+  assert.deepEqual(ruleFindings(source, new Set(['path-traversal'])), [
+    ['path-traversal', 7, 'D'],
+    ['path-traversal', 10, 'D'],
+  ]);
+});
+
