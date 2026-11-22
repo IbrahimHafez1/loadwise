@@ -10,6 +10,7 @@ const ts = require('typescript');
 const { applyChangesToText } = require('../../editor/apply-fix.cjs');
 const { applyEdits, hunksFor, lineStartsOf, normalize } = require('../../lib/shared/fix-hunks.cjs');
 const { introducedSyntaxError } = require('../../lib/shared/fix-safety.cjs');
+const { labelledLines } = require('../../lib/shared/fix-terminal.cjs');
 const {
   createWriteTracker,
   dropConflictingComments,
@@ -25,7 +26,9 @@ const bin = path.resolve(__dirname, '../../bin/loadwise.cjs');
 const loadwisePrettier = path.dirname(require.resolve('prettier/package.json'));
 const ruleId = 'array-repeated-membership';
 const comment =
-  '// Loadwise array-repeated-membership: An array is tested with includes or indexOf repeatedly where a Set would do.';
+  '// Loadwise array-repeated-membership: An array is tested with includes or\n// indexOf repeatedly where a Set would do.';
+// The comment as inserted above a statement indented by two spaces.
+const indentedComment = comment.replace(/^/gm, '  ');
 const hunkJoinDistance = 3;
 
 function entryFor(text, filename = 'site.ts') {
@@ -98,6 +101,27 @@ test('the why-comment is the rule description, cut to its first sentence', () =>
   assert.equal(whyComment('not-a-rule'), undefined);
 });
 
+test('the why-comment wraps at 80 columns, and removing it keeps a project comment matching one of its lines', () => {
+  for (const line of comment.split('\n')) assert.ok(line.length <= 80, line);
+  const before = '  // indexOf repeatedly where a Set would do.\n  const hit = ids.includes(1);';
+  const after = indentedComment + '\n  // indexOf repeatedly where a Set would do.\n  const hit = new Set(ids).has(1);';
+  const fix = { changes: [{ file: 'site.ts', line: 1, before, after }] };
+  assert.equal(
+    withoutWhyComment(fix, ruleId).changes[0].after,
+    '  // indexOf repeatedly where a Set would do.\n  const hit = new Set(ids).has(1);',
+  );
+});
+
+test('a long note wraps under its label', () => {
+  const note = 'word '.repeat(40).trim();
+  const lines = labelledLines('Note', note);
+  assert.ok(lines.length > 1);
+  assert.ok(lines.every((line) => line.length <= 100));
+  assert.ok(lines[0].startsWith('  Note: word'));
+  assert.ok(lines.slice(1).every((line) => line.startsWith(' '.repeat('  Note: '.length) + 'word')));
+  assert.deepEqual(lines.join(' ').split(/\s+/).filter(Boolean), ['Note:', ...note.split(' ')]);
+});
+
 // Identifiers in TypeScript code, read with the scanner so strings and comments are left out.
 function identifiersOf(code) {
   const scanner = ts.createScanner(ts.ScriptTarget.Latest, true, ts.LanguageVariant.Standard, code);
@@ -119,10 +143,11 @@ test('the why-comment names no identifier of the rule example that the fixed fil
   const { code } = require('../../editor/performance-examples.cjs').exampleFor(ruleId, 'typescript', '');
   const exampleOnly = [...identifiersOf(code)].filter((name) => !fixedNames.has(name));
   assert.ok(exampleOnly.includes('allowedIds'), 'the example names a variable the file does not have');
-  const [fixComment] = membership.fix.changes.flatMap((change) =>
-    change.after.split('\n').filter((line) => line.trim().startsWith('// Loadwise')),
-  );
-  assert.equal(fixComment.trim(), comment);
+  const fixComment = membership.fix.changes
+    .flatMap((change) => change.after.split('\n').filter((line) => line.trim().startsWith('//')))
+    .map((line) => line.trim())
+    .join('\n');
+  assert.equal(fixComment, comment);
   const words = new Set(fixComment.match(/[A-Za-z_$][\w$]*/g));
   assert.deepEqual(
     exampleOnly.filter((name) => words.has(name)),
@@ -139,7 +164,7 @@ test('the why-comment goes on its own line above the statement holding the fixed
     result.text,
     [
       'function find(ids: number[]) {',
-      '  ' + comment,
+      indentedComment,
       '  const hit = new Set(ids).has(1);',
       '  return hit;',
       '}',
@@ -153,7 +178,7 @@ test('a decorated member takes the why-comment above its decorators', () => {
   const result = commented(text, replaceEdit(text, 'id: string', '{ id }: { id: string }'));
   assert.equal(
     result.text,
-    ['class Controller {', '  ' + comment, '  @Get()', '  find({ id }: { id: string }) {}', '}', ''].join('\n'),
+    ['class Controller {', indentedComment, '  @Get()', '  find({ id }: { id: string }) {}', '}', ''].join('\n'),
   );
 });
 
@@ -169,12 +194,12 @@ test('no why-comment inside a template, after code on the same line, or in a cat
 });
 
 test('the why-comment is added once, and a review directive or JSDoc above the statement stays attached', () => {
-  const already = ['function find(ids: number[]) {', '  ' + comment, '  const hit = ids.includes(1);', '}', ''].join(
+  const already = ['function find(ids: number[]) {', indentedComment, '  const hit = ids.includes(1);', '}', ''].join(
     '\n',
   );
   const repeated = commented(already, replaceEdit(already, 'ids.includes(1)', 'set.has(1)'));
   assert.equal(repeated.comment, undefined);
-  assert.equal(repeated.text.split(comment).length, 2);
+  assert.equal(repeated.text.split(indentedComment).length, 2);
   const reviewed = [
     'function find(ids: number[]) {',
     '  // loadwise-reviewed other-rule -- checked',
@@ -187,7 +212,7 @@ test('the why-comment is added once, and a review directive or JSDoc above the s
     commented(reviewed, replaceEdit(reviewed, 'ids.includes(1)', 'set.has(1)')).text,
     [
       'function find(ids: number[]) {',
-      '  ' + comment,
+      indentedComment,
       '  // loadwise-reviewed other-rule -- checked',
       '  /** The hit. */',
       '  const hit = set.has(1);',
@@ -225,11 +250,11 @@ test('two fixes anchored on one statement share a single why-comment and apply t
     const edit = replaceEdit(text, `ids.includes(${value})`, `set.has(${value})`);
     return { ruleId, fix: buildFix(entry, [edit], edit.start) };
   });
-  assert.ok(findings.every((finding) => JSON.stringify(finding.fix).includes(comment)));
+  assert.ok(findings.every((finding) => finding.fix.changes.some((change) => change.after.includes(indentedComment))));
   dropConflictingComments(findings);
   // Both keep the same comment-only change, so applying them together writes the comment once.
   const commentChanges = findings.map((finding) =>
-    JSON.stringify(finding.fix.changes.filter((change) => change.after.includes(comment))),
+    JSON.stringify(finding.fix.changes.filter((change) => change.after.includes(indentedComment))),
   );
   assert.equal(commentChanges[0], commentChanges[1]);
   // `loadwise fix` writes a change shared by several fixes once.
@@ -241,7 +266,7 @@ test('two fixes anchored on one statement share a single why-comment and apply t
     applied.text,
     [
       'function find(ids: number[]) {',
-      '  ' + comment,
+      indentedComment,
       '  const hit =',
       '    set.has(1) ||',
       '    set.has(2);',
@@ -384,10 +409,10 @@ test('loadwise fix --comments comments and formats each applied fix; by default 
   const fixed = run('fix', '--yes', 'performance', '--comments', '--json');
   assert.equal(fixed.status, 0, fixed.stderr);
   const source = fs.readFileSync(path.join(directory, 'slow.ts'), 'utf8');
-  assert.ok(source.includes('  ' + comment + '\n'));
+  assert.ok(source.includes(indentedComment + '\n'));
   const membership = JSON.parse(fixed.stdout).applied.find((finding) => finding.ruleId === ruleId);
   const [change] = membership.fix.changes;
-  assert.ok(change.after.startsWith('  ' + comment + '\n'));
+  assert.ok(change.after.startsWith(indentedComment + '\n'));
   assert.ok(source.includes(change.after), 'the reported hunk is the formatted text');
   assert.match(change.after, /orders\.filter\(\(order\) =>/, 'Prettier formatted the changed lines');
   assert.ok(source.includes(example.split('\n').at(-2)), 'an untouched line is unchanged');

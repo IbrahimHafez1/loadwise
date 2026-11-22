@@ -396,7 +396,8 @@ test('dependency-cycle fix turns a type-only import into import type', (context)
       line: 1,
       before: "import { Shape } from './b';",
       after:
-        '// Loadwise dependency-cycle: An eager chain of internal imports leads back to the module it started from.\n' +
+        '// Loadwise dependency-cycle: An eager chain of internal imports leads back to\n' +
+        '// the module it started from.\n' +
         "import type { Shape } from './b';",
     },
   ]);
