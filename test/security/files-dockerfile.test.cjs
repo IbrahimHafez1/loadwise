@@ -107,5 +107,34 @@ test('continuation lines form one instruction and comments are ignored', () => {
 test('development and test Dockerfiles are contextual', () => {
   const [finding] = checkDockerfile('Dockerfile.dev', 'FROM node:22');
   assert.equal(finding.contextualReason, 'Development or test image.');
-  assert.equal(checkDockerfile('Dockerfile', 'FROM node:22')[0].contextualReason, undefined);
+  assert.equal(checkDockerfile('Dockerfile', 'FROM node:22\nCMD ["node"]')[0].contextualReason, undefined);
+});
+
+test('Dockerfiles in test, e2e, devcontainer or fake folders are contextual; a dev-named folder is not', () => {
+  for (const folder of [
+    'packages/e2e-auth-server',
+    'backend-go/docker-test',
+    '.devcontainer',
+    'docker/fake-upgrades',
+  ]) {
+    const [finding] = checkDockerfile(`${folder}/Dockerfile`, 'FROM node:22\nCMD ["node"]');
+    assert.equal(finding.contextualReason, 'Development or test image.', folder);
+  }
+  const [gateway] = checkDockerfile('docker/dev-gateway/Dockerfile', 'FROM caddy:2\nEXPOSE 80');
+  assert.equal(gateway.ruleId, 'dockerfile-runs-as-root');
+  assert.equal(gateway.contextualReason, undefined);
+});
+
+test('a toolchain Dockerfile is contextual', () => {
+  const [finding] = checkDockerfile('backend/Dockerfile.fips-toolchain', 'FROM node:22\nCMD ["node"]');
+  assert.equal(finding.contextualReason, 'Development or test image.');
+});
+
+test('an image with no start command is still reported at default level', () => {
+  const [finding] = checkDockerfile('Dockerfile', 'FROM node:22\nRUN yarn build');
+  assert.equal(finding.contextualReason, undefined);
+});
+
+test('a ci folder Dockerfile is not treated as development', () => {
+  assert.equal(checkDockerfile('ci/Dockerfile', 'FROM node:22')[0].contextualReason, undefined);
 });

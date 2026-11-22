@@ -196,3 +196,59 @@ test('default development passwords in compose are contextual', () => {
   assert.equal(findings.length, 1);
   assert.match(findings[0].contextualReason, /local service/);
 });
+
+test('a secret-manager reference is not a committed value', () => {
+  assert.deepEqual(
+    checkSecrets('deployment/.env', 'export CLOUDFLARE_API_TOKEN="op://vault/item/field"\nDB_SECRET=vault://kv/app'),
+    [],
+  );
+});
+
+test('a key file named as a test fixture is contextual, a plain key file is not', () => {
+  const key = `-----BEGIN PRIVATE KEY-----\n${'QUJD'.repeat(20)}\n-----END PRIVATE KEY-----`;
+  assert.equal(checkSecrets('packages/e2e/test-keys.ts', key)[0].contextualReason, 'Test environment file.');
+  assert.equal(checkSecrets('lib/insecurity.ts', key)[0].contextualReason, undefined);
+  assert.equal(checkSecrets('artifacts/cert/server.key', key).length, 1);
+});
+
+test('a private key excerpt ending in an ellipsis is documentation, a complete body is reported', () => {
+  const body = 'QUJD'.repeat(20);
+  assert.deepEqual(checkSecrets('page.mdx', `KEY="-----BEGIN RSA PRIVATE KEY-----\n${body}...`), []);
+  assert.equal(checkSecrets('page.mdx', `KEY="-----BEGIN RSA PRIVATE KEY-----\n${body}\n-----END`).length, 1);
+});
+
+test('an env file declaring a local or test NODE_ENV is contextual; a production one is not', () => {
+  const entry = `AUTH_SECRET=${realPassword}`;
+  const local = checkSecrets('apps/api/src/.env.agent', `NODE_ENV=local\n${entry}`);
+  assert.equal(local[0].contextualReason, 'Local development environment file.');
+  assert.equal(checkSecrets('.env', `NODE_ENV=production\n${entry}`)[0].contextualReason, undefined);
+});
+
+test('a word-only token body is a sample, a random body is reported', () => {
+  assert.deepEqual(checkSecrets('scenario.ts', "const text = 'token: xoxp-test-slack-token'"), []);
+  assert.equal(checkSecrets('scenario.ts', `const text = 'xoxp-${randomBody(12)}-${randomBody(12)}'`).length, 1);
+});
+
+test('provider-format tokens stay at default level in test files and dev env files; generic values and keys are contextual', () => {
+  const key = `-----BEGIN PRIVATE KEY-----
+${'QUJD'.repeat(20)}
+-----END PRIVATE KEY-----`;
+  const testSource = checkSecrets(
+    'src/auth.test.ts',
+    `const id = '${awsKey}'
+${key}`,
+  );
+  assert.equal(testSource.find((finding) => /AWS/.test(finding.message)).contextualReason, undefined);
+  assert.equal(
+    testSource.find((finding) => /private key/.test(finding.message)).contextualReason,
+    'Test environment file.',
+  );
+  const devEnv = checkSecrets(
+    '.env',
+    `NODE_ENV=development
+STRIPE_KEY=${stripeKey}
+AUTH_SECRET=${realPassword}`,
+  );
+  assert.equal(devEnv.find((finding) => /Stripe/.test(finding.message)).contextualReason, undefined);
+  assert.match(devEnv.find((finding) => /AUTH_SECRET/.test(finding.message)).contextualReason, /development/);
+});
