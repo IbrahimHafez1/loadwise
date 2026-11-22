@@ -217,3 +217,129 @@ function arrowModule(names, extra = '') {
   ].join('\n');
 }
 
+test('two exported arrows share a helper named for what their names have in common', (context) => {
+  const names = ['getAccessTokenOptions', 'getRefreshTokenOptions'];
+  const files = { 'options.ts': arrowModule(names) };
+  const root = writeProject(context, files);
+  const fix = buildFix(duplicateFinding(files, 'TokenOptions = ('), createFileCache(root));
+  const after = fix.changes.map((change) => change.after).join('\n');
+  assert.match(after, /function getTokenOptions\(expiry: string\): object \{/);
+  assert.match(after, /export const getRefreshTokenOptions = \(expiry: string\): object => getTokenOptions\(expiry\)/);
+  assert.doesNotMatch(after, /Implementation/);
+});
+
+test('a shared arrow helper falls back to the Implementation name when the common name is taken', (context) => {
+  const files = {
+    'options.ts': arrowModule(['getAccessTokenOptions', 'getRefreshTokenOptions'], 'const getTokenOptions = 1;'),
+  };
+  const root = writeProject(context, files);
+  const fix = buildFix(duplicateFinding(files, 'TokenOptions = ('), createFileCache(root));
+  assert.match(fix.changes.map((change) => change.after).join('\n'), /getAccessTokenOptionsImplementation/);
+});
+
+const columnSchema =
+  'export interface Config { columns: Array<{ key: string; parse(value: unknown, row?: number): unknown; format(value: unknown): unknown }> };';
+const columnCallbacks = [
+  '      parse: (value) => {',
+  '        if (value == null) return null;',
+  '        return new Date(String(value));',
+  '      },',
+  '      format: (value) => {',
+  "        if (value instanceof Date) return value.toISOString().split('T')[0];",
+  '        return String(value);',
+  '      },',
+].join('\n');
+function columnConfig(keys) {
+  return [
+    "import type { Config } from './schema';",
+    '',
+    '/** Column mapping. */',
+    'export const config: Config = {',
+    '  columns: [',
+    ...keys.flatMap((key) => ['    {', `      key: '${key}',`, columnCallbacks, '    },']),
+    '  ],',
+    '};',
+    '',
+  ].join('\n');
+}
+
+function configFindings(context, source) {
+  const root = writeProject(context, { 'columns.ts': source, 'schema.ts': columnSchema });
+  const findings = ['parse', 'format'].map((name) => ({
+    ...duplicateFinding({ 'columns.ts': source }, `${name}: (value) =>`),
+    id: name,
+    checker: 'maint',
+  }));
+  for (const finding of findings) finding.column += finding.id.length + 2;
+  attachSiteFixes(findings, root, { comments: false });
+  return { findings, root };
+}
+
+test('duplicated column callbacks become named helpers above the config that each field references', (context) => {
+  const source = columnConfig(['discountStartDate', 'discountEndDate']);
+  const { findings, root } = configFindings(context, source);
+  // Applied together, as the identical columns make each change's original lines ambiguous after the other.
+  assert.equal(applyBulkFixes(findings, root, { includeReview: true }).changedFiles, 1);
+  const fixed = fs.readFileSync(path.join(root, 'columns.ts'), 'utf8');
+  assert.match(
+    fixed,
+    /\n\nfunction parseDiscountDate\(value: unknown\) \{[\s\S]*\n\nfunction formatDiscountDate\(value: unknown\) \{[\s\S]*\}\n\n\/\*\* Column mapping\. \*\//,
+  );
+  assert.equal(fixed.match(/parse: parseDiscountDate,/g).length, 2);
+  assert.equal(fixed.match(/format: formatDiscountDate,/g).length, 2);
+  assert.doesNotMatch(fixed, /\n\n\n/);
+  const output = ts.transpileModule(fixed, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+  const exported = {};
+  Function('exports', output)(exported);
+  const [column] = exported.config.columns;
+  assert.equal(column.parse(null), null);
+  assert.equal(column.format(new Date('2024-02-03T00:00:00Z')), '2024-02-03');
+});
+
+test('column callbacks without a shared field key keep the configuration-based helper names', (context) => {
+  const { findings } = configFindings(context, columnConfig(['opensAt', 'closedOn']));
+  const after = findings.map((finding) => finding.fix.changes.map((change) => change.after).join('\n')).join('\n');
+  assert.match(after, /function configParse\(/);
+  assert.match(after, /function configFormat\(/);
+});
+
+const parseHelper = [
+  '// Parses a JSON-encoded form field.',
+  'function parseJsonArray(value: unknown): unknown {',
+  "  if (typeof value !== 'string') return value;",
+  '  return JSON.parse(value);',
+  '}',
+].join('\n');
+const dto = [
+  "import { IsString } from 'class-validator';",
+  "import { Entry } from './entry';",
+  '',
+  parseHelper,
+  '',
+  'export class Dto {',
+  '  entries = parseJsonArray(Entry.raw);',
+  '  check = IsString;',
+  '}',
+  '',
+].join('\n');
+
+test('a shared sibling helper takes its own name and its import follows the relative imports', (context) => {
+  const files = { 'dto/create.dto.ts': dto, 'dto/update.dto.ts': dto };
+  const root = writeProject(context, { ...files, 'dto/entry.ts': 'export const Entry = { raw: "[]" };\n' });
+  const fix = buildFix(duplicateFinding(files, 'function parseJsonArray'), createFileCache(root));
+  assert.equal(fix.changes.find((change) => change.create).file, 'dto/parse-json-array.ts');
+  applyTo(root, fix);
+  assert.equal(
+    fs.readFileSync(path.join(root, 'dto/create.dto.ts'), 'utf8'),
+    dto.replace(
+      "from './entry';\n\n" + parseHelper + '\n',
+      "from './entry';\nimport { parseJsonArray } from './parse-json-array';\n",
+    ),
+  );
+});
+
+test('a shared sibling helper is withheld when a file already has its name', (context) => {
+  const files = { 'dto/create.dto.ts': dto, 'dto/update.dto.ts': dto };
+  const root = writeProject(context, { ...files, 'dto/entry.ts': '', 'dto/parse-json-array.ts': '' });
+  assert.equal(buildFix(duplicateFinding(files, 'function parseJsonArray'), createFileCache(root)), undefined);
+});
