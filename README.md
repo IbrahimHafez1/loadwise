@@ -121,7 +121,9 @@ To apply automatic fixes across your project, run `npx loadwise fix --yes` from 
 
 The performance and security checkers use the directory's `tsconfig.json` or `jsconfig.json`; without one, `check` looks for workspace packages (`package.json` `workspaces`, `pnpm-workspace.yaml` or `lerna.json`) and checks each one's config in one report, grouped per package; `--workspace <name|path>` (repeatable) limits every checker to some packages. For a standalone package with a `package.json` and JavaScript sources only, `check` and `fix` infer source files using the project inventory without writing a config. A mixed JavaScript/TypeScript project still needs a source config. For a JavaScript file without a project config, use `npx loadwise perf path/to/file.js` and `npx loadwise sec path/to/file.js`. For Python, Go, Java, C# or Rust performance checks, run `npx loadwise perf polyglot src` explicitly. The security checker can still scan Dockerfiles, Compose files and tracked environment files. When selected together, both checkers share a type-check unless a baseline is being written. Source scans are read-only. When fixes are available, text reports include a `Fix all:` command, such as `npx loadwise perf -p tsconfig.json --fix --only <ids>`, that applies its fixes.
 
-Exit codes: **0** passed, **1** a checker met its exit threshold, **2** invalid input or configuration in any checker.
+Exit codes: **0** passed, **1** a checker met its exit threshold, **2** invalid input or configuration in any checker, or a scan that skipped a file (see below).
+
+A scan skips a JavaScript or TypeScript file that does not parse, or whose analysis fails, and still reports the findings of every other file. Each skipped file is named in a note on stderr and in a `skippedFiles` array of `{ file, reason }` in `--json` output, and the run exits 2, also with `--fix` and `--write-baseline`. A file that exists but cannot be read (the schema snapshot, `package.json`, a review directive) prints a note on stderr; an absent file stays silent.
 
 ## Configuration
 
@@ -325,7 +327,7 @@ npx loadwise perf node_modules/@loadwise/cli/examples/slow.ts
 npx loadwise perf node_modules/@loadwise/cli/examples/indexed.ts
 ```
 
-Use the same one-shot commands in CI. Exit **0** means no displayed finding met the fail threshold, **1** means at least one did and **2** means the check could not complete. Add `--json` for structured output.
+Use the same one-shot commands in CI. Exit **0** means no displayed finding met the fail threshold, **1** means at least one did and **2** means the check could not complete or skipped a file. Add `--json` for structured output.
 
 Source checks summarize contextual findings separately. They include certain one-off blocking calls in CLI startup or unit tests and write advisories in test sources. Use `--include-contextual` to display every candidate and its reason. JSON includes `contextualFindingCount` when any remain after explicit rule exclusions. In the default view this count is additional to the displayed findings. In the expanded view these entries appear in `findings` with a `contextualReason`.
 
@@ -388,7 +390,7 @@ The site remains available with `--include-contextual`. Source comments cannot l
 
 Watch mode uses TypeScript 6.0.3. Watch a single project while editing. With `--watch --json`, each completed scan writes one JSON line. Ctrl+C stops the watcher. One-shot runs support project references.
 
-One-shot checks pick the compiler automatically. On Node.js 22.13+ with the optional native package for your platform, they use Microsoft's Go-based TypeScript 7.1 beta compiler. It is 2-4 times faster on large projects and reports the same findings. If TypeScript 7 rejects the project configuration, for example `baseUrl` or `moduleResolution: "node10"`, the check uses TypeScript 6.0.3 and prints one note on stderr. `--engine native` (alias `--native`) requires TypeScript 7 and reports incompatible configuration as exit 2. `--engine js` always uses TypeScript 6.0.3. [TypeScript native compiler](https://github.com/microsoft/typescript-go)
+One-shot checks pick the compiler automatically. On Node.js 22.13+ with the optional native package for your platform, they use Microsoft's Go-based TypeScript 7.1 beta compiler. It is 2-4 times faster on large projects and reports the same findings. If TypeScript 7 rejects the project configuration, for example `baseUrl` or `moduleResolution: "node10"`, the check uses TypeScript 6.0.3 and prints one note on stderr. `--engine native` (alias `--native`) requires TypeScript 7 and reports incompatible configuration as exit 2. `--engine js` always uses TypeScript 6.0.3. `perf --json` names the engine used in `engine` (`"js"` or `"native"`), and a silent fall-back from the native engine prints a note on stderr. [TypeScript native compiler](https://github.com/microsoft/typescript-go)
 
 Install the application's driver declarations and generate its Prisma client before checking. Result-shape checks target simple literal PostgreSQL reads and supported Prisma model delegates. Unresolved types, wrappers and deferred callbacks can hide findings. Repeated calls can be intentional, for example retries and ordered writes.
 
@@ -806,9 +808,11 @@ npm run bench:patterns
 npm run bench:scan
 npm run bench:scan -- --large
 npm run bench:traces
+npm run bench:scorecard
+npm run bench:corpus
 ```
 
-The benchmark commands verify their expected results. The pattern benchmark compares equal application outputs. The scan benchmarks measure the checker itself. Real request latency depends on the workload, instrumentation and database.
+The benchmark commands verify their expected results. The pattern benchmark compares equal application outputs. The scan benchmarks measure the checker itself. Real request latency depends on the workload, instrumentation and database. `bench:scorecard` writes `bench/corpus/scorecard.md`, and `bench:corpus` fails when a default-level rule with at least 10 labels is under 80% precision, unless `bench/corpus/precision-floor-exceptions.json` lists it.
 
 To repeat the optional six-package ORM declaration integration from the source checkout, run the commands below. The fixture typechecks the application, compares exact diagnostic locations and checks that clean controls stay quiet.
 
@@ -916,7 +920,7 @@ Source checks count lower-priority findings separately. Use `--include-contextua
 
 Context includes documented independent test oracles, before/after source snapshots with a corresponding live file, marked generated code, certain flat data mappings, and flat lists of optional literal messages selected by simple field checks. Two ordinary implementations still form a default duplicate finding even when an archive or test oracle also contains a copy. A Nest module cycle can receive context when every internal eager edge is used solely in an explicit module `forwardRef` callback. A cycle supplied through graph input has no such source evidence.
 
-The default `--fail-on contract` exits 1 for a declared folder, data-access or query contract violation. Design advisories remain visible and exit 0 on their own. Use `--fail-on all` to fail on any finding. Invalid configurations, source parse failures and missing required parser binaries exit 2.
+The default `--fail-on contract` exits 1 for a declared folder, data-access or query contract violation. Design advisories remain visible and exit 0 on their own. Use `--fail-on all` to fail on any finding. Invalid configurations, a non-JavaScript file a native parser cannot read and missing required parser binaries exit 2. A JavaScript or TypeScript file that does not parse is skipped, named in a stderr note and in `skippedFiles` in `--json` output, and the run exits 2.
 
 DRY candidates can represent intentional copies between isolated modules. Deep nesting can accurately reflect a protocol. Use the reported locations to decide whether extracting a function, changing a dependency or retaining the current implementation makes the next change easier. YAGNI, Tell Don't Ask, the Law of Demeter and CUPID depend on domain knowledge. Fluent call chains and unused extension points alone do not establish a violation. [CUPID and the properties of good code](https://dannorth.net/cupid-for-joyful-coding/)
 
