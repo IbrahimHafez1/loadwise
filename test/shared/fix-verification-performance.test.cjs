@@ -6,12 +6,14 @@ const { performanceCases } = require('./fixtures/fix-verification/performance-ca
 const { performanceQueryCases } = require('./fixtures/fix-verification/performance-query-cases.cjs');
 const { performanceIntegrityCases } = require('./fixtures/fix-verification/performance-integrity-cases.cjs');
 const { performanceFlowCases } = require('./fixtures/fix-verification/performance-flow-cases.cjs');
+const { performanceAddedCases } = require('./fixtures/fix-verification/performance-added-cases.cjs');
 
 for (const { ruleId, files, policy, todo } of [
   ...performanceCases,
   ...performanceQueryCases,
   ...performanceIntegrityCases,
   ...performanceFlowCases,
+  ...performanceAddedCases,
 ]) {
   test(`the ${ruleId} fix compiles and removes its finding`, { todo }, () =>
     verifyFix({ pillar: 'performance', ruleId, files, policy }),

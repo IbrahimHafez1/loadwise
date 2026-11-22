@@ -132,6 +132,74 @@ const securityCases = [
     files: { 'src.ts': drizzleSample, ...packages.drizzle },
     policy: packages.drizzlePolicy,
   },
+  {
+    ruleId: 'error-stack-in-response',
+    files: {
+      'handler.ts': [
+        'declare function load(): void;',
+        'export function route(res: any) {',
+        '  try {',
+        '    load();',
+        '  } catch (err: any) {',
+        '    res.status(500).json({ message: err.message, stack: err.stack });',
+        '  }',
+        '}',
+        '',
+      ].join('\n'),
+    },
+  },
+  {
+    ruleId: 'database-error-in-response',
+    files: {
+      'handler.ts': [
+        "import { Pool } from 'pg';",
+        'export async function route(pool: Pool, res: any) {',
+        '  try {',
+        "    await pool.query('SELECT 1');",
+        '  } catch (err: any) {',
+        '    res.status(500).json({ error: err.message });',
+        '  }',
+        '}',
+        '',
+      ].join('\n'),
+      ...packages.pg,
+    },
+  },
+  {
+    ruleId: 'jwt-none-algorithm',
+    files: {
+      'app.ts': [
+        "import jwt from 'jsonwebtoken';",
+        "export const check = (token: string, secret: string) => jwt.verify(token, secret, { algorithms: ['HS256', 'none'] });",
+        '',
+      ].join('\n'),
+      ...packages.jsonwebtoken,
+    },
+  },
+  {
+    ruleId: 'jwt-sign-without-expiry',
+    files: {
+      'app.ts': [
+        "import jwt from 'jsonwebtoken';",
+        'export const issue = (id: string, secret: string) => jwt.sign({ id }, secret);',
+        '',
+      ].join('\n'),
+      ...packages.jsonwebtoken,
+    },
+  },
+  {
+    ruleId: 'template-autoescape-disabled',
+    files: {
+      'app.ts': ["import nunjucks from 'nunjucks';", "nunjucks.configure('views', { autoescape: false });", ''].join(
+        '\n',
+      ),
+      'node_modules/nunjucks/index.d.ts': [
+        'declare const nunjucks: { configure(path: string, options?: object): void };',
+        'export default nunjucks;',
+      ].join('\n'),
+      'node_modules/nunjucks/package.json': '{"types":"./index.d.ts"}',
+    },
+  },
 ];
 
 module.exports = { securityCases };

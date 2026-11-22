@@ -12,6 +12,7 @@ const { performanceCases } = require('./fixtures/fix-verification/performance-ca
 const { performanceQueryCases } = require('./fixtures/fix-verification/performance-query-cases.cjs');
 const { performanceIntegrityCases } = require('./fixtures/fix-verification/performance-integrity-cases.cjs');
 const { performanceFlowCases } = require('./fixtures/fix-verification/performance-flow-cases.cjs');
+const { performanceAddedCases } = require('./fixtures/fix-verification/performance-added-cases.cjs');
 const { maintainabilityCases } = require('./fixtures/fix-verification/maintainability-cases.cjs');
 const { notYetVerified: NOT_YET_VERIFIED } = require('./fixtures/fix-verification/not-yet-verified.cjs');
 
@@ -42,6 +43,7 @@ const verified = new Set(
     ...performanceQueryCases,
     ...performanceIntegrityCases,
     ...performanceFlowCases,
+    ...performanceAddedCases,
     ...maintainabilityCases,
   ].map(({ ruleId }) => ruleId),
 );
