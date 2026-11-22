@@ -120,17 +120,21 @@ test('Drizzle: skips already-covered keys, occupied names, unknown extras, overs
 test('Prisma: the index is inserted before the closing brace with the field indentation', (context) => {
   const root = project(context, { 'schema.prisma': prismaSchema });
   const result = fixOf(
-    finding(root, { ...prismaOrder, declarationMessage: orderDeclared, suggestion: '@@index([storeId, note])' }),
+    finding(root, {
+      ...prismaOrder,
+      declarationMessage: orderDeclared,
+      suggestion: '@@index([storeId, note], map: "orders_idx")',
+    }),
   );
   assert.equal(result.changes.length, 1);
   assert.equal(result.changes[0].line, 10);
   assert.equal(result.changes[0].before, '}');
-  assert.equal(result.changes[0].after, '  @@index([storeId, note])\n}');
+  assert.equal(result.changes[0].after, '  @@index([storeId, note], map: "orders_idx")\n}');
 });
 
 test('Prisma: a trigram index suggestion is inserted as is', (context) => {
   const root = project(context, { 'schema.prisma': prismaSchema });
-  const suggestion = '@@index([note(ops: raw("gin_trgm_ops"))], type: Gin)';
+  const suggestion = '@@index([note(ops: raw("gin_trgm_ops"))], type: Gin, map: "orders_idx")';
   const result = fixOf(
     finding(root, {
       ...prismaOrder,
@@ -149,25 +153,33 @@ test('Prisma: the redundant-index cleanup is a note and the old index is untouch
       ...prismaOrder,
       declarationMessage: orderDeclared,
       ruleId: 'index-missing-order',
-      suggestion: '@@index([storeId, note])',
+      suggestion: '@@index([storeId, note], map: "orders_idx")',
       message: 'Sorts. Add it. Then drop `Order_idx`, which the new index makes redundant.',
     }),
   );
-  assert.equal(result.note, 'Then drop `Order_idx`, which the new index makes redundant. (left untouched here)');
+  assert.match(result.note, /^Then drop `Order_idx`, which the new index makes redundant\. \(left untouched here\)/);
   assert.equal(result.changes.length, 1);
 });
 
 test('Prisma: CRLF files keep their line endings', (context) => {
   const root = project(context, { 'schema.prisma': prismaSchema.replace(/\n/g, '\r\n') });
   const result = fixOf(
-    finding(root, { ...prismaOrder, declarationMessage: orderDeclared, suggestion: '@@index([storeId])' }),
+    finding(root, {
+      ...prismaOrder,
+      declarationMessage: orderDeclared,
+      suggestion: '@@index([storeId], map: "orders_idx")',
+    }),
   );
-  assert.equal(result.changes[0].after, '  @@index([storeId])\n}');
+  assert.equal(result.changes[0].after, '  @@index([storeId], map: "orders_idx")\n}');
 });
 
 test('Prisma: no fix for an already present index, an empty model, a moved line or an odd suggestion', (context) => {
   const root = project(context, { 'schema.prisma': prismaSchema + '' });
-  const base = { ...prismaOrder, declarationMessage: orderDeclared, suggestion: '@@index([storeId])' };
+  const base = {
+    ...prismaOrder,
+    declarationMessage: orderDeclared,
+    suggestion: '@@index([storeId], map: "orders_idx")',
+  };
   assert.equal(
     fixOf(finding(root, { ...base, declarationLine: 11, declarationMessage: 'Model `Empty` is declared here.' })),
     undefined,
@@ -176,7 +188,7 @@ test('Prisma: no fix for an already present index, an empty model, a moved line 
   assert.equal(fixOf(finding(root, { ...base, suggestion: 'CREATE INDEX x ON y (z);' })), undefined);
   assert.equal(fixOf(finding(root, { ...base, declarationMessage: 'Table `Order` is declared here.' })), undefined);
   const present = project(context, {
-    'schema.prisma': prismaSchema.replace('  @@map', '  @@index([storeId])\n  @@map'),
+    'schema.prisma': prismaSchema.replace('  @@map', '  @@index([storeId], map: "orders_idx")\n  @@map'),
   });
   assert.equal(fixOf(finding(present, base)), undefined);
 });
@@ -187,7 +199,7 @@ test('TypeORM: an entity-level index goes above @Entity and Index joins the type
     finding(root, {
       ...studentDeclared,
       declarationMessage: 'Entity `Student` is declared here.',
-      suggestion: "@Index(['gradeLevel', 'enrolledAt'])",
+      suggestion: "@Index('students_idx', ['gradeLevel', 'enrolledAt'])",
     }),
   );
   assert.deepEqual(
@@ -197,7 +209,7 @@ test('TypeORM: an entity-level index goes above @Entity and Index joins the type
         line: 1,
         before: "import { Column, Entity } from 'typeorm';\n\n@Entity('students')",
         after:
-          "import { Column, Entity, Index } from 'typeorm';\n\n@Index(['gradeLevel', 'enrolledAt'])\n@Entity('students')",
+          "import { Column, Entity, Index } from 'typeorm';\n\n@Index('students_idx', ['gradeLevel', 'enrolledAt'])\n@Entity('students')",
       },
     ],
   );
@@ -209,15 +221,15 @@ test('TypeORM: a property-level index goes above the property decorators', (cont
     finding(root, {
       ...studentDeclared,
       declarationMessage: 'Entity `Student` is declared here.',
-      suggestion: '@Index()',
-      message: 'Add `@Index()` to the `enrolledAt` property of entity `Student` (entities.ts:4).',
+      suggestion: "@Index('students_idx')",
+      message: "Add `@Index('students_idx')` to the `enrolledAt` property of entity `Student` (entities.ts:4).",
     }),
   );
   assert.deepEqual(
     result.changes.map(({ line, after }) => ({ line, after })),
     [
       { line: 1, after: "import { Column, Entity, Index } from 'typeorm';" },
-      { line: 8, after: '  @Index()\n  @Column()\n  enrolledAt!: Date;' },
+      { line: 8, after: "  @Index('students_idx')\n  @Column()\n  enrolledAt!: Date;" },
     ],
   );
 });
@@ -228,11 +240,11 @@ test('TypeORM: an existing Index import is reused and a multi-line import is ext
   const base = {
     ...studentDeclared,
     declarationMessage: 'Entity `Student` is declared here.',
-    suggestion: "@Index(['gradeLevel', 'enrolledAt'])",
+    suggestion: "@Index('students_idx', ['gradeLevel', 'enrolledAt'])",
   };
   const reused = fixOf(finding(root, base));
   assert.equal(reused.changes.length, 1);
-  assert.equal(reused.changes[0].after, "@Index(['gradeLevel', 'enrolledAt'])\n@Entity('students')");
+  assert.equal(reused.changes[0].after, "@Index('students_idx', ['gradeLevel', 'enrolledAt'])\n@Entity('students')");
   const multiline = project(context, {
     'entities.ts': entitiesSource.replace('{ Column, Entity }', '{\n  Column,\n  Entity,\n}'),
   });
@@ -244,7 +256,7 @@ test('TypeORM: no fix without a typeorm named import, with a clashing Index name
   const base = {
     ...studentDeclared,
     declarationMessage: 'Entity `Student` is declared here.',
-    suggestion: "@Index(['gradeLevel', 'enrolledAt'])",
+    suggestion: "@Index('students_idx', ['gradeLevel', 'enrolledAt'])",
   };
   const noImport = project(context, {
     'entities.ts': entitiesSource.replace("import { Column, Entity } from 'typeorm';", ''),
@@ -257,7 +269,11 @@ test('TypeORM: no fix without a typeorm named import, with a clashing Index name
   const plain = project(context, { 'entities.ts': entitiesSource.replace("@Entity('students')\n", '') });
   assert.equal(fixOf(finding(plain, { ...base, declarationLine: 3 })), undefined);
   const root = project(context, { 'entities.ts': entitiesSource });
-  const missingProperty = { ...base, suggestion: '@Index()', message: 'to the `nope` property of entity `Student`' };
+  const missingProperty = {
+    ...base,
+    suggestion: "@Index('students_idx')",
+    message: 'to the `nope` property of entity `Student`',
+  };
   assert.equal(fixOf(finding(root, missingProperty)), undefined);
   assert.equal(fixOf(finding(root, { ...base, suggestion: "CREATE INDEX CONCURRENTLY x ON y ('z');" })), undefined);
 });
@@ -296,8 +312,8 @@ export class Lesson {
     file: path.join(root, 'lesson.ts'),
     line: 7,
     column: 3,
-    suggestion: '@Index()',
-    message: 'Add `@Index()` to the `student` property of entity `Lesson` (lesson.ts:4).',
+    suggestion: "@Index('students_idx')",
+    message: "Add `@Index('students_idx')` to the `student` property of entity `Lesson` (lesson.ts:4).",
   };
   const result = fixOf(base);
   assert.deepEqual(
@@ -306,7 +322,8 @@ export class Lesson {
       { line: 1, after: "import { Entity, JoinColumn, ManyToOne, Index } from 'typeorm';" },
       {
         line: 5,
-        after: "  @Index()\n  @ManyToOne(() => Student)\n  @JoinColumn({ name: 'student_id' })\n  student!: Student;",
+        after:
+          "  @Index('students_idx')\n  @ManyToOne(() => Student)\n  @JoinColumn({ name: 'student_id' })\n  student!: Student;",
       },
     ],
   );
@@ -330,25 +347,34 @@ export class Report {
 `;
   const root = project(context, { 'report.ts': source });
   const base = { ruleId: 'index-missing-foreign-key', file: path.join(root, 'report.ts'), column: 3 };
-  const message = (name) => `Add \`@Index()\` to the \`${name}\` property of entity \`Report\` (report.ts:4).`;
-  const column = fixOf({ ...base, line: 8, suggestion: '@Index()', message: message('approvedById') });
+  const message = (name) =>
+    `Add \`@Index('students_idx')\` to the \`${name}\` property of entity \`Report\` (report.ts:4).`;
+  const column = fixOf({ ...base, line: 8, suggestion: "@Index('students_idx')", message: message('approvedById') });
   assert.deepEqual(
     column.changes.map(({ line, after }) => ({ line, after })),
-    [{ line: 5, after: "  @Index()\n  @Column({ type: 'uuid', nullable: true }) approvedById!: string | null;" }],
+    [
+      {
+        line: 5,
+        after: "  @Index('students_idx')\n  @Column({ type: 'uuid', nullable: true }) approvedById!: string | null;",
+      },
+    ],
   );
-  const relation = fixOf({ ...base, line: 12, suggestion: '@Index()', message: message('ownerId') });
+  const relation = fixOf({ ...base, line: 12, suggestion: "@Index('students_idx')", message: message('ownerId') });
   assert.deepEqual(
     relation.changes.map(({ line, after }) => ({ line, after })),
     [
       {
         line: 10,
         after:
-          "  @Index()\n  @ManyToOne(() => User)\n  @JoinColumn({ name: 'ownerId', foreignKeyConstraintName: 'fk_owner' })\n  owner?: User | null;",
+          "  @Index('students_idx')\n  @ManyToOne(() => User)\n  @JoinColumn({ name: 'ownerId', foreignKeyConstraintName: 'fk_owner' })\n  owner?: User | null;",
       },
     ],
   );
   assert.match(relation.note, /join column `ownerId`/);
-  assert.equal(fixOf({ ...base, line: 12, suggestion: '@Index()', message: message('creatorId') }), undefined);
+  assert.equal(
+    fixOf({ ...base, line: 12, suggestion: "@Index('students_idx')", message: message('creatorId') }),
+    undefined,
+  );
 });
 
 test('TypeORM: a column inherited from a base class gets an entity-level index', (context) => {
@@ -369,8 +395,8 @@ export class Client extends BaseEntity {
       declarationColumn: 14,
       declarationMessage: 'Entity `Client` is declared here.',
       ruleId: 'index-missing-order',
-      suggestion: '@Index()',
-      message: 'Add `@Index()` to the `createdAt` property of entity `Client` (client.ts:5).',
+      suggestion: "@Index('students_idx')",
+      message: "Add `@Index('students_idx')` to the `createdAt` property of entity `Client` (client.ts:5).",
     }),
   );
   assert.deepEqual(
@@ -379,7 +405,7 @@ export class Client extends BaseEntity {
       {
         line: 1,
         after:
-          "import { Column, Entity, Index } from 'typeorm';\nimport { BaseEntity } from './base';\n\n@Index(['createdAt'])\n@Entity('clients')",
+          "import { Column, Entity, Index } from 'typeorm';\nimport { BaseEntity } from './base';\n\n@Index('students_idx', ['createdAt'])\n@Entity('clients')",
       },
     ],
   );
@@ -416,15 +442,21 @@ const ticketDeclared = {
 test('TypeORM: free-text columns are left out of a suggested index, which is withheld when nothing is left', (context) => {
   const root = project(context, { 'entities.ts': ticketSource });
   const trimmed = fixOf(
-    finding(root, { ...ticketDeclared, suggestion: "@Index(['ownerId', 'description', 'status'])" }),
+    finding(root, { ...ticketDeclared, suggestion: "@Index('students_idx', ['ownerId', 'description', 'status'])" }),
   );
-  assert.match(trimmed.changes.at(-1).after, /\n@Index\(\['ownerId', 'status'\]\)\n@Entity\('tickets'\)$/);
+  assert.match(
+    trimmed.changes.at(-1).after,
+    /\n@Index\('students_idx', \['ownerId', 'status'\]\)\n@Entity\('tickets'\)$/,
+  );
   assert.match(trimmed.note, /`description` is left out of the index/);
-  assert.equal(fixOf(finding(root, { ...ticketDeclared, suggestion: "@Index(['summaryText'])" })), undefined);
+  assert.equal(
+    fixOf(finding(root, { ...ticketDeclared, suggestion: "@Index('students_idx', ['summaryText'])" })),
+    undefined,
+  );
   const property = (name) => ({
     ...ticketDeclared,
-    suggestion: '@Index()',
-    message: `Add \`@Index()\` to the \`${name}\` property of entity \`Ticket\` (entities.ts:4).`,
+    suggestion: "@Index('students_idx')",
+    message: `Add \`@Index('students_idx')\` to the \`${name}\` property of entity \`Ticket\` (entities.ts:4).`,
   });
   assert.equal(fixOf(finding(root, property('description'))), undefined);
   assert.ok(fixOf(finding(root, property('status'))));
@@ -436,8 +468,8 @@ test('TypeORM: the property hunk ends at the property name, so lookalike decorat
     fixOf(
       finding(root, {
         ...ticketDeclared,
-        suggestion: '@Index()',
-        message: `Add \`@Index()\` to the \`${name}\` property of entity \`Ticket\` (entities.ts:4).`,
+        suggestion: "@Index('students_idx')",
+        message: `Add \`@Index('students_idx')\` to the \`${name}\` property of entity \`Ticket\` (entities.ts:4).`,
       }),
     );
   const [ownerImport, owner] = property('ownerId').changes;
@@ -448,15 +480,18 @@ test('TypeORM: the property hunk ends at the property name, so lookalike decorat
   const indexed = project(context, {
     'entities.ts': ticketSource
       .replace('Column, Entity', 'Column, Entity, Index')
-      .replace("@Entity('tickets')", "@Index(['queueId'])\n@Entity('tickets')")
-      .replace("  @Column({ type: 'uuid' })\n  ownerId", "  @Index()\n  @Column({ type: 'uuid' })\n  ownerId"),
+      .replace("@Entity('tickets')", "@Index('students_idx', ['queueId'])\n@Entity('tickets')")
+      .replace(
+        "  @Column({ type: 'uuid' })\n  ownerId",
+        "  @Index('students_idx')\n  @Column({ type: 'uuid' })\n  ownerId",
+      ),
   });
   const again = (overrides) => fixOf(finding(indexed, { ...ticketDeclared, declarationLine: 5, ...overrides }));
-  assert.equal(again({ suggestion: "@Index(['queueId'])" }), undefined);
+  assert.equal(again({ suggestion: "@Index('students_idx', ['queueId'])" }), undefined);
   assert.equal(
     again({
-      suggestion: '@Index()',
-      message: 'Add `@Index()` to the `ownerId` property of entity `Ticket` (entities.ts:5).',
+      suggestion: "@Index('students_idx')",
+      message: "Add `@Index('students_idx')` to the `ownerId` property of entity `Ticket` (entities.ts:5).",
     }),
     undefined,
   );
@@ -466,10 +501,31 @@ test('Prisma: free-text fields are left out of a B-tree index but kept in a trig
   const schema = prismaSchema.replace('  @@map', '  body     String @db.Text\n  @@map');
   const root = project(context, { 'schema.prisma': schema });
   const base = { ...prismaOrder, declarationMessage: orderDeclared };
-  const trimmed = fixOf(finding(root, { ...base, suggestion: '@@index([storeId, body])' }));
-  assert.equal(trimmed.changes[0].after, '  @@index([storeId])\n}');
+  const trimmed = fixOf(finding(root, { ...base, suggestion: '@@index([storeId, body], map: "orders_idx")' }));
+  assert.equal(trimmed.changes[0].after, '  @@index([storeId], map: "orders_idx")\n}');
   assert.match(trimmed.note, /`body` is left out/);
-  assert.equal(fixOf(finding(root, { ...base, suggestion: '@@index([body])' })), undefined);
-  const trigram = '@@index([body(ops: raw("gin_trgm_ops"))], type: Gin)';
+  assert.equal(fixOf(finding(root, { ...base, suggestion: '@@index([body], map: "orders_idx")' })), undefined);
+  const trigram = '@@index([body(ops: raw("gin_trgm_ops"))], type: Gin, map: "orders_idx")';
   assert.equal(fixOf(finding(root, { ...base, suggestion: trigram })).changes[0].after, `  ${trigram}\n}`);
+});
+
+test('fix notes tell migration-driven projects to generate a migration, per ORM', (context) => {
+  const prismaRoot = project(context, { 'schema.prisma': prismaSchema });
+  const prisma = fixOf(
+    finding(prismaRoot, {
+      ...prismaOrder,
+      declarationMessage: orderDeclared,
+      suggestion: '@@index([storeId], map: "orders_store_id_idx")',
+    }),
+  );
+  assert.match(prisma.note, /Generate a migration for this index \(run `npx prisma migrate dev`\)\./);
+  const typeormRoot = project(context, { 'entities.ts': entitiesSource });
+  const typeorm = fixOf(
+    finding(typeormRoot, {
+      ...studentDeclared,
+      declarationMessage: 'Entity `Student` is declared here.',
+      suggestion: "@Index('students_idx', ['gradeLevel', 'enrolledAt'])",
+    }),
+  );
+  assert.match(typeorm.note, /\(for example `npx typeorm migration:generate`\) unless the schema is synchronized/);
 });

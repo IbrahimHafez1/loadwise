@@ -35,12 +35,12 @@ test('Prisma: an unindexed relation scalar on PostgreSQL is reported on its sche
   assert.equal(
     findings[0].message,
     '`Order.customerId` references `User` and no index starts with it, so deleting or updating a `User` row scans ' +
-      '`orders` to check the reference, and joins from `User` cannot use an index. Add `@@index([customerId])` to model ' +
+      '`orders` to check the reference, and joins from `User` cannot use an index. Add `@@index([customerId], map: "orders_customer_id_idx")` to model ' +
       '`Order` (test/performance/fixtures/schema/prisma-shop/prisma/schema.prisma:50); on a live database build it with ' +
       '`CREATE INDEX CONCURRENTLY "orders_customer_id_idx" ON "orders" ("customerId");`. PostgreSQL does not create ' +
       'this index for a foreign key automatically. Table size is unknown; pass `--schema` to gate this rule by row count.',
   );
-  assert.equal(findings[0].suggestion, '@@index([customerId])');
+  assert.equal(findings[0].suggestion, '@@index([customerId], map: "orders_customer_id_idx")');
 });
 
 test(
@@ -161,7 +161,10 @@ export class SchoolClass {
     [[13, 'index-missing-foreign-key']],
   );
   assert.match(findings[0].message, /^`SchoolClass.school` references `School` and no index starts with it/);
-  assert.match(findings[0].message, /Add `@Index\(\)` to the `school` property of entity `SchoolClass`/);
+  assert.match(
+    findings[0].message,
+    /Add `@Index\('classes_school_id_idx'\)` to the `school` property of entity `SchoolClass`/,
+  );
   assert.match(findings[0].message, /ON "classes" \("school_id"\)/);
 });
 
@@ -192,7 +195,10 @@ export class Sale extends Model<Sale> {
     findings.map(({ line, ruleId }) => [line, ruleId]),
     [[12, 'index-missing-foreign-key']],
   );
-  assert.match(findings[0].message, /Add `\{ fields: \['storeId'\] \}` to the `indexes` of model `Sale`/);
+  assert.match(
+    findings[0].message,
+    /Add `\{ name: 'sales_store_id_idx', fields: \['storeId'\] \}` to the `indexes` of model `Sale`/,
+  );
 });
 
 test('the same foreign-key findings on the TypeScript 7 engine', { skip: onNativeEngine || !nativeAvailable() }, () => {

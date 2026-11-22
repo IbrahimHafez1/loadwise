@@ -22,7 +22,7 @@ test('Prisma: insensitive equality compiles to ILIKE, which only a trigram index
   assert.equal(
     findings[0].message,
     "`mode: 'insensitive'` compiles to `ILIKE`, which a btree index on `User.email` cannot serve. Add a trigram index: " +
-      '`@@index([email(ops: raw("gin_trgm_ops"))], type: Gin)` to model `User` ' +
+      '`@@index([email(ops: raw("gin_trgm_ops"))], type: Gin, map: "user_email_trgm_idx")` to model `User` ' +
       '(test/performance/fixtures/schema/prisma-shop/prisma/schema.prisma:12); on a live database build it with ' +
       '`CREATE INDEX CONCURRENTLY "user_email_trgm_idx" ON "user" USING gin ("email" gin_trgm_ops);` (requires `pg_trgm`), ' +
       'or store the value lower-cased and match it with `equals`. Table size is unknown; pass `--schema` to gate this rule by row count.',

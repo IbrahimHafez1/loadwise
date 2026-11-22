@@ -15,11 +15,11 @@ test('Prisma: an unindexed equality filter reports the composite fix, schema lin
   assert.equal(
     finding.message,
     '`Order.totalEGP` and `Order.paidAt` are filtered here and no index starts with any of them, so this lookup scans the table as it grows. ' +
-      'Add `@@index([totalEGP, paidAt])` to model `Order` (test/performance/fixtures/schema/prisma-shop/prisma/schema.prisma:50); ' +
+      'Add `@@index([totalEGP, paidAt], map: "orders_total_egp_paid_at_idx")` to model `Order` (test/performance/fixtures/schema/prisma-shop/prisma/schema.prisma:50); ' +
       'on a live database build it with `CREATE INDEX CONCURRENTLY "orders_total_egp_paid_at_idx" ON "orders" ("totalEGP", "paidAt");`. ' +
       'Table size is unknown; pass `--schema` to gate this rule by row count.',
   );
-  assert.equal(finding.suggestion, '@@index([totalEGP, paidAt])');
+  assert.equal(finding.suggestion, '@@index([totalEGP, paidAt], map: "orders_total_egp_paid_at_idx")');
   assert.deepEqual(finding.related, [
     {
       file: 'test/performance/fixtures/schema/prisma-shop/prisma/schema.prisma',
@@ -185,7 +185,7 @@ test('TypeORM: reports through Repository<T>, getRepository and EntityManager; m
   assert.equal(
     findings[0].message,
     '`Student.gradeLevel` is filtered here and no index starts with it, so this lookup scans the table as it grows. ' +
-      'Add `@Index()` to the `gradeLevel` property of entity `Student` (test/performance/fixtures/schema/typeorm-app/entities.ts:13); ' +
+      "Add `@Index('students_grade_level_idx')` to the `gradeLevel` property of entity `Student` (test/performance/fixtures/schema/typeorm-app/entities.ts:13); " +
       'on a live database build it with `CREATE INDEX CONCURRENTLY "students_grade_level_idx" ON "students" ("grade_level");`. ' +
       'Table size is unknown; pass `--schema` to gate this rule by row count.',
   );
@@ -215,7 +215,10 @@ export async function run(phone: string, organizationId: string, from: Date) {
       [5, 'index-missing-filter'],
     ],
   );
-  assert.match(findings[0].message, /Add `\{ fields: \['customerPhone'\] \}` to the `indexes` of model `Sale`/);
+  assert.match(
+    findings[0].message,
+    /Add `\{ name: 'sales_customer_phone_idx', fields: \['customerPhone'\] \}` to the `indexes` of model `Sale`/,
+  );
   assert.match(findings[1].message, /only the 2nd column of `sale_org_date`/);
 });
 
@@ -240,7 +243,7 @@ export async function run(tenantId: string, name: string) {
   assert.equal(
     findings[0].message,
     '`Invoice.customerName` is filtered here and no index starts with it, so this lookup scans the collection as it grows. ' +
-      'Add `invoiceSchema.index({ customerName: 1 })` (test/performance/fixtures/schema/mongoose-app/models.ts:2). ' +
+      "Add `invoiceSchema.index({ customerName: 1 }, { name: 'invoices_customer_name_idx' })` (test/performance/fixtures/schema/mongoose-app/models.ts:2). " +
       'Collection size is unknown; pass `--schema` to gate this rule by row count.',
   );
 });
@@ -287,6 +290,6 @@ test('Prisma: a foreign key in the filter keys the suggested index on the foreig
 }`);
   assert.equal(rest.length, 0);
   assert.equal(finding.ruleId, 'index-missing-filter');
-  assert.equal(finding.suggestion, '@@index([customerId])');
+  assert.equal(finding.suggestion, '@@index([customerId], map: "orders_customer_id_idx")');
   assert.match(finding.message, /`Order.customerId`, `Order.totalEGP` and `Order.paidAt` are filtered here/);
 });

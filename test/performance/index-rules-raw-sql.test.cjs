@@ -39,9 +39,9 @@ test('raw SQL against a Prisma model gets the same rules and the schema fix', ()
   ]);
   assert.match(
     findings[0].message,
-    /^`Order.totalEGP` is filtered here and no index starts with it.*Add `@@index\(\[totalEGP\]\)` to model `Order`/,
+    /^`Order.totalEGP` is filtered here and no index starts with it.*Add `@@index\(\[totalEGP\], map: "orders_total_egp_idx"\)` to model `Order`/,
   );
-  assert.match(findings[1].message, /Add `@@index\(\[storeId, totalEGP\]\)`/);
+  assert.match(findings[1].message, /Add `@@index\(\[storeId, totalEGP\], map: "orders_store_id_total_egp_idx"\)`/);
   assert.equal(
     findings[2].message,
     '`lower(email)` hides the index on `User.email`. Create `CREATE INDEX CONCURRENTLY "user_email_lower_idx" ON "user" ' +

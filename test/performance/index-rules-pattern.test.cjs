@@ -30,12 +30,15 @@ test('Prisma: contains, endsWith and insensitive startsWith without a trigram in
   assert.equal(
     findings[0].message,
     "`contains` compiles to `LIKE '%...%'`, which a btree index on `Order.couponCode` cannot serve. Add a trigram index: " +
-      '`@@index([couponCode(ops: raw("gin_trgm_ops"))], type: Gin)` to model `Order` ' +
+      '`@@index([couponCode(ops: raw("gin_trgm_ops"))], type: Gin, map: "orders_coupon_code_trgm_idx")` to model `Order` ' +
       '(test/performance/fixtures/schema/prisma-shop/prisma/schema.prisma:50); on a live database build it with ' +
       '`CREATE INDEX CONCURRENTLY "orders_coupon_code_trgm_idx" ON "orders" USING gin ("couponCode" gin_trgm_ops);` ' +
       '(requires `pg_trgm`), or use `startsWith`. Table size is unknown; pass `--schema` to gate this rule by row count.',
   );
-  assert.equal(findings[0].suggestion, '@@index([couponCode(ops: raw("gin_trgm_ops"))], type: Gin)');
+  assert.equal(
+    findings[0].suggestion,
+    '@@index([couponCode(ops: raw("gin_trgm_ops"))], type: Gin, map: "orders_coupon_code_trgm_idx")',
+  );
   assert.match(findings[1].message, /^`endsWith` compiles to `LIKE '%\.\.\.'`/);
   assert.match(findings[2].message, /^`startsWith` with `mode: 'insensitive'` compiles to `ILIKE '\.\.\.%'`/);
   assert.doesNotMatch(findings[2].message, /or use `startsWith`/);
@@ -79,7 +82,7 @@ export async function run(q: string, organizationId: string) {
   assert.deepEqual(lines(sequelizeFindings), [[3, 'index-unusable-pattern']]);
   assert.match(
     sequelizeFindings[0].message,
-    /Add a trigram index: `\{ fields: \[\{ name: 'customerPhone', operator: 'gin_trgm_ops' \}\], using: 'gin' \}` to the `indexes` of model `Sale`/,
+    /Add a trigram index: `\{ name: '\w+', fields: \[\{ name: 'customerPhone', operator: 'gin_trgm_ops' \}\], using: 'gin' \}` to the `indexes` of model `Sale`/,
   );
   const mongooseFindings = mongoose(`import { Invoice } from '${projects.mongoose}models';
 export async function run(tenantId: string, q: string) {

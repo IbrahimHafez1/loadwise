@@ -62,17 +62,27 @@ test('expressionIndex compares normalized expressions', () => {
 test('fixFor gives the source-specific suggestion and production DDL', () => {
   const table = ordersTable();
   const sql = 'CREATE INDEX CONCURRENTLY "orders_customer_id_idx" ON "orders" ("customer_id");';
-  assert.deepEqual(model.fixFor(table, ['customerId'], 'prisma'), { suggestion: '@@index([customerId])', sql });
+  assert.deepEqual(model.fixFor(table, ['customerId'], 'prisma'), {
+    suggestion: '@@index([customerId], map: "orders_customer_id_idx")',
+    sql,
+    name: 'orders_customer_id_idx',
+  });
   assert.equal(
     model.fixFor(table, ['customerId'], 'drizzle').suggestion,
     "index('orders_customer_id_idx').on(table.customerId)",
   );
-  assert.equal(model.fixFor(table, ['customerId'], 'typeorm').suggestion, '@Index() on the property `customerId`');
+  assert.equal(
+    model.fixFor(table, ['customerId'], 'typeorm').suggestion,
+    "@Index('orders_customer_id_idx') on the property `customerId`",
+  );
   assert.equal(
     model.fixFor(table, ['customerId', 'createdAt'], 'typeorm').suggestion,
-    "@Index(['customerId', 'createdAt']) on the class",
+    "@Index('orders_customer_id_created_at_idx', ['customerId', 'createdAt']) on the class",
   );
-  assert.equal(model.fixFor(table, ['customerId'], 'sequelize').suggestion, "{ fields: ['customerId'] } in `indexes`");
+  assert.equal(
+    model.fixFor(table, ['customerId'], 'sequelize').suggestion,
+    "{ name: 'orders_customer_id_idx', fields: ['customerId'] } in `indexes`",
+  );
   assert.equal(model.fixFor(table, ['customerId'], 'sql').suggestion, sql);
   assert.equal(
     model.fixFor(table, ['customerId', 'createdAt'], 'sql').sql,
@@ -83,7 +93,7 @@ test('fixFor gives the source-specific suggestion and production DDL', () => {
     'CREATE INDEX `orders_customer_id_idx` ON `orders` (`customer_id`) ALGORITHM=INPLACE LOCK=NONE;',
   );
   const mongo = model.fixFor(ordersTable('mongo'), ['customerId'], 'mongoose');
-  assert.equal(mongo.suggestion, 'orderSchema.index({ customerId: 1 })');
+  assert.equal(mongo.suggestion, "orderSchema.index({ customerId: 1 }, { name: 'orders_customer_id_idx' })");
   assert.throws(() => model.fixFor(table, ['customerId'], 'hibernate'), /Unknown schema source/);
 });
 
@@ -142,4 +152,15 @@ test('findProjectRoot does not climb out of the temp folder into a package.json 
   const project = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-root-'));
   context.after(() => fs.rmSync(project, { recursive: true, force: true }));
   assert.equal(findProjectRoot(project), project);
+});
+
+test('fixFor names the index identically in every ORM suggestion and the DDL', () => {
+  const table = ordersTable();
+  const { name, sql } = model.fixFor(table, ['customerId'], 'sql');
+  for (const orm of ['prisma', 'drizzle', 'typeorm', 'sequelize', 'mongoose']) {
+    assert.ok(model.fixFor(table, ['customerId'], orm).suggestion.includes(name), orm);
+  }
+  assert.ok(sql.includes(`"${name}"`));
+  const mongoDdl = model.fixFor(ordersTable('mongo'), ['customerId'], 'sql').sql;
+  assert.equal(mongoDdl, `db.orders.createIndex({ customerId: 1 }, { name: '${name}' })`);
 });

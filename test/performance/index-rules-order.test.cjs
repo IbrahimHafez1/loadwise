@@ -34,18 +34,18 @@ test('Prisma: a limited sort that no index serves after the equality prefix', ()
     findings[0].message,
     '`Order.totalEGP` orders this limited read after filtering on `storeId`, and no index has (`storeId`, `totalEGP`) ' +
       'as leading columns, so the database sorts every matching row to return the first ones. ' +
-      'Add `@@index([storeId, totalEGP])` to model `Order` (test/performance/fixtures/schema/prisma-shop/prisma/schema.prisma:50); ' +
+      'Add `@@index([storeId, totalEGP], map: "orders_store_id_total_egp_idx")` to model `Order` (test/performance/fixtures/schema/prisma-shop/prisma/schema.prisma:50); ' +
       'on a live database build it with `CREATE INDEX CONCURRENTLY "orders_store_id_total_egp_idx" ON "orders" ("storeId", "totalEGP");`. ' +
       'Table size is unknown; pass `--schema` to gate this rule by row count.',
   );
-  assert.equal(findings[0].suggestion, '@@index([storeId, totalEGP])');
+  assert.equal(findings[0].suggestion, '@@index([storeId, totalEGP], map: "orders_store_id_total_egp_idx")');
   assert.match(
     findings[1].message,
     /^`Order.paidAt` orders this limited read and no index starts with it, so the database sorts the whole table/,
   );
   assert.match(
     findings[2].message,
-    /Add `@@index\(\[storeId, isActive, priceEGP\]\)`.*Then drop .*, which the new index makes redundant\./,
+    /Add `@@index\(\[storeId, isActive, priceEGP\], map: "\w+"\)`.*Then drop .*, which the new index makes redundant\./,
   );
 });
 
@@ -55,7 +55,7 @@ test('Prisma: an unindexed filter and sort merge into one composite', () => {
 }`);
   assert.equal(rest.length, 0);
   assert.equal(finding.ruleId, 'index-missing-filter');
-  assert.equal(finding.suggestion, '@@index([totalEGP, paidAt])');
+  assert.equal(finding.suggestion, '@@index([totalEGP, paidAt], map: "orders_total_egp_paid_at_idx")');
   assert.match(finding.message, /Ending it with `paidAt` also serves the sort\./);
 });
 
@@ -82,7 +82,7 @@ test('TypeORM: order with take names the property fix and the redundant single-c
   }
 }`);
   assert.deepEqual(lines(findings), [[6, 'index-missing-order']]);
-  assert.match(findings[0].message, /Add `@Index\(\['schoolId', 'gradeLevel'\]\)` to entity `Student`/);
+  assert.match(findings[0].message, /Add `@Index\('\w+', \['schoolId', 'gradeLevel'\]\)` to entity `Student`/);
   assert.match(findings[0].message, /Then drop .*school/);
 });
 
@@ -100,7 +100,10 @@ export async function run(tenantId: string) {
   await Invoice.find({ tenantId }).sort({ total: -1 });
 }`);
   assert.deepEqual(lines(mongooseFindings), [[4, 'index-missing-order']]);
-  assert.match(mongooseFindings[0].message, /Add `invoiceSchema\.index\(\{ tenantId: 1, total: 1 \}\)`/);
+  assert.match(
+    mongooseFindings[0].message,
+    /Add `invoiceSchema\.index\(\{ tenantId: 1, total: 1 \}, \{ name: '\w+' \}\)`/,
+  );
 });
 
 test('the same order findings on the TypeScript 7 engine', { skip: onNativeEngine || !nativeAvailable() }, () => {
