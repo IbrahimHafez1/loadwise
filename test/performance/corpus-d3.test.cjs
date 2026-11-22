@@ -262,3 +262,47 @@ function ormFixes(context, source) {
   return findings.filter((finding) => finding.ruleId === 'orm-query-in-loop');
 }
 
+test('orm-query-in-loop fix: Promise.all over per-id findOne becomes one find with In(ids) and a Map', (context) => {
+  const findings = ormFixes(
+    context,
+    `import { Repository } from 'typeorm';
+declare const categoryRepository: Repository<{ id: string }>;
+export async function load(ids: string[]) {
+  const categories = await Promise.all(ids.map(async (id) => categoryRepository.findOne({ where: { id }, relations: ['parent'] })));
+  return categories;
+}`,
+  );
+  assert.equal(findings.length, 1);
+  // The import and the call are three lines apart, so they arrive as one change.
+  const [change] = findings[0].fix.changes;
+  assert.equal(findings[0].fix.changes.length, 1);
+  assert.equal(
+    change.after,
+    `import { Repository, In } from 'typeorm';
+declare const categoryRepository: Repository<{ id: string }>;
+export async function load(ids: string[]) {
+  const existingCategories = await categoryRepository.find({ where: { id: In(ids) }, relations: ['parent'] });
+  const existingCategoriesById = new Map(existingCategories.map((category) => [category.id, category] as const));
+  const categories = ids.map((id) => existingCategoriesById.get(id) ?? null);`,
+  );
+});
+
+test('orm-query-in-loop fix: Promise.all reads with a computed key, a paged option or a non-array list stay', (context) => {
+  const findings = ormFixes(
+    context,
+    `import { Repository } from 'typeorm';
+declare const userRepository: Repository<{ id: string }>;
+declare function keyOf(value: string): string;
+export async function load(ids: string[], names: Set<string>) {
+  const first = await Promise.all(ids.map((id) => userRepository.findOne({ where: { id: keyOf(id) } })));
+  const second = await Promise.all(ids.map((id) => userRepository.findOne({ where: { id }, skip: 1 })));
+  const third = await Promise.all([...names].map((id) => userRepository.findOneBy({ id })));
+  return [first, second, third];
+}`,
+  );
+  assert.equal(findings.length, 3);
+  assert.deepEqual(
+    findings.map((finding) => finding.fix),
+    [undefined, undefined, undefined],
+  );
+});
