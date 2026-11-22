@@ -235,3 +235,59 @@ declare const stamp: Date;
   });
 });
 
+describe('migration fixes in code', () => {
+  before(() => prepareDialect('postgres'));
+
+  function checkCode(text, file = 'migration.ts') {
+    const { framework, units } = extractCodeFile(text, { file, dialect: 'postgres' });
+    return units.flatMap((unit) => {
+      annotateUnit(unit.operations, { inTransaction: unit.inTransaction, dialect: 'postgres' });
+      return checkPostgresUnit({ file, framework, dialect: 'postgres', operations: unit.operations });
+    });
+  }
+
+  function nodeAt(sourceFile, line, column) {
+    const offset = sourceFile.getPositionOfLineAndCharacter(line - 1, column - 1);
+    let found;
+    (function visit(node) {
+      if (node.getStart(sourceFile) <= offset && offset < node.end) {
+        found = node;
+        ts.forEachChild(node, visit);
+      }
+    })(sourceFile);
+    return found;
+  }
+
+  function buildFor(code, ruleId) {
+    const finding = checkCode(code).find((candidate) => candidate.ruleId === ruleId);
+    assert.ok(finding, `expected ${ruleId}`);
+    const sourceFile = ts.createSourceFile(finding.file, code, ts.ScriptTarget.Latest, true);
+    const node = nodeAt(sourceFile, finding.line, finding.column);
+    return migrationBuilders[ruleId]({ finding, node, sourceFile, text: code, load: () => null });
+  }
+
+  function typeormMigration(query) {
+    return `import { MigrationInterface, QueryRunner } from 'typeorm';
+
+export class AddOrderIndex1700000000000 implements MigrationInterface {
+  name = 'AddOrderIndex1700000000000';
+
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(${query});
+  }
+
+  public async down(queryRunner: QueryRunner): Promise<void> {}
+}
+`;
+  }
+
+  test('withholds a rewrite that would turn an escaped \\${ in the template into a live hole', () => {
+    const escaped = typeormMigration(
+      '`CREATE INDEX "orders_note_idx" ON "orders" ("note") WHERE "note" <> \'\\${draft}\'`',
+    );
+    assert.equal(buildFor(escaped, 'migration-index-not-concurrent'), undefined);
+    const hole = typeormMigration('`CREATE INDEX "orders_note_idx" ON "${table}" ("note")`');
+    assert.ok(buildFor(hole, 'migration-index-not-concurrent'), 'a real hole still gets the fix');
+  });
+
+});
