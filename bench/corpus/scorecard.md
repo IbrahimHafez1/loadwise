@@ -34,7 +34,7 @@
 | index-redundant-prefix              | low      |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | index-unusable-expression           | high     |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | index-unusable-pattern              | high     |   0 |   0 |      0 |         - |      - | yes | unmeasured |
-| json-parse-unguarded                | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
+| json-parse-unguarded                | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | json-roundtrip-clone                | low      |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | known-reads-awaited-serially        | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | list-count-per-request              | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
@@ -92,7 +92,7 @@
 | stream-pipe-unhandled-error         | high     |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | typeorm-existence-materialization   | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | typeorm-load-then-save              | high     |   0 |   0 |      0 |         - |      - | yes | unmeasured |
-| typeorm-transaction-client-escape   | critical |   0 |   0 |      0 |         - |      - | no  | unmeasured |
+| typeorm-transaction-client-escape   | critical |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | typeorm-transaction-in-loop         | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | typeorm-unused-count                | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | typeorm-wide-projection             | low      |   0 |   0 |      0 |         - |      - | yes | unmeasured |
@@ -102,24 +102,24 @@
 | node-sync-process-in-async          | high     |   0 |   6 |      0 |        0% |      - | yes | thin       |
 | unbounded-module-cache              | medium   |   0 |   8 |      0 |        0% |      - | no  | thin       |
 | whole-payload-in-memory             | medium   |   0 |   4 |      0 |        0% |      - | no  | thin       |
-| node-sync-fs-in-async               | medium   |   2 |  14 |      1 |       13% |    67% | yes | measured   |
-| reduce-copy-accumulator             | medium   |   4 |  10 |      1 |       31% |   100% | yes | measured   |
-| service-query-in-loop               | high     |   2 |   3 |      8 |       40% |    25% | yes | measured   |
+| reduce-copy-accumulator             | medium   |   4 |  10 |      1 |       44% |   100% | yes | measured   |
 | loop-copy-accumulator               | medium   |   3 |   4 |      0 |       50% |   100% | yes | thin       |
-| http-call-without-timeout           | high     |   9 |   9 |      0 |       64% |   100% | yes | measured   |
-| floating-promise                    | high     |   7 |   4 |      2 |       70% |    88% | yes | measured   |
+| service-query-in-loop               | high     |   2 |   3 |      8 |       50% |    38% | yes | measured   |
+| node-sync-fs-in-async               | medium   |   2 |  14 |      1 |       67% |    67% | yes | measured   |
+| floating-promise                    | high     |   7 |   4 |      2 |       73% |    89% | yes | measured   |
 | array-repeated-find                 | medium   |  10 |   4 |      0 |       77% |   100% | yes | measured   |
 | promise-return-escapes-catch        | high     |   4 |   1 |      0 |       80% |   100% | yes | thin       |
 | serial-awaits-in-literal            | medium   |   5 |   1 |      0 |       83% |   100% | yes | thin       |
 | filter-for-existence                | low      |   3 |   0 |      0 |      100% |   100% | yes | thin       |
+| http-call-without-timeout           | high     |   9 |   9 |      0 |      100% |   100% | yes | measured   |
 | index-missing-foreign-key           | high     |   9 |   0 |      0 |      100% |   100% | yes | thin       |
 | node-sync-crypto-in-async           | high     |   1 |   0 |      0 |      100% |   100% | yes | thin       |
+| orm-query-in-loop                   | high     |   0 |   0 |      4 |      100% |    33% | yes | thin       |
 | password-hash-sync-in-async         | high     |   1 |   0 |      0 |      100% |   100% | yes | thin       |
 | prisma-count-for-existence          | medium   |   1 |   0 |      0 |      100% |   100% | yes | thin       |
 | prisma-distinct-in-memory           | medium   |   1 |   0 |      0 |      100% |   100% | yes | thin       |
 | prisma-query-in-loop                | high     |   8 |   0 |      2 |      100% |    89% | yes | measured   |
 | prisma-relation-count-in-list       | medium   |   1 |   0 |      0 |      100% |   100% | yes | thin       |
-| orm-query-in-loop                   | high     |   0 |   0 |      4 |         - |     0% | yes | thin       |
 
 ## maint
 
@@ -132,8 +132,7 @@
 | folder-boundary                   | medium |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | query-mutates-state               | medium |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | sql-insert-truncated-at-semicolon | high   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
-| swallowed-error                   | medium |   3 |  12 |      0 |       33% |   100% | no  | measured   |
-| unreferenced-file                 | low    |   5 |   8 |      0 |       38% |   100% | no  | measured   |
+| swallowed-error                   | medium |   3 |  12 |      0 |       75% |   100% | no  | measured   |
 | long-parameter-list               | low    |   6 |   1 |      0 |       86% |   100% | yes | thin       |
 | high-branch-complexity            | medium |   7 |   1 |      0 |       88% |   100% | yes | thin       |
 | large-class                       | medium |   7 |   1 |      0 |       88% |   100% | no  | thin       |
@@ -141,6 +140,7 @@
 | deep-control-flow                 | low    |   8 |   0 |      0 |      100% |   100% | yes | thin       |
 | dependency-cycle                  | high   |   4 |   0 |      0 |      100% |   100% | yes | thin       |
 | large-module                      | medium |   7 |   0 |      0 |      100% |   100% | yes | thin       |
+| unreferenced-file                 | low    |   5 |   8 |      0 |      100% |   100% | no  | measured   |
 | unused-export                     | low    |   8 |   0 |      0 |      100% |   100% | no  | thin       |
 
 ## sec
@@ -152,7 +152,7 @@
 | auth-route-without-rate-limit     | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | bcrypt-low-cost                   | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | command-injection                 | critical |   0 |   0 |      0 |         - |      - | no  | unmeasured |
-| database-error-in-response        | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
+| database-error-in-response        | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | dependency-known-vulnerability    | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | dockerfile-add-remote-url         | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | drizzle-scope-unverified          | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
@@ -160,7 +160,7 @@
 | graphql-introspection-enabled     | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | graphql-query-depth-unbounded     | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | insecure-cipher                   | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
-| jwt-none-algorithm                | critical |   0 |   0 |      0 |         - |      - | no  | unmeasured |
+| jwt-none-algorithm                | critical |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | mass-assignment                   | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | mysql-dynamic-query-text          | critical |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | password-hash-in-response         | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
@@ -175,21 +175,21 @@
 | template-injection                | critical |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | upload-client-filename            | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | xml-external-entities             | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
-| compose-hardcoded-secret          | high     |   0 |  10 |      0 |        0% |      - | no  | measured   |
-| error-stack-in-response           | medium   |   0 |   2 |      1 |        0% |     0% | no  | thin       |
-| jwt-sign-without-expiry           | medium   |   0 |   6 |      0 |        0% |      - | no  | thin       |
+| cors-credentials-any-origin       | high     |   0 |   3 |      0 |        0% |      - | no  | thin       |
+| error-stack-in-response           | medium   |   0 |   2 |      1 |        0% |     0% | yes | thin       |
+| jwt-sign-without-expiry           | medium   |   0 |   6 |      0 |        0% |      - | yes | thin       |
 | path-traversal                    | high     |   0 |   8 |      0 |        0% |      - | no  | thin       |
 | open-redirect                     | medium   |   2 |  13 |      0 |       22% |   100% | no  | measured   |
 | secret-in-log                     | high     |   1 |   4 |      0 |       25% |   100% | no  | thin       |
-| committed-secret                  | critical |   4 |   6 |      0 |       40% |   100% | no  | measured   |
-| dockerfile-runs-as-root           | medium   |   4 |   6 |      0 |       40% |   100% | no  | measured   |
 | tls-verification-disabled         | high     |   2 |   5 |      0 |       40% |   100% | yes | thin       |
 | dockerfile-secret-in-build        | high     |   1 |   1 |      0 |       50% |   100% | no  | thin       |
+| hardcoded-secret                  | critical |   2 |   4 |      1 |       50% |    67% | no  | thin       |
 | cookie-missing-security-flags     | high     |   2 |   3 |      0 |       67% |   100% | yes | thin       |
-| hardcoded-secret                  | critical |   2 |   4 |      1 |       67% |    67% | no  | thin       |
 | insecure-random-for-secret        | high     |   2 |   1 |      0 |       67% |   100% | yes | thin       |
+| dockerfile-runs-as-root           | medium   |   4 |   6 |      0 |       80% |   100% | no  | measured   |
 | weak-password-hash                | high     |   5 |   2 |      0 |       83% |   100% | no  | thin       |
 | code-injection                    | critical |   3 |   0 |      0 |      100% |   100% | no  | thin       |
+| committed-secret                  | critical |   4 |   6 |      0 |      100% |   100% | no  | measured   |
 | cors-origin-regex-unanchored      | medium   |   1 |   0 |      0 |      100% |   100% | yes | thin       |
 | dockerfile-unpinned-base-image    | low      |   1 |   0 |      0 |      100% |   100% | no  | thin       |
 | jwt-verify-without-algorithms     | high     |   2 |   0 |      0 |      100% |   100% | yes | thin       |
@@ -198,9 +198,9 @@
 | secret-compared-non-constant-time | medium   |   2 |   0 |      0 |      100% |   100% | yes | thin       |
 | sequelize-dynamic-query-text      | critical |   2 |   2 |      0 |      100% |   100% | no  | thin       |
 | ssrf-request-url                  | high     |   2 |   1 |      0 |      100% |   100% | no  | thin       |
-| template-autoescape-disabled      | medium   |   1 |   0 |      0 |      100% |   100% | no  | thin       |
+| template-autoescape-disabled      | medium   |   1 |   0 |      0 |      100% |   100% | yes | thin       |
 | zip-slip-extraction               | high     |   1 |   0 |      0 |      100% |   100% | no  | thin       |
-| cors-credentials-any-origin       | high     |   0 |   3 |      0 |         - |      - | no  | thin       |
+| compose-hardcoded-secret          | high     |   0 |  10 |      0 |         - |      - | no  | measured   |
 | jwt-decode-for-auth               | high     |   0 |   1 |      0 |         - |      - | no  | thin       |
 | knex-raw-dynamic-text             | critical |   0 |   3 |      1 |         - |     0% | no  | thin       |
 | prisma-raw-unsafe-dynamic         | critical |   0 |   1 |      0 |         - |      - | no  | thin       |
