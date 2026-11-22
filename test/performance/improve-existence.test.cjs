@@ -75,3 +75,53 @@ test('Prisma count compared loosely with other values stays quiet', () => {
   const source = `${prismaHeader}export async function exists() { return [${comparisons.join(', ')}]; }`;
   assert.deepEqual(rule(lint(source, prismaFiles), 'prisma-count-for-existence'), []);
 });
+
+const transactionFiles = {
+  'globals.d.ts': `declare function fetch(url: string): Promise<{ ok: boolean }>;
+declare function setImmediate(callback: () => unknown): unknown;
+declare function setTimeout(callback: () => unknown, delay?: number): unknown;
+declare function setInterval(callback: () => unknown, delay?: number): unknown;
+declare function queueMicrotask(callback: () => unknown): void;
+declare const process: { nextTick(callback: () => unknown): void };`,
+  'node_modules/@prisma/client/index.d.ts': `
+    export class PrismaClient { user: { create(input: object): Promise<unknown> };
+      $transaction<T>(run: (tx: PrismaClient) => Promise<T>): Promise<T> }
+  `,
+};
+
+function transactionFindings(body) {
+  const source = `import { PrismaClient } from '@prisma/client';
+declare const prisma: PrismaClient;
+declare const urls: string[];
+export async function run() {
+  await prisma.$transaction(async (tx) => {
+    await tx.user.create({});
+${body}
+  });
+}`;
+  return rule(lint(source, transactionFiles), 'external-call-in-transaction');
+}
+
+test('I/O inside a callback deferred by a timer or microtask scheduler is outside the transaction', () => {
+  const findings = transactionFindings(`
+    setImmediate(async () => await fetch('https://example.test'));
+    setTimeout(async () => { await fetch('https://example.test'); }, 10);
+    setInterval(async () => { await fetch('https://example.test'); }, 10);
+    process.nextTick(async () => { await fetch('https://example.test'); });
+    queueMicrotask(async () => { await fetch('https://example.test'); });`);
+  assert.deepEqual(findings, []);
+});
+
+test('I/O awaited directly or through Promise.all over map in a transaction is still reported', () => {
+  const findings = transactionFindings(`
+    await fetch('https://example.test');
+    await Promise.all(urls.map(async (url) => await fetch(url)));`);
+  assert.equal(findings.length, 2);
+});
+
+test('a local function named like a scheduler still runs its callback inside the transaction', () => {
+  const findings = transactionFindings(`
+    const setImmediate = async (callback: () => Promise<unknown>) => callback();
+    await setImmediate(async () => await fetch('https://example.test'));`);
+  assert.equal(findings.length, 1);
+});
