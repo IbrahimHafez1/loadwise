@@ -290,4 +290,14 @@ export class AddOrderIndex1700000000000 implements MigrationInterface {
     assert.ok(buildFor(hole, 'migration-index-not-concurrent'), 'a real hole still gets the fix');
   });
 
+  test('notes that a statement moved after later statements of its query string may break them', () => {
+    const later = typeormMigration(
+      '`CREATE INDEX "orders_store_idx" ON "orders" ("store_id"); COMMENT ON INDEX "orders_store_idx" IS \'by store\'`',
+    );
+    assert.match(buildFor(later, 'migration-index-not-concurrent').note, /later statements/);
+    const last = typeormMigration(
+      '`ALTER TABLE "orders" ADD COLUMN "x" int; CREATE INDEX "orders_store_idx" ON "orders" ("store_id")`',
+    );
+    assert.doesNotMatch(buildFor(last, 'migration-index-not-concurrent').note, /later statements/);
+  });
 });
