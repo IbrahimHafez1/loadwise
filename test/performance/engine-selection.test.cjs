@@ -15,7 +15,7 @@ try {
 } catch {
   nativeSkip = 'optional native compiler is absent';
 }
-const fallbackNote = /^Note: TypeScript 7 cannot load this project \(.*baseUrl.*\); used TypeScript 6\.\d+\.\d+\.\n$/;
+const fallbackNote = /^Note: TypeScript 7 cannot load this project \(.*node10.*\); used TypeScript 6\.\d+\.\d+\.\n$/;
 
 function fixture(context) {
   const files = {
@@ -24,8 +24,7 @@ function fixture(context) {
       'export function check(keys: string[], raw: string) { const ids: string[] = JSON.parse(raw); return keys.map(key => ids.includes(key)); }',
     'clean.ts': 'export const message = "ok";',
     'tsconfig.json': '{"compilerOptions":{"target":"ES2022","strict":true},"files":["flag.ts","clean.ts"]}',
-    'base.json':
-      '{"compilerOptions":{"target":"ES2022","baseUrl":".","paths":{"@/*":["./*"]}},"files":["flag.ts","clean.ts"]}',
+    'base.json': '{"compilerOptions":{"target":"ES2022","moduleResolution":"node10"},"files":["flag.ts","clean.ts"]}',
     'bad.ts': 'export const broken = ;',
     // Reports at exit whether any native engine module was loaded into the CLI process.
     'probe.cjs':
@@ -77,7 +76,7 @@ test('forced native still rejects an incompatible config with exit 2', { skip: n
   for (const args of [['--native'], ['--engine', 'native']]) {
     const result = run([...args, '-p', 'base.json', '--json']);
     assert.equal(result.status, 2, result.stdout);
-    assert.match(result.stderr, /baseUrl/);
+    assert.match(result.stderr, /node10/);
     assert.equal(result.stdout, '');
   }
 });
