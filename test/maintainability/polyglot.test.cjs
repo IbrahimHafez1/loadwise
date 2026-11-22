@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const { analyzePolyglot } = require('../../lib/maintainability/polyglot.cjs');
 
 let nativeAvailable = false;
@@ -129,12 +130,16 @@ test('an else suite shares the enclosing decision depth across grammar wrappers'
   assert.deepEqual(findings.map((finding) => finding.file).sort(), [...files].sort());
 });
 
-test('explicit files are accounted for and parse errors fail the scan', nativeOnly, async (context) => {
+test('explicit files are accounted for and unparsable files are returned for skipping', nativeOnly, async (context) => {
   const { root, write } = fixture(context);
   write('empty.py', '');
   assert.deepEqual((await analyzePolyglot({ root, files: ['empty.py', 'empty.py'] })).languageCounts, { Python: 1 });
   write('invalid.py', 'def @@@:\n');
-  await assert.rejects(analyzePolyglot({ root, files: ['invalid.py'] }), /invalid.py/);
+  const { findings, unparsable } = await analyzePolyglot({ root, files: ['invalid.py'] });
+  assert.deepEqual(findings, []);
+  assert.equal(unparsable.length, 1);
+  assert.equal(unparsable[0].file, 'invalid.py');
+  assert.match(unparsable[0].parseError, /^invalid\.py:1:\d+ /);
   await assert.rejects(analyzePolyglot({ root, files: ['absent.py'] }), /absent.py/);
 });
 
@@ -171,5 +176,26 @@ test(
     assert.equal(findings.length, 1);
     assert.equal(findings[0].ruleId, 'duplicate-implementation');
     assert.deepEqual(languageCounts, { Python: 402, C: 1, 'C++': 5, Kotlin: 1 });
+  },
+);
+
+test(
+  'an unparsable non-JavaScript file is skipped and listed while other findings are reported',
+  nativeOnly,
+  (context) => {
+    const { root, write } = fixture(context);
+    write('invalid.py', 'def @@@:\n');
+    write('deep.py', 'def f(x):\n if x:\n  if x:\n   if x:\n    if x:\n     if x:\n      if x:\n       pass\n');
+    const result = spawnSync(process.execPath, [path.join(__dirname, '../../bin/loadwise.cjs'), 'maint', '--json'], {
+      cwd: root,
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 2, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.deepEqual(
+      report.skippedFiles.map((skipped) => skipped.file),
+      ['invalid.py'],
+    );
+    assert.deepEqual([...new Set(report.findings.map((finding) => finding.file))], ['deep.py']);
   },
 );

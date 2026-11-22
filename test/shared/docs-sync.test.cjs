@@ -58,7 +58,7 @@ test('package.json files covers every runtime require reachable from bin/', () =
   assert.deepEqual(uncovered, [], `not shipped by package.json files: ${uncovered.join(', ')}`);
 });
 
-// SARIF helpUri points at README#<rule-id>. syntax-error stops the scan instead of becoming a finding, so it has none.
+// SARIF helpUri points at README#<rule-id>. syntax-error skips the unparsable file instead of becoming a finding, so it has none.
 test('every rule id has exactly one README anchor', () => {
   const ruleIds = [
     ...Object.keys(require('../../lib/performance/rule-ids.cjs').impactByRule),
