@@ -874,3 +874,21 @@ test('no TypeScript extraction when a parameter would be typed {} or unknown', (
     }
   }
 });
+
+test('extracted block names drop the is or has of a boolean condition', (context) => {
+  const source = [
+    'function collect(file, out) {',
+    ...Array.from({ length: 13 }, (_, index) => `  if (file.level === ${index}) out.push(${index});`),
+    '  if (file.isDeclarationFile) {',
+    '    for (const reference of file.references) {',
+    '      if (reference) out.push(reference);',
+    '    }',
+    '  }',
+    '  return out;',
+    '}',
+    'module.exports = { collect };',
+  ].join('\n');
+  const directory = project(context, { 'collect.cjs': source });
+  const [finding] = ruleFindings(directory, 'high-branch-complexity');
+  assert.match(finding.fix.note, /into handleDeclarationFile/);
+});
