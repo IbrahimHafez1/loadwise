@@ -70,8 +70,8 @@ test('object fix hoists a Promise.all above a const or return', (context) => {
   });
   const [finding] = scanned.filter((entry) => entry.ruleId === rule);
   const change = onlyChange(finding);
-  assert.match(change.after, /const \[xValue, yValue\] = await Promise\.all\(\[a\(\), b\(\)\]\);/);
-  assert.match(change.after, /return \{ x: xValue, y: yValue \};/);
+  assert.match(change.after, /const \[x, y\] = await Promise\.all\(\[a\(\), b\(\)\]\);/);
+  assert.match(change.after, /return \{ x, y \};/);
 });
 
 test('object fix is withheld when the return is conditional', (context) => {
@@ -93,8 +93,8 @@ function fixFor(context, body) {
 test('mixed object keeps plain values in place and hoists only the awaits', (context) => {
   const finding = fixFor(context, '  return { x: await a(), shared, y: await b(), label: `n${shared}` };');
   const { after } = onlyChange(finding);
-  assert.match(after, /const \[xValue, yValue\] = await Promise\.all\(\[a\(\), b\(\)\]\);/);
-  assert.match(after, /return \{ x: xValue, shared, y: yValue, label: `n\$\{shared\}` \};/);
+  assert.match(after, /const \[x, y\] = await Promise\.all\(\[a\(\), b\(\)\]\);/);
+  assert.match(after, /return \{ x, shared, y, label: `n\$\{shared\}` \};/);
   assert.match(finding.fix.note, /Promise\.all starts/);
 });
 
@@ -107,7 +107,7 @@ test('a call between the awaits is kept in the literal and flagged for review', 
 test('an await at the head of a member chain is hoisted too', (context) => {
   const finding = fixFor(context, '  return { x: await a(), y: (await b()).toFixed(), z: await a() };');
   const { after } = onlyChange(finding);
-  assert.match(after, /const \[xValue, yResult, zValue\] = await Promise\.all\(\[a\(\), b\(\), a\(\)\]\);/);
+  assert.match(after, /const \[x, yResult, z\] = await Promise\.all\(\[a\(\), b\(\), a\(\)\]\);/);
   assert.match(after, /y: yResult\.toFixed\(\)/);
 });
 
@@ -125,7 +125,7 @@ test('a concise arrow body becomes a block that hoists the awaits', (context) =>
   const { after } = onlyChange(finding);
   assert.match(
     after,
-    /=> \{\n\s+const \[xValue, yValue\] = await Promise\.all\(\[a\(\), b\(\)\]\);\n\s+return \{ x: xValue, tag: shared, y: yValue \};\n\s*\};/,
+    /=> \{\n\s+const \[x, y\] = await Promise\.all\(\[a\(\), b\(\)\]\);\n\s+return \{ x, tag: shared, y \};\n\s*\};/,
   );
 });
 
@@ -134,12 +134,14 @@ test('an object nested in a call argument hoists above the statement', (context)
     context,
     '  sink(label({ x: await a(), y: await b() }));\n  function label(value: object) { return value; }\n  function sink(value: object) {}',
   );
-  assert.match(onlyChange(finding).after, /const \[xValue, yValue\] = await Promise\.all/);
+  assert.match(onlyChange(finding).after, /const \[x, y\] = await Promise\.all/);
 });
 
-test('the serial twin of a Promise.all branch gets a deliberate-serial note', (context) => {
-  const finding = fixFor(context, '  return flag ? [await a(), await b()] : await Promise.all([a(), b()]);');
-  assert.match(finding.fix.note, /other branch already uses Promise\.all/);
+test('the serial twin of a Promise.all branch is quiet, or gets a deliberate-serial note', (context) => {
+  const twin = fixFor(context, '  return flag ? [await a(), await b()] : await Promise.all([a(), b()]);');
+  assert.equal(twin, undefined);
+  const partial = fixFor(context, '  return flag ? [await a(), await b()] : await Promise.all([a()]);');
+  assert.match(partial.fix.note, /other branch already uses Promise\.all/);
 });
 
 const repositoryHeader =
@@ -210,6 +212,6 @@ test('a concise arrow body keeps the CRLF line breaks and tab indentation of the
   const fixed = finding.fix.changes[0].after;
   assert.match(
     fixed,
-    /=> \{\n {2}const \[xValue, yValue\] = await Promise\.all\(\[a\(\), b\(\)\]\);\n {2}return \{ x: xValue, y: yValue \};\n\};/,
+    /=> \{\n {2}const \[x, y\] = await Promise\.all\(\[a\(\), b\(\)\]\);\n {2}return \{ x, y \};\n\};/,
   );
 });

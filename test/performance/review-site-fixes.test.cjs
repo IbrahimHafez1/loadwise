@@ -19,7 +19,7 @@ test('arrow body that wraps the literal in a call keeps the call', (context) => 
     `${literalHeader}export const build = async () => wrap({ x: await a(), y: await b() });`,
   );
   if (!finding.fix) return;
-  assert.match(onlyChange(finding).after, /return wrap\(\{ x: xValue, y: yValue \}\);/);
+  assert.match(onlyChange(finding).after, /return wrap\(\{ x, y \}\);/);
 });
 
 const queueFiles = {
