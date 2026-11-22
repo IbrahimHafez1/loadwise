@@ -175,3 +175,53 @@ export class Invalidator {
   });
   assertNoFix(findings, 'service-query-in-loop');
 });
+
+describe('migration fixes leave NOT NULL inside a CHECK alone', () => {
+  const migrations = '../../lib/performance/migrations/';
+  const { extractSqlText, prepareDialect, sqlFileInTransaction } = require(migrations + 'extract-sql.cjs');
+  const { annotateUnit } = require(migrations + 'operations.cjs');
+  const { checkMysqlUnit } = require(migrations + 'rules-mysql.cjs');
+  const { checkPostgresUnit } = require(migrations + 'rules-postgres.cjs');
+  const migrationBuilders = require('../../lib/performance/site-fixes/migrations.cjs');
+  const lockTimeout = "SET lock_timeout = '5s';\n";
+
+  before(() => prepareDialect('postgres'));
+
+  function fixedSql(sql, ruleId, dialect) {
+    const { operations, statementCount } = extractSqlText(sql, { dialect, file: 'm.sql' });
+    annotateUnit(operations, { inTransaction: sqlFileInTransaction('sql', statementCount), dialect });
+    const unit = { file: 'm.sql', framework: 'sql', dialect, operations };
+    const findings = dialect === 'mysql' ? checkMysqlUnit(unit) : checkPostgresUnit(unit);
+    const finding = findings.find((entry) => entry.ruleId === ruleId);
+    assert.ok(finding, `${ruleId} should report`);
+    const { edits } = migrationBuilders[ruleId]({ finding, text: sql, load: () => null });
+    let result = sql;
+    for (const edit of [...edits].sort((left, right) => right.start - left.start))
+      result = result.slice(0, edit.start) + edit.text + result.slice(edit.end);
+    return result;
+  }
+
+  test('postgres not-null-without-default drops the column NOT NULL, not the one in CHECK', () => {
+    const sql = `${lockTimeout}ALTER TABLE t ADD COLUMN c int CHECK (c IS NOT NULL) NOT NULL;`;
+    assert.equal(
+      fixedSql(sql, 'migration-not-null-without-default', 'postgres'),
+      `${lockTimeout}ALTER TABLE t ADD COLUMN c int CHECK (c IS NOT NULL);`,
+    );
+  });
+
+  test('volatile default drops the column NOT NULL, not the one in CHECK', () => {
+    const sql = `${lockTimeout}ALTER TABLE t ADD COLUMN c int DEFAULT random() CHECK (c IS NOT NULL) NOT NULL;`;
+    assert.match(
+      fixedSql(sql, 'migration-volatile-default', 'postgres'),
+      /^SET lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c int CHECK \(c IS NOT NULL\);\n/,
+    );
+  });
+
+  test('mysql NOT NULL default goes after the column NOT NULL, outside CHECK', () => {
+    const sql = 'ALTER TABLE t ADD COLUMN c int CHECK (c IS NOT NULL) NOT NULL;';
+    assert.equal(
+      fixedSql(sql, 'migration-not-null-without-default', 'mysql'),
+      'ALTER TABLE t ADD COLUMN c int CHECK (c IS NOT NULL) NOT NULL DEFAULT 0;',
+    );
+  });
+});
