@@ -7,6 +7,7 @@ const path = require('node:path');
 const { before, describe, test } = require('node:test');
 const ts = require('typescript');
 
+const { applyEdits } = require('../../lib/shared/fix-hunks.cjs');
 const { extractCodeFile } = require('../../lib/performance/migrations/extract-code.cjs');
 const {
   extractSqlText,
@@ -45,14 +46,6 @@ function nodeAt(sourceFile, line, column) {
     }
   })(sourceFile);
   return found;
-}
-
-function applyEdits(text, edits) {
-  let result = text;
-  for (const edit of [...edits].sort((left, right) => right.start - left.start)) {
-    result = result.slice(0, edit.start) + edit.text + result.slice(edit.end);
-  }
-  return result;
 }
 
 function build(finding, text, load = () => null) {
