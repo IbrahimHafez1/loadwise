@@ -165,6 +165,52 @@ test('stays silent inside try/catch and on internal values', () => {
   for (const source of quiet) assert.deepEqual(parse(source), [], source);
 });
 
+test('stays silent when every caller of the parsing helper catches', () => {
+  const header =
+    'declare const fs: any;\nfunction load(p: string) { return JSON.parse(fs.readFileSync(p, "utf8")); }\n';
+  const guarded = `${header}export function a(p: string) { try { return load(p); } catch { return null; } }`;
+  assert.deepEqual(parse(guarded), []);
+  const awaited = `${header}export async function a(p: string) { try { return await load(p); } catch { return null; } }`;
+  assert.deepEqual(parse(awaited), []);
+});
+
+test('still reports a parsing helper with an unguarded, exported or unused caller', () => {
+  const header = 'declare const fs: any;\n';
+  const body = 'return JSON.parse(fs.readFileSync(p, "utf8")); }';
+  const guardedCall = 'export const a = (p: string) => { try { return load(p); } catch {} };';
+  const sources = [
+    `${header}function load(p: string) { ${body}\n${guardedCall}\nexport const b = (p: string) => load(p);`,
+    `${header}export function load(p: string) { ${body}\n${guardedCall}`,
+    `${header}function load(p: string) { ${body}\nexport const exposed = { load };`,
+    `${header}function load(p: string) { ${body}`,
+  ];
+  for (const source of sources) assert.equal(parse(source).length, 1, source);
+});
+
+test('stays silent on files read from beside the tool, and still reports other paths', () => {
+  const header = 'declare const fs: any; declare const path: any; declare const __dirname: string;\n';
+  const own = `${header}export function version() { const root = path.resolve(__dirname, "../.."); return JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")); }`;
+  assert.deepEqual(parse(own), []);
+  const direct = `${header}export function own() { return JSON.parse(fs.readFileSync(path.join(__dirname, "data.json"), "utf8")); }`;
+  assert.deepEqual(parse(direct), []);
+  const foreign = `${header}export function foreign(dir: string) { return JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")); }`;
+  assert.equal(parse(foreign).length, 1);
+  const uploaded = `${header}export function uploaded(name: string) { return JSON.parse(fs.readFileSync(path.join(__dirname, "uploads", name), "utf8")); }`;
+  assert.equal(parse(uploaded).length, 1, 'a variable path part beside __dirname is still outside input');
+});
+
+test('marks a parse in a standalone script contextual', () => {
+  const source = [
+    'declare const require: any; declare const module: any; declare const fs: any;',
+    'function readJson(file: string) { return JSON.parse(fs.readFileSync(file, "utf8")); }',
+    'function main() { readJson("a.json"); }',
+    'if (require.main === module) main();',
+  ].join('\n');
+  const reported = parse(source);
+  assert.equal(reported.length, 1);
+  assert.match(reported[0].contextualReason, /operator tooling/);
+});
+
 // ---- request-number-unvalidated ----
 
 test('reports request numbers that reach queries, limits, indexes or kept arithmetic', () => {
