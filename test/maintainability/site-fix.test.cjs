@@ -892,3 +892,62 @@ test('extracted block names drop the is or has of a boolean condition', (context
   const [finding] = ruleFindings(directory, 'high-branch-complexity');
   assert.match(finding.fix.note, /into handleDeclarationFile/);
 });
+
+const batchLines = [
+  'function batchLines(groups, blocked) {',
+  '  const lines = [];',
+  '  for (const group of groups) {',
+  '    for (const batch of group.batches) {',
+  '      const names = [];',
+  '      for (const member of batch) {',
+  '        if (!blocked.has(member.id)) {',
+  '          names.push(member.name);',
+  '        }',
+  '      }',
+  "      lines.push(group.name + ':' + names.join(','));",
+  '    }',
+  '  }',
+  '  return lines;',
+  '}',
+  'module.exports = { batchLines };',
+  '',
+].join('\n');
+
+const namedGroups = [
+  { name: 'a', batches: [[{ id: 1, name: 'x' }], [{ id: 2, name: 'y' }]] },
+  { name: 'b', batches: [[{ id: 3, name: 'z' }]] },
+  {
+    name: 'c',
+    batches: [
+      [
+        { id: 2, name: 'w' },
+        { id: 4, name: 'v' },
+      ],
+    ],
+  },
+];
+
+test('an extracted loop that only fills the collection declared above creates and returns it', (context) => {
+  const directory = project(context, { 'lines.cjs': batchLines });
+  const [finding] = ruleFindings(directory, 'deep-control-flow');
+  assert.match(finding.fix.note, /buildNames/);
+  const text = fixedFiles(directory, finding.fix)['lines.cjs'];
+  assert.match(text, /\n {6}const names = buildNames\(batch, blocked\);\n {6}lines\.push/);
+  assert.match(text, /\nfunction buildNames\(batch, blocked\) \{\n {2}const names = \[\];\n {2}for \(const member/);
+  assert.match(text, /\n {2}return names;\n\}\nmodule\.exports/);
+  const blocked = new Set([2]);
+  assert.deepEqual(load(text).batchLines(namedGroups, blocked), load(batchLines).batchLines(namedGroups, blocked));
+  fs.writeFileSync(path.join(directory, 'lines.cjs'), text);
+  assert.equal(ruleFindings(directory, 'deep-control-flow').length, 0);
+});
+
+test('an extracted loop that also changes another collection keeps passing the collections in', (context) => {
+  const source = batchLines
+    .replace('(groups, blocked) {', '(groups, blocked, audit) {')
+    .replace('names.push(member.name);', 'names.push(member.name);\n          audit.push(member.id);');
+  const directory = project(context, { 'lines.cjs': source });
+  const [finding] = ruleFindings(directory, 'deep-control-flow');
+  const text = fixedFiles(directory, finding.fix)['lines.cjs'];
+  assert.doesNotMatch(text, /const names = build/);
+  assert.match(text, /\n {6}processBatch\(/);
+});
