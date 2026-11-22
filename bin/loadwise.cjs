@@ -58,13 +58,28 @@ async function main(args) {
   return require('../lib/shared/check.cjs').runCheck(command === 'check' ? rest : args, usage);
 }
 
+// perf, maint and sec run in this process, whose default heap limit is too small for very large projects. One
+// re-spawn with a larger limit keeps their output and exit code the same; a limit the user set is never replaced.
+const inProcessCheckers = new Set(['perf', 'maint', 'sec']);
+
+function respawnIfHeapTooSmall(commandArgs) {
+  const heapLimit = require('../lib/shared/heap-limit.cjs');
+  if (!inProcessCheckers.has(commandArgs[0]) || !heapLimit.shouldRespawnWithLargerHeap()) return false;
+  process.exitCode = heapLimit.respawnWithLargerHeap(__filename, commandArgs);
+  return true;
+}
+
+function runMain(commandArgs) {
+  main(commandArgs)
+    .then((code) => {
+      process.exitCode = code;
+      require('../lib/shared/agent-session.cjs').promptReview(commandArgs);
+    })
+    .catch((error) => {
+      console.error(error.message);
+      process.exitCode = 2;
+    });
+}
+
 const args = process.argv.slice(2);
-main(args)
-  .then((code) => {
-    process.exitCode = code;
-    require('../lib/shared/agent-session.cjs').promptReview(args);
-  })
-  .catch((error) => {
-    console.error(error.message);
-    process.exitCode = 2;
-  });
+if (!respawnIfHeapTooSmall(args)) runMain(args);
