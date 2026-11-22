@@ -154,3 +154,41 @@ test('a malformed package.json withholds only the TypeScript-private method fix'
   assert.ok(fixFor('runtime.ts'), 'expected the runtime-private method to keep its fix');
 });
 
+const enumCycle = {
+  'a.ts': "import { Color } from './b';\nexport const red = Color.Red;\nexport const one = 1;\n",
+  'b.ts': "import { one } from './a';\nexport const enum Color {\n  Red = 1,\n}\nexport const twice = one * 2;\n",
+};
+
+test('dependency-cycle ignores an import of a const enum that TypeScript inlines', (context) => {
+  const directory = project(context, { ...enumCycle, 'tsconfig.json': '{ "compilerOptions": { "strict": true } }' });
+  assert.deepEqual(ruleFindings(directory, 'dependency-cycle'), []);
+});
+
+test('dependency-cycle still reports a const enum import that isolated modules keep', (context) => {
+  const variants = [{ isolatedModules: true }, { verbatimModuleSyntax: true }, { preserveValueImports: true }];
+  for (const compilerOptions of variants) {
+    const directory = project(context, { ...enumCycle, 'tsconfig.json': JSON.stringify({ compilerOptions }) });
+    assert.equal(ruleFindings(directory, 'dependency-cycle').length, 1, JSON.stringify(compilerOptions));
+  }
+});
+
+test('dependency-cycle still reports a regular enum, a mixed import and a re-exported const enum', (context) => {
+  const variants = {
+    regular: { ...enumCycle, 'b.ts': enumCycle['b.ts'].replace('const enum', 'enum') },
+    mixed: {
+      ...enumCycle,
+      'a.ts':
+        "import { Color, twice } from './b';\nexport const red = Color.Red;\nexport const one = 1;\nexport const both = twice;\n",
+    },
+    reexported: {
+      ...enumCycle,
+      'a.ts': enumCycle['a.ts'].replace("'./b'", "'./c'"),
+      'c.ts': "export { Color } from './b';\n",
+    },
+  };
+  for (const [name, files] of Object.entries(variants)) {
+    const directory = project(context, files);
+    assert.equal(ruleFindings(directory, 'dependency-cycle').length, 1, name);
+  }
+});
+
