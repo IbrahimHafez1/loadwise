@@ -131,3 +131,26 @@ test('extracted method still applies under a base class whose members are known'
   assert.match(finding.fix.changes.map((change) => change.after).join('\n'), /private processMembers\(/);
 });
 
+test('a malformed package.json withholds only the TypeScript-private method fix', (context) => {
+  const { checkSizeLimits } = require('../../lib/maintainability/size-limits.cjs');
+  const source = [
+    'export class Drawing {',
+    '  private line(a: number, b: number, c: number, d?: number, e?: number, scale = 2) {',
+    '    return [a, b, c, d, e, scale];',
+    '  }',
+    '  render() { return [this.line(1, 2, 3, undefined), this.line(2, 3, 4, 5, 6, 7)]; }',
+    '}',
+    '',
+  ].join('\n');
+  const runtimePrivate = source.replace('private line', '#line').replaceAll('this.line', 'this.#line');
+  const directory = project(context, {
+    'package.json': '{"private": true,',
+    'typed.ts': source,
+    'runtime.ts': runtimePrivate,
+  });
+  const load = createFileCache(directory);
+  const fixFor = (file) => buildFix(checkSizeLimits(load(file).sourceFile, file)[0], load);
+  assert.equal(fixFor('typed.ts'), undefined);
+  assert.ok(fixFor('runtime.ts'), 'expected the runtime-private method to keep its fix');
+});
+
