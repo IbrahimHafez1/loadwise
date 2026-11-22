@@ -54,6 +54,8 @@ The second scan should report two findings. Remove the disposable copy when fini
 | `loadwise fix --yes`                                                 | Scans the current project once and applies eligible edits across the configured checkers.                                           |
 | `loadwise agent init [--mode ask\|auto] [--hook [block\|warn\|off]]` | Writes project instructions for coding agents. Use `--hook` to configure a pre-commit hook.                                         |
 
+`loadwise check` reuses the previous result for an unchanged Git project from the `loadwise` folder of the OS cache directory. Any edit to a tracked or untracked (not ignored) file, a different flag or a new Loadwise version runs a fresh scan; `LOADWISE_NO_CACHE=1` always scans afresh. Fixes, `--staged`, `--changed-since`, `--online` and `--write-baseline` runs are never cached.
+
 Choose the checkers by name, separated by spaces. With no names, Loadwise uses the project's configured checkers.
 
 ```bash
