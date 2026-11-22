@@ -86,3 +86,44 @@ export async function found() {
   assert.equal(changedText(found), 'const department = await repo.existsBy({ id: 3 });');
 });
 
+function pgQueries(context, queryLine) {
+  return fixesFor(
+    context,
+    'pg-dynamic-query-text',
+    `import { Pool } from 'pg';
+async function run(pool: Pool, ms: number, id: number) {
+  ${queryLine}
+}`,
+    pgStub,
+    withSecurity,
+  );
+}
+
+test('utility and DDL statements keep their interpolated text', (context) => {
+  for (const line of [
+    'await pool.query(`SET statement_timeout = ${ms}`);',
+    'await pool.query(`SET LOCAL lock_timeout = ${ms}`);',
+    'await pool.query(`ALTER TABLE accounts ALTER COLUMN age SET DEFAULT ${id}`);',
+  ]) {
+    const matching = pgQueries(context, line);
+    assert.ok(matching.length, line);
+    assert.equal(matching.filter((finding) => finding.fix).length, 0, line);
+  }
+});
+
+test('data statements, including leading whitespace and WITH, still become parameters', (context) => {
+  for (const [line, after] of [
+    [
+      'await pool.query(` DELETE FROM accounts WHERE id = ${id}`);',
+      "await pool.query(' DELETE FROM accounts WHERE id = $1', [id]);",
+    ],
+    [
+      'await pool.query(`WITH recent AS (SELECT * FROM accounts) SELECT * FROM recent WHERE id = ${id}`);',
+      "await pool.query('WITH recent AS (SELECT * FROM accounts) SELECT * FROM recent WHERE id = $1', [id]);",
+    ],
+    ['await pool.query(`update accounts SET age = ${id}`);', "await pool.query('update accounts SET age = $1', [id]);"],
+  ]) {
+    const [finding] = pgQueries(context, line);
+    assert.equal(onlyChange(finding)?.after, after, line);
+  }
+});
