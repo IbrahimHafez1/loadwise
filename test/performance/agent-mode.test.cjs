@@ -76,7 +76,10 @@ test('--fix --only applies just the listed fix without a terminal', (context) =>
 
 test('fix commands reuse the JS engine when auto falls back on a removed compiler option', (context) => {
   const { root, run } = project(context);
-  fs.writeFileSync(path.join(root, 'tsconfig.json'), '{"compilerOptions":{"moduleResolution":"node10"},"files":["slow.ts"]}');
+  fs.writeFileSync(
+    path.join(root, 'tsconfig.json'),
+    '{"compilerOptions":{"moduleResolution":"node10"},"files":["slow.ts"]}',
+  );
   const report = run(['-p', 'tsconfig.json']);
   assert.equal(report.status, 1, report.stderr);
   const command = report.stdout.match(/^Fix all: npx loadwise perf (.+)$/m)?.[1];

@@ -147,7 +147,8 @@ test('marks framework-handled and startup parses contextual', () => {
 });
 
 test('stays silent on parses in test files', onBundledEngine, (context) => {
-  const source = 'declare const fs: any;\nexport function load(p: string) { return JSON.parse(fs.readFileSync(p, "utf8")); }';
+  const source =
+    'declare const fs: any;\nexport function load(p: string) { return JSON.parse(fs.readFileSync(p, "utf8")); }';
   const { findings: reported } = scanWithFixes(context, { 'loader.ts': source, 'loader.spec.ts': source });
   const files = reported.filter((finding) => finding.ruleId === 'json-parse-unguarded').map((finding) => finding.file);
   assert.equal(files.length, 1);
