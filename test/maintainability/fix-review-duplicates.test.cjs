@@ -10,7 +10,7 @@ const path = require('node:path');
 const test = require('node:test');
 const ts = require('typescript');
 const { applyFix } = require('../../editor/apply-fix.cjs');
-const { buildFix, createFileCache } = require('../../lib/maintainability/site-fix.cjs');
+const { attachSiteFixes, buildFix, createFileCache } = require('../../lib/maintainability/site-fix.cjs');
 const { extractImplementations } = require('../../lib/maintainability/duplicates.cjs');
 
 function writeProject(context, files) {
@@ -209,4 +209,25 @@ test('function bodies keep their block', () => {
   const [braced] = keysOf(guardBody('if (lowered === name) { return [lowered]; }'));
   const [arrowBare] = keysOf(guardBody('const unused = (): void => { name.trim(); };'));
   assert.notEqual(braced, arrowBare);
+});
+
+test('two duplicate groups of one helper name with different bodies both get a module in one scan', (context) => {
+  const larger = controllersWith(directUse);
+  const smaller = Object.fromEntries(
+    ['cart', 'wishlist'].map((name) => [
+      `src/${name}/${name}.controller.ts`,
+      controller(name[0].toUpperCase() + name.slice(1) + 'Controller', 1, directUse).replace("'en'", "'ar'"),
+    ]),
+  );
+  const root = writeProject(context, { ...support, ...larger, ...smaller });
+  const findings = [finding(smaller), finding(larger)];
+  attachSiteFixes(findings, root);
+  const created = findings.map((item) => item.fix.changes.find((change) => change.create)?.file);
+  assert.deepEqual(created, ['src/detect-language-2.ts', 'src/detect-language.ts']);
+  assert.match(findings[0].fix.note, /src\/detect-language\.ts already holds a different detectLanguage/);
+  for (const item of findings) applyTo(root, item.fix);
+  assert.match(read(root, 'src/detect-language-2.ts'), /return 'ar';/);
+  assert.match(read(root, 'src/cart/cart.controller.ts'), /from '\.\.\/detect-language-2';/);
+  const all = [...Object.keys(support), ...Object.keys(larger), ...Object.keys(smaller)];
+  assert.deepEqual(typeErrors(root, [...all, 'src/detect-language.ts', 'src/detect-language-2.ts']), []);
 });
