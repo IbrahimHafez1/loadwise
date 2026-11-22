@@ -48,6 +48,14 @@ describe('migration review regressions', () => {
     assert.deepEqual(summary(findings), [['migration-mysql-table-copy', 3]]);
   });
 
+  test('TypeORM `isPrimary: false` keeps the column NOT NULL', () => {
+    const findings = checkCode(
+      "import { MigrationInterface, QueryRunner, TableColumn } from 'typeorm';\nexport class A implements MigrationInterface {\n  async up(queryRunner: QueryRunner) {\n    await queryRunner.addColumn('users', new TableColumn({ name: 'age', type: 'int', isPrimary: false }));\n  }\n}\n",
+      { dialect: 'postgres', framework: 'typeorm', file: 'm.ts' },
+    );
+    assert.ok(summary(findings).some(([ruleId]) => ruleId === 'migration-not-null-without-default'));
+  });
+
   for (const statement of ['RESET lock_timeout;', 'SET lock_timeout TO DEFAULT;']) {
     test(`\`${statement}\` does not count as setting lock_timeout`, () => {
       const findings = checkPostgresSql(statement + '\nALTER TABLE users DROP CONSTRAINT users_old;');
