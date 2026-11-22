@@ -68,3 +68,27 @@ test('files named by tool configs, read by folder and placeholders are entry poi
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('files named by mocha options, a package.json test config or express.static are entry points', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'p2-mocha-'));
+  const write = (file, text) => {
+    fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    fs.writeFileSync(path.join(root, file), text);
+  };
+  try {
+    write('package.json', JSON.stringify({ name: 'app', mocha: { require: ['./hooks/register.js'] } }));
+    write('.mocharc.json', JSON.stringify({ spec: ['specs/**/*.js'] }));
+    write('hooks/register.js', 'global.ready = true;');
+    write('specs/a/one.js', 'it("one", () => {});');
+    write('src/server.ts', "import express from 'express'; express.static('public/assets/css');");
+    write('public/assets/css/theme.ts', 'export const theme = 1;');
+    write('src/dead.ts', 'export const dead = 1;');
+    const files = ['hooks/register.js', 'specs/a/one.js', 'src/server.ts', 'public/assets/css/theme.ts', 'src/dead.ts'];
+    const { isEntryPoint } = createEntryPoints(root, ['package.json', '.mocharc.json', ...files], files);
+    for (const file of ['hooks/register.js', 'specs/a/one.js']) assert.ok(isEntryPoint(file), file);
+    assert.ok(isEntryPoint('public/assets/css/theme.ts'));
+    assert.equal(isEntryPoint('src/dead.ts'), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
