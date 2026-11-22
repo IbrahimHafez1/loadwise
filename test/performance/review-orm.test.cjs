@@ -60,3 +60,28 @@ export class Pool { query(input: string, values?: unknown[]): Promise<PgResult>;
     assert.equal(reported, PG_QUERIES_IN_LOOP);
   });
 });
+
+const findThenCreate = require('../../lib/performance/find-then-create.cjs');
+
+const CREATES_IN_FUNCTION = 8000;
+// Rescanning the function text for each create took about 8 s for this input; one scan per function takes well under 1 s.
+const CREATE_TIME_BUDGET_MS = 2000;
+
+test('many creates in one function do not rescan the function text for each create', () => {
+  const prismaClient = `export interface UserDelegate { findFirst(args?: object): Promise<any>; create(args: object): Promise<any>; }
+export declare class PrismaClient { user: UserDelegate; }`;
+  const creates = Array.from(
+    { length: CREATES_IN_FUNCTION },
+    (_, index) => `  await prisma.user.create({ data: { email: 'user${index}@example.com', role: 'CUSTOMER' } });`,
+  ).join('\n');
+  const source = `import { PrismaClient } from '@prisma/client';\ndeclare const prisma: PrismaClient;\nexport async function seed() {\n${creates}\n}`;
+  withProgram(source, { 'node_modules/@prisma/client/index.d.ts': prismaClient }, (program, sourceFile) => {
+    const context = { checker: program.getTypeChecker(), report() {} };
+    const start = performance.now();
+    (function visit(node) {
+      if (ts.isCallExpression(node)) findThenCreate.check(node, context);
+      ts.forEachChild(node, visit);
+    })(sourceFile);
+    assert.ok(performance.now() - start < CREATE_TIME_BUDGET_MS);
+  });
+});
