@@ -147,7 +147,7 @@ test('a require binding keeps its other names and gains the promise require in t
   assert.equal(finding.fix.note, undefined);
 });
 
-test('a named fs import still used elsewhere stays, and the fix keeps the import note', (context) => {
+test('a named fs import still used elsewhere stays, and the fix adds the promise import', (context) => {
   const { findings } = scanWithFixes(context, {
     'app.ts': `import { writeFileSync } from 'fs';
 export const writer = writeFileSync;
@@ -157,10 +157,17 @@ export async function save(path: string, body: string) {
   });
   const finding = findings.find((candidate) => candidate.ruleId === fsRule);
   assert.deepEqual(onlyChange(finding), {
-    before: 'writeFileSync(path, body);',
-    after: 'await writeFile(path, body);',
+    before: `import { writeFileSync } from 'fs';
+export const writer = writeFileSync;
+export async function save(path: string, body: string) {
+  writeFileSync(path, body);`,
+    after: `import { writeFileSync } from 'fs';
+import { writeFile } from 'fs/promises';
+export const writer = writeFileSync;
+export async function save(path: string, body: string) {
+  await writeFile(path, body);`,
   });
-  assert.equal(finding.fix.note, "Import `writeFile` from 'node:fs/promises'.");
+  assert.equal(finding.fix.note, undefined);
 });
 
 test('an aliased named import still maps to the promise name', (context) => {
@@ -246,7 +253,7 @@ export async function load(path: string) {
   );
 });
 
-test('zlib namespace call is promisified with a promisify note', (context) => {
+test('zlib namespace call is promisified and imports promisify', (context) => {
   const { change, note } = changeFor(
     context,
     zlibRule,
@@ -257,10 +264,15 @@ export async function pack(buffer: Buffer) {
 }`,
   );
   assert.deepEqual(change, {
-    before: 'const packed = zlib.gzipSync(buffer, { level: 9 });',
-    after: 'const packed = await promisify(zlib.gzip)(buffer, { level: 9 });',
+    before: `import zlib from 'zlib';
+export async function pack(buffer: Buffer) {
+  const packed = zlib.gzipSync(buffer, { level: 9 });`,
+    after: `import zlib from 'zlib';
+import { promisify } from 'util';
+export async function pack(buffer: Buffer) {
+  const packed = await promisify(zlib.gzip)(buffer, { level: 9 });`,
   });
-  assert.equal(note, "Import `promisify` from 'node:util'.");
+  assert.equal(note, undefined);
 });
 
 test('an existing promisify import suppresses the note and parentheses are added for member access', (context) => {
@@ -280,7 +292,7 @@ export async function unpack(buffer: Buffer) {
   assert.equal(note, undefined);
 });
 
-test('a named zlib import needs both imports noted', (context) => {
+test('a named zlib import gains both imports', (context) => {
   const { change, note } = changeFor(
     context,
     zlibRule,
@@ -290,10 +302,16 @@ export async function pack(buffer: Buffer) {
 }`,
   );
   assert.deepEqual(change, {
-    before: 'return deflateSync(buffer);',
-    after: 'return await promisify(deflate)(buffer);',
+    before: `import { deflateSync } from 'zlib';
+export async function pack(buffer: Buffer) {
+  return deflateSync(buffer);`,
+    after: `import { deflateSync } from 'zlib';
+import { deflate } from 'zlib';
+import { promisify } from 'util';
+export async function pack(buffer: Buffer) {
+  return await promisify(deflate)(buffer);`,
   });
-  assert.equal(note, "Import `deflate` from 'node:zlib'. Import `promisify` from 'node:util'.");
+  assert.equal(note, undefined);
 });
 
 test('no zlib fix when promisify is a different binding', (context) => {
@@ -319,8 +337,13 @@ export async function derive(password: string, salt: Buffer) {
 }`,
   );
   assert.deepEqual(change, {
-    before: 'const key = crypto.scryptSync(password, salt, 64);',
-    after: 'const key = await promisify(crypto.scrypt)(password, salt, 64);',
+    before: `import crypto from 'crypto';
+export async function derive(password: string, salt: Buffer) {
+  const key = crypto.scryptSync(password, salt, 64);`,
+    after: `import crypto from 'crypto';
+import { promisify } from 'util';
+export async function derive(password: string, salt: Buffer) {
+  const key = await promisify(crypto.scrypt)(password, salt, 64);`,
   });
   const second = changeFor(
     context,
@@ -330,7 +353,13 @@ export async function derive(password: string, salt: Buffer) {
   return crypto.pbkdf2Sync(password, salt, 1000, 32, 'sha256');
 }`,
   );
-  assert.equal(second.change.after, "return await promisify(crypto.pbkdf2)(password, salt, 1000, 32, 'sha256');");
+  assert.equal(
+    second.change.after,
+    `import * as crypto from 'node:crypto';
+import { promisify } from 'node:util';
+export async function derive(password: string, salt: Buffer) {
+  return await promisify(crypto.pbkdf2)(password, salt, 1000, 32, 'sha256');`,
+  );
 });
 
 test('execSync with a discarded result becomes promisified exec', (context) => {
@@ -343,13 +372,16 @@ export async function build(directory: string) {
 }`,
   );
   assert.deepEqual(change, {
-    before: "execSync('npm run build', { cwd: directory });",
-    after: "await promisify(exec)('npm run build', { cwd: directory });",
+    before: `import { execSync } from 'child_process';
+export async function build(directory: string) {
+  execSync('npm run build', { cwd: directory });`,
+    after: `import { execSync } from 'child_process';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+export async function build(directory: string) {
+  await promisify(exec)('npm run build', { cwd: directory });`,
   });
-  assert.equal(
-    note,
-    "Import `exec` from 'node:child_process'. Import `promisify` from 'node:util'. Output is no longer forwarded to the parent stderr.",
-  );
+  assert.equal(note, 'Output is no longer forwarded to the parent stderr.');
 });
 
 test('execFileSync through a namespace keeps the argument array', (context) => {
@@ -362,8 +394,13 @@ export async function run() {
 }`,
   );
   assert.deepEqual(change, {
-    before: "cp.execFileSync('git', ['status']);",
-    after: "await promisify(cp.execFile)('git', ['status']);",
+    before: `import cp from 'node:child_process';
+export async function run() {
+  cp.execFileSync('git', ['status']);`,
+    after: `import cp from 'node:child_process';
+import { promisify } from 'node:util';
+export async function run() {
+  await promisify(cp.execFile)('git', ['status']);`,
   });
 });
 
