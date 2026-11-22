@@ -118,3 +118,53 @@ test('AWS SDK v3 clients without requestHandler timeouts are reported', () => {
   );
   assert.match(reported[0].message, /requestHandler: \{ requestTimeout/);
 });
+
+function pathFindings(fileName, source) {
+  const { withProgram } = require('./helpers.cjs');
+  return withProgram('export {};', { [fileName]: source }, (program) => {
+    const sourceFile = program.getSourceFiles().find((candidate) => candidate.fileName.endsWith(fileName));
+    return require('../../lib/performance/analyze.cjs')
+      .analyzeFile(program, sourceFile)
+      .filter((finding) => finding.ruleId === rule);
+  });
+}
+
+const bareFetch = "export async function run() { await fetch('https://a.test/x'); }";
+
+test('a fetch raced against its own timer is contextual, a lone fetch in Promise.race is not', () => {
+  const raced = (other) =>
+    `export async function run() { await Promise.race([fetch('https://a.test').catch(() => null), ${other}]); }`;
+  const [withTimer] = findings(raced('new Promise((resolve) => { setTimeout(resolve, 150); })'));
+  assert.match(withTimer.contextualReason, /not aborted/);
+  const [withoutTimer] = findings(raced('new Promise((resolve) => { resolve(null); })'));
+  assert.equal(withoutTimer.contextualReason, undefined);
+});
+
+test('fetch options only a browser normally uses make the call contextual', () => {
+  const [direct] = findings("export async function run(url: string) { await fetch(url, { mode: 'cors' }); }");
+  assert.match(direct.contextualReason, /browser/);
+  const source =
+    "export async function run(url: string, credentials?: RequestCredentials) { const options = { method: 'GET', credentials }; return fetch(url, options); }";
+  assert.match(findings(source)[0].contextualReason, /browser/);
+});
+
+test('a loopback URL is contextual, a remote URL stays at default level', () => {
+  const [local] = findings("export async function run() { await fetch('http://localhost:9119/handshake'); }");
+  assert.match(local.contextualReason, /loopback/);
+  const [remote] = findings(bareFetch);
+  assert.equal(remote.contextualReason, undefined);
+});
+
+test('calls in a seed script, release tool or client SDK are contextual', () => {
+  for (const fileName of ['db/seed-saml.ts', 'packages/release-notes-generator/src/a.ts', 'packages/js-sdk/src/a.ts']) {
+    const [finding] = pathFindings(fileName, bareFetch);
+    assert.ok(finding.contextualReason, fileName);
+  }
+});
+
+test('a command-line client and a server route stay at default level', () => {
+  for (const fileName of ['packages/cli/src/commands/asset.ts', 'app/api/route.ts']) {
+    const [finding] = pathFindings(fileName, bareFetch);
+    assert.equal(finding.contextualReason, undefined, fileName);
+  }
+});

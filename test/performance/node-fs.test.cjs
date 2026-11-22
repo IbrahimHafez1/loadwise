@@ -266,3 +266,132 @@ test('reports blocking fs work in multer diskStorage callbacks and the helpers t
     /`uploadDirectory\(\)` runs fs\.mkdirSync inside the multer `destination` callback/,
   );
 });
+
+function fsFindings(source) {
+  return lint(source).filter((diagnostic) => diagnostic.ruleId === 'node-sync-fs-in-async');
+}
+
+function pathFsFindings(fileName, source) {
+  const { withProgram } = require('./helpers.cjs');
+  return withProgram('export {};', { [fileName]: source }, (program) => {
+    const sourceFile = program.getSourceFiles().find((candidate) => candidate.fileName.endsWith(fileName));
+    return require('../../lib/performance/analyze.cjs')
+      .analyzeFile(program, sourceFile)
+      .filter((diagnostic) => diagnostic.ruleId === 'node-sync-fs-in-async');
+  });
+}
+
+test('sync file calls while configuring the Nest application are contextual', () => {
+  const source = [
+    "import { existsSync } from 'node:fs';",
+    'interface NestExpressApplication { use(handler: unknown): void }',
+    'export async function configureExpress(app: NestExpressApplication) {',
+    "  if (existsSync('web')) app.use(1);",
+    '}',
+  ].join('\n');
+  assert.ok(fsFindings(source)[0].contextualReason);
+});
+
+test('a per-request function named like a one-off task is still reported', () => {
+  const source = [
+    "import { readFileSync } from 'node:fs';",
+    'export async function exportReport(request: { id: string }) {',
+    "  return readFileSync(process.env.REPORT_DIR + '/' + request.id);",
+    '}',
+  ].join('\n');
+  assert.equal(fsFindings(source)[0].contextualReason, undefined);
+});
+
+test('a sync read in a per-request handler stays at default level', () => {
+  const source = [
+    "import { readFileSync } from 'node:fs';",
+    'export async function renderCertificate(documentId: string) {',
+    "  return readFileSync('logo.png');",
+    '}',
+  ].join('\n');
+  assert.equal(fsFindings(source)[0].contextualReason, undefined);
+});
+
+// The native fixture only analyzes main.ts, so a path-dependent context can only be checked on the JS engine.
+test(
+  'a sync call in a loop inside a release script is contextual',
+  { skip: process.env.PERF_CHECK_TEST_NATIVE === '1' },
+  () => {
+    const source = [
+      "import { existsSync } from 'node:fs';",
+      'export async function processPackages(paths: string[]) {',
+      '  for (const path of paths) {',
+      '    if (existsSync(path)) continue;',
+      '  }',
+      '}',
+    ].join('\n');
+    const [finding] = pathFsFindings('packages/release-notes-generator/src/process.ts', source);
+    assert.ok(finding.contextualReason);
+  },
+);
+
+const projectHandler = [
+  "import { readFileSync } from 'node:fs';",
+  'export async function handle() {',
+  "  await fetch('https://a.test/x');",
+  "  return readFileSync('logo.png');",
+  '}',
+].join('\n');
+
+function scanProject(directory, file) {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const { spawnSync } = require('node:child_process');
+  fs.mkdirSync(path.dirname(path.join(directory, file)), { recursive: true });
+  fs.writeFileSync(path.join(directory, 'package.json'), '{"private":true}');
+  fs.writeFileSync(
+    path.join(directory, 'tsconfig.json'),
+    JSON.stringify({
+      compilerOptions: { target: 'ES2022', module: 'NodeNext', types: [] },
+      include: ['src', 'scripts'],
+    }),
+  );
+  fs.writeFileSync(path.join(directory, file), projectHandler);
+  const bin = path.resolve(__dirname, '../../bin/loadwise.cjs');
+  const run = spawnSync(process.execPath, [bin, 'perf', file, '--json', '--include-contextual'], {
+    cwd: directory,
+    encoding: 'utf8',
+    timeout: 120000,
+  });
+  return JSON.parse(run.stdout).findings;
+}
+
+test('a project that itself sits under a folder named scripts or tools keeps request-path findings at default level', (context) => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
+  fs.mkdirSync(base, { recursive: true });
+  const root = fs.mkdtempSync(path.join(base, 'loadwise-root-path-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const request = scanProject(path.join(root, 'scripts', 'tools', 'app'), 'src/handler.ts');
+  assert.deepEqual(request.map((finding) => finding.ruleId).sort(), [
+    'http-call-without-timeout',
+    'node-sync-fs-in-async',
+  ]);
+  assert.deepEqual(
+    request.map((finding) => finding.contextualReason),
+    request.map(() => undefined),
+  );
+  const script = scanProject(path.join(root, 'app'), 'scripts/job.ts');
+  assert.ok(script.length > 0 && script.every((finding) => finding.contextualReason));
+});
+
+test('a project nested under a test folder of a larger git repository keeps request-path findings at default level', (context) => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
+  fs.mkdirSync(base, { recursive: true });
+  const root = fs.mkdtempSync(path.join(base, 'loadwise-nested-repo-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, '.git'));
+  const request = scanProject(path.join(root, 'test', 'app'), 'src/handler.ts');
+  assert.equal(request.length, 2);
+  assert.ok(request.every((finding) => finding.contextualReason === undefined));
+});
