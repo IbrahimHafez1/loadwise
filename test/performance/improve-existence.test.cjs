@@ -125,3 +125,73 @@ test('a local function named like a scheduler still runs its callback inside the
     await setImmediate(async () => await fetch('https://example.test'));`);
   assert.equal(findings.length, 1);
 });
+
+const floatingHeader = `declare function sendEmail(to: string): Promise<void>;
+declare function log(error: unknown): void;
+`;
+
+function floatingFindings(body) {
+  return rule(lint(floatingHeader + body), 'floating-promise');
+}
+
+test('a background helper that contains its own failures is contextual', () => {
+  const findings = floatingFindings(`
+async function notifyQuietly(to: string) {
+  try {
+    await sendEmail(to);
+  } catch (error) {
+    log(error);
+  }
+}
+const notifyLater = (to: string) => sendEmail(to).catch((error) => log(error));
+function notifyWithHandler(to: string) {
+  return sendEmail(to).catch(log);
+}
+export async function signup(email: string) {
+  notifyQuietly(email);
+  notifyLater(email);
+  notifyWithHandler(email);
+}`);
+  assert.equal(findings.length, 3);
+  for (const finding of findings) assert.match(finding.contextualReason ?? '', /own failures/);
+});
+
+test('helpers that rethrow, leak a returned promise or are unknown stay default findings', () => {
+  const findings = floatingFindings(`
+declare function unknownHelper(to: string): Promise<void>;
+async function rethrows(to: string) {
+  try {
+    await sendEmail(to);
+  } catch (error) {
+    log(error);
+    throw error;
+  }
+}
+async function returnsUnawaited(to: string) {
+  try {
+    return sendEmail(to);
+  } catch (error) {
+    log(error);
+  }
+}
+async function partlyGuarded(to: string) {
+  await sendEmail(to);
+  try {
+    await sendEmail(to);
+  } catch {}
+}
+const rejectsAgain = (to: string) => sendEmail(to).catch((error) => Promise.reject(error));
+const throwsAgain = (to: string) => sendEmail(to).catch((error) => { throw error; });
+const handledThenRisky = (to: string) => sendEmail(to).catch(log).then(() => sendEmail(to));
+export async function signup(email: string) {
+  unknownHelper(email);
+  rethrows(email);
+  returnsUnawaited(email);
+  partlyGuarded(email);
+  rejectsAgain(email);
+  throwsAgain(email);
+  handledThenRisky(email);
+}`);
+  assert.equal(findings.length, 7);
+  for (const finding of findings) assert.equal(finding.contextualReason, undefined);
+});
