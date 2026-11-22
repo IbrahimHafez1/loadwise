@@ -246,6 +246,10 @@ export async function run(tenantId: string, name: string) {
       "Add `invoiceSchema.index({ customerName: 1 }, { name: 'invoices_customer_name_idx' })` (test/performance/fixtures/schema/mongoose-app/models.ts:2). " +
       'Collection size is unknown; pass `--schema` to gate this rule by row count.',
   );
+  const { exampleFor } = require('../../editor/performance-examples.cjs');
+  const example = exampleFor('index-missing-filter', 'typescript', findings[0].message);
+  assert.match(example.code, /^orderSchema\.index\(/);
+  assert.match(exampleFor('index-missing-filter', 'typescript', 'no Mongoose here').code, /^CREATE INDEX/);
 });
 
 test('a snapshot gates by row count and replaces the declared indexes', () => {

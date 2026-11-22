@@ -352,7 +352,25 @@ function specializedExample(ruleId, message, language) {
   }
 }
 
+// A Mongoose finding's message names a `schema.index(...)` fix; the SQL example would point at the wrong database.
+const mongooseIndexExamples = {
+  'index-missing-filter': {
+    language: 'javascript',
+    before: "await Order.find({ status: 'open' });",
+    code: "orderSchema.index({ status: 1 }, { name: 'orders_status_idx' });",
+    note: 'Skip it for a field with very few distinct values unless the query also filters further.',
+  },
+  'index-missing-order': {
+    language: 'javascript',
+    before: 'await Order.find({ customerId }).sort({ createdAt: -1 }).limit(20);',
+    code: "orderSchema.index({ customerId: 1, createdAt: -1 }, { name: 'orders_customer_created_idx' });",
+    note: 'Equality fields first, then the sort field, so the index returns documents already ordered.',
+  },
+};
+
 function exampleFor(ruleId, languageId, message = '') {
+  if (Object.hasOwn(mongooseIndexExamples, ruleId) && message.includes('.index({'))
+    return { ...mongooseIndexExamples[ruleId] };
   if (Object.hasOwn(standaloneExamples, ruleId)) return { ...standaloneExamples[ruleId] };
   if (Object.hasOwn(polyglot, ruleId)) {
     const [language, code, note] = polyglot[ruleId];
