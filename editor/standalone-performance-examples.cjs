@@ -227,13 +227,13 @@ const standaloneExamples = {
   'async-route-unhandled-rejection': {
     language: 'javascript',
     before: "app.get('/users', async (req, res) => {\n  res.json(await loadUsers());\n});",
-    code: "app.get('/users', async (req, res, next) => {\n  try {\n    res.json(await loadUsers());\n  } catch (error) {\n    next(error);\n  }\n});",
+    code: "app.get('/users', async (req, res, next) => {\n  try {\n    res.json(await loadUsers());\n  } catch (error) { next(error); }\n});",
     note: 'Express 4 ignores the promise a handler returns; passing the error to next reaches the error middleware.',
   },
   'async-callback-unhandled-rejection': {
     language: 'javascript',
     before: 'setInterval(async () => {\n  await syncAccounts();\n}, 60_000);',
-    code: 'setInterval(async () => {\n  try {\n    await syncAccounts();\n  } catch (error) {\n    logger.error(error);\n  }\n}, 60_000);',
+    code: 'setInterval(async () => {\n  try {\n    await syncAccounts();\n  } catch (error) { logger.error(error); }\n}, 60_000);',
     note: 'Nothing awaits a callback timers and emitters call, so its rejection is unhandled unless the callback catches it.',
   },
   'stream-pipe-unhandled-error': {
