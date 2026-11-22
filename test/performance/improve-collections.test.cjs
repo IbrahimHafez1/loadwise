@@ -115,6 +115,113 @@ test('reduce concat and Object.assign skip in-place assign, empty concat, fixed 
   );
 });
 
+test('loop object spread of a local accumulator becomes a keyed assignment', (context) => {
+  const { change, note } = changeFor(
+    context,
+    loopCopy,
+    `export function index(rows: { id: string }[]) {
+  let byId: Record<string, { id: string }> = {};
+  for (const row of rows) {
+    byId = { ...byId, [row.id]: row };
+  }
+  return byId;
+}`,
+  );
+  assert.deepEqual(change, { before: `byId = { ...byId, [row.id]: row };`, after: `byId[row.id] = row;` });
+  assert.match(note, /__proto__/);
+});
+
+test('loop object spread keeps reads of the old value on the right-hand side', (context) => {
+  const { change } = changeFor(
+    context,
+    loopCopy,
+    `export function count(rows: { id: string }[]) {
+  let counts: Record<string, number> = {};
+  for (const row of rows) counts = { ...counts, [row.id]: (counts[row.id] ?? 0) + 1 };
+  return counts;
+}`,
+  );
+  assert.deepEqual(change, {
+    before: `for (const row of rows) counts = { ...counts, [row.id]: (counts[row.id] ?? 0) + 1 };`,
+    after: `for (const row of rows) counts[row.id] = (counts[row.id] ?? 0) + 1;`,
+  });
+});
+
+test('loop object spread fix is withheld for shared starts, aliases, untyped TS, several keys and Object.assign', (context) => {
+  const cases = [
+    `export function index(rows: { id: string }[], seed: Record<string, object>) {
+  let byId = seed;
+  for (const row of rows) byId = { ...byId, [row.id]: row };
+  return byId;
+}`,
+    `export function index(rows: { id: string }[]) {
+  let byId: Record<string, object> = {};
+  const history: object[] = [];
+  for (const row of rows) {
+    const previous = byId;
+    history.push(previous);
+    byId = { ...byId, [row.id]: row };
+  }
+  return history;
+}`,
+    `export function index(rows: { id: string }[]) {
+  let byId = {};
+  for (const row of rows) byId = { ...byId, [row.id]: row };
+  return byId;
+}`,
+    `export function index(rows: { id: string; name: string }[]) {
+  let byId: Record<string, object> = {};
+  for (const row of rows) byId = { ...byId, [row.id]: row, [row.name]: row };
+  return byId;
+}`,
+    `export function index(rows: { id: string }[]) {
+  let byId: Record<string, object> = { get size() { return 0; } };
+  for (const row of rows) byId = { ...byId, [row.id]: row };
+  return byId;
+}`,
+    `export function index(rows: { id: string }[]) {
+  let byId: Record<string, object> = {};
+  for (const row of rows) byId = Object.assign({}, byId, { [row.id]: row });
+  return byId;
+}`,
+  ];
+  for (const source of cases) assertNoFix(context, loopCopy, source);
+});
+
+test('loop object spread is fixed in plain JavaScript without a type annotation', (context) => {
+  const { change } = changeFor(
+    context,
+    loopCopy,
+    `export function index(rows) {
+  let byId = {};
+  for (const row of rows) byId = { ...byId, [row.id]: row };
+  return byId;
+}`,
+    'app.js',
+  );
+  assert.deepEqual(change, {
+    before: `for (const row of rows) byId = { ...byId, [row.id]: row };`,
+    after: `for (const row of rows) byId[row.id] = row;`,
+  });
+});
+
+test('reduce concat and Object.assign copies are reported without an autofix', (context) => {
+  assertNoFix(
+    context,
+    reduceCopy,
+    `export function tags(rows: { tags: string[] }[]) {
+  return rows.reduce<string[]>((all, row) => all.concat(row.tags), []);
+}`,
+  );
+  assertNoFix(
+    context,
+    reduceCopy,
+    `export function index(rows: { id: string }[]) {
+  return rows.reduce<Record<string, number>>((acc, row) => Object.assign({}, acc, { [row.id]: 1 }), {});
+}`,
+  );
+});
+
 const existence = 'filter-for-existence';
 
 test('filter length compared with one or wrapped in Boolean() becomes some()', (context) => {
