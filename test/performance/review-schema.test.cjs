@@ -61,3 +61,24 @@ export async function run(userId: string, groupId: string) {
     [[4, 'index-missing-filter']],
   );
 });
+
+const { compareDto } = require('../../lib/performance/contracts/dto.cjs');
+const { compareOpenApi } = require('../../lib/performance/contracts/openapi.cjs');
+
+function dtoTypeChanges(oldType, newType, roles) {
+  const source = (type) => `export class UserDto {\n  name: ${type};\n}\n`;
+  return compareDto(source(oldType), source(newType), 'UserDto', new Set(roles), {
+    file: 'user.dto.ts',
+    forbidsUnknownInput: false,
+    readModule: () => null,
+  }).map((finding) => finding.ruleId);
+}
+
+test('DTO: widening a request type or narrowing a response type is not a breaking type change', () => {
+  assert.deepEqual(dtoTypeChanges('string', 'string | null', ['input']), []);
+  assert.deepEqual(dtoTypeChanges('string | null', 'string', ['output']), []);
+  assert.deepEqual(dtoTypeChanges('string | null', 'string', ['input']), ['api-type-changed']);
+  assert.deepEqual(dtoTypeChanges('string', 'string | null', ['output']), ['api-type-changed']);
+  assert.deepEqual(dtoTypeChanges('string', 'string | null', ['input', 'output']), ['api-type-changed']);
+  assert.deepEqual(dtoTypeChanges('number', 'string', ['input']), ['api-type-changed']);
+});
