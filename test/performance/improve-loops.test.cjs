@@ -167,3 +167,16 @@ export async function save(value: string) {
   );
 });
 
+test('a per-item call to a project helper that does no database work skips the loop and argument checks', () => {
+  const requests = checkerRequests(
+    '../../lib/performance/service-loops.cjs',
+    `function label(values: string[]) {
+  return values.join(',');
+}
+export function run(groups: string[][]) {
+  for (const group of groups) label(group);
+}`,
+  );
+  // Resolving `label(group)` and the one call inside its body; no type requests for the loop or the argument.
+  assert.ok(requests <= 2, `${requests} checker requests`);
+});
