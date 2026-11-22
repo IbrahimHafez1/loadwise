@@ -122,7 +122,7 @@ test('standalone sample, fixture, seed, migration and per-release directories ar
   assert.equal(duplicateFindings({ 'src/v1/a.ts': declaration('one'), 'src/v2/b.ts': declaration('two') }).length, 1);
 });
 
-test('scanning on worker threads gives the same result and the same first error as a single thread', async () => {
+test('scanning on worker threads gives the same result as a single thread, also with unparsable files', async () => {
   const fs = require('node:fs');
   const os = require('node:os');
   const path = require('node:path');
@@ -142,12 +142,10 @@ test('scanning on worker threads gives the same result and the same first error 
     assert.ok(single.findings.some((row) => row.ruleId === 'dependency-cycle'));
     fs.writeFileSync(path.join(root, 'f30.ts'), 'export const = ;\n');
     fs.writeFileSync(path.join(root, 'f10.ts'), 'export const = 1;\n');
-    const errors = [];
-    for (const parallelFrom of [Infinity, 1]) {
-      errors.push(await scan(root, policy, { parallelFrom }).then(String, String));
-    }
-    assert.match(errors[0], /f10\.ts:1:/);
-    assert.equal(errors[1], errors[0]);
+    // Unparsable files are skipped with a note on both paths, so the reports still match.
+    const reports = [];
+    for (const parallelFrom of [Infinity, 1]) reports.push(await scan(root, policy, { parallelFrom }));
+    assert.deepEqual(reports[1], reports[0]);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
