@@ -103,7 +103,7 @@ const controllers = {
   'src/users/admin/admin.controller.ts': controller('AdminController', 2),
 };
 
-test('identical private methods across files delegate to one exported function that type-checks', (context) => {
+test('identical private methods across files give way to calls of one exported function that type-checks', (context) => {
   const files = { ...support, ...controllers };
   const root = writeProject(context, files);
   const fix = buildFix(duplicateFinding(controllers, 'detectLanguage(request: Request)'), createFileCache(root));
@@ -120,10 +120,8 @@ test('identical private methods across files delegate to one exported function t
   const admin = fs.readFileSync(path.join(root, 'src/users/admin/admin.controller.ts'), 'utf8');
   assert.doesNotMatch(admin, /SUPPORTED/);
   assert.match(admin, /import \{ detectLanguage \} from '\.\.\/\.\.\/detect-language';/);
-  assert.match(
-    admin,
-    /private detectLanguage\(request: Request\): string \{\n {4}return detectLanguage\(request\);\n {2}\}/,
-  );
+  assert.doesNotMatch(admin, /private detectLanguage/);
+  assert.match(admin, /return 'hello:' \+ detectLanguage\(request\);/);
   const all = [...Object.keys(files), created.file];
   assert.deepEqual(typeErrors(root, all), []);
   compileAll(root, all);
@@ -137,7 +135,7 @@ test('identical private methods across files delegate to one exported function t
   }
 });
 
-test('private methods that read this, differ, or use a module-private name keep their own bodies', (context) => {
+test('a private method that reads this, differs, or uses a module-private name keeps its own body', (context) => {
   const variants = [
     languageMethod.replace("return 'en';", 'return this.prefix;'),
     languageMethod.replace("return 'en';", "return 'ar';"),
@@ -154,7 +152,13 @@ test('private methods that read this, differ, or use a module-private name keep 
         changed[file] = controller('Controller', file.split('/').length - 2, method, "const fallback = 'en';");
     const root = writeProject(context, { ...support, ...changed });
     const finding = duplicateFinding(changed, 'detectLanguage(request: Request)');
-    assert.equal(buildFix(finding, createFileCache(root)), undefined, method);
+    const fix = buildFix(finding, createFileCache(root));
+    // The other two identical copies may still share a function; the odd one is never rewritten.
+    assert.equal(
+      Boolean(fix?.changes.some((change) => change.file === 'src/users/users.controller.ts')),
+      false,
+      method,
+    );
   }
 });
 
