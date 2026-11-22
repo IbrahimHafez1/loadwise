@@ -110,3 +110,33 @@ function unboundedLines(body) {
     .map((finding) => finding.line - offset);
 }
 
+test('unbounded-list-query reports Sequelize findAll and Mongoose find returned without a limit', () => {
+  const body = `export async function orders(req: unknown, res: { json(value: unknown): void }) {
+  res.json(await Order.findAll({ where: { status: 'open' } }));
+}
+export async function expenses(req: unknown, res: { json(value: unknown): void }) {
+  res.json(await Expense.find({ owner: 'x' }).sort({ date: -1 }).lean());
+}
+export async function quiet(req: unknown, res: { json(value: unknown): void }) {
+  res.json({
+    paged: await Order.findAll({ where: { status: 'open' }, limit: 20 }),
+    one: await Order.findAll({ where: { id: orderId } }),
+    grouped: await Order.findAll({ group: ['status'] }),
+    limited: await Expense.find({ owner: 'x' }).limit(20),
+    pinned: await Expense.find({ _id: expenseId }),
+  });
+}
+`;
+  assert.deepEqual(unboundedLines(body), [2, 5]);
+});
+
+test('unbounded-list-query follows a handler into a service assigned as an arrow function', () => {
+  const body = `export const listOrders = async () => Order.findAll();
+export const pagedOrders = async (page: number) => Order.findAll();
+export async function orders(req: unknown, res: { json(value: unknown): void }) {
+  res.json(await listOrders());
+  res.json(await pagedOrders(1));
+}
+`;
+  assert.deepEqual(unboundedLines(body), [1]);
+});
