@@ -259,7 +259,7 @@ test('the security CLI fixes both strict string comparisons and preserves their 
   assert.deepEqual(JSON.parse(fixed.stdout).applied, ids);
   const rewritten = fs.readFileSync(filename, 'utf8');
   assert.match(rewritten, /timingSafeEqual/);
-  assert.equal((rewritten.match(/from 'node:crypto'/g) ?? []).length, 1);
+  assert.equal((rewritten.match(/from "node:crypto"/g) ?? []).length, 1);
   assert.equal(execute(), before);
   assert.ok(JSON.parse(run().stdout).findings.every(({ ruleId }) => ruleId !== comparisonRule));
 });
