@@ -1,0 +1,16 @@
+{
+  "ignore": [
+    "../../lib/performance/vendor/**",
+    "../../bench/**",
+    "../../dist/**",
+    "../../editor/**",
+    "../../examples/**",
+    "../../hooks/**",
+    "../../integrations/**",
+    "../../plugin/**",
+    "../../polyglot/**",
+    "../../schema/**",
+    "../../test/**",
+    "../../node_modules/**"
+  ]
+}
