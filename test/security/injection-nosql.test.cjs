@@ -60,7 +60,7 @@ test('body and query values used as filter values, whole filters and $match stag
     [10, 'D'],
     [11, 'D'],
   ]);
-  const [first] = lintWithoutTypes(source, packages);
+  const first = lintWithoutTypes(source, packages).find((finding) => finding.ruleId === ruleId);
   assert.equal(
     first.message,
     '`req.body.email` is used as a MongoDB filter value and can be an object such as `{ "$ne": null }`, changing what the query matches. Pass `String(value)` or wrap it as `{ $eq: value }`, or validate the body with a schema.',
@@ -69,8 +69,7 @@ test('body and query values used as filter values, whole filters and $match stag
 
 test('a $where expression built from the request is reported with its own message', () => {
   const source = route("User.find({ $where: `this.name === '${req.body.name}'` });");
-  const [finding] = lintBothWays(source, packages).typed;
-  assert.equal(finding.ruleId, ruleId);
+  const finding = lintBothWays(source, packages).typed.find((entry) => entry.ruleId === ruleId);
   assert.match(finding.message, /`\$where` expression, which runs as JavaScript/);
 });
 
