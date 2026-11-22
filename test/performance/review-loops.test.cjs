@@ -99,3 +99,17 @@ test('a service call per item of a list grown inside the loop is reported', () =
     [],
   );
 });
+
+test('a service call per key of a for-in loop is reported unless the object is a constant table', () => {
+  assert.deepEqual(
+    loopRules(`export async function each(record: Record<string, number>) {
+      for (const key in record) await users.load(record[key]);
+    }`),
+    ['service-query-in-loop'],
+  );
+  assert.deepEqual(
+    loopRules(`const LIMITS = { free: 1, paid: 2 };
+    export async function each() { for (const key in LIMITS) await users.load(LIMITS[key as keyof typeof LIMITS]); }`),
+    [],
+  );
+});
