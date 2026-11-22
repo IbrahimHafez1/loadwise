@@ -129,3 +129,41 @@ test('many queries in one loop body do not rescan the body once per query', () =
 
 // Runs one call rule over every call in the file and counts the checker requests it makes; on the native
 // engine each request is a synchronous round trip.
+function checkerRequests(rulePath, source, files = {}) {
+  const ts = require('typescript');
+  const check = require(rulePath).check;
+  return withProgram(source, files, (program, sourceFile) => {
+    const checker = program.getTypeChecker();
+    let requests = 0;
+    const countingChecker = new Proxy(checker, {
+      get(target, name) {
+        const value = target[name];
+        if (typeof value !== 'function') return value;
+        return (...args) => {
+          requests++;
+          return value.apply(target, args);
+        };
+      },
+    });
+    const context = { checker: countingChecker, program, report() {} };
+    (function visit(node) {
+      if (ts.isCallExpression(node)) check(node, context);
+      ts.forEachChild(node, visit);
+    })(sourceFile);
+    return requests;
+  });
+}
+
+test('a program without bcryptjs never resolves call signatures for the hashing rule', () => {
+  assert.equal(
+    checkerRequests(
+      '../../lib/performance/pure-js-hashing.cjs',
+      `declare function hash(value: string, rounds: number): Promise<string>;
+export async function save(value: string) {
+  return hash(value, 10);
+}`,
+    ),
+    0,
+  );
+});
+
