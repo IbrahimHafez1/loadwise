@@ -56,6 +56,14 @@ describe('migration review regressions', () => {
     assert.ok(summary(findings).some(([ruleId]) => ruleId === 'migration-not-null-without-default'));
   });
 
+  test('Knex `dropNullable` is SET NOT NULL, not an added column', () => {
+    const findings = checkCode(
+      "exports.up = async (knex) => {\n  await knex.schema.alterTable('users', (t) => { t.dropNullable('email'); });\n};\n",
+      { dialect: 'postgres', framework: 'knex' },
+    );
+    assert.ok(summary(findings).some(([ruleId, line]) => ruleId === 'migration-set-not-null-scan' && line === 2));
+  });
+
   for (const statement of ['RESET lock_timeout;', 'SET lock_timeout TO DEFAULT;']) {
     test(`\`${statement}\` does not count as setting lock_timeout`, () => {
       const findings = checkPostgresSql(statement + '\nALTER TABLE users DROP CONSTRAINT users_old;');
