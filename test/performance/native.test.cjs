@@ -179,3 +179,18 @@ test(
     assert.deepEqual(fixedRules.sort(), ['http-call-without-timeout', 'serial-awaits-in-literal']);
   },
 );
+
+test('a missing `types` entry is noted on stderr instead of aborting the native scan', { skip }, (context) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-native-types-'));
+  context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const compilerOptions = { types: ['vitest/globals'], module: 'commonjs', target: 'es2022' };
+  fs.writeFileSync(path.join(directory, 'tsconfig.json'), JSON.stringify({ compilerOptions, include: ['index.ts'] }));
+  fs.writeFileSync(path.join(directory, 'index.ts'), 'export const answer = 42;\n');
+  const result = spawnSync(process.execPath, [bin, 'perf', '--engine', 'native', '-p', 'tsconfig.json', '--json'], {
+    cwd: directory,
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /Note: type libraries not installed \(vitest\/globals\)/);
+  assert.equal(JSON.parse(result.stdout).scannedFiles, 1);
+});
