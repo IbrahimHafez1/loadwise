@@ -40,3 +40,23 @@ test('large-module counts a data module whose one array holds hundreds of thousa
   );
   assert.match(findings[0].message, new RegExp(`${entryCount + 2} lines of code`));
 });
+
+test('a Node worker started from a path beside the current file references that file', async () => {
+  const findings = await unusedModuleFindings({
+    'package.json': '{"main":"src/app/index.js"}',
+    'src/app/index.js': [
+      "const path = require('node:path');",
+      "const { Worker } = require('node:worker_threads');",
+      "new Worker(path.join(__dirname, 'job.js'));",
+      "new Worker(path.resolve(__dirname, 'workers', 'nested.js'), { workerData: 1 });",
+      "new Worker(path.join(__dirname, '..', 'outside.js'));",
+      "new Worker(path.join(configuredFolder, 'elsewhere.js'));",
+      'new Worker(path.join(__dirname, name));',
+    ].join('\n'),
+    'src/app/job.js': "module.exports.unused = 1;\nconsole.log('job');",
+    'src/app/workers/nested.js': "console.log('nested');",
+    'src/outside.js': "console.log('outside');",
+    'src/app/elsewhere.js': "console.log('elsewhere');",
+  });
+  assert.deepEqual(findings, ['unreferenced-file src/app/elsewhere.js']);
+});
