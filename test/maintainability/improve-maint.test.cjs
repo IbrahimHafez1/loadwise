@@ -78,3 +78,56 @@ test('duplicate-implementation still delegates when the kept implementation has 
 });
 
 // The loop below is deep enough that the fix extracts it as `this.processMembers(...)`.
+const tallyClass = (heading, signature = '  run(groups: Group[], out: Map<string, string>) {') =>
+  [
+    ...heading,
+    signature,
+    '    for (const group of groups) {',
+    '      if (group.enabled) {',
+    '        for (const member of group.members) {',
+    '          if (member.id) {',
+    "            out.set(member.id, 'seen');",
+    '          }',
+    "          out.set('member', member.id);",
+    '        }',
+    "        out.set('group', 'seen');",
+    '      }',
+    "      out.set('last', 'seen');",
+    '    }',
+    '  }',
+    '}',
+    '',
+  ].join('\n');
+const groupType = 'type Group = { enabled: boolean; members: { id: string }[] };';
+
+test('extracted method is withheld when an imported base class may define its name', (context) => {
+  const directory = project(context, {
+    'base.ts': 'export class Base {\n  processMembers() {\n    return 1;\n  }\n}\n',
+    'tally.ts': tallyClass(["import { Base } from './base';", groupType, 'export class Tally extends Base {']),
+  });
+  const [finding] = ruleFindings(directory, 'deep-control-flow');
+  assert.ok(finding, 'expected the deep loop to be reported');
+  assert.equal(finding.fix, undefined);
+});
+
+// A JavaScript file is not type-checked after the rewrite, so only the member check keeps the base method intact.
+test('extracted method avoids a name a base class declares as a string member', (context) => {
+  const base = ['class Base {', "  'processMembers'() {", '    return 1;', '  }', '}'];
+  const tally = tallyClass([...base, 'export class Tally extends Base {'], '  run(groups, out) {');
+  const directory = project(context, { 'tally.mjs': tally });
+  const [finding] = ruleFindings(directory, 'deep-control-flow');
+  assert.ok(finding, 'expected the deep loop to be reported');
+  const added = (finding.fix?.changes ?? []).map((change) => change.after).join('\n');
+  assert.doesNotMatch(added, /processMembers/);
+});
+
+test('extracted method still applies under a base class whose members are known', (context) => {
+  const base = ['class Base {', '  label = 1;', '}'];
+  const directory = project(context, {
+    'tally.ts': tallyClass([groupType, ...base, 'export class Tally extends Base {']),
+  });
+  const [finding] = ruleFindings(directory, 'deep-control-flow');
+  assert.ok(finding?.fix, 'expected a fix when the base class is in the file');
+  assert.match(finding.fix.changes.map((change) => change.after).join('\n'), /private processMembers\(/);
+});
+
