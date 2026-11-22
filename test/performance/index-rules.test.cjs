@@ -87,6 +87,38 @@ ${query}`;
   assert.deepEqual(findings, []);
 });
 
+test('Prisma: a missing-index finding in seed data setup is contextual', { skip: onNativeEngine }, () => {
+  const { withProgram } = require('./helpers.cjs');
+  const { analyzeFile } = require('../../lib/performance/analyze.cjs');
+  const seedFile = `${projects.prisma}prisma/seed.ts`;
+  const seedSource = `import { PrismaClient } from '../node_modules/.prisma/client';
+declare const prisma: PrismaClient;
+export const rows = prisma.order.findMany({ where: { totalEGP: 1 } });`;
+  const [finding] = withProgram('', projectFiles('prisma', { 'prisma/seed.ts': seedSource }), (program) =>
+    analyzeFile(
+      program,
+      program.getSourceFiles().find((file) => file.fileName.endsWith(seedFile.slice(2))),
+    ),
+  ).filter((reported) => reported.ruleId === 'index-missing-filter');
+  assert.equal(finding.contextualReason, 'Query in seed or demo-data setup.');
+});
+
+test('Prisma: a missing-index finding in an operator script is contextual', { skip: onNativeEngine }, () => {
+  const { withProgram } = require('./helpers.cjs');
+  const { analyzeFile } = require('../../lib/performance/analyze.cjs');
+  const scriptFile = `${projects.prisma}scripts/backfill.ts`;
+  const scriptSource = `import { PrismaClient } from '../node_modules/.prisma/client';
+declare const prisma: PrismaClient;
+export const rows = prisma.order.findMany({ where: { totalEGP: 1 } });`;
+  const [finding] = withProgram('', projectFiles('prisma', { 'scripts/backfill.ts': scriptSource }), (program) =>
+    analyzeFile(
+      program,
+      program.getSourceFiles().find((file) => file.fileName.endsWith(scriptFile.slice(2))),
+    ),
+  ).filter((reported) => reported.ruleId === 'index-missing-filter');
+  assert.match(finding.contextualReason, /^Query in operator tooling/);
+});
+
 test('Drizzle: reports unindexed filters with the drizzle fix and stays quiet on covered ones', () => {
   const findings =
     drizzle(`export async function load(organizationId: string, head: number, since: Date, archived: boolean) {
