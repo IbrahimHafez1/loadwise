@@ -137,3 +137,42 @@ describe('queue-add-in-loop fix', () => {
   });
 });
 
+describe('prisma-distinct-in-memory fix', () => {
+  const prismaFiles = {
+    'node_modules/@prisma/client/index.d.ts': "export * from '.prisma/client';",
+    'node_modules/.prisma/client/index.d.ts': `
+  export interface UserDelegate {
+    findMany(options?: object): Promise<{ id: number, tenantId: number }[]>;
+    groupBy(options: object): Promise<object[]>;
+  }
+  export declare class PrismaClient { user: UserDelegate }`,
+    'package.json': '{}',
+  };
+
+  function distinctFindings(context, body) {
+    const source = `import type { PrismaClient } from '@prisma/client';\nasync function run(db: PrismaClient, ids: number[]) {\n${body}\n}\n`;
+    return scanWithFixes(context, { ...prismaFiles, 'main.ts': source }).findings.filter(
+      (finding) => finding.ruleId === 'prisma-distinct-in-memory',
+    );
+  }
+
+  test('keeps comments inside a kept option and withholds the fix when a dropped part holds one', (context) => {
+    const [kept, dropped, between] = distinctFindings(
+      context,
+      `  await db.user.findMany({ where: { id: { in: ids } /* active only */ }, select: { tenantId: true }, distinct: ['tenantId'] });
+  await db.user.findMany({ select: { tenantId: true /* the tenant */ }, distinct: ['tenantId'] });
+  await db.user.findMany({
+    // Tenants with at least one user.
+    select: { tenantId: true },
+    distinct: ['tenantId'],
+  });`,
+    );
+    assert.match(
+      onlyChange(kept).after,
+      /db\.user\.groupBy\(\{ by: \['tenantId'\], where: \{ id: \{ in: ids \} \/\* active only \*\/ \} \}\)/,
+    );
+    assert.equal(dropped.fix, undefined);
+    assert.equal(between.fix, undefined);
+  });
+});
+
