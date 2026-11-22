@@ -56,7 +56,7 @@ export const orders = pgTable('orders', { tenantId: uuid(), status: text() }, (t
     'Index `a_idx` (tenantId) on `orders` is a leading prefix of index `ab_idx` (tenantId, status), so it serves no ' +
       'lookup the longer index cannot and only adds write cost and memory. Drop the shorter index.',
   );
-  assert.equal(finding.suggestion, 'DROP INDEX a_idx;');
+  assert.equal(finding.suggestion, 'DROP INDEX CONCURRENTLY "a_idx";');
 });
 
 test('Drizzle: unique prefixes, other column orders and different keys are not redundant', () => {

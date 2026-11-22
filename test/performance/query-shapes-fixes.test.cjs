@@ -211,7 +211,11 @@ test('Drizzle: the shorter index is removed from the array form', (context) => {
   ]`),
     redundantPrefix,
   );
-  assert.deepEqual(only(findings), { before: "index('a_idx').on(table.tenantId),", after: '' });
+  // The whole line goes, with the line break before it, so no blank line is left.
+  assert.deepEqual(only(findings), {
+    before: "(table) => [\n  index('a_idx').on(table.tenantId),",
+    after: '(table) => [',
+  });
 });
 
 test('Drizzle: the shorter index is removed from the object form', (context) => {
@@ -224,7 +228,10 @@ test('Drizzle: the shorter index is removed from the object form', (context) => 
   })`),
     redundantPrefix,
   );
-  assert.deepEqual(only(findings), { before: "a: index('a_idx').on(table.tenantId),", after: '' });
+  assert.deepEqual(only(findings), {
+    before: "ab: index('ab_idx').on(table.tenantId, table.status),\na: index('a_idx').on(table.tenantId),",
+    after: "ab: index('ab_idx').on(table.tenantId, table.status),",
+  });
 });
 
 function withProject(context, files) {
@@ -259,7 +266,11 @@ model Order {
 }
 `,
   });
-  assert.deepEqual(only(schemaFindingsWithFixes(root)), { before: '@@index([tenantId])', after: '' });
+  // The line break before the removed line goes too, so no blank line is left.
+  assert.deepEqual(only(schemaFindingsWithFixes(root)), {
+    before: 'status   String\n@@index([tenantId])',
+    after: 'status   String',
+  });
 });
 
 test('SQL migrations: a redundant index stays manual', (context) => {
