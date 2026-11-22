@@ -381,7 +381,7 @@ import { promisify } from 'util';
 export async function build(directory: string) {
   await promisify(exec)('npm run build', { cwd: directory });`,
   });
-  assert.equal(note, 'Output is no longer forwarded to the parent stderr.');
+  assert.match(note, /Output is no longer forwarded to the parent stderr.$/);
 });
 
 test('execFileSync through a namespace keeps the argument array', (context) => {

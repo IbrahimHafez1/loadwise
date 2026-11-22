@@ -12,7 +12,7 @@ function applied(source, fix) {
   return fix.changes.reduce((text, change) => text.replace(change.before, () => change.after), source);
 }
 
-test('an unawaited async guard in an async function gets an await fix without review', (context) => {
+test('an unawaited async guard in an async function gets an await fix that needs review', (context) => {
   const source = `async function assertMutable(id: string): Promise<void> {
   if (!id) throw new Error('locked');
 }
@@ -23,7 +23,7 @@ export async function update(id: string) {
 }
 `;
   const [finding] = findingsFor(context, 'floating-promise', source);
-  assert.equal(finding.fix.requiresReview, undefined);
+  assert.equal(finding.fix.requiresReview, true);
   assert.match(applied(source, finding.fix), /\n {2}await assertMutable\(id\);\n/);
   assert.deepEqual(findingsFor(context, 'floating-promise', applied(source, finding.fix)), []);
 });

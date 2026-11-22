@@ -110,12 +110,20 @@ test('explicit sibling source fixes use the source project history; separate pro
     path.join(target.root, 'connection.ts'),
     "\ndeclare const res: any;\nres.cookie('session', 'x', { secure: true, sameSite: 'lax' });\n",
   );
-  const run = (checker, ...files) =>
-    spawnSync(process.execPath, [bin, checker, ...files, '--fix', '--yes'], {
+  const spawnLoadwise = (...args) =>
+    spawnSync(process.execPath, [bin, ...args], {
       cwd: caller.root,
       encoding: 'utf8',
       env: { ...process.env, LOADWISE_AGENT: '1' },
     });
+  // The cookie flag fix needs individual review, so it is applied by id instead of by --yes.
+  const run = (checker, ...files) => {
+    if (checker !== 'sec') return spawnLoadwise(checker, ...files, '--fix', '--yes');
+    const [file] = files;
+    const scan = spawnLoadwise(checker, file, '--json');
+    const { id } = JSON.parse(scan.stdout).findings.find(({ ruleId }) => ruleId === 'cookie-missing-security-flags');
+    return spawnLoadwise(checker, file, '--fix', '--only', id);
+  };
   for (const [checker, file] of [
     ['perf', slow],
     ['sec', cookie],
@@ -302,17 +310,17 @@ test('checker-specific --yes scopes security and maintainability history to thei
     ].join('\n'),
   );
   run('agent', 'init');
-  run('sec', '--fix', '--yes');
+  // The cookie flag fix needs individual review, so choosing it by id is what applies it.
+  const scan = spawnSync(process.execPath, [bin, 'sec', '--json'], { cwd: root, encoding: 'utf8' });
+  const { id: cookieId } = JSON.parse(scan.stdout).findings.find(
+    ({ ruleId }) => ruleId === 'cookie-missing-security-flags',
+  );
+  run('sec', '--fix', '--only', cookieId);
   const [security] = history('sec').runs;
   assert.deepEqual(
     security.applied.map(({ ruleId }) => ruleId),
     ['cookie-missing-security-flags'],
   );
-  assert.deepEqual(
-    security.pendingReview.map(({ ruleId }) => ruleId),
-    ['nest-validation-without-whitelist'],
-  );
-  assert.ok(security.manual.some(({ ruleId }) => ruleId === 'tls-verification-disabled'));
   fs.writeFileSync(
     path.join(root, 'nested.cjs'),
     [

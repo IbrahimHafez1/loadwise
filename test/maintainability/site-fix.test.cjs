@@ -757,9 +757,11 @@ test('bulk fix applies an ambiguous hunk at the row an earlier edit of the run m
   const first = typedGroups('const name = this.current?.name;\n    if (!name) return;', 'name');
   const second = first.slice(first.indexOf('export class')).replace('class Tally', 'class Summary');
   const directory = project(context, { 'tally.ts': first + second, 'lookup.ts': lookupModule });
-  const fixed = run(directory, '--fix', '--yes', '--ignore', 'duplicate-implementation');
+  // The extraction needs individual review, so both fixes are chosen by id.
+  const ids = ruleFindings(directory, 'deep-control-flow').map(({ id }) => id);
+  const fixed = run(directory, '--fix', '--only', ids.join(','));
   assert.equal(fixed.status, 0, fixed.stderr || fixed.stdout);
-  assert.match(fixed.stdout, /Applied 2 of 2 automatic fix\(es\)/);
+  assert.match(fixed.stdout, /Applied 2 of 2 chosen fix\(es\)/);
   assert.deepEqual(ruleFindings(directory, 'deep-control-flow'), []);
   const file = path.join(directory, 'tally.ts');
   assert.deepEqual(typeErrors(file, fs.readFileSync(file, 'utf8')), []);

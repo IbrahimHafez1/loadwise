@@ -221,7 +221,7 @@ declare const stamp: Date;
     assert.match(finding.fix.note, /no longer atomic/);
   });
 
-  test('a single generated call stays a plain fix', (context) => {
+  test('a single generated call is a reviewed fix because update() skips entity hooks', (context) => {
     const [finding] = loadThenSave(
       context,
       `export async function run(id: number) {
@@ -231,7 +231,7 @@ declare const stamp: Date;
 }`,
     );
     assert.equal(onlyChange(finding).after, 'await users.update({ id }, { lastLoginAt: stamp });');
-    assert.equal(finding.fix.requiresReview, undefined);
+    assert.equal(finding.fix.requiresReview, true);
   });
 });
 
