@@ -44,11 +44,11 @@ export async function check() {
   );
   assert.deepEqual(onlyChange(inline), {
     before: 'if (await repo.findOne({ where: { id: 1 } })) return 1;',
-    after: "if (await repo[typeof repo.exists === 'function' ? 'exists' : 'findOne']({ where: { id: 1 } })) return 1;",
+    after: 'if (await repo.exists({ where: { id: 1 } })) return 1;',
   });
   assert.deepEqual(onlyChange(direct), {
     before: 'return !(await repo.findOneBy({ id: 2 }));',
-    after: "return !(await repo[typeof repo.existsBy === 'function' ? 'existsBy' : 'findOneBy']({ id: 2 }));",
+    after: 'return !(await repo.existsBy({ id: 2 }));',
   });
 });
 
@@ -65,7 +65,7 @@ export async function check() {
   );
   assert.deepEqual(onlyChange(finding), {
     before: 'const found = await repo.findOneBy({ id: 5 });',
-    after: "const found = await repo[typeof repo.existsBy === 'function' ? 'existsBy' : 'findOneBy']({ id: 5 });",
+    after: 'const found = await repo.existsBy({ id: 5 });',
   });
 });
 
@@ -102,17 +102,14 @@ async function present() {
     'filter',
     rewritten.slice(rewritten.indexOf('async function present')) + ';return present();',
   );
-  for (const [fast, value, expected] of [
-    [true, false, false],
-    [true, true, true],
-    [false, {}, true],
-    [false, null, false],
-    [false, undefined, false],
+  for (const [value, expected] of [
+    [false, false],
+    [true, true],
   ]) {
     let argumentsBuilt = 0;
     let calls = 0;
     const repository = {
-      [fast ? 'exists' : 'findOne'](argument) {
+      exists(argument) {
         assert.equal(this, repository);
         assert.deepEqual(argument, { where: { id: 'scope' } });
         calls++;
@@ -131,7 +128,7 @@ async function present() {
   }
 });
 
-test('repeatable-looking getters and factory-call receivers do not receive method dispatch edits', (context) => {
+test('getter and factory-call receivers keep their single evaluation in the existence call', (context) => {
   const diagnostics = fixesFor(
     context,
     `import { Repository } from 'typeorm';
@@ -145,8 +142,13 @@ class Client {
 }`,
     'typeorm-existence-materialization',
   );
-  assert.equal(diagnostics.length, 2);
-  assert.ok(diagnostics.every((finding) => !finding.fix));
+  assert.deepEqual(
+    diagnostics.map((finding) => onlyChange(finding).after),
+    [
+      'if (await acquire().exists({ where: { id: 1 } })) return true;',
+      'if (await this.repo.exists({ where: { id: 2 } })) return true;',
+    ],
+  );
 });
 
 test('wide projection adds select to the options object or creates it for a bare find', (context) => {
@@ -301,8 +303,8 @@ export async function looseNull() {
   );
   assert.equal(findings.length, 5);
   const rewritten = findings.map((finding) => finding.fix?.changes.map((change) => change.after).join('\n'));
-  assert.match(rewritten[0], /'existsBy' : 'findOneBy'\]\(\{ id: 1 \}\)/);
-  assert.match(rewritten[1], /'existsBy' : 'findOneBy'\]\(\{ id: 2 \}\)/);
+  assert.match(rewritten[0], /repo\.existsBy\(\{ id: 1 \}\)/);
+  assert.match(rewritten[1], /repo\.existsBy\(\{ id: 2 \}\)/);
   assert.equal(rewritten[2], undefined);
   assert.equal(rewritten[3], undefined);
   assert.match(rewritten[4], /return !!found;/);
