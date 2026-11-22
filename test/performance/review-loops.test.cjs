@@ -81,3 +81,21 @@ test('a cache-miss branch around the loop does not memoise the per-item query in
     [],
   );
 });
+
+test('a service call per item of a list grown inside the loop is reported', () => {
+  assert.deepEqual(
+    loopRules(`export async function walk(root: number) {
+      const pending = [root];
+      for (const id of pending) {
+        const row = await users.load(id);
+        if (row) pending.push(row.id + 1);
+      }
+    }`),
+    ['service-query-in-loop'],
+  );
+  assert.deepEqual(
+    loopRules(`const roots = [1, 2];
+    export async function walk() { for (const id of roots) await users.load(id); }`),
+    [],
+  );
+});
