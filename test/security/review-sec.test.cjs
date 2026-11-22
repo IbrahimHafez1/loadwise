@@ -27,3 +27,46 @@ test('insecure-random-for-secret offers no randomInt fix for a bound randomInt r
   const { findings } = scanWithFixes(context, { 'app.ts': source }, { analyzers: withSecurity });
   assertReportedWithoutFix(findings.filter((finding) => finding.ruleId === 'insecure-random-for-secret'));
 });
+
+// Symbol lookups made by the security rules for a route with `count` let variables built by `+=`, `count` const
+// values and `count` unrelated assignments, each reaching a raw query.
+function symbolLookups(count) {
+  const lines = [];
+  for (let index = 0; index < count; index++) {
+    lines.push(`let text${index} = 'SELECT ';`, `text${index} += req.query.column${index};`);
+    lines.push(`const value${index} = req.query.value${index};`, `counter = ${index};`);
+    lines.push(`prisma.$queryRawUnsafe(text${index});`, `prisma.$queryRawUnsafe('SELECT ' + value${index});`);
+  }
+  const source = [
+    "import express from 'express';",
+    'declare const prisma: any;',
+    'const app = express();',
+    "app.get('/x', (req, res) => {",
+    'let counter = 0;',
+    ...lines,
+    '});',
+  ].join('\n');
+  return withProgram(source, stubs.express, (program, sourceFile) => {
+    const checker = program.getTypeChecker();
+    const lookup = checker.getSymbolAtLocation;
+    let lookups = 0;
+    checker.getSymbolAtLocation = (...args) => {
+      lookups++;
+      return lookup.apply(checker, args);
+    };
+    try {
+      const findings = analyzeFile(program, sourceFile);
+      assert.equal(findings.filter((finding) => finding.ruleId === 'prisma-raw-unsafe-dynamic').length, 2 * count);
+    } finally {
+      checker.getSymbolAtLocation = lookup;
+    }
+    return lookups;
+  });
+}
+
+test('resolving many variables of one function does not rewalk the function for each', () => {
+  const smaller = symbolLookups(60);
+  const larger = symbolLookups(120);
+  // Doubling the function doubles linear work; rewalking the function for each variable quadruples it.
+  assert.ok(larger < 2.6 * smaller, `${smaller} lookups for 60 variables, ${larger} for 120`);
+});
