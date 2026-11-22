@@ -40,3 +40,38 @@ test('filter length compared with one as a count threshold, or a shadowed Boolea
 export function check(rows: number[]) { return [${tests.join(', ')}, Boolean(rows.filter(row => row > 0).length)]; }`;
   assert.deepEqual(rule(lint(source), 'filter-for-existence'), []);
 });
+
+const prismaFiles = {
+  'node_modules/@prisma/client/index.d.ts': `
+export interface StoreDelegate {
+  count(args?: object): Promise<number>;
+}
+export declare class PrismaClient { store: StoreDelegate }
+`,
+};
+const prismaHeader = `import { PrismaClient } from '@prisma/client';
+declare const prisma: PrismaClient;
+declare const where: { slug: string };
+`;
+
+test('Prisma count compared loosely with zero is an existence check', () => {
+  const comparisons = [
+    '(await prisma.store.count({ where })) == 0',
+    '(await prisma.store.count({ where })) != 0',
+    '0 == (await prisma.store.count({ where }))',
+    '(await prisma.store.count({ where })) < 1',
+    '0 < (await prisma.store.count({ where }))',
+  ];
+  const source = `${prismaHeader}export async function exists() { return [${comparisons.join(', ')}]; }`;
+  assert.equal(rule(lint(source, prismaFiles), 'prisma-count-for-existence').length, comparisons.length);
+});
+
+test('Prisma count compared loosely with other values stays quiet', () => {
+  const comparisons = [
+    '(await prisma.store.count({ where })) == 1',
+    '(await prisma.store.count({ where })) != 2',
+    '1 != (await prisma.store.count({ where }))',
+  ];
+  const source = `${prismaHeader}export async function exists() { return [${comparisons.join(', ')}]; }`;
+  assert.deepEqual(rule(lint(source, prismaFiles), 'prisma-count-for-existence'), []);
+});
