@@ -42,3 +42,42 @@ test('does not treat the right operand of a comparison as the response value', (
     0,
   );
 });
+
+const loopFiles = {
+  'node_modules/@prisma/client/index.d.ts': "export * from '.prisma/client';",
+  'node_modules/.prisma/client/index.d.ts': `export interface UserDelegate { findUnique(options: object): Promise<{ id: number } | null> }
+    export declare class PrismaClient { user: UserDelegate }`,
+};
+const loopHeader = `import type { PrismaClient } from '@prisma/client';
+declare const prisma: PrismaClient, ids: number[], cache: Map<string, unknown>;
+class UserService { async load(id: number) { return prisma.user.findUnique({ where: { id } }); } }
+declare const users: UserService;
+`;
+
+function loopRules(body) {
+  return lint(loopHeader + body, loopFiles)
+    .filter((finding) => finding.ruleId === 'prisma-query-in-loop' || finding.ruleId === 'service-query-in-loop')
+    .map((finding) => finding.ruleId);
+}
+
+test('a cache-miss branch around the loop does not memoise the per-item query inside it', () => {
+  assert.deepEqual(
+    loopRules(`export async function warm(key: string) {
+      if (!cache.has(key)) {
+        const rows = [];
+        for (const id of ids) rows.push(await prisma.user.findUnique({ where: { id } }));
+        cache.set(key, rows);
+      }
+    }`),
+    ['prisma-query-in-loop'],
+  );
+  assert.deepEqual(
+    loopRules(`export async function warm() {
+      for (const id of ids) {
+        const key = String(id);
+        if (!cache.has(key)) cache.set(key, await prisma.user.findUnique({ where: { id } }));
+      }
+    }`),
+    [],
+  );
+});
