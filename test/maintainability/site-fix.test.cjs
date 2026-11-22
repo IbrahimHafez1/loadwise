@@ -72,7 +72,10 @@ test('deep-control-flow fix turns the if that ends a loop body into a continue g
   assert.ok(finding.fix, 'expected a fix');
   const [change] = finding.fix.changes;
   assert.equal(change.file, 'collect.cjs');
-  assert.match(change.after, /^ {4}if \(!row\.active\) continue;\n {4}for \(const tag of row\.tags\) \{/);
+  assert.match(
+    change.after,
+    /^ {4}\/\/ Loadwise deep-control-flow: .*\n {4}if \(!row\.active\) continue;\n {4}for \(const tag of row\.tags\) \{/,
+  );
   const rewritten = load(fixedFiles(directory, finding.fix)['collect.cjs']).collect;
   const original = load(nestedLoops).collect;
   const rows = [
@@ -388,7 +391,14 @@ test('dependency-cycle fix turns a type-only import into import type', (context)
   });
   const [finding] = findingsOf(directory).filter((item) => item.ruleId === 'dependency-cycle');
   assert.deepEqual(finding.fix.changes, [
-    { file: 'a.ts', line: 1, before: "import { Shape } from './b';", after: "import type { Shape } from './b';" },
+    {
+      file: 'a.ts',
+      line: 1,
+      before: "import { Shape } from './b';",
+      after:
+        '// Loadwise dependency-cycle: An eager chain of internal imports leads back to the module it started from.\n' +
+        "import type { Shape } from './b';",
+    },
   ]);
 });
 
@@ -743,16 +753,16 @@ const typedGroups = (guard, use) =>
 
 const lookupModule = 'export function lookup(key: string): string {\n  return key;\n}\n';
 
-test('bulk fix exits 2 and asks for a fresh scan when an earlier edit shifts an ambiguous hunk', (context) => {
+test('bulk fix applies an ambiguous hunk at the row an earlier edit of the run moved it to', (context) => {
   const first = typedGroups('const name = this.current?.name;\n    if (!name) return;', 'name');
   const second = first.slice(first.indexOf('export class')).replace('class Tally', 'class Summary');
   const directory = project(context, { 'tally.ts': first + second, 'lookup.ts': lookupModule });
   const fixed = run(directory, '--fix', '--yes', '--ignore', 'duplicate-implementation');
-  assert.equal(fixed.status, 2, fixed.stderr || fixed.stdout);
-  assert.match(fixed.stdout, /Applied 1 of 2 automatic fix\(es\), 1 could not be applied/);
-  assert.match(fixed.stdout, /Run the same scan again/);
-  const remaining = ruleFindings(directory, 'deep-control-flow');
-  assert.equal(remaining.length, 1);
+  assert.equal(fixed.status, 0, fixed.stderr || fixed.stdout);
+  assert.match(fixed.stdout, /Applied 2 of 2 automatic fix\(es\)/);
+  assert.deepEqual(ruleFindings(directory, 'deep-control-flow'), []);
+  const file = path.join(directory, 'tally.ts');
+  assert.deepEqual(typeErrors(file, fs.readFileSync(file, 'utf8')), []);
 });
 
 function typeErrors(file, text) {

@@ -21,7 +21,7 @@ function findingsFor(context, ruleId, source, stubs, policy) {
     fs.writeFileSync(path.join(root, name), contents);
   }
   const { findings } = analyzeSources({ files: [path.join(root, 'src.ts')], policy, analyzers: withSecurity });
-  attachSiteFixes(findings);
+  attachSiteFixes(findings, { comments: false });
   return findings.filter((finding) => finding.ruleId === ruleId);
 }
 

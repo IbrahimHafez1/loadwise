@@ -35,7 +35,7 @@ function scanWithFixes(context, files, { tsconfig, analyzers } = {}) {
       .map((name) => path.join(root, name));
     result = analyzeSources({ files: sources, analyzers });
   }
-  attachSiteFixes(result.findings);
+  attachSiteFixes(result.findings, { comments: false });
   return { root, findings: result.findings };
 }
 

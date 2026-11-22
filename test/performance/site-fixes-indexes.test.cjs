@@ -66,7 +66,7 @@ function finding(root, overrides) {
 }
 
 function fixOf(findingToFix) {
-  return buildFix(findingToFix, createFileCache());
+  return buildFix(findingToFix, createFileCache(), { comments: false });
 }
 
 const prismaOrder = { declarationFile: 'schema.prisma', declarationLine: 5, declarationColumn: 7 };

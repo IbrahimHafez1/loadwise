@@ -53,6 +53,6 @@ test('a class extending an import keeps it a value import', (context) => {
   assert.equal(buildFix(finding, createFileCache(directory)), undefined);
   const implemented = "import { Base } from './base';\nexport class Child implements Base {}\n";
   fs.writeFileSync(path.join(directory, 'child.ts'), implemented);
-  const fix = buildFix(finding, createFileCache(directory));
+  const fix = buildFix(finding, createFileCache(directory), { comments: false });
   assert.equal(fix.changes[0].after, "import type { Base } from './base';");
 });
