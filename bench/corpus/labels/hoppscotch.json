@@ -1,0 +1,274 @@
+[
+  {
+    "pillar": "maint",
+    "ruleId": "deep-control-flow",
+    "file": "packages/hoppscotch-backend/src/mock-server/mock-server.service.ts",
+    "line": 931,
+    "verdict": "tp",
+    "note": "condition nested four levels deep inside loops"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "duplicate-implementation",
+    "file": "packages/hoppscotch-backend/src/auth/auth.controller.ts",
+    "line": 117,
+    "verdict": "tp",
+    "note": "three controller handlers have the same body"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "duplicate-implementation",
+    "file": "packages/hoppscotch-common/src/helpers/graphql/eq.ts",
+    "line": 16,
+    "verdict": "tp",
+    "note": "equality helper repeated in the same module"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "high-branch-complexity",
+    "file": "packages/hoppscotch-backend/src/infra-config/infra-config.service.ts",
+    "line": 745,
+    "verdict": "tp",
+    "note": "validateEnvValues has branch complexity 16"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-class",
+    "file": "packages/hoppscotch-backend/src/admin/admin.service.ts",
+    "line": 36,
+    "verdict": "tp",
+    "note": "AdminService has 37 methods"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-module",
+    "file": "packages/hoppscotch-backend/src/infra-config/infra-config.service.ts",
+    "line": 1,
+    "verdict": "tp",
+    "note": "627 lines of code"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "long-parameter-list",
+    "file": "packages/hoppscotch-backend/src/mock-server/mock-server.service.ts",
+    "line": 729,
+    "verdict": "tp",
+    "note": "six positional parameters"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "swallowed-error",
+    "file": "packages/hoppscotch-cli/src/index.ts",
+    "line": 107,
+    "verdict": "tp",
+    "note": "empty catch around parseAsync hides CLI failures"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unreferenced-file",
+    "file": "packages/hoppscotch-backend/src/types/Email.ts",
+    "line": 1,
+    "verdict": "tp",
+    "note": "nothing imports types/Email"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unreferenced-file",
+    "file": "packages/hoppscotch-desktop/plugin-workspace/tauri-plugin-appload/guest-js/index.ts",
+    "line": 1,
+    "verdict": "fp",
+    "note": "package entry point of the Tauri plugin"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unreferenced-file",
+    "file": "packages/hoppscotch-desktop/plugin-workspace/tauri-plugin-relay/guest-js/index.ts",
+    "line": 1,
+    "verdict": "fp",
+    "note": "package entry point of the Tauri plugin"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unused-export",
+    "file": "packages/hoppscotch-backend/src/auth/helper.ts",
+    "line": 169,
+    "verdict": "tp",
+    "note": "export is only referenced in its own file"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unused-export",
+    "file": "packages/hoppscotch-backend/src/errors.ts",
+    "line": 63,
+    "verdict": "tp",
+    "note": "error constant nobody imports"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/hoppscotch-common/src/helpers/teams/TeamsSearch.service.ts",
+    "line": 150,
+    "verdict": "tp",
+    "note": "collections.find per collection in forEach is quadratic in collection count"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "floating-promise",
+    "file": "packages/hoppscotch-backend/src/auth/auth.service.ts",
+    "line": 323,
+    "verdict": "fp",
+    "note": "updateUserLastLoggedOn catches internally and cannot reject"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "floating-promise",
+    "file": "packages/hoppscotch-backend/src/infra-config/infra-config.service.ts",
+    "line": 379,
+    "verdict": "tp",
+    "note": "async enableAndDisableSSO is called without await or catch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "floating-promise",
+    "file": "packages/hoppscotch-backend/src/team-collection/team-collection.service.ts",
+    "line": 847,
+    "verdict": "fp",
+    "note": "pubsub.publish is deliberate fire-and-forget subscription fan-out"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "floating-promise",
+    "file": "packages/hoppscotch-backend/src/team/team.service.ts",
+    "line": 101,
+    "verdict": "fp",
+    "note": "pubsub.publish is deliberate fire-and-forget subscription fan-out"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "http-call-without-timeout",
+    "file": "packages/hoppscotch-cli/src/utils/auth/digest.ts",
+    "line": 103,
+    "verdict": "tp",
+    "note": "axios.request with no timeout option"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "http-call-without-timeout",
+    "file": "packages/hoppscotch-common/src/platform/std/kernel-interceptors/agent/store.ts",
+    "line": 200,
+    "verdict": "fp",
+    "note": "desktop client call to a localhost agent, not a server request"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "loop-copy-accumulator",
+    "file": "packages/hoppscotch-common/src/helpers/teams/TeamsSearch.service.ts",
+    "line": 705,
+    "verdict": "fp",
+    "note": "prepends along a parent chain, bounded by folder depth"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/hoppscotch-backend/src/gql-schema.ts",
+    "line": 113,
+    "verdict": "fp",
+    "note": "schema emit at startup, not per request"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-count-for-existence",
+    "file": "packages/hoppscotch-backend/src/infra-config/helper.ts",
+    "line": 367,
+    "verdict": "tp",
+    "note": "count() === 0 only checks whether any row exists"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-query-in-loop",
+    "file": "packages/hoppscotch-backend/src/infra-config/infra-config.service.ts",
+    "line": 279,
+    "verdict": "tp",
+    "note": "update per config inside a loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-query-in-loop",
+    "file": "packages/hoppscotch-backend/src/team/team.service.ts",
+    "line": 398,
+    "verdict": "tp",
+    "note": "count per owned team inside a loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "serial-awaits-in-literal",
+    "file": "packages/hoppscotch-backend/src/posthog/posthog.service.ts",
+    "line": 46,
+    "verdict": "tp",
+    "note": "two independent counts awaited in sequence"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "cors-credentials-any-origin",
+    "file": "packages/hoppscotch-backend/src/main.ts",
+    "line": 91,
+    "verdict": "fp",
+    "note": "development branch only, production uses the origin whitelist"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "dockerfile-runs-as-root",
+    "file": "packages/hoppscotch-backend/Dockerfile",
+    "line": 31,
+    "verdict": "tp",
+    "note": "prod stage extends builder and has no USER"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "dockerfile-runs-as-root",
+    "file": "packages/hoppscotch-sh-admin/Dockerfile",
+    "line": 16,
+    "verdict": "tp",
+    "note": "final caddy stage has no USER"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "dockerfile-secret-in-build",
+    "file": "packages/hoppscotch-backend/Dockerfile",
+    "line": 8,
+    "verdict": "tp",
+    "note": "COPY .env . bakes the env file into the image"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "hardcoded-secret",
+    "file": "packages/hoppscotch-backend/src/posthog/posthog.service.ts",
+    "line": 12,
+    "verdict": "fp",
+    "note": "public ingest-only analytics project key"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "insecure-random-for-secret",
+    "file": "packages/hoppscotch-common/src/platform/std/kernel-interceptors/agent/store.ts",
+    "line": 216,
+    "verdict": "tp",
+    "note": "registration OTP built from Math.random"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-compared-non-constant-time",
+    "file": "packages/hoppscotch-backend/src/infra-config/infra-config.service.ts",
+    "line": 639,
+    "verdict": "tp",
+    "note": "recovery token compared with ==="
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "tls-verification-disabled",
+    "file": "packages/hoppscotch-backend/src/prisma/prisma.service.ts",
+    "line": 70,
+    "verdict": "fp",
+    "note": "matches libpq sslmode require and prefer semantics"
+  }
+]

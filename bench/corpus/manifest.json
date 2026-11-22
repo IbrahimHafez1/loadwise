@@ -1,0 +1,89 @@
+{
+  "repos": [
+    {
+      "name": "cal.com",
+      "url": "https://github.com/calcom/cal.com.git",
+      "commit": "ae027bb70e694e2d2c44569f398d6cbcee0389b1"
+    },
+    {
+      "name": "directus",
+      "url": "https://github.com/directus/directus.git",
+      "commit": "db8d476e87e74056c69d681671d875c2bc11e1a3"
+    },
+    {
+      "name": "documenso",
+      "url": "https://github.com/documenso/documenso.git",
+      "commit": "80550e78b3e4852f87e9968e24b1984c427e4430"
+    },
+    {
+      "name": "formbricks",
+      "url": "https://github.com/formbricks/formbricks.git",
+      "commit": "845176cf3e72b68493e03b4350534b52a6defa07"
+    },
+    {
+      "name": "Ghost",
+      "url": "https://github.com/TryGhost/Ghost.git",
+      "commit": "613506b5c52a394525ccd76d60a939959e8aa5f3"
+    },
+    {
+      "name": "hoppscotch",
+      "url": "https://github.com/hoppscotch/hoppscotch.git",
+      "commit": "55908a76a1d0555c9bbb5d74244c14173df95b06"
+    },
+    {
+      "name": "immich",
+      "url": "https://github.com/immich-app/immich.git",
+      "commit": "08fe0470fa884e1cddd42e9a19539fbe618c44bc"
+    },
+    {
+      "name": "infisical",
+      "url": "https://github.com/Infisical/infisical.git",
+      "commit": "2fabb64cc788056ec049dfa502feac863d970cf7"
+    },
+    {
+      "name": "juice-shop",
+      "url": "https://github.com/juice-shop/juice-shop.git",
+      "commit": "c9f99228d9d56afb5f5ca7925376292f7fa44b13"
+    },
+    {
+      "name": "medusa",
+      "url": "https://github.com/medusajs/medusa.git",
+      "commit": "f3c5aa7df5454b2dce097a11da7f88ba5923e71c"
+    },
+    {
+      "name": "n8n",
+      "url": "https://github.com/n8n-io/n8n.git",
+      "commit": "bf31087be421ee4352ef87471546488d357aaa81"
+    },
+    {
+      "name": "NodeGoat",
+      "url": "https://github.com/OWASP/NodeGoat.git",
+      "commit": "c5cb68a7084e4ae7dcc60e6a98768720a81841e8"
+    },
+    {
+      "name": "novu",
+      "url": "https://github.com/novuhq/novu.git",
+      "commit": "ced3a4569dde75c77d238f0b736ecdb83156cbef"
+    },
+    {
+      "name": "outline",
+      "url": "https://github.com/outline/outline.git",
+      "commit": "ee3c88bc14a6f1bf91ce5230272d0b6d5062db89"
+    },
+    {
+      "name": "payload",
+      "url": "https://github.com/payloadcms/payload.git",
+      "commit": "ce66418fcf8617a215139aaf67fe161bda13c272"
+    },
+    {
+      "name": "strapi",
+      "url": "https://github.com/strapi/strapi.git",
+      "commit": "d42ae3fd836a35e23b42a8b0a32cb3c19fdd20a2"
+    },
+    {
+      "name": "twenty",
+      "url": "https://github.com/twentyhq/twenty.git",
+      "commit": "bfd5b16535e7d826351c52e498c6549328ac2268"
+    }
+  ]
+}

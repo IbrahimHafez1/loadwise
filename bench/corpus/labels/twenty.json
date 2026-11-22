@@ -1,0 +1,18 @@
+[
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/twenty-server/src/main.ts",
+    "line": 47,
+    "verdict": "fp",
+    "note": "one-time bootstrap, not a request path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-query-in-loop",
+    "file": "packages/twenty-server/src/modules/calendar/common/services/calendar-channel-sync-status.service.ts",
+    "line": 369,
+    "verdict": "missed",
+    "note": "findOne per channel inside a loop"
+  }
+]

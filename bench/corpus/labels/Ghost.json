@@ -1,0 +1,146 @@
+[
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "apps/admin-x-framework/src/utils/analytics.ts",
+    "line": 51,
+    "verdict": "fp",
+    "note": "previous filter list is a handful of entries, lookup cost is negligible"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "http-call-without-timeout",
+    "file": "apps/activitypub/src/utils/image.ts",
+    "line": 12,
+    "verdict": "fp",
+    "note": "browser fetch in a frontend app, the Node undici default does not apply"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "http-call-without-timeout",
+    "file": "apps/announcement-bar/src/utils/api.ts",
+    "line": 32,
+    "verdict": "fp",
+    "note": "browser widget fetch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "loop-copy-accumulator",
+    "file": "apps/admin/src/automations/components/canvas/automation-canvas.tsx",
+    "line": 453,
+    "verdict": "tp",
+    "note": "object spread of the accumulator for each change"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "e2e/helpers/pages/admin/members/members-list-page.ts",
+    "line": 390,
+    "verdict": "fp",
+    "note": "e2e test helper"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "ghost/core/server/web/admin/controller.js",
+    "line": 34,
+    "verdict": "missed",
+    "note": "readFileSync and md5 of the admin template on every request"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "tools/scripts/lib/ghost-dev-env.ts",
+    "line": 176,
+    "verdict": "fp",
+    "note": "developer tooling script"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "apps/admin-x-framework/src/test/acceptance.ts",
+    "line": 48,
+    "verdict": "fp",
+    "note": "test helper over a few mocked requests"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "apps/shade/src/components/patterns/filters.tsx",
+    "line": 1069,
+    "verdict": "tp",
+    "note": "array spread of the accumulator per field group"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "ghost/core/server/api/endpoints/utils/public-cache-keys.ts",
+    "line": 39,
+    "verdict": "fp",
+    "note": "accumulates a few option keys"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "serial-awaits-in-literal",
+    "file": "ghost/core/server/services/app-installations/load-manifest.ts",
+    "line": 146,
+    "verdict": "tp",
+    "note": "two independent thumbprints awaited in sequence"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "service-query-in-loop",
+    "file": "ghost/core/server/services/link-tracking/link-click-repository.js",
+    "line": 50,
+    "verdict": "missed",
+    "note": "Member.findOne per model inside a loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-module-cache",
+    "file": "apps/activitypub/src/views/inbox/components/reader.tsx",
+    "line": 839,
+    "verdict": "fp",
+    "note": "browser scroll position map, lives with one tab session"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "whole-payload-in-memory",
+    "file": "e2e/helpers/services/apps/fixture-app.ts",
+    "line": 201,
+    "verdict": "fp",
+    "note": "e2e fixture proxy"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "dockerfile-runs-as-root",
+    "file": "docker/dev-gateway/Dockerfile",
+    "line": 5,
+    "verdict": "tp",
+    "note": "final caddy stage has no USER and caddy runs as root"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "dockerfile-runs-as-root",
+    "file": "docker/fake-upgrades/Dockerfile",
+    "line": 3,
+    "verdict": "fp",
+    "note": "developer tooling image for upgrade tests"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "knex-raw-dynamic-text",
+    "file": "ghost/core/server/services/email-service/newsletter-email-event-storage.js",
+    "line": 359,
+    "verdict": "missed",
+    "note": "id and timestamp are interpolated into CASE clause SQL text"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "ghost/core/server/services/members/middleware.js",
+    "line": 544,
+    "verdict": "fp",
+    "note": "referrer is checked with isSiteUrl so the redirect stays on the site"
+  }
+]

@@ -1,0 +1,114 @@
+[
+  {
+    "pillar": "maint",
+    "ruleId": "deep-control-flow",
+    "file": "apps/api/v2/src/modules/auth/guards/roles/roles.guard.ts",
+    "line": 139,
+    "verdict": "tp",
+    "note": "if inside else inside loop reaches four nested levels"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "duplicate-implementation",
+    "file": "apps/api/v2/src/lib/services/qualified-hosts.service.ts",
+    "line": 23,
+    "verdict": "tp",
+    "note": "two methods have identical bodies"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "duplicate-implementation",
+    "file": "apps/api/v2/src/modules/webhooks/services/event-type-webhooks.service.ts",
+    "line": 12,
+    "verdict": "tp",
+    "note": "createEventTypeWebhook body matches a sibling service"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "high-branch-complexity",
+    "file": "apps/api/v2/src/modules/auth/guards/roles/roles.guard.ts",
+    "line": 53,
+    "verdict": "tp",
+    "note": "checkUserRoleAccess has branch complexity 18"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-class",
+    "file": "apps/api/v2/src/modules/users/users.repository.ts",
+    "line": 16,
+    "verdict": "fp",
+    "note": "cohesive single-table repository just over the limit"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-module",
+    "file": "apps/api/v2/src/platform/bookings/2024-08-13/services/bookings.service.ts",
+    "line": 1,
+    "verdict": "tp",
+    "note": "1072 lines of code"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "long-parameter-list",
+    "file": "apps/api/v2/src/modules/destination-calendars/destination-calendars.repository.ts",
+    "line": 8,
+    "verdict": "tp",
+    "note": "six positional parameters"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "swallowed-error",
+    "file": "apps/api/v2/src/middleware/request-ids/request-id.interceptor.ts",
+    "line": 32,
+    "verdict": "fp",
+    "note": "body is stringified only for a log line, so continuing after the catch is intended"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "swallowed-error",
+    "file": "apps/web/components/apps/btcpayserver/BtcpayPaymentComponent.tsx",
+    "line": 177,
+    "verdict": "tp",
+    "note": "empty catch hides polling failures"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "apps/api/v2/src/modules/auth/decorators/get-membership/get-membership.decorator.ts",
+    "line": 22,
+    "verdict": "fp",
+    "note": "reduces over the literal key list passed to the decorator"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "packages/features/bookings/lib/handleNewBooking/loadAndValidateUsers.ts",
+    "line": 175,
+    "verdict": "missed",
+    "note": "reduce spreads the accumulator across all hosts"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "service-query-in-loop",
+    "file": "apps/api/v2/src/modules/teams/event-types/services/output-team-event-types.service.ts",
+    "line": 178,
+    "verdict": "missed",
+    "note": "findById per child inside a for loop"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "apps/api/v2/src/modules/oauth-clients/controllers/oauth-flow/oauth-flow.controller.ts",
+    "line": 80,
+    "verdict": "fp",
+    "note": "redirectUri is checked against the client allowlist before redirecting"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "ssrf-request-url",
+    "file": "apps/api/v2/src/modules/stripe/controllers/stripe.controller.ts",
+    "line": 114,
+    "verdict": "fp",
+    "note": "host is a fixed config origin, only the path is tainted"
+  }
+]

@@ -1,0 +1,146 @@
+[
+  {
+    "pillar": "maint",
+    "ruleId": "deep-control-flow",
+    "file": "apps/web/app/api/v3/surveys/serializers.ts",
+    "line": 175,
+    "verdict": "tp",
+    "note": "nested conditionals four levels deep"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "duplicate-implementation",
+    "file": "apps/web/app/api/v3/lib/loggable-error.ts",
+    "line": 48,
+    "verdict": "tp",
+    "note": "loggableError is duplicated in another module"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "duplicate-implementation",
+    "file": "apps/web/lib/env.ts",
+    "line": 32,
+    "verdict": "tp",
+    "note": "isSecureCredentialUrl repeated in another module"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "high-branch-complexity",
+    "file": "apps/web/app/api/v1/client/[workspaceId]/responses/route.ts",
+    "line": 252,
+    "verdict": "tp",
+    "note": "POST handler has branch complexity 15"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-class",
+    "file": "apps/web/modules/survey/import/qsf/read-qsf.ts",
+    "line": 279,
+    "verdict": "tp",
+    "note": "QsfReader has 34 methods"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unreferenced-file",
+    "file": "apps/deployment-check/checks/global-setup.ts",
+    "line": 1,
+    "verdict": "fp",
+    "note": "Playwright global setup loaded from the test config"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unreferenced-file",
+    "file": "apps/web/integration/setup.ts",
+    "line": 1,
+    "verdict": "fp",
+    "note": "Vitest setup file referenced from the integration config"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unused-export",
+    "file": "apps/web/lib/feedback-source/utils.ts",
+    "line": 60,
+    "verdict": "tp",
+    "note": "helper is only referenced in its own file"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unused-export",
+    "file": "apps/web/lib/i18n/i18n.mock.ts",
+    "line": 331,
+    "verdict": "tp",
+    "note": "mock export nobody imports"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unused-export",
+    "file": "apps/web/lib/i18n/i18n.mock.ts",
+    "line": 339,
+    "verdict": "tp",
+    "note": "mock export nobody imports"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "http-call-without-timeout",
+    "file": "apps/web/modules/survey/list/lib/v3-surveys-client.ts",
+    "line": 197,
+    "verdict": "fp",
+    "note": "browser API client, not a Node socket"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "http-call-without-timeout",
+    "file": "apps/web/playwright/utils/helper.ts",
+    "line": 377,
+    "verdict": "fp",
+    "note": "Playwright e2e helper"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-query-in-loop",
+    "file": "apps/web/modules/auth/invite/lib/team.ts",
+    "line": 20,
+    "verdict": "missed",
+    "note": "findUnique per team inside a loop"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "error-stack-in-response",
+    "file": "apps/web/app/lib/api/response.ts",
+    "line": 52,
+    "verdict": "fp",
+    "note": "message parameter of a response helper is not an Express error object"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "jwt-decode-for-auth",
+    "file": "apps/web/lib/jwt.ts",
+    "line": 118,
+    "verdict": "fp",
+    "note": "decodes the token the function just signed to read exp"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "apps/web/proxy.ts",
+    "line": 29,
+    "verdict": "fp",
+    "note": "callback URL is validated against allowed origins first"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "prisma-raw-unsafe-dynamic",
+    "file": "apps/web/modules/ee/contacts/segments/lib/filter/prisma-query.ts",
+    "line": 184,
+    "verdict": "fp",
+    "note": "operator comes from a literal map and values are parameterised"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "weak-password-hash",
+    "file": "apps/web/modules/auth/lib/better-auth-hibp.ts",
+    "line": 52,
+    "verdict": "fp",
+    "note": "SHA-1 is required by the HIBP k-anonymity API and never stored"
+  }
+]

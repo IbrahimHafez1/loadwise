@@ -1,0 +1,170 @@
+[
+  {
+    "pillar": "maint",
+    "ruleId": "swallowed-error",
+    "file": "server/src/repositories/machine-learning.repository.ts",
+    "line": 180,
+    "verdict": "fp",
+    "note": "tries each candidate url and throws when all fail"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "swallowed-error",
+    "file": "server/src/services/api.service.ts",
+    "line": 45,
+    "verdict": "fp",
+    "note": "logged fallback to a default when the index file is missing"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "filter-for-existence",
+    "file": "server/src/services/session.service.ts",
+    "line": 59,
+    "verdict": "tp",
+    "note": "filter().length === 0 used only as an existence check"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "http-call-without-timeout",
+    "file": "packages/cli/src/commands/asset.ts",
+    "line": 434,
+    "verdict": "tp",
+    "note": "upload fetch with no timeout or signal"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "http-call-without-timeout",
+    "file": "server/src/repositories/server-info.repository.ts",
+    "line": 72,
+    "verdict": "tp",
+    "note": "server fetch with no timeout"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "server/src/app.common.ts",
+    "line": 68,
+    "verdict": "fp",
+    "note": "runs once at bootstrap"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "password-hash-sync-in-async",
+    "file": "server/src/repositories/crypto.repository.ts",
+    "line": 22,
+    "verdict": "tp",
+    "note": "bcrypt compareSync on the login path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "promise-return-escapes-catch",
+    "file": "server/src/repositories/machine-learning.repository.ts",
+    "line": 174,
+    "verdict": "tp",
+    "note": "return response.json() inside try, a parse rejection skips the per-url catch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "web/src/lib/managers/timeline-manager/timeline-month.svelte.ts",
+    "line": 119,
+    "verdict": "tp",
+    "note": "concat of the accumulator across timeline days"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "committed-secret",
+    "file": "deployment/.env",
+    "line": 2,
+    "verdict": "fp",
+    "note": "value is an op:// 1Password reference, not a secret"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "committed-secret",
+    "file": "packages/e2e-auth-server/test-keys.ts",
+    "line": 1,
+    "verdict": "fp",
+    "note": "throwaway key pair for the e2e auth test server only"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "dockerfile-runs-as-root",
+    "file": "packages/e2e-auth-server/Dockerfile",
+    "line": 1,
+    "verdict": "fp",
+    "note": "test-only e2e auth server image"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "hardcoded-secret",
+    "file": "server/src/services/notification-admin.service.ts",
+    "line": 74,
+    "verdict": "fp",
+    "note": "sample data for an email template preview, not a credential"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "server/src/controllers/asset-media.controller.ts",
+    "line": 134,
+    "verdict": "fp",
+    "note": "relative literal prefix, only the query varies"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "server/src/controllers/asset-media.controller.ts",
+    "line": 159,
+    "verdict": "fp",
+    "note": "redirect target is a relative path derived from the request path with a validated size"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "server/src/controllers/oauth.controller.ts",
+    "line": 34,
+    "verdict": "fp",
+    "note": "redirect is built from a fixed mobile redirect constant"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "path-traversal",
+    "file": "server/src/repositories/storage.repository.ts",
+    "line": 159,
+    "verdict": "fp",
+    "note": "filename is validated by a strict regex DTO upstream"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-compared-non-constant-time",
+    "file": "server/src/services/shared-link.service.ts",
+    "line": 42,
+    "verdict": "tp",
+    "note": "shared link password compared with !=="
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-in-log",
+    "file": "server/src/commands/reset-admin-password.command.ts",
+    "line": 37,
+    "verdict": "fp",
+    "note": "CLI intentionally prints the new admin password to the operator"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-in-log",
+    "file": "server/src/middleware/logging.interceptor.ts",
+    "line": 42,
+    "verdict": "fp",
+    "note": "replacer masks every password key"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "weak-password-hash",
+    "file": "server/src/services/shared-link.service.ts",
+    "line": 275,
+    "verdict": "fp",
+    "note": "sha256 builds a link token from id and password, it is not stored as the password hash"
+  }
+]

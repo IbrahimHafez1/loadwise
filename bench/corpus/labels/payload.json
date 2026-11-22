@@ -1,0 +1,74 @@
+[
+  {
+    "pillar": "maint",
+    "ruleId": "deep-control-flow",
+    "file": "examples/form-builder/src/components/RichText/serialize.tsx",
+    "line": 85,
+    "verdict": "tp",
+    "note": "five nested levels in the serializer"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "duplicate-implementation",
+    "file": ".agents/skills/record-pr-demo/scripts/prepare-demo.mjs",
+    "line": 502,
+    "verdict": "tp",
+    "note": "parseTiming duplicated across demo scripts"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "high-branch-complexity",
+    "file": "examples/form-builder/src/components/RichText/serialize.tsx",
+    "line": 34,
+    "verdict": "tp",
+    "note": "serializer map callback has branch complexity 16"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-class",
+    "file": "packages/payload/src/index.ts",
+    "line": 503,
+    "verdict": "tp",
+    "note": "BasePayload has 37 methods"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-module",
+    "file": ".agents/skills/record-pr-demo/scripts/record-demo.mjs",
+    "line": 1,
+    "verdict": "tp",
+    "note": "739 lines of code"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "loop-copy-accumulator",
+    "file": "packages/payload/src/database/getLocalizedPaths.ts",
+    "line": 238,
+    "verdict": "fp",
+    "note": "copy runs at most once per call"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "service-query-in-loop",
+    "file": "packages/payload/src/hierarchy/resolveHierarchyCollections.ts",
+    "line": 262,
+    "verdict": "missed",
+    "note": "findByID per id inside a loop"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "cors-credentials-any-origin",
+    "file": "packages/payload/src/utilities/headersWithCors.ts",
+    "line": 50,
+    "verdict": "fp",
+    "note": "only reached when the origin is in the allowlist"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "hardcoded-secret",
+    "file": "packages/translations/src/languages/de.ts",
+    "line": 10,
+    "verdict": "fp",
+    "note": "German UI label, not a credential"
+  }
+]

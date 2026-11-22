@@ -1,0 +1,266 @@
+[
+  {
+    "pillar": "maint",
+    "ruleId": "deep-control-flow",
+    "file": "packages/admin/dashboard/src/components/common/sortable-tree/keyboard-coordinates.ts",
+    "line": 61,
+    "verdict": "tp",
+    "note": "switch case with nested ifs four levels deep"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "dependency-cycle",
+    "file": "packages/modules/pricing/integration-tests/__fixtures__/price-rule/data.ts",
+    "line": 3,
+    "verdict": "tp",
+    "note": "data.ts re-exports from ./data, which resolves to itself"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "duplicate-implementation",
+    "file": "packages/admin/dashboard/src/components/common/customer-info/customer-info.tsx",
+    "line": 188,
+    "verdict": "tp",
+    "note": "getOrderCustomer repeated in a sibling helper"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "high-branch-complexity",
+    "file": "packages/admin/dashboard/src/components/layout/settings-layout/settings-layout.tsx",
+    "line": 79,
+    "verdict": "fp",
+    "note": "declarative menu array built from permission flags, not control flow logic"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-class",
+    "file": "packages/core/orchestration/src/transaction/transaction-orchestrator.ts",
+    "line": 74,
+    "verdict": "tp",
+    "note": "TransactionOrchestrator has 49 methods"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "long-parameter-list",
+    "file": "packages/admin/dashboard/scripts/i18n/sync-translations.js",
+    "line": 104,
+    "verdict": "tp",
+    "note": "six positional parameters"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "swallowed-error",
+    "file": "integration-tests/helpers/wait-for-index.ts",
+    "line": 68,
+    "verdict": "fp",
+    "note": "logs inside a polling retry loop that retries until timeout"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "swallowed-error",
+    "file": "packages/core/framework/src/http/audit.ts",
+    "line": 471,
+    "verdict": "fp",
+    "note": "audit recording is best effort and must not fail the request"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "swallowed-error",
+    "file": "packages/core/utils/src/modules-sdk/loaders/load-models.ts",
+    "line": 14,
+    "verdict": "fp",
+    "note": "default-fallback idiom for a missing directory"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/core/core-flows/src/cart/steps/upsert-tax-lines-for-items.ts",
+    "line": 155,
+    "verdict": "tp",
+    "note": "existingTaxLines.find per tax line in a map"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/core/core-flows/src/cart/steps/upsert-tax-lines-for-items.ts",
+    "line": 171,
+    "verdict": "tp",
+    "note": "existingTaxLines.find per shipping tax line in a map"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/modules/product/src/utils/compute-option-link-changes.ts",
+    "line": 34,
+    "verdict": "tp",
+    "note": "originalProducts.find per product in a map"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-membership",
+    "file": "packages/core/framework/src/http/utils/field-filtering/field-validator.ts",
+    "line": 48,
+    "verdict": "fp",
+    "note": "short restricted-field lists"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "floating-promise",
+    "file": "packages/admin/dashboard/src/routes/orders/order-detail/components/order-activity-section/order-note-form.tsx",
+    "line": 38,
+    "verdict": "tp",
+    "note": "mutateAsync promise is not awaited or handled"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "http-call-without-timeout",
+    "file": "packages/core/js-sdk/src/admin/product.ts",
+    "line": 125,
+    "verdict": "fp",
+    "note": "client SDK upload helper"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "http-call-without-timeout",
+    "file": "packages/modules/providers/auth-github/src/services/github.ts",
+    "line": 112,
+    "verdict": "tp",
+    "note": "token exchange fetch with no timeout"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "loop-copy-accumulator",
+    "file": "packages/core/query/src/joiner/compile.ts",
+    "line": 364,
+    "verdict": "fp",
+    "note": "concat over a short join path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/cli/create-medusa-app/src/utils/nextjs-utils.ts",
+    "line": 42,
+    "verdict": "fp",
+    "note": "interactive CLI scaffolder"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/cli/create-medusa-app/src/utils/nextjs-utils.ts",
+    "line": 55,
+    "verdict": "fp",
+    "note": "interactive CLI scaffolder"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/cli/create-medusa-app/src/utils/package-manager.ts",
+    "line": 262,
+    "verdict": "fp",
+    "note": "interactive CLI scaffolder"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-process-in-async",
+    "file": "packages/cli/create-medusa-app/src/utils/execute.ts",
+    "line": 32,
+    "verdict": "fp",
+    "note": "interactive CLI scaffolder"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-process-in-async",
+    "file": "packages/medusa/src/commands/plugin/add.ts",
+    "line": 237,
+    "verdict": "fp",
+    "note": "CLI command, not a server request path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "packages/admin/dashboard/src/components/common/sortable-tree/sortable-tree.tsx",
+    "line": 118,
+    "verdict": "fp",
+    "note": "reduces over the visible tree nodes of an admin widget"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "service-query-in-loop",
+    "file": "packages/modules/order/src/services/order-module-service.ts",
+    "line": 1268,
+    "verdict": "missed",
+    "note": "list per update inside a for loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "service-query-in-loop",
+    "file": "packages/modules/product/src/repositories/product-category.ts",
+    "line": 310,
+    "verdict": "missed",
+    "note": "findOne per id inside a Promise.all map"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "whole-payload-in-memory",
+    "file": "packages/admin/admin-bundler/src/commands/develop.ts",
+    "line": 67,
+    "verdict": "fp",
+    "note": "dev server reads its own HTML template"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "committed-secret",
+    "file": "www/apps/book/app/learn/configurations/medusa-config/asymmetric-encryption/page.mdx",
+    "line": 180,
+    "verdict": "fp",
+    "note": "truncated example key inside documentation"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "dockerfile-runs-as-root",
+    "file": ".oss-scanner/Dockerfile",
+    "line": 5,
+    "verdict": "fp",
+    "note": "CI scanner image, not a runtime image"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "dockerfile-secret-in-build",
+    "file": ".oss-scanner/Dockerfile",
+    "line": 12,
+    "verdict": "fp",
+    "note": "throwaway test database credentials in a CI scanner image"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "path-traversal",
+    "file": "packages/admin/admin-bundler/src/commands/develop.ts",
+    "line": 67,
+    "verdict": "fp",
+    "note": "dev server reads its own HTML template, not a request-chosen file"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-in-log",
+    "file": "packages/medusa/src/commands/user.ts",
+    "line": 70,
+    "verdict": "fp",
+    "note": "CLI prints the invite token to the operator who asked for it"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-in-log",
+    "file": "packages/medusa/src/commands/user.ts",
+    "line": 71,
+    "verdict": "fp",
+    "note": "CLI prints the invite token to the operator who asked for it"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "tls-verification-disabled",
+    "file": "packages/medusa-test-utils/src/medusa-test-runner-utils/config.ts",
+    "line": 37,
+    "verdict": "fp",
+    "note": "test runner database config"
+  }
+]

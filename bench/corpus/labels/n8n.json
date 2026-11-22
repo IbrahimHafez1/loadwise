@@ -1,0 +1,50 @@
+[
+  {
+    "pillar": "maint",
+    "ruleId": "swallowed-error",
+    "file": "packages/cli/src/evaluation.ee/evaluation-collections.controller.ee.ts",
+    "line": 47,
+    "verdict": "fp",
+    "note": "feature-flag failure leaves a sentinel that is handled right after"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "swallowed-error",
+    "file": "packages/cli/src/modules/instance-ai/instance-ai-settings.service.ts",
+    "line": 131,
+    "verdict": "fp",
+    "note": "empty catch followed by an unconditional throw"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-membership",
+    "file": "packages/cli/src/utils/compression.util.ts",
+    "line": 210,
+    "verdict": "fp",
+    "note": "constant list of about 25 extensions"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "floating-promise",
+    "file": "packages/@n8n/db/src/migrations/common/1630330987096-UpdateWorkflowCredentials.ts",
+    "line": 27,
+    "verdict": "missed",
+    "note": "forEach(async) inside a batch callback drops the update promises"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "cors-credentials-any-origin",
+    "file": "packages/cli/src/middlewares/cors.ts",
+    "line": 6,
+    "verdict": "fp",
+    "note": "registered only in development"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "hardcoded-secret",
+    "file": "packages/cli/src/modules/agents/integrations/platforms/teams/teams-arm-template.service.ts",
+    "line": 195,
+    "verdict": "fp",
+    "note": "HMAC key is a label used to derive a resource-name suffix"
+  }
+]
