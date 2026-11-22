@@ -170,3 +170,59 @@ export async function signup() {
   assert.match(finding.message, /^`create\(\)` returns a lazy PrismaPromise, so this query never runs/);
   assert.doesNotMatch(finding.message, /mark it with `void`/);
 });
+
+function contextualReasons(body) {
+  return reported(body).map((finding) => finding.contextualReason);
+}
+
+test('a helper that returns a plain value inside its catching try is contextual', () => {
+  const [reason] = contextualReasons(`async function touch(id: string) {
+  try {
+    await sendEmail(id);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+export async function login(id: string) {
+  touch(id);
+}`);
+  assert.match(reason, /catches its own failures/);
+});
+
+test('a helper that returns a promise from its try still escapes the catch and stays plain', () => {
+  const [reason] = contextualReasons(`async function touch(id: string) {
+  try {
+    return sendEmail(id);
+  } catch (error) {
+    return undefined;
+  }
+}
+export async function login(id: string) {
+  touch(id);
+}`);
+  assert.equal(reason, undefined);
+});
+
+test('an unawaited call to a thin async forwarding wrapper is still reported at default level', () => {
+  const [reason] = contextualReasons(`class Bus {
+  async publish(topic: string) {
+    await sendEmail(topic);
+  }
+}
+export async function notify(bus: Bus) {
+  bus.publish('created');
+}`);
+  assert.equal(reason, undefined);
+});
+
+test('an unawaited guard that can reject has no contextual reason', () => {
+  const [reason] = contextualReasons(`async function assertOpen(id: string) {
+  if (!id) throw new Error('closed');
+  await sendEmail(id);
+}
+export async function update(id: string) {
+  assertOpen(id);
+}`);
+  assert.equal(reason, undefined);
+});
