@@ -220,7 +220,7 @@ test('type imports, namespace imports, require and literal dynamic imports count
   assert.deepEqual(findings, []);
 });
 
-test('literal browser worker modules are referenced without consuming their exports', async () => {
+test('literal import.meta.url module URLs are referenced without consuming their exports', async () => {
   const findings = await scanProject({
     'package.json': '{"main":"src/index.ts"}',
     'src/index.ts': [
@@ -241,9 +241,9 @@ test('literal browser worker modules are referenced without consuming their expo
   assert.deepEqual(summary(findings), [
     'unreferenced-file src/jobs/other-base.ts',
     'unreferenced-file src/jobs/shadowed-url.ts',
-    'unreferenced-file src/jobs/shadowed-worker.ts',
-    'unreferenced-file src/jobs/url-only.ts',
     'unused-export src/jobs/background.ts',
+    'unused-export src/jobs/shadowed-worker.ts',
+    'unused-export src/jobs/url-only.ts',
   ]);
 });
 
