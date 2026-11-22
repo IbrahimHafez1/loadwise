@@ -154,3 +154,24 @@ export async function run(pool: Pool) {
   });
   assertNoFix(findings, 'pg-transaction-on-pool');
 });
+
+test('a cache helper loop under an if without braces gets no multi-statement rewrite', (context) => {
+  const { findings } = scanWithFixes(context, {
+    'node_modules/ioredis/index.d.ts': 'export default class Redis { del(key: string): Promise<number> }',
+    'src/cache.ts': `import Redis from 'ioredis';
+export class CacheService {
+  constructor(private redis: Redis) {}
+  async invalidate(key: string) { await this.redis.del(key); }
+}
+`,
+    'src/main.ts': `import { CacheService } from './cache.js';
+export class Invalidator {
+  constructor(private cache: CacheService) {}
+  async run(keys: string[], go: boolean) {
+    if (go) for (const key of keys) await this.cache.invalidate(key);
+  }
+}
+`,
+  });
+  assertNoFix(findings, 'service-query-in-loop');
+});
