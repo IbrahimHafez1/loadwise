@@ -44,3 +44,18 @@ test('native engine reads the literal bcryptjs cost instead of crashing', { skip
   );
   assert.match(findings[0].message, /at cost 12 burns/);
 });
+
+test('native engine resolves the call signatures of a file in one batched request', { skip }, () => {
+  const { lint } = require('./native-fixture.cjs');
+  const calls = Array.from({ length: 30 }, (_, index) => `  log(${index});`).join('\n');
+  const source =
+    "import { hash } from 'bcryptjs';\ndeclare function log(value: number): void;\n" +
+    `export async function save(p: string) {\n${calls}\n  return hash(p, 12);\n}\n`;
+  const { result, counts } = countRequests(() => lint(source, bcryptjs));
+  assert.deepEqual(
+    result.map((finding) => finding.ruleId),
+    ['password-hash-pure-js'],
+  );
+  assert.equal(counts.get('getResolvedSignature') ?? 0, 0);
+  assert.equal(counts.get('batchRequests'), 1);
+});
