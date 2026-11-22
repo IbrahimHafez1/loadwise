@@ -232,3 +232,66 @@ test('deep-control-flow names an extracted loop that only asserts after what it 
   assert.match(updating, /this\.handleChecked\(/);
 });
 
+function swallowedLines(source) {
+  const { checkSwallowedErrors } = require('../../lib/maintainability/swallowed-errors.cjs');
+  const sourceFile = ts.createSourceFile('src/example.ts', source, ts.ScriptTarget.Latest, true);
+  return checkSwallowedErrors(sourceFile, 'src/example.ts').map((finding) => finding.line);
+}
+
+test('swallowed-error accepts a catch that keeps a declared default or returns the empty result', () => {
+  const fallbackFont = [
+    'async function fonts(document) {',
+    '  let font = document.standard;',
+    '  try {',
+    '    font = await document.embed(read());',
+    '  } catch (error) {',
+    '    logger.warn("embed failed", error);',
+    '  }',
+    '  return draw(font);',
+    '}',
+  ].join('\n');
+  assert.deepEqual(swallowedLines(fallbackFont), []);
+  for (const empty of ['null', 'undefined', 'false'])
+    assert.deepEqual(
+      swallowedLines(
+        `function parse(text) {\n  try {\n    return new URL(text).pathname;\n  } catch {}\n  return ${empty};\n}`,
+      ),
+      [],
+    );
+  const explained = [
+    'async function register(user) {',
+    '  // Non-blocking: registration succeeds even if the email fails.',
+    '  try {',
+    '    await mail.send(user);',
+    '  } catch (error) {',
+    '    logger.warn(error);',
+    '  }',
+    '  return user;',
+    '}',
+  ].join('\n');
+  assert.deepEqual(swallowedLines(explained), []);
+});
+
+test('swallowed-error still reports a catch that hides an error with no default or empty result', () => {
+  const noDefault = [
+    'async function fonts(document) {',
+    '  let font;',
+    '  try {',
+    '    font = await document.embed(read());',
+    '  } catch (error) {',
+    '    logger.warn("embed failed", error);',
+    '  }',
+    '  return draw(font);',
+    '}',
+  ].join('\n');
+  assert.deepEqual(swallowedLines(noDefault), [5]);
+  const moreWork = noDefault
+    .replace('let font;', 'let font = document.standard;')
+    .replace('    font = await', '    await audit();\n    font = await');
+  assert.deepEqual(swallowedLines(moreWork), [6]);
+  assert.deepEqual(
+    swallowedLines('function parse(text) {\n  try {\n    save(text);\n  } catch {}\n  return text;\n}'),
+    [4],
+  );
+});
+
