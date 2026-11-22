@@ -17,7 +17,9 @@ const source = [
   '  const step = (n: number) => (log.push(n), n);',
   '  ' + signature,
   '    [a, b, c, d, e].map(value => value * scale);',
-  '  return [draw(step(1), step(2), step(3), step(4), step(5)), draw(1, 2, 3, 4, 5, step(6)), log];',
+  '  const first = draw(step(1), step(2), step(3), step(4), step(5));',
+  '  const second = draw(1, 2, 3, 4, 5, step(6));',
+  '  return [first, second, log];',
   '}',
 ].join('\n');
 
@@ -111,9 +113,9 @@ test('names required arguments at every local call, preserves defaults, evaluati
 
 test('leaves a public or escaped helper, dynamic calls and ambiguous arguments alone', () => {
   for (const changed of [
-    source.replace('return [draw', 'observe(draw); return [draw'),
-    source.replace('return [draw', 'eval("draw"); return [draw'),
-    source.replace('return [draw', 'const arity = draw.length; return [draw'),
+    source.replace('const first = draw', 'observe(draw); const first = draw'),
+    source.replace('const first = draw', 'eval("draw"); const first = draw'),
+    source.replace('const first = draw', 'const arity = draw.length; const first = draw'),
     source.replace('draw(step(1)', 'draw(...values'),
     source.replace('draw(step(1)', 'draw(() => 1'),
     source.replace('draw(step(1)', 'draw(/* preserve */step(1)').replace('step(2)', 'step(2) /* note */'),
