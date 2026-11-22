@@ -170,3 +170,61 @@ test('timeout fixes on request bodies or long-running endpoints require review',
   ]);
 });
 
+test('a NestJS-style const bootstrap invoked once at load is a process entry', () => {
+  const entry = (tail) =>
+    [
+      "import * as fs from 'node:fs';",
+      'const bootstrap = async () => {',
+      "  const key = fs.readFileSync('key.pem');",
+      '  return key;',
+      '};',
+      tail,
+    ].join('\n');
+  const reasons = (source) =>
+    lint(source)
+      .filter((finding) => finding.ruleId === syncFsRule)
+      .map((finding) => finding.contextualReason);
+  assert.match(reasons(entry('void bootstrap();'))[0], /private process entry point/);
+  assert.match(reasons(entry('bootstrap().catch(console.error);'))[0], /private process entry point/);
+  assert.deepEqual(reasons(entry('void bootstrap();\nexport { bootstrap };')), [undefined]);
+  assert.deepEqual(reasons(entry('void bootstrap();\nsetInterval(bootstrap, 1000);')), [undefined]);
+});
+
+test('sync calls in src/commands are CLI context, other paths are not', (context) => {
+  const source = [
+    "import { readFileSync } from 'node:fs';",
+    "export default async function exec(file: string) { return readFileSync(file, 'utf8'); }",
+  ].join('\n');
+  const byFile = scannedByFile(
+    context,
+    { 'src/commands/exec.ts': source, 'src/users/commands/create.ts': source },
+    syncFsRule,
+  );
+  assert.match(byFile['src/commands/exec.ts'][0].contextualReason, /CLI command/);
+  assert.equal(byFile['src/users/commands/create.ts'][0].contextualReason, undefined);
+});
+
+test('a plain request handler that reads a file per request is reported without a fix', (context) => {
+  const files = {
+    'controller.ts': [
+      "import * as fs from 'node:fs';",
+      'export function adminController(req: unknown, res: { send(body: unknown): void }) {',
+      "  const file = fs.readFileSync('index.html');",
+      '  res.send(file);',
+      '}',
+      'export function helper(path: string) { return fs.readFileSync(path); }',
+      "export function hash(req: unknown, res: unknown) { return require('node:crypto').scryptSync('a', 'b', 8); }",
+      'export function later(req: unknown, res: unknown) {',
+      "  return () => fs.readFileSync('x');",
+      '}',
+    ].join('\n'),
+  };
+  const { findings } = scanWithFixes(context, files);
+  const reported = findings.filter((finding) => finding.ruleId.startsWith('node-sync-'));
+  assert.deepEqual(
+    reported.map((finding) => [finding.ruleId, finding.line]),
+    [[syncFsRule, 3]],
+  );
+  assert.match(reported[0].message, /on every request to this handler/);
+  assert.equal(reported[0].fix, undefined);
+});
