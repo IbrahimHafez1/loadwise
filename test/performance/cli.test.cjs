@@ -214,3 +214,22 @@ test('JavaScript a tsconfig leaves out without allowJs is named in a note on bot
   assert.doesNotMatch(run(['--json'], directory).stderr, /allowJs/);
 });
 
+test('an uninstalled Mongoose loaded with require() is recognised like an import', (context) => {
+  const loop =
+    'export async function load(ids: string[]) {\n  const out = [];\n  for (const id of ids) out.push(await User.findById(id));\n  return out;\n}\n';
+  const sources = {
+    imported: "import mongoose from 'mongoose';\nconst User = mongoose.model('User', new mongoose.Schema({}));\n",
+    required: "const mongoose = require('mongoose');\nconst User = mongoose.model('User', new mongoose.Schema({}));\n",
+    destructured: "const { model, Schema } = require('mongoose');\nconst User = model('User', new Schema({}));\n",
+  };
+  for (const [form, header] of Object.entries(sources)) {
+    const directory = fixture(context, {
+      'package.json': JSON.stringify({ dependencies: { mongoose: '^8.0.0' } }),
+      'tsconfig.json': JSON.stringify({ compilerOptions: { types: [], strict: true } }),
+      'users.ts': header + loop,
+    });
+    const result = run(['--json'], directory);
+    const ruleIds = JSON.parse(result.stdout).findings.map((finding) => finding.ruleId);
+    assert.ok(ruleIds.includes('orm-query-in-loop'), `${form}: ${ruleIds.join(', ')} ${result.stderr}`);
+  }
+});
