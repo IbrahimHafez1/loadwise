@@ -176,3 +176,62 @@ describe('prisma-distinct-in-memory fix', () => {
   });
 });
 
+describe('typeorm-load-then-save fix', () => {
+  const typeormFiles = {
+    'node_modules/typeorm/index.d.ts': `export class Repository<T> {
+  findOne(options: object): Promise<T | null>;
+  save(entity: T): Promise<T>;
+  update(criteria: object, values: object): Promise<{ affected?: number }>;
+  increment(criteria: object, column: string, value: number): Promise<{ affected?: number }>;
+}
+export declare function Column(): PropertyDecorator;
+export declare function Entity(): ClassDecorator;`,
+  };
+  const header = `import { Repository, Column, Entity } from 'typeorm';
+@Entity()
+class User {
+  @Column() id!: number;
+  @Column() lastLoginAt!: Date;
+  @Column() tokenVersion!: number;
+}
+declare const users: Repository<User>;
+declare const stamp: Date;
+`;
+
+  function loadThenSave(context, body) {
+    const { findings } = scanWithFixes(context, { ...typeormFiles, 'a.ts': header + body });
+    return findings.filter((finding) => finding.ruleId === 'typeorm-load-then-save');
+  }
+
+  test('marks a split into several calls for review, since the single save was atomic', (context) => {
+    const [finding] = loadThenSave(
+      context,
+      `export async function run(id: number) {
+  const user = await users.findOne({ where: { id } });
+  user.lastLoginAt = stamp;
+  user.tokenVersion += 1;
+  await users.save(user);
+}`,
+    );
+    assert.equal(
+      onlyChange(finding).after,
+      "await users.increment({ id }, 'tokenVersion', 1);\nawait users.update({ id }, { lastLoginAt: stamp });",
+    );
+    assert.equal(finding.fix.requiresReview, true);
+    assert.match(finding.fix.note, /no longer atomic/);
+  });
+
+  test('a single generated call stays a plain fix', (context) => {
+    const [finding] = loadThenSave(
+      context,
+      `export async function run(id: number) {
+  const user = await users.findOne({ where: { id } });
+  user.lastLoginAt = stamp;
+  await users.save(user);
+}`,
+    );
+    assert.equal(onlyChange(finding).after, 'await users.update({ id }, { lastLoginAt: stamp });');
+    assert.equal(finding.fix.requiresReview, undefined);
+  });
+});
+
