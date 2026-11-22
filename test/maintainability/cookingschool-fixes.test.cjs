@@ -181,3 +181,39 @@ const reexporting = [
   '',
 ].join('\n');
 
+test('an unused type re-export is removed together with its type-only import', async (context) => {
+  const [finding] = await unusedExportFindings(context, reexporting);
+  assert.match(finding.message, /`Pending`/);
+  assert.equal(finding.fix.requiresReview, true);
+  assert.match(finding.fix.note, /^Removes the re-export and the type-only import/);
+  const fixed = applyChangesToText(reexporting, finding.fix.changes).text;
+  assert.equal(
+    fixed,
+    reexporting.replace("import type { Pending } from './schema';\n", '').replace('export type { Pending };\n\n', ''),
+  );
+});
+
+test('a type re-export keeps its import when the file still uses the type', async (context) => {
+  for (const source of [
+    reexporting.replace('run(): number', 'run(pending?: Pending): number'),
+    reexporting.replace('import type { Pending }', 'import { type Pending }'),
+  ]) {
+    const [finding] = await unusedExportFindings(context, source);
+    assert.match(finding.message, /`Pending`/);
+    assert.equal(finding.fix, undefined, source);
+  }
+});
+
+const arrowBody = ['{', '  const secure = !!settings.domain;', '  return { secure, age: Number(expiry) };', '}'].join(
+  '\n',
+);
+function arrowModule(names, extra = '') {
+  return [
+    "export const settings = { domain: '' };",
+    ...names.map(
+      (name) => `/** Options for ${name}. */\nexport const ${name} = (expiry: string): object => ${arrowBody};`,
+    ),
+    extra,
+  ].join('\n');
+}
+
