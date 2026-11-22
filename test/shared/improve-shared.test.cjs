@@ -8,6 +8,7 @@ const path = require('node:path');
 const { Readable, Writable } = require('node:stream');
 const test = require('node:test');
 const { replaceBlocks } = require('../../lib/shared/managed-blocks.cjs');
+const { runReviewMcp } = require('../../lib/shared/review-mcp.cjs');
 
 const bin = path.resolve(__dirname, '../../bin/loadwise.cjs');
 require('./history-test-state.cjs').isolateHistory();
@@ -48,3 +49,18 @@ test('a start marker that lost its end marker never takes the user text after it
   assert.ok(replaceBlocks(appendedLater, pairs).includes('User text that must stay.'));
 });
 
+test('review-mcp ignores blank and whitespace-only stdin lines', async () => {
+  let transcript = '';
+  const output = new Writable({
+    write(chunk, _encoding, done) {
+      transcript += chunk;
+      done();
+    },
+  });
+  const ping = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' });
+  const input = Readable.from(['\n', '   \t\n', ping + '\n', '\r\n']);
+  assert.equal(await runReviewMcp(process.cwd(), input, output), 0);
+  const replies = transcript.trimEnd().split('\n').map(JSON.parse);
+  assert.equal(replies.length, 1);
+  assert.equal(replies[0].id, 1);
+});
