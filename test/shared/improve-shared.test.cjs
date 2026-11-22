@@ -35,6 +35,41 @@ function hookRepository(context, existingHook) {
   return { root, hookFile, installHook };
 }
 
+test('the hook block goes before a trailing exit, moves there on reinstall, and --hook off still removes it', (context) => {
+  const { hookFile, installHook } = hookRepository(context, '#!/bin/sh\necho other tool\nexit 0\n');
+  assert.equal(installHook('--hook', 'block').status, 0);
+  const installed = fs.readFileSync(hookFile, 'utf8');
+  assert.ok(installed.indexOf(blockMarker) < installed.indexOf('\nexit 0'), installed);
+  assert.ok(installed.trimEnd().endsWith('exit 0'));
+  if (process.platform !== 'win32') assert.ok(fs.statSync(hookFile).mode & 0o100);
+
+  // An earlier release appended the block after the exit; a reinstall moves it where it runs.
+  fs.writeFileSync(
+    hookFile,
+    installed.replace(/\nexit 0\n$/, '').replace('#!/bin/sh\necho other tool\n', '$&exit 0\n'),
+  );
+  installHook('--hook', 'warn');
+  const moved = fs.readFileSync(hookFile, 'utf8');
+  assert.ok(moved.indexOf(blockMarker) < moved.indexOf('\nexit 0'), moved);
+  assert.equal(moved.match(/>>> loadwise pre-commit/g).length, 1);
+
+  assert.equal(installHook('--hook', 'off').status, 0);
+  const removed = fs.readFileSync(hookFile, 'utf8');
+  assert.ok(!removed.includes(blockMarker));
+  assert.match(removed, /echo other tool\n+exit 0\n$/);
+});
+
+test('a hook with an earlier top-level exit keeps the install and warns that the block may not run', (context) => {
+  const { hookFile, installHook } = hookRepository(context, '#!/bin/sh\nexit 0\necho unreachable\n');
+  const run = installHook('--hook', 'block');
+  assert.equal(run.status, 0);
+  assert.ok(fs.readFileSync(hookFile, 'utf8').includes(blockMarker));
+  assert.match(run.stdout + run.stderr, /may not run/);
+  // A conditional exit inside a branch is not a reason to warn.
+  const quiet = hookRepository(context, '#!/bin/sh\nif [ -n "$SKIP" ]; then\n  exit 0\nfi\n').installHook('--hook');
+  assert.doesNotMatch(quiet.stdout + quiet.stderr, /may not run/);
+});
+
 test('a start marker that lost its end marker never takes the user text after it', () => {
   const pairs = [['<!-- start -->', '<!-- end -->']];
   const block = '<!-- start -->\nnew\n<!-- end -->';
