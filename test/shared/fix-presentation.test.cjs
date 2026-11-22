@@ -421,6 +421,11 @@ test('loadwise fix --comments comments and formats each applied fix; by default 
   write();
   const plain = run('fix', '--yes', 'performance', '--no-format');
   assert.equal(plain.status, 0, plain.stderr);
+  assert.match(
+    plain.stdout,
+    /^Fixed: perf slow\.ts:\d+ \[array-repeated-membership #\w+\]\n {2}Why: An array is tested with includes or indexOf repeatedly where a Set would do\.\n/m,
+    'each applied fix says why it changed the code',
+  );
   const plainSource = fs.readFileSync(path.join(directory, 'slow.ts'), 'utf8');
   assert.doesNotMatch(plainSource, /Loadwise/);
   assert.match(plainSource, /orders\.filter\(order =>/);
@@ -451,4 +456,29 @@ test('a call Prettier collapses onto one line keeps a single closing parenthesis
   const text = result.texts.get(file) ?? after;
   assert.equal(introducedSyntaxError(file, before, text), undefined, text);
   assert.equal(text.match(/\);/g).length, 1, text);
+});
+
+test('loadwise fix says why once for fixes of the same rule and keeps each fix note under its site', (context) => {
+  const example = fs.readFileSync(path.resolve(__dirname, '../../examples/slow.ts'), 'utf8');
+  const directory = temporaryDirectory(context, 'loadwise-grouped-');
+  fs.writeFileSync(path.join(directory, 'package.json'), '{}');
+  fs.writeFileSync(path.join(directory, 'tsconfig.json'), '{"files":["slow.ts"]}');
+  fs.writeFileSync(
+    path.join(directory, 'slow.ts'),
+    example +
+      '\nexport function blockedOrders(orders: Order[], request: { body: { blocked: number[] } }) {\n' +
+      '  const blocked = request.body.blocked;\n' +
+      '  return orders.filter(order => blocked.includes(order.customerId));\n}\n',
+  );
+  const result = spawnSync(process.execPath, [bin, 'fix', '--yes', 'performance', '--no-format'], {
+    cwd: directory,
+    encoding: 'utf8',
+    env: { ...process.env, LOADWISE_AGENT: '0' },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /^Fixed 2 \[array-repeated-membership\]:\n {2}Why: An array is tested .*\n {2}perf slow\.ts:6 #\w+\n {4}Note: .*`allowed`[^]*\n {2}perf slow\.ts:14 #\w+\n {4}Note: .*`blocked`/m,
+  );
+  assert.equal(result.stdout.match(/Why: An array is tested/g).length, 1);
 });
