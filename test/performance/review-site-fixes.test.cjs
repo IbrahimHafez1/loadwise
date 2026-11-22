@@ -104,3 +104,36 @@ test('count then page rewrite is not offered over a comment between the two read
   });
   assertNoFix(findings, 'count-then-page-serial');
 });
+
+test('redis DEL batch under an if without braces is not split into two statements', (context) => {
+  const { findings } = scanWithFixes(context, {
+    'node_modules/ioredis/index.d.ts': 'export class Redis { del(...keys: string[]): Promise<number>; }',
+    'src/cache.ts': `import type { Redis } from 'ioredis';
+declare const redis: Redis;
+export async function run(names: string[], go: boolean) {
+  if (go) await Promise.all(names.map((key) => redis.del(key)));
+}
+`,
+  });
+  assertNoFix(findings, 'redis-command-in-loop');
+});
+
+test('prisma create loop with a comment in its body is not rewritten away from the comment', (context) => {
+  const { findings } = scanWithFixes(context, {
+    'node_modules/@prisma/client/index.d.ts': `export interface UserDelegate {
+  create(options: object): Promise<{ id: number }>;
+  createMany(options: object): Promise<{ count: number }>;
+}
+export declare class PrismaClient { user: UserDelegate; }`,
+    'src/save.ts': `import type { PrismaClient } from '@prisma/client';
+declare const prisma: PrismaClient;
+export async function save(items: { name: string }[]) {
+  for (const item of items) {
+    // legacy rows keep their own ids
+    await prisma.user.create({ data: { name: item.name } });
+  }
+}
+`,
+  });
+  assertNoFix(findings, 'prisma-query-in-loop');
+});
