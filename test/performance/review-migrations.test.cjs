@@ -3,11 +3,22 @@
 const assert = require('node:assert/strict');
 const { before, describe, test } = require('node:test');
 
+const { extractCodeFile } = require('../../lib/performance/migrations/extract-code.cjs');
 const { extractSqlText, prepareDialect } = require('../../lib/performance/migrations/extract-sql.cjs');
 const { annotateUnit } = require('../../lib/performance/migrations/operations.cjs');
+const { checkMysqlUnit } = require('../../lib/performance/migrations/rules-mysql.cjs');
 const { checkPostgresUnit } = require('../../lib/performance/migrations/rules-postgres.cjs');
 
 const summary = (findings) => findings.map((finding) => [finding.ruleId, finding.line]);
+
+function checkCode(text, { dialect, framework, file = 'm.js' }) {
+  const { units } = extractCodeFile(text, { file, dialect });
+  return units.flatMap((unit) => {
+    annotateUnit(unit.operations, { inTransaction: unit.inTransaction, dialect });
+    const checkUnit = dialect === 'mysql' ? checkMysqlUnit : checkPostgresUnit;
+    return checkUnit({ file, framework, dialect, operations: unit.operations });
+  });
+}
 
 function checkPostgresSql(sql) {
   const { operations } = extractSqlText(sql, { dialect: 'postgres', file: 'm.sql' });
@@ -17,6 +28,25 @@ function checkPostgresSql(sql) {
 
 describe('migration review regressions', () => {
   before(() => prepareDialect('postgres'));
+
+  test('MySQL raw queries in separate calls are separate statements', () => {
+    const findings = checkCode(
+      "exports.up = async (knex) => {\n  await knex.raw('ALTER TABLE users ADD INDEX idx_a (a)');\n  await knex.raw('ALTER TABLE orders ADD INDEX idx_b (b)');\n};\n",
+      { dialect: 'mysql', framework: 'knex' },
+    );
+    assert.deepEqual(summary(findings), [
+      ['migration-mysql-lock-unspecified', 2],
+      ['migration-mysql-lock-unspecified', 3],
+    ]);
+  });
+
+  test('MySQL builder calls are not grouped with an earlier CREATE TABLE', () => {
+    const findings = checkCode(
+      "exports.up = async (knex) => {\n  await knex.schema.createTable('fresh', (t) => { t.increments('id'); });\n  await knex.schema.alterTable('users', (t) => { t.string('name', 500).alter(); });\n};\n",
+      { dialect: 'mysql', framework: 'knex' },
+    );
+    assert.deepEqual(summary(findings), [['migration-mysql-table-copy', 3]]);
+  });
 
   for (const statement of ['RESET lock_timeout;', 'SET lock_timeout TO DEFAULT;']) {
     test(`\`${statement}\` does not count as setting lock_timeout`, () => {
