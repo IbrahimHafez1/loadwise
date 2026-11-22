@@ -233,3 +233,28 @@ test('a tracked source folder named like build output is scanned; build output a
   assert.ok(!files.includes('dist/settings.yaml'));
 });
 
+test('a project inside an examples folder keeps its security findings; its own examples stay contextual', (context) => {
+  const outer = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-examples-'));
+  context.after(() => fs.rmSync(outer, { recursive: true, force: true }));
+  const root = path.join(outer, 'examples', 'app');
+  const insecure =
+    "import https from 'node:https';\nexport const agent = new https.Agent({ rejectUnauthorized: false });\n";
+  for (const [name, text] of Object.entries({
+    'package.json': '{}',
+    'tsconfig.json': '{"compilerOptions":{"types":[]},"include":["src"]}',
+    'src/agent.ts': insecure,
+    'src/examples/demo.ts': insecure,
+  })) {
+    fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
+    fs.writeFileSync(path.join(root, name), text);
+  }
+  const report = JSON.parse(sec(root, '--json', '--include-contextual').stdout);
+  const tls = report.findings.filter((finding) => finding.ruleId === 'tls-verification-disabled');
+  assert.deepEqual(
+    tls.map((finding) => [finding.file.split(path.sep).join('/'), Boolean(finding.contextualReason)]).sort(),
+    [
+      ['src/agent.ts', false],
+      ['src/examples/demo.ts', true],
+    ],
+  );
+});
