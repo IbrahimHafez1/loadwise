@@ -107,3 +107,31 @@ test('a numeric conversion inside the promise or the callback still clears taint
   assert.equal(tracedInRoute('fetch("https://example.com").then((v) => sink(v));'), undefined);
 });
 
+function pathTraversals(body) {
+  const source = [
+    "import express from 'express';",
+    "import path from 'path';",
+    "import { readFile } from 'fs/promises';",
+    'const app = express();',
+    `app.get('/files/:name', async (req, res) => { ${body} });`,
+  ].join('\n');
+  return lintBothWays(source, stubs.express).typed.filter(({ ruleId }) => ruleId === 'path-traversal');
+}
+
+test('a containment check against the literal root with a trailing separator quiets path-traversal', () => {
+  const guarded = (root, prefix) =>
+    `const full = path.resolve(${root}, req.params.name); if (!full.startsWith(${prefix})) throw new Error('outside'); await readFile(full);`;
+  assert.equal(pathTraversals(guarded("'/srv'", "'/srv/'")).length, 0);
+  assert.equal(pathTraversals(guarded("'/srv/'", "'/srv/'")).length, 0);
+  assert.equal(pathTraversals(guarded("'C:\\srv'", "'C:\\srv\\'")).length, 0);
+});
+
+test('a literal prefix without a separator or for another root is still path-traversal', () => {
+  const guarded = (root, prefix) =>
+    `const full = path.resolve(${root}, req.params.name); if (!full.startsWith(${prefix})) throw new Error('outside'); await readFile(full);`;
+  assert.equal(pathTraversals(guarded("'/srv'", "'/srv'")).length, 1);
+  assert.equal(pathTraversals(guarded("'/srv'", "'/sr/'")).length, 1);
+  assert.equal(pathTraversals(guarded("'/srv'", "'/'")).length, 1);
+  assert.equal(pathTraversals(guarded("'/'", "'/'")).length, 1);
+  assert.equal(pathTraversals(guarded("'/srv'", "'/srv/other/'")).length, 1);
+});
