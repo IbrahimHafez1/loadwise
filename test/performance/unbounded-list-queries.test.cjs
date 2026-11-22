@@ -95,11 +95,11 @@ test('stays silent when the filter pins a unique key or a literal list', () => {
   );
 });
 
-test('an in-list over a variable is not a bound', () => {
+test('an in-list over a variable that is not request input bounds the rows', () => {
   assert.equal(
     findings(`export class Items { @Get() a() { return prisma.user.findMany({ where: { id: { in: ids } } }); } }`)
       .length,
-    1,
+    0,
   );
 });
 

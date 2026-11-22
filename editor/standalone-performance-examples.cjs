@@ -181,6 +181,80 @@ const standaloneExamples = {
     code: 'const posts = await prisma.post.findMany({ select: { id: true, title: true, author: { select: { name: true } } } });',
     note: 'Each row drags large columns or nested relations along. Select the fields the list shows and load the rest on demand.',
   },
+  'orm-deep-offset': {
+    language: 'javascript',
+    before: 'const rows = await prisma.order.findMany({ skip: Number(req.query.page) * 50, take: 50 });',
+    code: "const rows = await prisma.order.findMany({ take: 50, ...(cursor && { cursor: { id: cursor }, skip: 1 }), orderBy: { id: 'asc' } });",
+    note: 'A deep offset makes the database read and discard every earlier row. Page by the last seen key instead.',
+  },
+  'list-count-per-request': {
+    language: 'javascript',
+    before: 'const [rows, total] = await Promise.all([prisma.order.findMany({ skip, take }), prisma.order.count()]);',
+    code: 'const rows = await prisma.order.findMany({ skip, take: take + 1 });\nconst hasMore = rows.length > take;',
+    note: 'A full count scans the table on every page. Fetch one extra row for "has more", or count once and cache it.',
+  },
+  'notification-send-in-loop': {
+    language: 'javascript',
+    before: 'for (const token of tokens) await messaging.send({ token, notification });',
+    code: 'await messaging.sendEach(tokens.map((token) => ({ token, notification })));',
+    note: 'One request per recipient multiplies latency and rate-limit use. Keep per-recipient sends only when each message is personalised.',
+  },
+  'session-memory-store': {
+    language: 'javascript',
+    before: 'app.use(session({ secret, resave: false }));',
+    code: 'app.use(session({ secret, resave: false, store: new RedisStore({ client: redisClient }) }));',
+    note: 'A shared store keeps sessions across restarts and instances and does not grow process memory.',
+  },
+  'orm-cartesian-include': {
+    language: 'javascript',
+    before:
+      "repo.createQueryBuilder('u').leftJoinAndSelect('u.posts', 'p').leftJoinAndSelect('u.tags', 't').getMany();",
+    code: "repo.find({ relations: ['posts', 'tags'], relationLoadStrategy: 'query' });",
+    note: 'Each collection loads in its own query, so no row is repeated for every combination.',
+  },
+  'retry-without-backoff': {
+    language: 'javascript',
+    before: 'for (let attempt = 0; attempt < 3; attempt++) {\n  try { return await fetch(url); } catch {}\n}',
+    code: 'for (let attempt = 0; attempt < 3; attempt++) {\n  try { return await fetch(url); } catch { await sleep(2 ** attempt * 100 + Math.random() * 100); }\n}',
+    note: 'Waiting longer after each failure keeps retries from hammering a struggling service.',
+  },
+  'json-roundtrip-clone': {
+    language: 'javascript',
+    before: 'items.map((item) => JSON.parse(JSON.stringify(item)))',
+    code: 'items.map((item) => structuredClone(item))',
+    note: 'structuredClone is faster and keeps Dates and Maps, which a JSON round trip drops.',
+  },
+  'async-route-unhandled-rejection': {
+    language: 'javascript',
+    before: "app.get('/users', async (req, res) => {\n  res.json(await loadUsers());\n});",
+    code: "app.get('/users', async (req, res, next) => {\n  try {\n    res.json(await loadUsers());\n  } catch (error) {\n    next(error);\n  }\n});",
+    note: 'Express 4 ignores the promise a handler returns; passing the error to next reaches the error middleware.',
+  },
+  'async-callback-unhandled-rejection': {
+    language: 'javascript',
+    before: 'setInterval(async () => {\n  await syncAccounts();\n}, 60_000);',
+    code: 'setInterval(async () => {\n  try {\n    await syncAccounts();\n  } catch (error) {\n    logger.error(error);\n  }\n}, 60_000);',
+    note: 'Nothing awaits a callback timers and emitters call, so its rejection is unhandled unless the callback catches it.',
+  },
+  'stream-pipe-unhandled-error': {
+    language: 'javascript',
+    before: 'fs.createReadStream(file).pipe(zlib.createGzip()).pipe(res);',
+    code: "import { pipeline } from 'node:stream/promises';\n\nawait pipeline(fs.createReadStream(file), zlib.createGzip(), res);",
+    note: 'pipeline forwards an error from any stage and closes every stream; .pipe() does neither.',
+  },
+  'json-parse-unguarded': {
+    language: 'javascript',
+    before: 'const settings = JSON.parse(req.body.settings);',
+    code: "let settings;\ntry {\n  settings = JSON.parse(req.body.settings);\n} catch {\n  return res.status(400).json({ error: 'Invalid settings' });\n}",
+    note: 'Malformed input becomes a 400 instead of an unhandled throw.',
+  },
+  'request-number-unvalidated': {
+    language: 'javascript',
+    before:
+      'const page = Number(req.query.page);\nconst rows = await db.order.findMany({ skip: page * 20, take: 20 });',
+    code: "const page = Number(req.query.page);\nif (!Number.isInteger(page) || page < 0) return res.status(400).json({ error: 'Invalid page' });\nconst rows = await db.order.findMany({ skip: page * 20, take: 20 });",
+    note: 'NaN or a negative number reaching the query errors or returns the wrong rows; reject it first.',
+  },
   'service-query-in-loop': {
     language: 'javascript',
     before: 'for (const id of ids) await this.approve(id); // approve() runs findOne + save',
@@ -282,6 +356,11 @@ const standaloneExamples = {
     'SELECT id FROM users WHERE lower(email) = $1;',
     'CREATE INDEX CONCURRENTLY users_email_lower_idx ON users (lower(email));',
     'Index the exact expression the query uses, or compare the plain column.',
+  ),
+  'index-redundant-prefix': sqlExample(
+    'CREATE INDEX orders_tenant_idx ON orders (tenant_id);\nCREATE INDEX orders_tenant_created_idx ON orders (tenant_id, created_at);',
+    'CREATE INDEX orders_tenant_created_idx ON orders (tenant_id, created_at);',
+    'The composite index already serves lookups on tenant_id alone. Drop the shorter one with DROP INDEX orders_tenant_idx; in a new migration.',
   ),
   'migration-index-not-concurrent': sqlExample(
     'CREATE INDEX orders_status_idx ON orders (status);',
