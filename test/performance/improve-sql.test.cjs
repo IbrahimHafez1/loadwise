@@ -9,6 +9,8 @@ const { before, describe, test } = require('node:test');
 
 const { ensureLoaded, parseStatements, splitStatements } = require('../../lib/performance/sql/pg-parser.cjs');
 const { changedFilesSince } = require('../../lib/performance/migrations/enforce.cjs');
+const performanceChangedLines = require('../../lib/performance/changed-lines.cjs');
+const maintainabilityChangedLines = require('../../lib/maintainability/changed-lines.cjs');
 
 function temporaryRepository(context) {
   const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-improve-sql-')));
@@ -28,6 +30,12 @@ function git(cwd, ...args) {
 function write(root, name, text) {
   fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
   fs.writeFileSync(path.join(root, name), text);
+}
+
+// Windows cannot create a file named with `"`, so the name is staged straight into the index.
+function stageUnusualName(root, name, text) {
+  const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: root, input: text, encoding: 'utf8' });
+  git(root, '-c', 'core.protectNTFS=false', 'update-index', '--add', '--cacheinfo', `100644,${blob.trim()},${name}`);
 }
 
 const statementTexts = (sql) => splitStatements(sql).map(({ start, end }) => sql.slice(start, end));
@@ -91,6 +99,68 @@ describe('--changed-since migrations', () => {
     git(root, 'commit', '-q', '-m', 'rename');
 
     assert.deepEqual([...changedFilesSince('main', root)], []);
+  });
+});
+
+describe('changed lines with quoted git paths', () => {
+  const unusualName = 'src/we"ird.ts';
+
+  test('performance diff parsing reads C-quoted file headers', () => {
+    const directory = path.resolve('project');
+    const diff = [
+      'diff --git "a/src/we\\"ird.ts" "b/src/we\\"ird.ts"',
+      '--- "a/src/we\\"ird.ts"',
+      '+++ "b/src/we\\"ird.ts"',
+      '@@ -1 +1,2 @@',
+      'diff --git "a/caf\\303\\251 x.ts" "b/caf\\303\\251 x.ts"',
+      '--- "a/caf\\303\\251 x.ts"',
+      '+++ "b/caf\\303\\251 x.ts"\t',
+      '@@ -3 +3 @@',
+    ].join('\n');
+    const changed = performanceChangedLines.parseChangedLines(diff, directory);
+    const key = (name) => performanceChangedLines.fileKey(path.join(directory, name));
+    assert.deepEqual(changed.get(key(unusualName)), [[1, 2]]);
+    assert.deepEqual(changed.get(key('café x.ts')), [[3, 3]]);
+  });
+
+  test('performance --staged finds a staged file whose name git quotes', (context) => {
+    const root = temporaryRepository(context);
+    write(root, 'plain.ts', 'export const plain = 1;\n');
+    git(root, 'add', '.');
+    git(root, 'commit', '-q', '-m', 'base');
+    stageUnusualName(root, unusualName, 'export const one = 1;\nexport const two = 2;\n');
+
+    const changed = performanceChangedLines.collectChangedLines({ staged: true }, root);
+    const key = performanceChangedLines.fileKey(path.join(root, unusualName));
+    assert.deepEqual([...changed.keys()], [key]);
+    assert.deepEqual(changed.get(key), [[1, 2]]);
+  });
+
+  test('maintainability --staged finds a staged file whose name git quotes', (context) => {
+    const root = temporaryRepository(context);
+    write(root, 'plain.js', 'module.exports = 1;\n');
+    git(root, 'add', '.');
+    git(root, 'commit', '-q', '-m', 'base');
+    stageUnusualName(root, unusualName, 'export const one = 1;\nexport const two = 2;\n');
+
+    const changes = maintainabilityChangedLines.readChangedRanges(root, { staged: true });
+    assert.deepEqual([...changes.entries()], [[unusualName, [[1, Infinity]]]]);
+  });
+
+  test('maintainability diff parsing reads C-quoted headers and keeps plain ones', () => {
+    const diff = [
+      'diff --git "a/tab\\there.js" "b/tab\\there.js"',
+      '--- "a/tab\\there.js"',
+      '+++ "b/tab\\there.js"',
+      '@@ -2 +2,3 @@',
+      'diff --git a/plain name.js b/plain name.js',
+      '--- a/plain name.js',
+      '+++ b/plain name.js\t',
+      '@@ -1 +1 @@',
+    ].join('\n');
+    const changes = maintainabilityChangedLines.parseChangedRanges(diff);
+    assert.deepEqual(changes.get('tab\there.js'), [[2, 4]]);
+    assert.deepEqual(changes.get('plain name.js'), [[1, 1]]);
   });
 });
 
