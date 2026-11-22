@@ -8,6 +8,27 @@ const path = require('node:path');
 const { before, describe, test } = require('node:test');
 
 const { ensureLoaded, parseStatements, splitStatements } = require('../../lib/performance/sql/pg-parser.cjs');
+const { changedFilesSince } = require('../../lib/performance/migrations/enforce.cjs');
+
+function temporaryRepository(context) {
+  const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-improve-sql-')));
+  context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  git(directory, 'init', '-q', '-b', 'main');
+  return directory;
+}
+
+function git(cwd, ...args) {
+  return execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', ...args], {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+}
+
+function write(root, name, text) {
+  fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
+  fs.writeFileSync(path.join(root, name), text);
+}
 
 const statementTexts = (sql) => splitStatements(sql).map(({ start, end }) => sql.slice(start, end));
 
@@ -40,6 +61,36 @@ describe('pg statement splitter', () => {
   test('dollar quotes, E strings and nested comments hide their semicolons', () => {
     const sql = "SELECT E'a\\';b', $x$ ; $x$ /* outer /* inner ; */ still ; */; SELECT 2;";
     assert.equal(statementTexts(sql).length, 2);
+  });
+});
+
+describe('--changed-since migrations', () => {
+  test('a renamed and edited migration is enforced under its new path', (context) => {
+    const root = temporaryRepository(context);
+    const body = Array.from({ length: 20 }, (_, index) => `SELECT ${index};`).join('\n') + '\n';
+    write(root, 'migrations/001_old.sql', body);
+    write(root, 'migrations/002_kept.sql', 'SELECT 2;\n');
+    git(root, 'add', '.');
+    git(root, 'commit', '-q', '-m', 'base');
+    git(root, 'checkout', '-q', '-b', 'feature');
+    git(root, 'mv', 'migrations/001_old.sql', 'migrations/001_new.sql');
+    write(root, 'migrations/001_new.sql', body + 'SELECT 99;\n');
+    git(root, 'commit', '-q', '-am', 'rename');
+
+    const changed = [...changedFilesSince('main', root)].map((file) => path.basename(file));
+    assert.deepEqual(changed, ['001_new.sql']);
+  });
+
+  test('a migration renamed without edits stays unenforced', (context) => {
+    const root = temporaryRepository(context);
+    write(root, 'migrations/001_old.sql', 'SELECT 1;\n');
+    git(root, 'add', '.');
+    git(root, 'commit', '-q', '-m', 'base');
+    git(root, 'checkout', '-q', '-b', 'feature');
+    git(root, 'mv', 'migrations/001_old.sql', 'migrations/001_new.sql');
+    git(root, 'commit', '-q', '-m', 'rename');
+
+    assert.deepEqual([...changedFilesSince('main', root)], []);
   });
 });
 
