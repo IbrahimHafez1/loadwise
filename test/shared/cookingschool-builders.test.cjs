@@ -108,3 +108,46 @@ test('long-parameter-list offers no fix for a closure whose parameter types cann
   assert.ok(parameterFix(context, swappable));
 });
 
+function controlFlowRewrite(text, filename = 'products.ts') {
+  const { analyzeFunctions } = require('../../lib/maintainability/functions.cjs');
+  const build = require('../../lib/maintainability/site-fixes/control-flow.cjs')['deep-control-flow'];
+  const sourceFile = ts.createSourceFile(filename, text, ts.ScriptTarget.Latest, true);
+  const finding = analyzeFunctions(sourceFile, filename).find((issue) => issue.ruleId === 'deep-control-flow');
+  assert.ok(finding);
+  const offset = sourceFile.getPositionOfLineAndCharacter(finding.line - 1, finding.column - 1);
+  const result = build({ sourceFile, offset, node: ts.getTokenAtPosition(sourceFile, offset) });
+  if (!result) return;
+  for (const edit of result.edits.toSorted((left, right) => right.start - left.start))
+    text = text.slice(0, edit.start) + edit.text + text.slice(edit.end);
+  return text;
+}
+
+function imageLoop(declaration, condition) {
+  return [
+    'export function attach(rows: string[], images: Map<string, ' + declaration + '>, sink: string[]) {',
+    '  for (const sku of rows) {',
+    '    const rowImages = images.get(sku);',
+    '    if (' + condition + ') {',
+    '      for (const image of rowImages.slice(0, 4)) {',
+    '        if (image) sink.push(image);',
+    '      }',
+    '    }',
+    '  }',
+    '}',
+  ].join('\n');
+}
+
+test('deep-control-flow guards negate a length test without a negated comparison', () => {
+  const merged = controlFlowRewrite(imageLoop('string[]', 'rowImages && rowImages.length > 0'));
+  assert.match(merged, /if \(!rowImages\?\.length\) continue;/);
+  const flipped = controlFlowRewrite(imageLoop('string[]', 'sku && rowImages!.length > 0'));
+  assert.match(flipped, /if \(!sku \|\| rowImages!\.length <= 0\) continue;/);
+});
+
+test('deep-control-flow guards keep a negated comparison when the operand may be NaN or untyped', () => {
+  const numeric = controlFlowRewrite(imageLoop('string[]', 'rowImages && Number(sku) > 0'));
+  assert.match(numeric, /if \(!rowImages \|\| !\(Number\(sku\) > 0\)\) continue;/);
+  const untyped = controlFlowRewrite(imageLoop('Unresolved', 'rowImages && rowImages.length > 0'));
+  assert.match(untyped, /if \(!rowImages \|\| !\(rowImages\.length > 0\)\) continue;/);
+});
+
