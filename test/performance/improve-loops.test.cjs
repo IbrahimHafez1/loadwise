@@ -87,3 +87,45 @@ async function firstLabelled() {
   );
 });
 
+const pgFiles = {
+  'node_modules/pg/package.json': '{ "name": "pg", "types": "index.d.ts" }',
+  'node_modules/pg/index.d.ts':
+    'export declare class Pool { query(text: string, values?: unknown[]): Promise<unknown>; }',
+};
+
+function lintMilliseconds(source, files) {
+  const started = process.hrtime.bigint();
+  lint(source, files);
+  return Number(process.hrtime.bigint() - started) / 1e6;
+}
+
+function countedLoop(queryCount) {
+  const queries = Array.from(
+    { length: queryCount },
+    (_, index) => `    const row${index} = await pool.query('UPDATE t SET a = $1 WHERE id = $2', [item, i]);`,
+  );
+  return `import { Pool } from 'pg';
+declare const pool: Pool;
+export async function run(items: number[]) {
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+${queries.join('\n')}
+  }
+  while (items.length) {
+    const item = items.pop();
+${queries.join('\n')}
+  }
+}
+`;
+}
+
+test('many queries in one loop body do not rescan the body once per query', () => {
+  lintMilliseconds(countedLoop(10), pgFiles);
+  const small = lintMilliseconds(countedLoop(200), pgFiles);
+  const large = lintMilliseconds(countedLoop(800), pgFiles);
+  // Four times the queries is about four times the linear work; a per-query rescan of the body grows with the square.
+  assert.ok(large / small < 6, `analysis grew ${(large / small).toFixed(1)}x`);
+});
+
+// Runs one call rule over every call in the file and counts the checker requests it makes; on the native
+// engine each request is a synchronous round trip.
