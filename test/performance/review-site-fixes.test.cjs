@@ -41,7 +41,7 @@ export async function run(queue: Queue, ids: string[]) {
   });
   const finding = findings.find((entry) => entry.ruleId === 'queue-add-in-loop');
   assert.ok(finding);
-  assert.equal(finding.fix, undefined);
+  assert.match(onlyChange(finding).after, /\{\n {2}\/\/ retries are handled by the worker\n {2}return \{ name: 'job'/);
 });
 
 const ioredisStub = `export class Redis {
