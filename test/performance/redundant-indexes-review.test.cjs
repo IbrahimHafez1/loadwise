@@ -189,6 +189,29 @@ test('migrations: a knex dropColumn takes its indexes with it', () => {
   assert.deepEqual(findings, []);
 });
 
+test('migrations: TypeORM queryRunner.dropColumn takes its indexes with it', () => {
+  const findings = schemaFindings({
+    'migrations/001_init.sql': [
+      'CREATE INDEX orders_a_idx ON orders (a);',
+      'CREATE INDEX orders_ab_idx ON orders (a, b);',
+      'CREATE INDEX orders_c_idx ON orders (c);',
+      'CREATE INDEX orders_cd_idx ON orders (c, d);',
+      'CREATE INDEX orders_e_idx ON orders (e);',
+      'CREATE INDEX orders_ef_idx ON orders (e, f);',
+    ].join('\n'),
+    'migrations/002_drop.ts': [
+      'export class Drop {',
+      '  async up(queryRunner) {',
+      "    await queryRunner.dropColumn('orders', 'a');",
+      "    await queryRunner.dropColumn('orders', new TableColumn({ name: 'c', type: 'varchar' }));",
+      "    await queryRunner.dropColumns('orders', ['e']);",
+      '  }',
+      '}',
+    ].join('\n'),
+  });
+  assert.deepEqual(findings, []);
+});
+
 test('migrations: MySQL RENAME TABLE moves the indexes of every renamed pair', () => {
   const findings = schemaFindings(
     {
