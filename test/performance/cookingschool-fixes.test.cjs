@@ -72,3 +72,32 @@ const lastInsertStubs = {
     export function int(name: string): {autoincrement(): object};`,
 };
 
+test('a long generated-ID fallback is split across lines at the ?? operator', (context) => {
+  const source = `import { sql } from 'drizzle-orm';
+import { mysqlTable, int } from 'drizzle-orm/mysql-core';
+import { MySql2Database } from 'drizzle-orm/mysql2';
+const shoppingCarts = mysqlTable('shopping_carts', {id: int('id').autoincrement()});
+declare const transaction: MySql2Database;
+async function createGuestCart() {
+  {
+    await transaction.insert(shoppingCarts).values({ sessionId: 'a' });
+
+    // Get the last inserted ID using raw SQL
+    const lastIdResult = await transaction.execute(sql\`SELECT LAST_INSERT_ID() as id\`);
+    const insertedId = (lastIdResult[0] as unknown as Array<{ id: number }>)[0]!.id;
+    return insertedId;
+  }
+}`;
+  const [finding] = scanWithFixes(context, { ...lastInsertStubs, 'src.ts': source }).findings.filter(
+    ({ ruleId }) => ruleId === 'drizzle-last-insert-id',
+  );
+  const fixed = finding.fix.changes.reduce((text, change) => text.replace(change.before, () => change.after), source);
+  assert.ok(
+    fixed.includes(`    const lastIdResult = await transaction.insert(shoppingCarts).values({ sessionId: 'a' });
+    const insertedId =
+      lastIdResult?.[0]?.insertId ??
+      ((await transaction.execute(sql\`SELECT LAST_INSERT_ID() as id\`))[0] as unknown as Array<{ id: number }>)[0]!.id;
+    return insertedId;`),
+    fixed,
+  );
+});

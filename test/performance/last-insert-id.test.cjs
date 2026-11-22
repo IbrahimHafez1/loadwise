@@ -42,7 +42,7 @@ test('mysql2 generated ID patch retains the INSERT, requires review, and elimina
   let fixed = source;
   for (const change of finding.fix.changes) fixed = fixed.replace(change.before, () => change.after);
   assert.ok(fixed.includes('const result = ' + insert));
-  assert.ok(fixed.includes('const id = result?.[0]?.insertId ?? '));
+  assert.match(fixed, /const id =\s+result\?\.\[0\]\?\.insertId \?\?/);
   assert.ok(fixed.includes('(await db.execute(sql`SELECT LAST_INSERT_ID() AS id`))'));
   assert.deepEqual(scan(fixed), []);
 });
@@ -71,7 +71,7 @@ test('insert headers skip the query; absent metadata preserves row conversion an
     );
     assert.ok(!updated.includes(lookupComment));
     if (statements.length === 2) {
-      assert.match(updated, /const firstRowId = result\?\.\[0\]\?\.insertId \?\?/);
+      assert.match(updated, /const firstRowId =\s+result\?\.\[0\]\?\.insertId \?\?/);
       assert.match(updated, /Number\(firstRowId \?\? 0\)/);
     }
     assert.deepEqual(scan(updated), []);
