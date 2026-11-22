@@ -41,11 +41,15 @@ test('awaits that only wrap in-process certificate or digest work are quiet', ()
 
 test('one in-process await next to one I/O await is quiet, two I/O awaits still report', () => {
   assert.deepEqual(
-    findings(`${x509Header}${header}export async function run() {\n  return [await x509.SubjectKeyIdentifierExtension.create(key), await loadSeats()];\n}`),
+    findings(
+      `${x509Header}${header}export async function run() {\n  return [await x509.SubjectKeyIdentifierExtension.create(key), await loadSeats()];\n}`,
+    ),
     [],
   );
   assert.equal(
-    findings(`${x509Header}${header}export async function run() {\n  return [await x509.SubjectKeyIdentifierExtension.create(key), await loadSeats(), await loadFlows()];\n}`).length,
+    findings(
+      `${x509Header}${header}export async function run() {\n  return [await x509.SubjectKeyIdentifierExtension.create(key), await loadSeats(), await loadFlows()];\n}`,
+    ).length,
     1,
   );
   assert.equal(
@@ -59,7 +63,11 @@ test('one in-process await next to one I/O await is quiet, two I/O awaits still 
 test('the serial arm of a conditional whose other arm runs the same calls in Promise.all is quiet', () => {
   const body = (expression) => `${header}export async function run(manager: unknown) {\n  return ${expression};\n}`;
   assert.deepEqual(
-    findings(body('manager ? ([await loadSeats(), await loadFlows()] as const) : await Promise.all([loadSeats(), loadFlows()])')),
+    findings(
+      body(
+        'manager ? ([await loadSeats(), await loadFlows()] as const) : await Promise.all([loadSeats(), loadFlows()])',
+      ),
+    ),
     [],
   );
   assert.equal(
