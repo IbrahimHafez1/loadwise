@@ -137,3 +137,20 @@ export async function save(items: { name: string }[]) {
   });
   assertNoFix(findings, 'prisma-query-in-loop');
 });
+
+test('pg transaction whose COMMIT is returned unawaited is not wrapped in try/finally', (context) => {
+  const { findings } = scanWithFixes(context, {
+    'node_modules/@types/pg/index.d.ts': `export class Pool {
+  query(statement: string): Promise<{ rows: unknown[] }>;
+  connect(): Promise<{ query(statement: string): Promise<unknown>; release(): void }>;
+}`,
+    'src/transfer.ts': `import { Pool } from 'pg';
+export async function run(pool: Pool) {
+  await pool.query('BEGIN');
+  await pool.query('UPDATE t SET n = 1');
+  return pool.query('COMMIT');
+}
+`,
+  });
+  assertNoFix(findings, 'pg-transaction-on-pool');
+});
