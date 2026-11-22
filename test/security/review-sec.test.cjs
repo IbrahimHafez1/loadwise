@@ -17,3 +17,13 @@ test('development passwords such as testpass are contextual default credentials'
   const [composeFinding] = checkCompose('services:\n  db:\n    environment:\n      POSTGRES_PASSWORD: testpass\n');
   assert.match(composeFinding.contextualReason, /local service/);
 });
+
+test('insecure-random-for-secret offers no randomInt fix for a bound randomInt rejects', (context) => {
+  const source = [
+    "import { readFileSync } from 'node:fs';",
+    'export const resetToken = () => Math.floor(Math.random() * 281474976710656);',
+    '',
+  ].join('\n');
+  const { findings } = scanWithFixes(context, { 'app.ts': source }, { analyzers: withSecurity });
+  assertReportedWithoutFix(findings.filter((finding) => finding.ruleId === 'insecure-random-for-secret'));
+});
