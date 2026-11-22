@@ -9,6 +9,7 @@ const { Readable, Writable } = require('node:stream');
 const test = require('node:test');
 const { replaceBlocks } = require('../../lib/shared/managed-blocks.cjs');
 const { runReviewMcp } = require('../../lib/shared/review-mcp.cjs');
+const { writeFileAtomic } = require('../../lib/shared/atomic-write.cjs');
 
 const bin = path.resolve(__dirname, '../../bin/loadwise.cjs');
 require('./history-test-state.cjs').isolateHistory();
@@ -47,6 +48,26 @@ test('a start marker that lost its end marker never takes the user text after it
   assert.equal(reinstalled.match(/<!-- start -->/g).length, 1);
   assert.ok(!replaceBlocks(appendedLater, pairs).includes('<!-- start -->'));
   assert.ok(replaceBlocks(appendedLater, pairs).includes('User text that must stay.'));
+});
+
+
+test('writeFileAtomic replaces through a temporary file and keeps the mode and symlink target', (context) => {
+  const root = temporaryDirectory(context, 'loadwise-improve-atomic-');
+  const target = path.join(root, 'hook');
+  fs.writeFileSync(target, 'old', { mode: 0o755 });
+  writeFileAtomic(target, 'new');
+  assert.equal(fs.readFileSync(target, 'utf8'), 'new');
+  if (process.platform !== 'win32') assert.equal(fs.statSync(target).mode & 0o777, 0o755);
+  assert.deepEqual(fs.readdirSync(root), ['hook']);
+  const link = path.join(root, 'link');
+  try {
+    fs.symlinkSync(target, link);
+  } catch {
+    return;
+  }
+  writeFileAtomic(link, 'through link');
+  assert.ok(fs.lstatSync(link).isSymbolicLink());
+  assert.equal(fs.readFileSync(target, 'utf8'), 'through link');
 });
 
 test('review-mcp ignores blank and whitespace-only stdin lines', async () => {
