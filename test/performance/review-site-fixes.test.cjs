@@ -21,3 +21,25 @@ test('arrow body that wraps the literal in a call keeps the call', (context) => 
   if (!finding.fix) return;
   assert.match(onlyChange(finding).after, /return wrap\(\{ x: xValue, y: yValue \}\);/);
 });
+
+const queueFiles = {
+  'node_modules/bullmq/index.d.ts':
+    'export declare class Queue { add(name: string, data: any, opts?: any): Promise<{ id: string }>; addBulk(jobs: any[]): Promise<any[]>; }',
+};
+
+test('queue add loop with a comment in its body is not rewritten away from the comment', (context) => {
+  const { findings } = scanWithFixes(context, {
+    ...queueFiles,
+    'src/app.ts': `import { Queue } from 'bullmq';
+export async function run(queue: Queue, ids: string[]) {
+  for (const id of ids) {
+    // retries are handled by the worker
+    await queue.add('job', { id });
+  }
+}
+`,
+  });
+  const finding = findings.find((entry) => entry.ruleId === 'queue-add-in-loop');
+  assert.ok(finding);
+  assert.equal(finding.fix, undefined);
+});
