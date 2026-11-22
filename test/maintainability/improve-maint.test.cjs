@@ -192,3 +192,33 @@ test('dependency-cycle still reports a regular enum, a mixed import and a re-exp
   }
 });
 
+test('declaration files record each top-level import and re-export once', () => {
+  const ts = require('typescript');
+  const { collectModuleUsage } = require('../../lib/maintainability/module-usage.cjs');
+  const text = [
+    "import { Shape } from './shape';",
+    "export { Color } from './color';",
+    'export { Size };',
+    "declare module './plugin' {",
+    "  import { Hook } from './hook';",
+    '}',
+    'declare const Size: Shape;',
+    '',
+  ].join('\n');
+  const sourceFile = ts.createSourceFile('/repo/types.d.ts', text, ts.ScriptTarget.Latest, true);
+  const known = new Set(['shape.ts', 'color.ts', 'plugin.ts', 'hook.ts']);
+  const resolve = (specifier) => [specifier.slice(2) + '.ts'].find((file) => known.has(file));
+  const usage = collectModuleUsage(sourceFile, 'types.d.ts', resolve);
+  assert.deepEqual(
+    usage.imports.map((item) => item.to),
+    ['shape.ts', 'plugin.ts', 'hook.ts'],
+  );
+  assert.deepEqual(
+    usage.reexports.map((item) => item.to),
+    ['color.ts'],
+  );
+  assert.deepEqual(
+    usage.exports.map((item) => item.name),
+    ['Size'],
+  );
+});
