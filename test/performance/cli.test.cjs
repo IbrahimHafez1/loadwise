@@ -194,3 +194,23 @@ test('plan CLI recognizes both engines and rejects estimates', (context) => {
   assert.equal(run(['plan', 'indexed.json'], directory).status, 0);
   assert.equal(run(['plan', 'estimate.json'], directory).status, 2);
 });
+
+test('JavaScript a tsconfig leaves out without allowJs is named in a note on both engines', (context) => {
+  const directory = fixture(context, {
+    'tsconfig.json': JSON.stringify({ compilerOptions: { types: [] } }),
+    'app.ts': 'export const app = 1;\n',
+    'report.js': 'module.exports = {};\n',
+    'eslint.config.js': 'module.exports = [];\n',
+  });
+  for (const engine of ['js', 'native']) {
+    const result = run(['--engine', engine, '--json'], directory);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stderr, /skip 1 JavaScript file\(s\) in \. \(report\.js\) because .*"allowJs"/);
+  }
+  fs.writeFileSync(
+    path.join(directory, 'tsconfig.json'),
+    JSON.stringify({ compilerOptions: { types: [], allowJs: true } }),
+  );
+  assert.doesNotMatch(run(['--json'], directory).stderr, /allowJs/);
+});
+

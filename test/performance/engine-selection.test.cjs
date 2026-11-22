@@ -27,7 +27,8 @@ function fixture(context) {
     'base.json': '{"compilerOptions":{"target":"ES2022","moduleResolution":"node10"},"files":["flag.ts","clean.ts"]}',
     'bad.ts': 'export const broken = ;',
     // Reports at exit whether any native engine module was loaded into the CLI process.
-    'probe.cjs':
+    // Named like a tool config, which the note on JavaScript a tsconfig leaves out does not list.
+    'probe.config.cjs':
       "process.on('exit', () => { if (Object.keys(require.cache).some((name) => /[\\\\/]lib[\\\\/]performance[\\\\/]native/.test(name))) process.stderr.write('native loaded'); });",
   };
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
@@ -60,7 +61,7 @@ test('auto falls back to TypeScript 6 for a config TypeScript 7 rejects', { skip
 
 test('auto matches the JS engine on a compatible project and uses native', { skip: nativeSkip }, (context) => {
   const run = fixture(context);
-  const auto = run(['-p', 'tsconfig.json', '--json'], ['--require', './probe.cjs']);
+  const auto = run(['-p', 'tsconfig.json', '--json'], ['--require', './probe.config.cjs']);
   const js = run(['-p', 'tsconfig.json', '--json', '--engine', 'js']);
   assert.equal(auto.status, 1, auto.stderr);
   assert.deepEqual(JSON.parse(auto.stdout), JSON.parse(js.stdout));
@@ -92,7 +93,7 @@ test('auto keeps exit 2 for source errors', (context) => {
 test('--engine js never loads the native engine', (context) => {
   const run = fixture(context);
   for (const project of ['tsconfig.json', 'base.json']) {
-    const result = run(['-p', project, '--json', '--engine', 'js'], ['--require', './probe.cjs']);
+    const result = run(['-p', project, '--json', '--engine', 'js'], ['--require', './probe.config.cjs']);
     assert.equal(result.status, 1, result.stderr);
     assert.equal(result.stderr, '');
     assert.equal(JSON.parse(result.stdout).findings.length, 1);
