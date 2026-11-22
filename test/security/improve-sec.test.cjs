@@ -77,3 +77,33 @@ test('an OSV batch that never stops paging fails instead of looping', async (con
   assert.equal(batches, 100);
 });
 
+function tracedInRoute(body, files = stubs.express) {
+  const source = [
+    "import express from 'express';",
+    'declare function sink(value: unknown): void;',
+    'const app = express();',
+    `app.get('/items', async (req, res) => { ${body} });`,
+  ].join('\n');
+  return withContext(source, files, (context, sourceFile) => context.taint.trace(sinkArgument(sourceFile), 'sql'));
+}
+
+test('taint passes through Promise.resolve, await and a then callback, with and without types', () => {
+  for (const files of [stubs.express, {}]) {
+    assert.equal(
+      tracedInRoute('const q = await Promise.resolve(req.query.q); sink("x" + q);', files)?.label,
+      'req.query.q',
+    );
+    assert.equal(
+      tracedInRoute('Promise.resolve(req.query.q).then((v) => sink("x" + v));', files)?.label,
+      'req.query.q',
+    );
+    assert.equal(tracedInRoute('sink(`${String(req.query.q).trim().toLowerCase()}`);', files)?.label, 'req.query.q');
+  }
+});
+
+test('a numeric conversion inside the promise or the callback still clears taint', () => {
+  assert.equal(tracedInRoute('sink(await Promise.resolve(Number(req.query.q)));'), undefined);
+  assert.equal(tracedInRoute('Promise.resolve(req.query.q).then((v) => sink(parseInt(v, 10)));'), undefined);
+  assert.equal(tracedInRoute('fetch("https://example.com").then((v) => sink(v));'), undefined);
+});
+
