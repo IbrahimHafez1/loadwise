@@ -316,3 +316,60 @@ test('tls-verification-disabled keeps a comment on its own line above the option
   assert.doesNotMatch(fix.note, /Removes the comment/);
 });
 
+const diplomaTable = [
+  "import { mysqlTable, index, int, varchar } from 'drizzle-orm/mysql-core';",
+  'export const diplomas = mysqlTable(',
+  "  'diplomas',",
+  "  { id: int('id'), status: varchar('status', { length: 50 }), createdAt: int('created_at') },",
+  '  (table) => [',
+  "    index('status_idx').on(table.status),",
+  '  ],',
+  ');',
+  '',
+].join('\n');
+
+function drizzleIndexNote(context, files) {
+  const performanceFix = require('../../lib/performance/site-fix.cjs');
+  const root = temporaryProject(context, { 'package.json': '{}', 'query.ts': 'export const run = 1;\n', ...files });
+  const finding = {
+    ruleId: 'index-missing-filter',
+    file: path.join(root, 'query.ts'),
+    line: 1,
+    column: 8,
+    message: '',
+    suggestion: "index('diplomas_status_created_at_idx').on(table.status, table.createdAt)",
+    related: [
+      {
+        file: path.join(root, 'schema/diploma.schema.ts'),
+        line: 2,
+        column: 25,
+        message: 'Table `diplomas` is declared here.',
+      },
+    ],
+  };
+  const fix = performanceFix.buildFix(finding, performanceFix.createFileCache());
+  assert.equal(fix?.requiresReview, true);
+  return fix.note;
+}
+
+const drizzleKitConfig =
+  "import type { Config } from 'drizzle-kit';\nexport default { out: './drizzle' } satisfies Config;\n";
+
+test('drizzle index fix asks for a hand-written migration and names the index it makes redundant', (context) => {
+  const note = drizzleIndexNote(context, {
+    'schema/diploma.schema.ts': diplomaTable,
+    'drizzle.config.ts': drizzleKitConfig,
+    'schema/drizzle.config.ts': 'export const runtime = true;\n',
+  });
+  assert.match(note, /no drizzle-kit migrations folder/);
+  assert.match(note, /`status_idx` becomes redundant/);
+});
+
+test('drizzle index fix leaves the migration to drizzle-kit and keeps unrelated indexes', (context) => {
+  const note = drizzleIndexNote(context, {
+    'schema/diploma.schema.ts': diplomaTable.replace('on(table.status)', 'on(table.createdAt)'),
+    'drizzle.config.ts': drizzleKitConfig,
+    'drizzle/0000_init.sql': 'CREATE TABLE diplomas (id int);\n',
+  });
+  assert.doesNotMatch(note, /migrations folder|redundant/);
+});
