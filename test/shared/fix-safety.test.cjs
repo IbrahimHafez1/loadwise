@@ -97,3 +97,30 @@ test('maintainability --fix --only refuses a broken fix and applies a valid one'
   assert.equal(read('broken.ts'), original);
   assert.equal(read('fine.ts'), original.replace('compute(1, 2)', 'compute(2, 1)'));
 });
+
+test('two fixes creating the same new file apply the first and leave the second for the next run', (context) => {
+  const { directory, read } = project(context, { 'a.ts': original, 'b.ts': original });
+  const helper = (id, file, body) => {
+    const extraction = finding(id, file, validAfter);
+    extraction.fix.changes.push({ file: 'helper.ts', line: 1, before: '', after: body, create: true });
+    return extraction;
+  };
+  const same = helper('same', 'b.ts', 'export const helper = 1;\n');
+  same.fix.changes.shift();
+  const result = applyBulkFixes(
+    [
+      helper('first', 'a.ts', 'export const helper = 1;\n'),
+      helper('second', 'b.ts', 'export const helper = 2;\n'),
+      same,
+    ],
+    directory,
+  );
+  assert.equal(read('helper.ts'), 'export const helper = 1;\n');
+  assert.equal(read('b.ts'), original);
+  assert.deepEqual(
+    result.applied.map(({ id }) => id),
+    ['first', 'same'],
+  );
+  assert.equal(result.refused[0].finding.id, 'second');
+  assert.match(result.refused[0].reason, /#first creates helper\.ts in this run/);
+});

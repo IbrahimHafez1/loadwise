@@ -9,6 +9,7 @@ const test = require('node:test');
 const ts = require('typescript');
 const { applyChangesToText } = require('../../editor/apply-fix.cjs');
 const { applyEdits, hunksFor, lineStartsOf, normalize } = require('../../lib/shared/fix-hunks.cjs');
+const { introducedSyntaxError } = require('../../lib/shared/fix-safety.cjs');
 const {
   createWriteTracker,
   dropConflictingComments,
@@ -398,4 +399,31 @@ test('loadwise fix --comments comments and formats each applied fix; by default 
   const plainSource = fs.readFileSync(path.join(directory, 'slow.ts'), 'utf8');
   assert.doesNotMatch(plainSource, /Loadwise/);
   assert.match(plainSource, /orders\.filter\(order =>/);
+});
+
+test('a call Prettier collapses onto one line keeps a single closing parenthesis', (context) => {
+  const directory = temporaryDirectory(context, 'loadwise-collapse-');
+  installPrettier(directory);
+  fs.writeFileSync(path.join(directory, '.prettierrc'), '{"singleQuote":true,"printWidth":120}');
+  const file = path.join(directory, 'controller.ts');
+  const before = [
+    'export class LocationsController {',
+    '  update(id: number, dto: object, request: object, user: { id: number }) {',
+    '    return this.locationsService.update(',
+    '      id,',
+    '      dto,',
+    '      this.detectLanguage(request),',
+    '      user.id,',
+    '    );',
+    '  }',
+    '}',
+    '',
+  ].join('\n');
+  const after = before.replace('this.detectLanguage(request)', 'detectLanguage(request)');
+  const { result } = capturingErrors(() =>
+    formatUpdates(directory, [{ file, before, after, hunks: [{ key: 'call', row: 5, removed: 1, added: 1 }] }]),
+  );
+  const text = result.texts.get(file) ?? after;
+  assert.equal(introducedSyntaxError(file, before, text), undefined, text);
+  assert.equal(text.match(/\);/g).length, 1, text);
 });
