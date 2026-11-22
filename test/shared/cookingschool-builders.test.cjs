@@ -199,3 +199,36 @@ test('large-module keeps a record whose move leaves the module over the line lim
   assert.equal(largeModuleFix(context, packetModule, 1700), undefined);
 });
 
+function seedStore(loopBody) {
+  return [
+    "'use strict';",
+    "const assert = require('node:assert');",
+    'class Store {',
+    '  save(rows, existing, registryKey) {',
+    '    for (const row of rows) {',
+    '      if (row.owned) {',
+    '        if (existing.length) {',
+    '          if (row.checked) {',
+    '            for (const [field, value] of Object.entries(row.identity))',
+    '              ' + loopBody,
+    '          }',
+    '          row.count++;',
+    '        }',
+    '      }',
+    '    }',
+    '  }',
+    '}',
+    'module.exports = { Store };',
+  ].join('\n');
+}
+
+test('deep-control-flow names an extracted loop that only asserts after what it checks', () => {
+  const asserting = controlFlowRewrite(
+    seedStore('assert.equal(existing[0][field], value, `Seed ownership changed: ${registryKey}`);'),
+    'seed.cjs',
+  );
+  assert.match(asserting, /this\.assertChecked\(/);
+  const updating = controlFlowRewrite(seedStore('existing[0][field] = value;'), 'seed.cjs');
+  assert.match(updating, /this\.handleChecked\(/);
+});
+
