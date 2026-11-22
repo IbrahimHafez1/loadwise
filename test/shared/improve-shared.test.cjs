@@ -7,6 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { Readable, Writable } = require('node:stream');
 const test = require('node:test');
+const { applyBaselineOptions, baselineForScan } = require('../../lib/shared/baseline.cjs');
 const { replaceBlocks } = require('../../lib/shared/managed-blocks.cjs');
 const { runReviewMcp } = require('../../lib/shared/review-mcp.cjs');
 const { writeFileAtomic } = require('../../lib/shared/atomic-write.cjs');
@@ -85,6 +86,80 @@ test('a start marker that lost its end marker never takes the user text after it
   assert.ok(replaceBlocks(appendedLater, pairs).includes('User text that must stay.'));
 });
 
+function writeWorkspaceProject(context) {
+  const root = temporaryDirectory(context, 'loadwise-improve-baseline-');
+  fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ workspaces: ['packages/*'] }));
+  for (const name of ['api', 'web']) {
+    fs.mkdirSync(path.join(root, 'packages', name), { recursive: true });
+    fs.writeFileSync(path.join(root, 'packages', name, 'package.json'), JSON.stringify({ name }));
+  }
+  return root;
+}
+
+test('--write-baseline on a partial scan keeps entries outside the scanned workspaces and filters', (context) => {
+  const root = writeWorkspaceProject(context);
+  const finding = (ruleId, file, id) => ({ ruleId, file, id });
+  const write = (values, findings) =>
+    applyBaselineOptions({
+      options: baselineForScan({ writeBaseline: {} }, values),
+      pillar: 'performance',
+      findings,
+      projectRoot: root,
+      absoluteFileOf: (item) => path.join(root, item.file),
+    });
+  write({}, [
+    finding('n-plus-one-query', 'packages/api/a.ts', 'api1'),
+    finding('n-plus-one-query', 'packages/web/b.ts', 'web1'),
+    finding('unbounded-query', 'packages/api/c.ts', 'api2'),
+  ]);
+  write({ workspace: ['web'] }, [finding('n-plus-one-query', 'packages/web/b.ts', 'web2')]);
+  write({ ignore: ['unbounded-query'] }, [
+    finding('n-plus-one-query', 'packages/api/a.ts', 'api1'),
+    finding('n-plus-one-query', 'packages/web/b.ts', 'web2'),
+  ]);
+  const entries = JSON.parse(fs.readFileSync(path.join(root, 'loadwise-baseline.json'), 'utf8')).pillars.performance
+    .findings;
+  assert.deepEqual(
+    entries.map(({ ruleId, file, fingerprint }) => [ruleId, file, fingerprint]),
+    [
+      ['n-plus-one-query', 'packages/api/a.ts', 'api1'],
+      ['n-plus-one-query', 'packages/web/b.ts', 'web2'],
+      ['unbounded-query', 'packages/api/c.ts', 'api2'],
+    ],
+  );
+  // A full scan still replaces the whole section.
+  write({}, []);
+  assert.deepEqual(
+    JSON.parse(fs.readFileSync(path.join(root, 'loadwise-baseline.json'), 'utf8')).pillars.performance.findings,
+    [],
+  );
+});
+
+test('--write-baseline with --min-impact keeps entries for rules below the threshold', (context) => {
+  const root = writeWorkspaceProject(context);
+  const { impactByRule } = require('../../lib/performance/rule-ids.cjs');
+  const lowRule = Object.keys(impactByRule).find((ruleId) => impactByRule[ruleId] === 'low');
+  const criticalRule = Object.keys(impactByRule).find((ruleId) => impactByRule[ruleId] === 'critical');
+  const write = (values, findings) =>
+    applyBaselineOptions({
+      options: baselineForScan({ writeBaseline: {} }, values),
+      pillar: 'performance',
+      findings,
+      projectRoot: root,
+      absoluteFileOf: (item) => path.join(root, item.file),
+    });
+  write({}, [
+    { ruleId: lowRule, file: 'a.ts', id: 'low1' },
+    { ruleId: criticalRule, file: 'a.ts', id: 'critical1' },
+  ]);
+  write({ 'min-impact': 'high' }, []);
+  const entries = JSON.parse(fs.readFileSync(path.join(root, 'loadwise-baseline.json'), 'utf8')).pillars.performance
+    .findings;
+  assert.deepEqual(
+    entries.map(({ ruleId }) => ruleId),
+    [lowRule],
+  );
+});
 
 test('writeFileAtomic replaces through a temporary file and keeps the mode and symlink target', (context) => {
   const root = temporaryDirectory(context, 'loadwise-improve-atomic-');
