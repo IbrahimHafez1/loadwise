@@ -62,11 +62,13 @@ export async function run(userId: string, groupId: string) {
   );
 });
 
-const { compareDto } = require('../../lib/performance/contracts/dto.cjs');
-const { compareOpenApi } = require('../../lib/performance/contracts/openapi.cjs');
+// The contract comparators load the JavaScript compiler, which cannot share a process with the native engine.
+const onNativeEngine = process.env.PERF_CHECK_TEST_NATIVE === '1';
+const contractTest = (name, body) => test(name, { skip: onNativeEngine }, body);
 
 function dtoTypeChanges(oldType, newType, roles) {
   const source = (type) => `export class UserDto {\n  name: ${type};\n}\n`;
+  const { compareDto } = require('../../lib/performance/contracts/dto.cjs');
   return compareDto(source(oldType), source(newType), 'UserDto', new Set(roles), {
     file: 'user.dto.ts',
     forbidsUnknownInput: false,
@@ -74,7 +76,7 @@ function dtoTypeChanges(oldType, newType, roles) {
   }).map((finding) => finding.ruleId);
 }
 
-test('DTO: widening a request type or narrowing a response type is not a breaking type change', () => {
+contractTest('DTO: widening a request type or narrowing a response type is not a breaking type change', () => {
   assert.deepEqual(dtoTypeChanges('string', 'string | null', ['input']), []);
   assert.deepEqual(dtoTypeChanges('string | null', 'string', ['output']), []);
   assert.deepEqual(dtoTypeChanges('string | null', 'string', ['input']), ['api-type-changed']);
@@ -83,17 +85,29 @@ test('DTO: widening a request type or narrowing a response type is not a breakin
   assert.deepEqual(dtoTypeChanges('number', 'string', ['input']), ['api-type-changed']);
 });
 
-test('OpenAPI: locating thousands of findings in a large document stays linear', () => {
+contractTest('OpenAPI: locating thousands of findings in a large document stays linear', () => {
+  const { compareOpenApi } = require('../../lib/performance/contracts/openapi.cjs');
   const paths = {};
   for (let index = 0; index < 8000; index++) {
     paths['/items' + index] = { get: { responses: { 200: { description: 'ok' } } } };
   }
   const oldText = JSON.stringify({ openapi: '3.0.0', paths }, null, 2).replaceAll('\n', '\r\n');
-  const started = process.hrtime.bigint();
-  const findings = compareOpenApi(oldText, JSON.stringify({ openapi: '3.0.0', paths: {} }));
-  const elapsedMilliseconds = Number(process.hrtime.bigint() - started) / 1e6;
+  // Counts character reads instead of timing: rescanning the document per finding reads it thousands of times
+  // over, and the budget stops such a run early instead of letting it take minutes.
+  const readBudget = 4 * oldText.length;
+  const readCharacter = String.prototype.charCodeAt;
+  let characterReads = 0;
+  String.prototype.charCodeAt = function (index) {
+    if (++characterReads > readBudget) throw new Error(`over ${readBudget} character reads`);
+    return readCharacter.call(this, index);
+  };
+  let findings;
+  try {
+    findings = compareOpenApi(oldText, JSON.stringify({ openapi: '3.0.0', paths: {} }));
+  } finally {
+    String.prototype.charCodeAt = readCharacter;
+  }
   assert.equal(findings.length, 8000);
   assert.deepEqual([findings[0].line, findings[0].column], [5, 14]);
   assert.deepEqual([findings.at(-1).line, findings.at(-1).column], [71996, 14]);
-  assert.ok(elapsedMilliseconds < 2000, `took ${Math.round(elapsedMilliseconds)} ms`);
 });
