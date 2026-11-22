@@ -492,6 +492,23 @@ test('Drizzle unfiltered writes with no implied filter get no fix', (context) =>
   assert.equal(findings.filter((finding) => finding.fix).length, 0);
 });
 
+test('Drizzle same-boolean update keeps a where argument that runs code and replaces a plain undefined', (context) => {
+  const source = [
+    "import type { Database } from 'drizzle-orm/pg-core/db';",
+    "import { invoices } from '@app/schema';",
+    'declare function audit(): void;',
+    'export async function run(db: Database) {',
+    '  await db.update(invoices).set({ archived: true }).where(void audit());',
+    '  await db.update(invoices).set({ archived: true }).where(undefined);',
+    '}',
+  ].join('\n');
+  const findings = findingsFor(context, 'drizzle-unfiltered-write', source, drizzleStubs);
+  assert.deepEqual(
+    findings.map((finding) => Boolean(finding.fix)),
+    [false, true],
+  );
+});
+
 const notNullSchemaStub = {
   'schema.ts': `
     interface ColumnBuilder { notNull(): ColumnBuilder; default(value: boolean): ColumnBuilder }
