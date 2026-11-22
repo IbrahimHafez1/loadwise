@@ -295,3 +295,24 @@ test('swallowed-error still reports a catch that hides an error with no default 
   );
 });
 
+function tlsFix(context, optionLine) {
+  const { scanWithFixes, withSecurity } = require('../performance/site-fix-helpers.cjs');
+  const source = ['export const config = {', '  ssl: {', '    ' + optionLine, '  },', '};', ''].join('\n');
+  const { findings } = scanWithFixes(context, { 'drizzle.config.ts': source }, { analyzers: withSecurity });
+  const [finding] = findings.filter((candidate) => candidate.ruleId === 'tls-verification-disabled');
+  assert.ok(finding?.fix);
+  return finding.fix;
+}
+
+test('tls-verification-disabled drops the same-line comment that described the disabled value', (context) => {
+  const fix = tlsFix(context, 'rejectUnauthorized: false, // Or true, depending on your CA setup');
+  assert.equal(fix.changes[0].after.trim(), 'rejectUnauthorized: true,');
+  assert.match(fix.note, /Removes the comment/);
+});
+
+test('tls-verification-disabled keeps a comment on its own line above the option', (context) => {
+  const fix = tlsFix(context, '// Managed database CA\n    rejectUnauthorized: false,');
+  assert.match(fix.changes.map((change) => change.after).join('\n'), /^\s*rejectUnauthorized: true,$/m);
+  assert.doesNotMatch(fix.note, /Removes the comment/);
+});
+
