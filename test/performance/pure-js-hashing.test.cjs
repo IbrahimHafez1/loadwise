@@ -3,7 +3,10 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { lint } = require('./helpers.cjs');
-const { scanWithFixes, onlyChange } = require('./site-fix-helpers.cjs');
+
+// Site fixes scan on the JS compiler; loading them first would bind the rules to it, so the native engine skips them.
+const siteFixOptions = { skip: process.env.PERF_CHECK_TEST_NATIVE === '1' };
+const siteFixHelpers = () => require('./site-fix-helpers.cjs');
 
 const bcryptjsTypes = `
   export function hash(data: string, rounds: number | string): Promise<string>;
@@ -41,7 +44,8 @@ test('ignores sync variants and native bcrypt', () => {
   assert.equal(check("import { hash } from 'bcrypt';\nexport const run = () => hash('a', 10);").length, 0);
 });
 
-test('site fix swaps the import specifier for compatible import shapes only', (context) => {
+test('site fix swaps the import specifier for compatible import shapes only', siteFixOptions, (context) => {
+  const { scanWithFixes, onlyChange } = siteFixHelpers();
   const { findings } = scanWithFixes(context, {
     ...files,
     'package.json': JSON.stringify({ dependencies: { bcrypt: '^6.0.0', bcryptjs: '^2.4.3' } }),
@@ -58,8 +62,8 @@ test('site fix swaps the import specifier for compatible import shapes only', (c
   assert.equal(byFile('b.ts').fix, undefined);
 });
 
-test('site fix offers no edit while bcrypt is missing from package.json', (context) => {
-  const { findings } = scanWithFixes(context, {
+test('site fix offers no edit while bcrypt is missing from package.json', siteFixOptions, (context) => {
+  const { findings } = siteFixHelpers().scanWithFixes(context, {
     'node_modules/bcryptjs/index.d.ts': bcryptjsTypes,
     'package.json': JSON.stringify({ dependencies: { bcryptjs: '^2.4.3' } }),
     'a.ts': "import { hash } from 'bcryptjs';\nexport const a = () => hash('p', 10);\n",
