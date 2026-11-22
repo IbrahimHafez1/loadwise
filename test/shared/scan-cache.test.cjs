@@ -106,3 +106,19 @@ test('a folder outside git runs uncached', async (context) => {
   assert.deepEqual(delta(before), { hits: 0, misses: 0, bypasses: 2 });
   assert.equal(second.stdout, first.stdout);
 });
+
+test('a run that exits 2 for skipped files is not stored', async (context) => {
+  isolateCache(context);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-scan-cache-skipped-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(root, 'broken.ts'), 'export const broken = ;');
+  fs.writeFileSync(path.join(root, 'tsconfig.json'), '{"compilerOptions":{"strict":true},"files":["broken.ts"]}');
+  assert.equal(spawnSync('git', ['init', '--quiet'], { cwd: root }).status, 0);
+  const args = ['perf', '-p', 'tsconfig.json', '--json', '--engine', 'js'];
+  const first = await runChecker(args, root);
+  assert.equal(first.code, 2);
+  const before = { ...stats };
+  await runChecker(args, root);
+  assert.equal(stats.hits, before.hits);
+  assert.equal(stats.misses, before.misses + 1);
+});
