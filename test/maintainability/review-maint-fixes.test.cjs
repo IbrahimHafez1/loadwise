@@ -23,6 +23,18 @@ const record = [
   '}',
 ].join('\n');
 
+test('a record that is re-exported by name stays in its module', (context) => {
+  const directory = project(context);
+  const finding = { file: 'api.ts', line: 1, column: 1, ruleId: 'large-module', id: 'packet' };
+  const source = `${record}\nexport function inspect(packet: Packet) { return packet.when; }\n`;
+  fs.writeFileSync(path.join(directory, 'api.ts'), source);
+  assert.ok(buildFix(finding, createFileCache(directory)));
+  for (const reExport of ['export { Packet };\n', 'export type { Packet };\n', 'export default Packet;\n']) {
+    fs.writeFileSync(path.join(directory, 'api.ts'), source + reExport);
+    assert.equal(buildFix(finding, createFileCache(directory)), undefined, reExport);
+  }
+});
+
 test('a class extending an import keeps it a value import', (context) => {
   const directory = project(context);
   const text = "import { Base } from './base';\nexport class Child extends Base {}\n";
