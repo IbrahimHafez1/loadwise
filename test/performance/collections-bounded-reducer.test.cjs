@@ -2,7 +2,9 @@
 
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const { lint } = require('./helpers.cjs');
+const path = require('node:path');
+const { lint, withProgram } = require('./helpers.cjs');
+const { analyzeFile } = require('../../lib/performance/analyze.cjs');
 
 function copyingReducers(source) {
   return lint(source).filter(({ ruleId }) => ruleId === 'reduce-copy-accumulator');
@@ -49,4 +51,86 @@ test('reducers still report when the same file replaces the built-in enumeration
     }
   `);
   assert.equal(findings.length, 1);
+});
+
+function reducerContexts(source, files) {
+  return lint(source, files)
+    .filter(({ ruleId }) => ruleId === 'reduce-copy-accumulator')
+    .map(({ line, contextualReason }) => [line, Boolean(contextualReason)]);
+}
+
+test('reducers over a constant lookup table or a const-asserted short list are contextual', () => {
+  const files = {
+    'constants.ts': [
+      "export const LANGUAGE_CODES = ['de', 'en', 'fr', 'es', 'it', 'nl', 'pl', 'pt', 'ja', 'ko', 'zh'] as const;",
+      'export const HEADER_CONFIG: Record<string, { required: boolean }> = { a: { required: true }, b: { required: false } };',
+    ].join('\n'),
+  };
+  const source = [
+    "import { LANGUAGE_CODES, HEADER_CONFIG } from './constants';",
+    'export const instances = LANGUAGE_CODES.reduce((acc, code) => ({ ...acc, [code]: code }), {});',
+    'export const headers = Object.entries(HEADER_CONFIG).reduce((acc, [name, header]) => ({ ...acc, [name]: header }), {});',
+  ].join('\n');
+  assert.deepEqual(reducerContexts(source, files), [
+    [2, true],
+    [3, true],
+  ]);
+});
+
+test('reducers over a growing list stay reported at default level beside the bounded shapes', () => {
+  const files = { 'constants.ts': 'export const HEADER_CONFIG: Record<string, number> = { a: 1 };' };
+  const source = [
+    "import { HEADER_CONFIG } from './constants';",
+    'export function grow(ids: string[]) {',
+    '  Object.keys(HEADER_CONFIG).push("x");',
+    '  return ids.reduce((acc, id) => ({ ...acc, [id]: true }), {});',
+    '}',
+  ].join('\n');
+  assert.deepEqual(reducerContexts(source, files), [[4, false]]);
+});
+
+test('reducers over the entries of a small declared object type are contextual', () => {
+  const source = [
+    'interface Channels { email?: boolean; sms?: boolean; push?: boolean }',
+    'export function toPreferences(channels: Channels) {',
+    '  return Object.entries(channels).reduce((acc, [channel, enabled]) => ({ ...acc, [channel]: { enabled } }), {});',
+    '}',
+    'export function toIndexed(channels: Record<string, boolean>) {',
+    '  return Object.entries(channels).reduce((acc, [channel, enabled]) => ({ ...acc, [channel]: { enabled } }), {});',
+    '}',
+  ].join('\n');
+  assert.deepEqual(reducerContexts(source), [
+    [3, true],
+    [6, false],
+  ]);
+});
+
+test('reducers over the arguments of a param decorator are contextual', () => {
+  const source = [
+    'declare function createParamDecorator(factory: (data: string[] | undefined, context: unknown) => unknown): unknown;',
+    'export const Pick = createParamDecorator((data, context) => {',
+    '  if (!data) return undefined;',
+    '  return data.reduce((prev, curr) => ({ ...prev, [curr]: curr }), {});',
+    '});',
+    'export function pickAll(keys: string[]) {',
+    '  return keys.reduce((prev, curr) => ({ ...prev, [curr]: curr }), {});',
+    '}',
+  ].join('\n');
+  assert.deepEqual(reducerContexts(source), [
+    [4, true],
+    [7, false],
+  ]);
+});
+
+test('reducers in a test source are contextual while server sources stay reported', () => {
+  const source =
+    'export const index = (names: string[]) => names.reduce((acc, name) => ({ ...acc, [name]: name }), {});';
+  const contexts = (fileName) =>
+    withProgram('export {};', { [fileName]: source }, (program) =>
+      analyzeFile(program, program.getSourceFile(path.join(__dirname, 'virtual-project', fileName)))
+        .filter(({ ruleId }) => ruleId === 'reduce-copy-accumulator')
+        .map(({ contextualReason }) => Boolean(contextualReason)),
+    );
+  assert.deepEqual(contexts('helpers.spec.ts'), [true]);
+  assert.deepEqual(contexts('service.ts'), [false]);
 });
