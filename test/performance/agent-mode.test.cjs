@@ -78,7 +78,7 @@ test('fix commands reuse the JS engine when auto falls back on a removed compile
   const { root, run } = project(context);
   fs.writeFileSync(
     path.join(root, 'tsconfig.json'),
-    '{"compilerOptions":{"moduleResolution":"node10"},"files":["slow.ts"]}',
+    '{"compilerOptions":{"moduleResolution":"classic"},"files":["slow.ts"]}',
   );
   const report = run(['-p', 'tsconfig.json']);
   assert.equal(report.status, 1, report.stderr);
