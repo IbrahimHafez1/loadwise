@@ -124,3 +124,31 @@ test('two fixes creating the same new file apply the first and leave the second 
   assert.equal(result.refused[0].finding.id, 'second');
   assert.match(result.refused[0].reason, /#first creates helper\.ts in this run/);
 });
+
+test('two fixes rewriting overlapping lines apply the first and leave the second for the next run', (context) => {
+  const lines = 'const a = 1;\nconst b = 2;\nconst c = 3;\nconst d = 4;\n';
+  const { directory, read } = project(context, { 'schema.ts': lines });
+  const removal = (id, line, before, after) => ({
+    id,
+    ruleId: 'test-rule',
+    checker: 'test',
+    file: 'schema.ts',
+    line,
+    fix: { changes: [{ file: 'schema.ts', line, before, after }] },
+  });
+  const result = applyBulkFixes(
+    [
+      removal('first', 1, 'const a = 1;\nconst b = 2;', 'const a = 1;'),
+      removal('second', 2, 'const b = 2;\nconst c = 3;', 'const b = 2;'),
+      removal('separate', 4, 'const d = 4;', 'const d = 5;'),
+    ],
+    directory,
+  );
+  assert.equal(read('schema.ts'), 'const a = 1;\nconst c = 3;\nconst d = 5;\n');
+  assert.deepEqual(
+    result.applied.map(({ id }) => id),
+    ['first', 'separate'],
+  );
+  assert.equal(result.refused[0].finding.id, 'second');
+  assert.match(result.refused[0].reason, /#first changes schema\.ts:2 in this run/);
+});

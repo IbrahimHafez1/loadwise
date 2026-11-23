@@ -106,18 +106,24 @@ test('bulk JSON keeps evidence of applied edits alongside findings left for the 
   assert.match(clean.instructions, /No findings in the selected checkers/);
 });
 
-test('bulk preflight coalesces identical edits and rejects stale or overlapping edits across checkers', (context) => {
+test('bulk preflight coalesces identical edits, rejects stale ones and defers overlapping ones', (context) => {
   const original = 'one\r\ntwo\r\nthree\r\n';
   const { directory, read } = project(context, { 'source.txt': original, 'other.txt': 'other\n' });
   const replaceOne = finding('source.txt', 1, 'one', 'first');
   const unrelated = finding('other.txt', 1, 'other', 'updated');
   const overlap = finding('source.txt', 1, 'one\ntwo', 'pair');
   const stale = finding('source.txt', 2, 'one', 'first');
-  for (const conflict of [overlap, stale]) {
-    assert.throws(() => applyBulkFixes([unrelated, replaceOne, conflict], directory), /overlapping|changed since/);
-    assert.equal(read('source.txt'), original);
-    assert.equal(read('other.txt'), 'other\n');
-  }
+  assert.throws(() => applyBulkFixes([unrelated, replaceOne, stale], directory), /changed since/);
+  assert.equal(read('source.txt'), original);
+  assert.equal(read('other.txt'), 'other\n');
+  const deferred = applyBulkFixes([unrelated, replaceOne, overlap], directory);
+  assert.deepEqual(
+    deferred.refused.map(({ finding: refusedFinding }) => refusedFinding),
+    [overlap],
+  );
+  assert.equal(read('source.txt'), original.replace('one', 'first'));
+  assert.equal(read('other.txt'), 'updated\n');
+  fs.writeFileSync(path.join(directory, 'source.txt'), original);
   assert.equal(applyBulkFixes([replaceOne, replaceOne], directory).changedFiles, 1);
   assert.equal(read('source.txt'), original.replace('one', 'first'));
 });
