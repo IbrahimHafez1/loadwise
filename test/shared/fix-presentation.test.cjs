@@ -390,7 +390,7 @@ test('the per-checker --fix records the text formatting left for each written ch
   assert.ok(rows.includes('  const   alsoUntouched=2;'), 'a statement next to the change is unchanged');
 });
 
-test('loadwise fix --comments comments and formats each applied fix; by default and with --no-format both are left out', (context) => {
+test('loadwise fix comments and formats each applied fix by default; --no-comments and --no-format leave both out', (context) => {
   const example = fs.readFileSync(path.resolve(__dirname, '../../examples/slow.ts'), 'utf8');
   const directory = temporaryDirectory(context, 'loadwise-presentation-');
   const write = () => {
@@ -406,7 +406,7 @@ test('loadwise fix --comments comments and formats each applied fix; by default 
     });
   write();
   installPrettier(directory);
-  const fixed = run('fix', '--yes', 'performance', '--comments', '--json');
+  const fixed = run('fix', '--yes', 'performance', '--json');
   assert.equal(fixed.status, 0, fixed.stderr);
   const source = fs.readFileSync(path.join(directory, 'slow.ts'), 'utf8');
   assert.ok(source.includes(indentedComment + '\n'));
@@ -419,7 +419,7 @@ test('loadwise fix --comments comments and formats each applied fix; by default 
   const rescan = run('perf', '--json');
   assert.ok(!JSON.parse(rescan.stdout).findings.some((finding) => finding.ruleId === ruleId));
   write();
-  const plain = run('fix', '--yes', 'performance', '--no-format');
+  const plain = run('fix', '--yes', 'performance', '--no-comments', '--no-format');
   assert.equal(plain.status, 0, plain.stderr);
   assert.match(
     plain.stdout,

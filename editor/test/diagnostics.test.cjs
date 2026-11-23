@@ -330,7 +330,7 @@ test('a finding with a site fix offers a one-click quick fix that edits only the
     after: 'const found = await repo.exists(where);',
   };
   const finding = { file: 'orders.ts', line: 2, column: 21, ruleId: 'typeorm-existence-materialization', message: 'm' };
-  // The report's fix carries the --comments why-comment, which a default fix leaves out.
+  // The quick fix writes the report's why-comment, like a default --fix.
   const { whyComment } = require('../../lib/shared/fix-presentation.cjs');
   const commented = { ...change, after: whyComment(finding.ruleId) + '\n' + change.after };
   publish(vscode, collection, root, 'loadwise perf', [
@@ -353,5 +353,5 @@ test('a finding with a site fix offers a one-click quick fix that edits only the
       { line: 1, character: change.before.length },
     ],
   );
-  assert.equal(edits[0].newText, change.after);
+  assert.equal(edits[0].newText.replace(/\r\n/g, '\n'), commented.after);
 });

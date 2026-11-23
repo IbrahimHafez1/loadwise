@@ -7,7 +7,6 @@ const { exampleFor: maintainabilityExample } = require('./maintainability-exampl
 const { exampleFor: securityExample } = require('./security-examples.cjs');
 const { getFindingComparison, inlineComparison } = require('./finding-comparison.cjs');
 const { isChangeApplied, locateChange } = require('./apply-fix.cjs');
-const { withoutWhyComment } = require('../lib/shared/fix-presentation.cjs');
 const anchors = new WeakMap();
 const severityNames = { error: 'Error', warning: 'Warning', information: 'Information', hint: 'Hint' };
 const staleFixMessage = 'The code changed since the last scan. Save the file to rescan, then try again.';
@@ -162,9 +161,8 @@ function location(vscode, rootPath, site, documents) {
   return new vscode.Location(uri, sourceRange(vscode, site, document));
 }
 
-// Resolves each change of a site fix inside the workspace folder; a path outside it drops the whole fix. The report
-// carries the why-comment that `--comments` adds; the editor applies the fix as `--fix` writes it by default.
-function workspaceFix(rootPath, fix, ruleId) {
+// Resolves each change of a site fix inside the workspace folder; a path outside it drops the whole fix.
+function workspaceFix(rootPath, fix) {
   if (!fix || !Array.isArray(fix.changes) || !fix.changes.length) return;
   const changes = [];
   for (const change of fix.changes) {
@@ -177,7 +175,7 @@ function workspaceFix(rootPath, fix, ruleId) {
     changes.push({ ...change, filename });
   }
   return {
-    changes: withoutWhyComment({ changes }, ruleId).changes,
+    changes,
     note: typeof fix.note === 'string' ? fix.note : undefined,
     requiresReview: fix.requiresReview === true,
   };
@@ -238,7 +236,7 @@ function publish(vscode, collection, rootPath, source, findings, { isDismissed, 
       message,
       suggestion: finding.suggestion,
       comparison: finding.comparison,
-      fix: workspaceFix(rootPath, finding.fix, finding.ruleId),
+      fix: workspaceFix(rootPath, finding.fix),
       dismissal,
     };
     anchors.set(diagnostic, anchor);
