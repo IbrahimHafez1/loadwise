@@ -102,13 +102,13 @@
 | node-sync-process-in-async          | high     |   0 |   6 |      0 |        0% |      - | yes | thin       |
 | unbounded-module-cache              | medium   |   0 |   8 |      0 |        0% |      - | no  | thin       |
 | whole-payload-in-memory             | medium   |   0 |   4 |      0 |        0% |      - | no  | thin       |
-| reduce-copy-accumulator             | medium   |   6 |  22 |      1 |       27% |   100% | yes | measured   |
+| reduce-copy-accumulator             | medium   |   6 |  22 |      1 |       35% |   100% | yes | measured   |
 | loop-copy-accumulator               | medium   |   3 |   4 |      0 |       50% |   100% | yes | thin       |
 | service-query-in-loop               | high     |   2 |   3 |      8 |       50% |    38% | yes | measured   |
-| node-sync-fs-in-async               | medium   |  12 |  31 |      1 |       57% |    92% | yes | measured   |
-| array-repeated-find                 | medium   |  27 |  14 |      0 |       73% |   100% | yes | measured   |
+| node-sync-fs-in-async               | medium   |  12 |  31 |      1 |       75% |    92% | yes | measured   |
 | promise-return-escapes-catch        | high     |   4 |   1 |      0 |       80% |   100% | yes | thin       |
 | serial-awaits-in-literal            | medium   |   5 |   1 |      0 |       83% |   100% | yes | thin       |
+| array-repeated-find                 | medium   |  27 |  14 |      0 |       84% |   100% | yes | measured   |
 | floating-promise                    | high     |   9 |   4 |      2 |       91% |    91% | yes | measured   |
 | filter-for-existence                | low      |   3 |   0 |      0 |      100% |   100% | yes | thin       |
 | http-call-without-timeout           | high     |   9 |   9 |      0 |      100% |   100% | yes | measured   |
