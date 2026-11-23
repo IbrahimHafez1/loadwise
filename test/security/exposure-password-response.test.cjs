@@ -136,3 +136,46 @@ test('a Mongoose read is clean when the projection or schema hides the password'
   ];
   for (const source of cleanCases) assert.equal(findingsOf(ruleId, source, files).length, 0, source);
 });
+
+const nestServiceController = (serviceBody) =>
+  [
+    "import { Controller, Get, Param } from '@nestjs/common';",
+    prismaClient,
+    'class UsersService {',
+    `  async findOne(id: string) { ${serviceBody} }`,
+    '}',
+    '@Controller() class UsersController {',
+    '  constructor(private readonly users: UsersService) {}',
+    "  @Get(':id') find(@Param('id') id: string) { return this.users.findOne(id); }",
+    '}',
+  ].join('\n');
+
+test('a record returned whole by an injected service method is traced into the Nest controller response', () => {
+  const bodies = [
+    'return prisma.user.findUnique({ where: { id } });',
+    'const user = await prisma.user.findUnique({ where: { id } }); return user;',
+  ];
+  for (const body of bodies) {
+    const findings = defaultFindingsOf(ruleId, nestServiceController(body), stubs.nest);
+    assert.equal(findings.length, 1, body);
+    assert.match(findings[0].message, /`passwordHash`/);
+  }
+});
+
+test('an injected service method that selects, omits or strips the password is clean', () => {
+  const bodies = [
+    'return prisma.user.findUnique({ where: { id }, select: { id: true, email: true } });',
+    'return prisma.user.findUnique({ where: { id }, omit: { passwordHash: true } });',
+    'const user = await prisma.user.findUnique({ where: { id } }); const { passwordHash, ...rest } = user!; return rest;',
+    'const user = await prisma.user.findUnique({ where: { id } }); return { id: user!.id };',
+  ];
+  for (const body of bodies) assert.deepEqual(findingsOf(ruleId, nestServiceController(body), stubs.nest), [], body);
+});
+
+test('a service that is not constructor-injected is not followed', () => {
+  const source = nestServiceController('return prisma.user.findUnique({ where: { id } });').replace(
+    'constructor(private readonly users: UsersService) {}',
+    'users = new UsersService();',
+  );
+  assert.deepEqual(findingsOf(ruleId, source, stubs.nest), []);
+});
