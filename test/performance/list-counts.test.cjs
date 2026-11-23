@@ -23,13 +23,34 @@ function findings(body) {
   return lint(header + body, files).filter((finding) => finding.ruleId === RULE_ID);
 }
 
-test('reports a count run alongside the page query and returned in the response', () => {
+test('reports a count run alongside an unlimited list query and returned in the response', () => {
   const found = findings(`export async function list(req: Request, res: typeof response) {
-    const [rows, total] = await Promise.all([prisma.user.findMany({ take: 10 }), prisma.user.count()]);
+    const [rows, total] = await Promise.all([prisma.user.findMany(), prisma.user.count()]);
     res.json({ rows, total });
   }`);
   assert.equal(found.length, 1);
   assert.equal(found[0].contextualReason, undefined);
+});
+
+test('a count with the same where as a page-limited list query is contextual; an offset alone is not a page', () => {
+  const [paged] = findings(`export async function list(req: Request, res: typeof response) {
+    const [rows, total] = await Promise.all([prisma.user.findMany({ take: 10 }), prisma.user.count()]);
+    res.json({ rows, total });
+  }`);
+  assert.match(paged.contextualReason, /same where filter/);
+  const [filtered] = findings(`export async function list(req: Request, res: typeof response) {
+    const [rows, total] = await Promise.all([
+      prisma.user.findMany({ where: { active: true }, take: 10 }),
+      prisma.user.count({ where: { active: true } }),
+    ]);
+    res.json({ rows, total });
+  }`);
+  assert.match(filtered.contextualReason, /same where filter/);
+  const [offsetOnly] = findings(`export async function list(req: Request, res: typeof response) {
+    const [rows, total] = await Promise.all([prisma.user.findMany({ skip: 10 }), prisma.user.count()]);
+    res.json({ rows, total });
+  }`);
+  assert.equal(offsetOnly.contextualReason, undefined);
 });
 
 test('follows the total through arithmetic into the response', () => {
