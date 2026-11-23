@@ -124,7 +124,7 @@ test('native CLI covers clean and flagged files, overlapping configs, and invali
     'one.json': '{"compilerOptions":{"target":"ES2022"},"files":["flag.ts"]}',
     'two.json': '{"compilerOptions":{"target":"ES2022"},"files":["flag.ts","clean.ts","types.d.ts"]}',
     'tsconfig.json': '{"files":[],"references":[{"path":"./one.json"},{"path":"./two.json"}]}',
-    'removed.json': '{"compilerOptions":{"moduleResolution":"node10"},"files":["flag.ts"]}',
+    'removed.json': '{"compilerOptions":{"moduleResolution":"classic"},"files":["flag.ts"]}',
   };
   context.after(() => {
     for (const name of Object.keys(inputs)) fs.unlinkSync(path.join(directory, name));
