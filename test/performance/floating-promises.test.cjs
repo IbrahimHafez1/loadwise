@@ -34,8 +34,9 @@ test('a promise-returning call used as a statement in an async function is repor
   );
 });
 
-test('a request handler that is not async is covered by its request parameter', () => {
-  assert.equal(reported(`export function handle(req: object) {\n  sendEmail('a');\n}`).length, 1);
+test('a request handler that is not async is covered by its request and response parameters', () => {
+  assert.equal(reported(`export function handle(req: object, res: object) {\n  sendEmail('a');\n}`).length, 1);
+  assert.equal(reported(`export function build(req: object) {\n  sendEmail('a');\n}`).length, 0);
   assert.equal(reported(`export function helper(value: object) {\n  sendEmail('a');\n}`).length, 0);
 });
 
@@ -188,6 +189,24 @@ export async function login(id: string) {
   touch(id);
 }`);
   assert.match(reason, /catches its own failures/);
+});
+
+test('Promise.resolve with no value or a plain value cannot reject and is quiet', () => {
+  assert.equal(reported(`export async function run() {\n  Promise.resolve();\n  Promise.resolve(1);\n}`).length, 0);
+  assert.equal(reported(`export async function run() {\n  Promise.resolve(sendEmail('a'));\n}`).length, 1);
+});
+
+test('a helper in an object literal that catches its own failures is contextual', () => {
+  const helpers = [
+    'const helpers = { touch: async (id: string) => { try { await sendEmail(id); } catch (error) { return; } } };',
+    'const helpers = { async touch(id: string) { try { await sendEmail(id); } catch (error) { return; } } };',
+  ];
+  for (const declaration of helpers) {
+    const [reason] = contextualReasons(
+      `${declaration}\nexport async function login(id: string) {\n  helpers.touch(id);\n}`,
+    );
+    assert.match(reason, /catches its own failures/, declaration);
+  }
 });
 
 test('a helper that returns a promise from its try still escapes the catch and stays plain', () => {
