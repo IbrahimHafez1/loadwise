@@ -66,7 +66,7 @@
     "lint": "oxlint --deny-warnings .",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
     "typecheck": "tsc -p tsconfig.typecheck.json",
-    "test": "node --require ./test/manual-session.cjs --test --test-concurrency=2 test/performance/*.test.cjs test/maintainability/*.test.cjs test/security/*.test.cjs test/shared/*.test.cjs test/plugin/*.test.cjs editor/test/*.test.cjs",
+    "test": "node --require ./test/manual-session.cjs --test --test-concurrency=8 test/performance/*.test.cjs test/maintainability/*.test.cjs test/security/*.test.cjs test/shared/*.test.cjs test/plugin/*.test.cjs editor/test/*.test.cjs",
     "selfscan:baseline": "node bin/loadwise.cjs check . --config scripts/self-scan/loadwise.config.json --write-baseline scripts/self-scan/loadwise-baseline.json",
     "bench:corpus": "node scripts/score-corpus.cjs",
     "bench:scorecard": "node scripts/score-corpus.cjs --scorecard",
