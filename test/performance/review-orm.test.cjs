@@ -29,8 +29,9 @@ test('many get calls in one loop do not rescan the loop body for each call', () 
 const { checkPostgresCall } = require('../../lib/performance/postgres.cjs');
 
 const PG_QUERIES_IN_LOOP = 3000;
-// Rescanning the loop body for each query took over 30 s for this input; one scan per loop takes under 3 s.
-const PG_TIME_BUDGET_MS = 6000;
+// Rescanning the loop body for each query took over 30 s for this input; one scan per loop takes 4-6 s on a
+// loaded Windows machine, so the budget sits well between the two.
+const PG_TIME_BUDGET_MS = 15000;
 
 test('many pg queries in one loop do not rescan the loop body for each query', () => {
   const pgTypes = `interface PgResult { rows: { id: number }[] }
