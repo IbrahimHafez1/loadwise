@@ -530,3 +530,12 @@ test('filter skips observed counts, numeric thresholds, effects, accessors and u
   `).filter((finding) => finding.ruleId === 'filter-for-existence');
   assert.deepEqual(findings, []);
 });
+
+test('findIndex inside a loop is reported like find, without the find fix details', () => {
+  const findings = lint(`export function positions(items: { id: string }[], rows: { id: string }[]) {
+  return rows.map((row) => items.findIndex((item) => item.id === row.id));
+}`).filter((finding) => finding.ruleId === 'array-repeated-find');
+  assert.equal(findings.length, 1);
+  assert.match(findings[0].message, /with findIndex\(\)/);
+  assert.equal(findings[0].fix, undefined);
+});
