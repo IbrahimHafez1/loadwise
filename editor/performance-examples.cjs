@@ -144,6 +144,21 @@ const polyglot = {
     'items = []\nfor value in values:\n    items.append(value)',
     'For a list with no observers depending on intermediate copies.',
   ],
+  'python-sync-requests-in-async': [
+    'python',
+    'async def fetch(client, url):\n    return await client.get(url)',
+    'For an httpx.AsyncClient or aiohttp session.',
+  ],
+  'python-blocking-sleep-in-async': [
+    'python',
+    'async def wait():\n    await asyncio.sleep(1)',
+    'For code running on the asyncio event loop.',
+  ],
+  'python-fixed-regex-in-loop': [
+    'python',
+    'pattern = re.compile(r"^[0-9]+$")\nfor value in values:\n    pattern.match(value)',
+    'For a constant pattern; hoist the compile out of the loop.',
+  ],
   'go-fixed-regexp-in-loop': [
     'go',
     'pattern := regexp.MustCompile(`^[0-9]+$`)\nfor _, value := range values {\n    if pattern.MatchString(value) { collect(value) }\n}',

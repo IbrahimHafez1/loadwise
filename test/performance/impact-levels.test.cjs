@@ -27,6 +27,9 @@ const unignorableRules = [
   'java-fixed-regex-in-loop',
   'rust-fixed-regex-in-loop',
   'python-copy-growing-list',
+  'python-sync-requests-in-async',
+  'python-blocking-sleep-in-async',
+  'python-fixed-regex-in-loop',
 ];
 
 test('every performance rule id has a valid impact level', () => {

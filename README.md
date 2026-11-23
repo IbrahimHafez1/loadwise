@@ -586,13 +586,16 @@ Pass `--schema snapshot.json` (written by `db --schema-snapshot`) to refine them
 
 Performance and maintainability scans retry files when the bundled parser rejects a Java marker annotation before varargs or a C# 14 conditional member assignment (`=`) in a simple identifier chain. The retry uses a position-preserving copy in memory and still fails if the parser reports a syntax error.
 
-| Rule                                                                | Example in a loop                                                                             |
-| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| <a id="python-copy-growing-list"></a>`python-copy-growing-list`     | A list initialized to `[]` is repeatedly assigned `items = items + [value]` in a simple loop. |
-| <a id="go-fixed-regexp-in-loop"></a>`go-fixed-regexp-in-loop`       | `regexp.Compile("pattern")` or `regexp.MustCompile("pattern")`                                |
-| <a id="java-fixed-regex-in-loop"></a>`java-fixed-regex-in-loop`     | `Pattern.compile("pattern")`                                                                  |
-| <a id="csharp-fixed-regex-in-loop"></a>`csharp-fixed-regex-in-loop` | `new Regex("pattern")`                                                                        |
-| <a id="rust-fixed-regex-in-loop"></a>`rust-fixed-regex-in-loop`     | `Regex::new("pattern")`                                                                       |
+| Rule                                                                        | Example in a loop                                                                                                          |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| <a id="python-copy-growing-list"></a>`python-copy-growing-list`             | A list initialized to `[]` is repeatedly assigned `items = items + [value]` in a simple loop.                              |
+| <a id="python-sync-requests-in-async"></a>`python-sync-requests-in-async`   | A `requests.get`, `post`, `put`, `patch`, `delete` or `request` call inside an `async def` function blocks the event loop. |
+| <a id="python-blocking-sleep-in-async"></a>`python-blocking-sleep-in-async` | `time.sleep(...)` inside an `async def` function, in a module that imports `time`.                                         |
+| <a id="python-fixed-regex-in-loop"></a>`python-fixed-regex-in-loop`         | `re.compile("pattern")` with a string literal, in a module that imports `re`.                                              |
+| <a id="go-fixed-regexp-in-loop"></a>`go-fixed-regexp-in-loop`               | `regexp.Compile("pattern")` or `regexp.MustCompile("pattern")`                                                             |
+| <a id="java-fixed-regex-in-loop"></a>`java-fixed-regex-in-loop`             | `Pattern.compile("pattern")`                                                                                               |
+| <a id="csharp-fixed-regex-in-loop"></a>`csharp-fixed-regex-in-loop`         | `new Regex("pattern")`                                                                                                     |
+| <a id="rust-fixed-regex-in-loop"></a>`rust-fixed-regex-in-loop`             | `Regex::new("pattern")`                                                                                                    |
 
 ## Trace checks in other languages and databases
 
@@ -786,6 +789,9 @@ Every finding carries an impact level. `--min-impact <low|medium|high|critical>`
 | `prisma-top-k-materialization`        | medium   |
 | `promise-combinator-serial-await`     | medium   |
 | `python-copy-growing-list`            | medium   |
+| `python-sync-requests-in-async`       | high     |
+| `python-blocking-sleep-in-async`      | high     |
+| `python-fixed-regex-in-loop`          | low      |
 | `redis-incr-then-expire`              | medium   |
 | `redis-repeated-read`                 | medium   |
 | `reduce-copy-accumulator`             | medium   |

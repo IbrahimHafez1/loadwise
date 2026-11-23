@@ -38,3 +38,80 @@ constraints:
             - pattern: '($ONLY,)'
         - not:
             has: { kind: list_splat }
+
+---
+id: python-sync-requests-in-async
+language: Python
+severity: warning
+message: Blocking requests call inside an async function stalls the asyncio event loop. Use httpx.AsyncClient or aiohttp instead.
+rule:
+  all:
+    - any:
+        - pattern: requests.get($$$ARGS)
+        - pattern: requests.post($$$ARGS)
+        - pattern: requests.put($$$ARGS)
+        - pattern: requests.patch($$$ARGS)
+        - pattern: requests.delete($$$ARGS)
+        - pattern: requests.request($$$ARGS)
+    - inside:
+        kind: function_definition
+        regex: '^async\s'
+        stopBy:
+          kind: function_definition
+
+---
+id: python-blocking-sleep-in-async
+language: Python
+severity: warning
+message: time.sleep blocks the asyncio event loop inside an async function. Use await asyncio.sleep instead.
+rule:
+  all:
+    - pattern: time.sleep($$$ARGS)
+    - inside:
+        kind: module
+        stopBy: end
+        has:
+          kind: import_statement
+          stopBy: end
+          has:
+            kind: dotted_name
+            regex: '^time$'
+    - inside:
+        kind: function_definition
+        regex: '^async\s'
+        stopBy:
+          kind: function_definition
+
+---
+id: python-fixed-regex-in-loop
+language: Python
+severity: warning
+labels:
+  PAT:
+    style: primary
+message: This loop compiles a fixed regex for each iteration. Compile it once outside the loop and reuse the pattern.
+rule:
+  all:
+    - pattern: re.compile($PAT)
+    - inside:
+        kind: module
+        stopBy: end
+        has:
+          kind: import_statement
+          stopBy: end
+          has:
+            kind: dotted_name
+            regex: '^re$'
+    - inside:
+        any:
+          - kind: for_statement
+          - kind: while_statement
+        field: body
+        stopBy:
+          any:
+            - kind: function_definition
+            - kind: lambda
+            - kind: class_definition
+constraints:
+  PAT:
+    kind: string
