@@ -1,14 +1,10 @@
 [
   {
-    "rule": "perf/array-repeated-find",
-    "reason": "Precision 0.7297 over 37 labels at the 2026-11-23 rescore. The remaining false positives are lookups over a handful of entries (admin filter options, a workflow's steps, one product's options) that no static check can tell from a large list; lookups in operator and container tooling are already contextual. Raise precision or relabel, then remove this entry."
-  },
-  {
     "rule": "perf/node-sync-fs-in-async",
-    "reason": "Precision 0.5714 over 21 labels at the 2026-11-23 rescore. The remaining false positives are one-time startup loads (immich geodata, hoppscotch schema emit), a release script and a sandbox setup; a sync call in a boot-time async function looks the same as one on a request path. Build configs, container, boot, migration, codemod and test-support folders are already contextual. Raise precision or relabel, then remove this entry."
+    "reason": "Precision 0.75 over 16 labels at the 2026-11-23 rescore. Functions that create the Nest application, boot lifecycle methods (init, start, onModuleInit) and private methods reached only from them or from a cached first call are now contextual. The remaining false positives include a release-check script (juice-shop rsn) and a sandbox setup step (directus tests/sandbox) whose async functions are exported and called from other files. Raise precision or relabel, then remove this entry."
   },
   {
     "rule": "perf/reduce-copy-accumulator",
-    "reason": "Precision 0.2727 over 22 labels at the 2026-11-23 rescore. Most findings reduce over a few config keys, form fields or schema properties, which the type checker cannot bound; module-load reduces and constant small inputs are already contextual. Raise precision or relabel, then remove this entry."
+    "reason": "Precision 0.3529 over 17 labels at the 2026-11-23 rescore. Reduces over enum or literal lists, accumulators keyed by a finite literal type, generic form objects and reduces inside UI hooks are now contextual. Most remaining findings reduce over a few config keys, schema properties, tree nodes or filters typed as Record or plain arrays, which the type checker cannot bound. Raise precision or relabel, then remove this entry."
   }
 ]
