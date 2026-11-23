@@ -100,9 +100,7 @@ def stage_runtime(downloads, stage, lock):
 def build(output):
     if not NPM or output.suffix.lower() != ".vsix":
         raise ValueError("npm must be installed and the output filename must end in .vsix")
-    scratch = Path(tempfile.gettempdir()) / "AI-Work"
-    scratch.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="loadwise-vsix-", dir=scratch) as temp:
+    with tempfile.TemporaryDirectory(prefix="loadwise-vsix-") as temp:
         root = Path(temp)
         stage = root / "extension"
         stage.mkdir()
