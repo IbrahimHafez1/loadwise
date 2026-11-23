@@ -64,7 +64,8 @@
     "format": "prettier --cache --write .",
     "format:check": "prettier --cache --check .",
     "lint": "oxlint --deny-warnings .",
-    "check": "npm run format:check && npm run lint && npm test",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
     "test": "node --require ./test/manual-session.cjs --test --test-concurrency=2 test/performance/*.test.cjs test/maintainability/*.test.cjs test/security/*.test.cjs test/shared/*.test.cjs test/plugin/*.test.cjs editor/test/*.test.cjs",
     "selfscan:baseline": "node bin/loadwise.cjs check . --config scripts/self-scan/loadwise.config.json --write-baseline scripts/self-scan/loadwise-baseline.json",
     "bench:corpus": "node scripts/score-corpus.cjs",
@@ -105,6 +106,7 @@
     "@typescript/typescript-win32-x64": "7.1.0-beta"
   },
   "devDependencies": {
+    "@types/node": "26.6.6",
     "oxlint": "1.94.0",
     "prettier": "3.10.1"
   }
