@@ -2,7 +2,11 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { lint } = require('./helpers.cjs');
+const helpers = require('./helpers.cjs');
+
+// These fixtures use `SELECT *` freely; sql-select-star-in-query has its own tests, so the expectations here stay
+// exact for the pg rules.
+const lint = (...args) => helpers.lint(...args).filter((finding) => finding.ruleId !== 'sql-select-star-in-query');
 
 const declarations = `type Input = string | {text: string, values?: unknown[]};
 export class Pool {
