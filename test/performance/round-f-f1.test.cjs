@@ -52,20 +52,61 @@ export async function run(ids: string[]) {
   assert.match(findings[0].fix.note, /Each iteration now waits/);
 });
 
-test('no await fix outside async functions, for forEach findings or for nested statements', (context) => {
+test('no await fix outside async functions or for nested statements', (context) => {
   const source = `declare function save(id: string): Promise<void>;
-export function handle(req: object) {
+export function handle(req: object, res: object) {
   save('a');
 }
 export async function run(ids: string[], flag: boolean) {
-  ids.forEach(async (id) => {
-    await save(id);
-  });
   if (flag) save('b');
 }
 `;
   const findings = findingsFor(context, 'floating-promise', source);
-  assert.equal(findings.length, 3);
+  assert.equal(findings.length, 2);
+  for (const finding of findings) assert.equal(finding.fix, undefined);
+});
+
+test('an async forEach in an async function becomes a for...of loop, for review', (context) => {
+  const source = `declare function save(id: string): Promise<void>;
+export async function run(ids: string[]) {
+  ids.forEach(async (id) => {
+    await save(id);
+  });
+  ids.forEach(async (id) => await save(id));
+}
+`;
+  const findings = findingsFor(context, 'floating-promise', source);
+  assert.equal(findings.length, 2);
+  for (const finding of findings) assert.equal(finding.fix.requiresReview, true);
+  const fixed = findings.reduce((text, finding) => applied(text, finding.fix), source);
+  assert.match(fixed, /for \(const id of ids\) \{\n {4}await save\(id\);\n {2}\}/);
+  assert.match(fixed, /for \(const id of ids\) \{ await save\(id\); \}/);
+  assert.deepEqual(findingsFor(context, 'floating-promise', fixed), []);
+});
+
+test('no forEach rewrite when the callback returns, uses this or arguments, reassigns its item or the owner is sync', (context) => {
+  const source = `declare function save(id: string): Promise<void>;
+export async function run(ids: string[]) {
+  ids.forEach(async (id) => {
+    if (!id) return;
+    await save(id);
+  });
+  ids.forEach(async function (id) {
+    await save(arguments[0]);
+  });
+  ids.forEach(async (id) => {
+    id = id.trim();
+    await save(id);
+  });
+}
+export function handle(req: object, res: object, ids: string[]) {
+  ids.forEach(async (id) => {
+    await save(id);
+  });
+}
+`;
+  const findings = findingsFor(context, 'floating-promise', source);
+  assert.equal(findings.length, 4);
   for (const finding of findings) assert.equal(finding.fix, undefined);
 });
 
