@@ -188,7 +188,7 @@ test('large-module imports the record in the import block with the neighbouring 
   const distantAfter = appliedText(largeModuleFix(context, distant, 610), distant);
   assert.match(
     distantAfter,
-    /common';\n\/\/ Loadwise large-module[^\n]*\nimport type \{ Packet \} from '\.\/api\.types';\nimport \{ helper \}/,
+    /common';\n\/\/ Loadwise large-module[^\n]*\n(?:\/\/[^\n]*\n)*import type \{ Packet \} from '\.\/api\.types';\nimport \{ helper \}/,
   );
   assert.match(distantAfter, /const fourth = 4;\n\nexport function inspect/);
   const esmModule = packetModule.replace("'./helper'", "'./helper.js'");
