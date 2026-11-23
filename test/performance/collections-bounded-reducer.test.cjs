@@ -147,3 +147,16 @@ test('a top-level reduce runs once at module load and is contextual, while the s
   assert.match(atLoad.contextualReason, /once when the module loads/);
   assert.equal(perRequest.contextualReason, undefined);
 });
+
+test('a reduce in a JSX component module is contextual, while the same reduce in a server module still reports', () => {
+  const source =
+    'export const index = (names: string[]) => names.reduce((acc, name) => ({ ...acc, [name]: name }), {});';
+  const contexts = (fileName) =>
+    withProgram('export {};', { [fileName]: source }, (program) =>
+      analyzeFile(program, program.getSourceFile(path.join(__dirname, 'virtual-project', fileName)))
+        .filter(({ ruleId }) => ruleId === 'reduce-copy-accumulator')
+        .map(({ contextualReason }) => Boolean(contextualReason)),
+    );
+  assert.deepEqual(contexts('Panel.tsx'), [true]);
+  assert.deepEqual(contexts('panel.ts'), [false]);
+});
