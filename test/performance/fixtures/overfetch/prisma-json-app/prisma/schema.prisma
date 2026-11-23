@@ -1,0 +1,24 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Named {
+  id       Int  @id
+  metadata Json
+}
+
+model Blob {
+  id      Int  @id
+  payload Json
+}
+
+model Listed {
+  id    Int    @id
+  items Json[]
+}
+
+model Mixed {
+  id       Int    @id
+  metadata Json
+  body     String @db.Text
+}

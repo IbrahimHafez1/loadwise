@@ -56,7 +56,7 @@ export async function everything() {
 }`);
   assert.equal(found.length, 3);
   assert.ok(found[0].message.includes('(meta (Json))'));
-  assert.equal(found[0].contextualReason, undefined);
+  assert.match(found[0].contextualReason, /name suggests a small JSON value/);
   assert.ok(found[1].message.includes('(body (Text))'));
   assert.equal(found[1].contextualReason, undefined);
   assert.match(found[2].contextualReason, /returned or passed on whole/);
@@ -113,4 +113,36 @@ export const b = () => posts.find({ take: 10 });
 export const c = () => labels.find({ where: { name: 'x' } });`),
     [],
   );
+});
+
+const jsonProject = '../fixtures/overfetch/prisma-json-app/';
+const jsonDelegates = ['Named', 'Blob', 'Listed', 'Mixed']
+  .map((model) => `export interface ${model}Delegate { findMany(args?: object): Promise<any[]>; }`)
+  .join('\n');
+const jsonStub = `${jsonDelegates}
+export declare class PrismaClient { named: NamedDelegate; blob: BlobDelegate; listed: ListedDelegate; mixed: MixedDelegate }`;
+const jsonFiles = { [`${jsonProject}node_modules/.prisma/client/index.d.ts`]: jsonStub };
+const jsonImport = `import { PrismaClient } from '${jsonProject}node_modules/.prisma/client';\ndeclare const prisma: PrismaClient;\n`;
+const smallJsonReason = /name suggests a small JSON value/;
+
+function jsonReason(model) {
+  const [finding] = findings(
+    `${jsonImport}export async function ids() {
+  const rows = await prisma.${model}.findMany({ where: { id: { gt: 1 } } });
+  return rows.map((row) => row.id);
+}`,
+    jsonFiles,
+  );
+  assert.ok(finding, `${model} is still reported`);
+  return finding.contextualReason;
+}
+
+test('Prisma: small-blob Json names and Json[] columns stay reported with a contextual reason', () => {
+  assert.match(jsonReason('named'), smallJsonReason);
+  assert.match(jsonReason('listed'), smallJsonReason);
+});
+
+test('Prisma: an unrelated Json column name and a wide column beside a small Json stay firm', () => {
+  assert.equal(jsonReason('blob'), undefined);
+  assert.equal(jsonReason('mixed'), undefined);
 });
