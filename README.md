@@ -488,7 +488,7 @@ npx loadwise perf -p tsconfig.json --fix --yes   # applies eligible fixes withou
 
 ## Apply fixes by id
 
-Every finding has a stable `id`, shown as `[rule-id #id]` in text output. It hashes the rule, the file and the flagged line's text, so it survives edits above the finding. JSON findings also carry `fixable` and, when available, `fix`. To apply chosen fixes without a prompt:
+Every finding has a stable `id`, shown as `[rule-id #id]` in text output. It hashes the rule, the file and the flagged line's text, so it survives edits above the finding. JSON findings also carry `fixable` and, when available, `fix`. `prisma-count-for-existence` findings may carry `idField`, the model's single primary-key field, which the fix uses for its `select`. To apply chosen fixes without a prompt:
 
 ```sh
 npx loadwise perf --fix --only a1b2c3d4e5f6,0f9e8d7c6b5a --json   # prints { applied, alreadyApplied, failed }
