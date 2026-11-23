@@ -414,7 +414,7 @@
         {
           "ruleId": "large-module",
           "file": "../../lib/shared/fix-presentation.cjs",
-          "fingerprint": "6f1597ed162e",
+          "fingerprint": "3449f1d0fb6e",
           "count": 1
         },
         {
