@@ -185,6 +185,33 @@ describe('concurrent index builds', () => {
     assert.match(fixed, /'CREATE INDEX CONCURRENTLY orders_store_idx ON orders \(store_id\)'/);
   });
 
+  test('turns off the MikroORM transaction with isTransactional() and adds CONCURRENTLY', () => {
+    const code = `import { Migration } from '@mikro-orm/migrations';
+export class Migration20240101 extends Migration {
+  async up(): Promise<void> {
+    this.addSql('CREATE INDEX orders_store_idx ON orders (store_id);');
+  }
+}
+`;
+    const { fixed, result } = fixCode(code, 'migration-index-not-concurrent');
+    assert.match(
+      fixed,
+      /extends Migration \{\n {2}override isTransactional\(\): boolean \{\n {4}return false;\n {2}\}\n {2}async up/,
+    );
+    assert.match(fixed, /'CREATE INDEX CONCURRENTLY orders_store_idx ON orders \(store_id\);'/);
+    assert.match(result.note, /isTransactional/);
+    const remaining = ruleIds(checkCode(fixed));
+    assert.ok(
+      !remaining.includes('migration-index-not-concurrent') &&
+        !remaining.includes('migration-concurrent-in-transaction'),
+    );
+    const javascript = code.replace(': Promise<void>', '');
+    assert.match(
+      fixCode(javascript, 'migration-index-not-concurrent', 'migration.js').fixed,
+      /\n {2}isTransactional\(\) \{\n/,
+    );
+  });
+
   test('passes concurrently to Sequelize addIndex', () => {
     const code = `module.exports = {\n  async up(queryInterface) {\n    await queryInterface.addIndex('orders', ['store_id']);\n  },\n};\n`;
     const { fixed } = fixCode(code, 'migration-index-not-concurrent', 'migration.js');
