@@ -226,3 +226,25 @@ export async function update(id: string) {
 }`);
   assert.equal(reason, undefined);
 });
+
+test('an unawaited publish on a pubsub receiver is contextual fire-and-forget fan-out', () => {
+  const [reason] = contextualReasons(`class PubSub { async publish(topic: string) { await sendEmail(topic); } }
+class TeamService {
+  constructor(private readonly pubsub: PubSub) {}
+  async addMember() {
+    this.pubsub.publish('team/member_added');
+  }
+}`);
+  assert.match(reason, /pub\/sub or event bus/);
+});
+
+test('an unawaited call on a receiver that is not an event bus stays plain', () => {
+  const [reason] = contextualReasons(`class Mailer { async publish(topic: string) { await sendEmail(topic); } }
+class TeamService {
+  constructor(private readonly mailer: Mailer) {}
+  async addMember() {
+    this.mailer.publish('team/member_added');
+  }
+}`);
+  assert.equal(reason, undefined);
+});
