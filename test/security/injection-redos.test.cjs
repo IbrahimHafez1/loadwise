@@ -99,3 +99,46 @@ test('safe patterns, fixed text, capped input and runtime-built regexes are sile
   );
   assert.deepEqual(redosLines(source), []);
 });
+
+test('overlapping unbounded repeats in sequence are polynomial when something after them can fail', () => {
+  const polynomialPatterns = [
+    String.raw`\s+.*\s+$`,
+    String.raw`^\w+[\w-]*$`,
+    String.raw`^\w+\s*\w+$`,
+    String.raw`^\d+x?\d+$`,
+    String.raw`.*\s+,`,
+    String.raw`^(?:a+)a+$`,
+    String.raw`(?:\d+\d+)x`,
+    // ms@0.7.0 (CVE-2015-8315): an optional digit run, an optional dot, then another digit run.
+    String.raw`^((?:\d+)?\.?\d+) *(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|years?|yrs?|y)?$`,
+  ];
+  for (const pattern of polynomialPatterns) assert.equal(isCatastrophicPattern(pattern), true, pattern);
+  assert.equal(isCatastrophicPattern('^a+A+$'), false);
+  assert.equal(isCatastrophicPattern('^a+A+$', 'i'), true);
+});
+
+test('separated, disjoint, bounded, unfollowed and multi-character repeats are not polynomial', () => {
+  const quietPatterns = [
+    String.raw`^\d+\.\d+$`,
+    String.raw`^\w+_\w+$`,
+    String.raw`^[a-z]+\d+$`,
+    String.raw`^\s*\w+\s*$`,
+    String.raw`^\w{1,64}\w{1,64}$`,
+    String.raw`^\w+\w{2}$`,
+    String.raw`\d+\w*`,
+    String.raw`^\s*.*`,
+    String.raw`^(?:ab)+(?:ac)+$`,
+    String.raw`^a+\ba+$`,
+    String.raw`^(?:\d+)?\.\d+$`,
+  ];
+  for (const pattern of quietPatterns) assert.equal(isCatastrophicPattern(pattern), false, pattern);
+});
+
+test('a polynomial pattern on request text says it backtracks in polynomial time', () => {
+  const findings = lintWithoutTypes(route(String.raw`/^\s+.*\s+$/.test(req.query.q);`), stubs.express);
+  assert.deepEqual(
+    findings.map((finding) => [finding.ruleId, finding.line]),
+    [[ruleId, 5]],
+  );
+  assert.match(findings[0].message, /^This regular expression can backtrack in polynomial time on `req\.query\.q`/);
+});
