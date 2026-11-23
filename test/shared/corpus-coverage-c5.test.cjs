@@ -167,7 +167,10 @@ test('an import of an unbuilt workspace package resolves to its source, so typed
   assert.equal(run.code, 1, run.stderr);
   assert.deepEqual(
     JSON.parse(run.stdout).findings.map(({ line, ruleId }) => [line, ruleId]),
-    [[3, 'index-unusable-expression']],
+    [
+      [3, 'index-unusable-expression'],
+      [3, 'sql-select-star-in-query'],
+    ],
   );
 });
 

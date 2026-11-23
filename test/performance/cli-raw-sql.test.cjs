@@ -30,6 +30,9 @@ test('a one-shot scan loads the SQL parser, so raw SQL index rules report', (con
   assert.equal(checked.status, 1, checked.stderr);
   assert.deepEqual(
     JSON.parse(checked.stdout).findings.map(({ line, ruleId }) => [line, ruleId]),
-    [[4, 'index-unusable-expression']],
+    [
+      [4, 'index-unusable-expression'],
+      [4, 'sql-select-star-in-query'],
+    ],
   );
 });

@@ -50,10 +50,14 @@ test('one Program serves both analyzers and stamps each finding with its pillar'
   assert.equal(recorded.programs.size, 1);
   const performanceOnly = analyzeSources({ project: config, files: [] });
   const securityOnly = analyzeSources({ project: config, files: [], analyzers: [security.analyzer] });
-  assert.deepEqual(summary(performanceOnly.findings), [[3, 'array-repeated-membership', undefined]]);
+  assert.deepEqual(summary(performanceOnly.findings), [
+    [2, 'sql-select-star-in-query', undefined],
+    [3, 'array-repeated-membership', undefined],
+  ]);
   assert.deepEqual(summary(securityOnly.findings), [[2, 'pg-dynamic-query-text', undefined]]);
   assert.deepEqual(summary(shared.findings), [
     [2, 'pg-dynamic-query-text', 'security'],
+    [2, 'sql-select-star-in-query', 'performance'],
     [3, 'array-repeated-membership', 'performance'],
   ]);
 });
