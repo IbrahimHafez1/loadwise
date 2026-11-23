@@ -469,23 +469,27 @@ test('a changing lookup cannot be indexed once for the entire loop', () => {
   );
 });
 
-test('a rebuilt program checks writes again when it reuses source trees', (context) => {
-  const source = 'function run(ids: number[]) { for (const id of ids) { ids.push(id); ids.includes(id); } }';
-  const { analyzeFile } = require('../../lib/performance/analyze.cjs');
-  withProgram(source, {}, (program, sourceFile) => {
-    assert.deepEqual(analyzeFile(program, sourceFile), []);
-    const options = program.getCompilerOptions();
-    const host = ts.createCompilerHost(options, true);
-    host.getSourceFile = (filename) => program.getSourceFile(filename);
-    const rebuilt = ts.createProgram(program.getRootFileNames(), options, host, program);
-    assert.equal(rebuilt.getSourceFile(sourceFile.fileName), sourceFile);
-    assert.notEqual(rebuilt.getTypeChecker(), program.getTypeChecker());
-    const symbolLookup = context.mock.method(rebuilt.getTypeChecker(), 'getSymbolAtLocation');
-    assert.deepEqual(analyzeFile(rebuilt, sourceFile), []);
-    const mutationPosition = source.indexOf('ids.push');
-    assert.ok(symbolLookup.mock.calls.some(({ arguments: [node] }) => node.getStart() === mutationPosition));
-  });
-});
+test(
+  'a rebuilt program checks writes again when it reuses source trees',
+  { skip: process.env.PERF_CHECK_TEST_NATIVE === '1' && 'rebuilds a TypeScript 6 program' },
+  (context) => {
+    const source = 'function run(ids: number[]) { for (const id of ids) { ids.push(id); ids.includes(id); } }';
+    const { analyzeFile } = require('../../lib/performance/analyze.cjs');
+    withProgram(source, {}, (program, sourceFile) => {
+      assert.deepEqual(analyzeFile(program, sourceFile), []);
+      const options = program.getCompilerOptions();
+      const host = ts.createCompilerHost(options, true);
+      host.getSourceFile = (filename) => program.getSourceFile(filename);
+      const rebuilt = ts.createProgram(program.getRootFileNames(), options, host, program);
+      assert.equal(rebuilt.getSourceFile(sourceFile.fileName), sourceFile);
+      assert.notEqual(rebuilt.getTypeChecker(), program.getTypeChecker());
+      const symbolLookup = context.mock.method(rebuilt.getTypeChecker(), 'getSymbolAtLocation');
+      assert.deepEqual(analyzeFile(rebuilt, sourceFile), []);
+      const mutationPosition = source.indexOf('ids.push');
+      assert.ok(symbolLookup.mock.calls.some(({ arguments: [node] }) => node.getStart() === mutationPosition));
+    });
+  },
+);
 
 test('existence checks use the filtered length only for truthiness or comparison with zero', () => {
   const findings = lint(
