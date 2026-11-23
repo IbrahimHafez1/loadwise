@@ -173,3 +173,25 @@ test('lookups are default findings over known data sources and contextual when t
   assert.equal(reasonFor('const ids = param;'), unknown);
   assert.equal(reasonFor('const ids = await opaque();'), unknown);
 });
+
+test('lookups on receivers named like small configuration lists are contextual only when the size is unknown', () => {
+  const smallList = "The receiver's name suggests a small configuration list; dismiss if it stays a handful of items.";
+  const membershipReason = (name, declaration = `const ${name} = param;`) =>
+    lintAs(
+      'service.ts',
+      `declare const repo: { findMany(): Promise<string[]> };\nexport async function pick(rows: string[], param: string[]) {\n  ${declaration}\n  return rows.filter((row) => ${name}.includes(row));\n}`,
+    ).find((finding) => finding.ruleId === 'array-repeated-membership')?.contextualReason;
+  for (const name of ['filters', 'options', 'props', 'columns', 'fields', 'roles', 'permissions', 'tabs', 'steps']) {
+    assert.equal(membershipReason(name), smallList, name);
+  }
+  assert.equal(membershipReason('ids'), 'array size unknown; review if it can hold more than a few dozen items');
+  assert.equal(membershipReason('roles', 'const roles = await repo.findMany();'), undefined);
+
+  const findReason = (name) =>
+    lintAs(
+      'service.ts',
+      `export function link(${name}: { id: string }[], rows: { id: string }[]) {\n  return rows.map((row) => ${name}.find((item) => item.id === row.id));\n}`,
+    ).find((finding) => finding.ruleId === 'array-repeated-find')?.contextualReason;
+  assert.equal(findReason('columns'), smallList);
+  assert.equal(findReason('items'), undefined);
+});
