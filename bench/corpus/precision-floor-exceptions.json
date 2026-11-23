@@ -1,6 +1,6 @@
 [
   {
     "rule": "perf/reduce-copy-accumulator",
-    "reason": "Precision 0.3333 (5 TP, 10 FP) at the 2026-11-23 rescore. Reduces over enum or literal lists, accumulators keyed by a finite literal type, generic form objects, reduces in JSX modules and inside UI hooks are contextual. The remaining findings reduce over a few config keys, schema properties, tree nodes or filters typed as Record or plain arrays in server or dashboard modules, which no principled signal bounds (name or folder heuristics were tried and dropped). Raise precision or relabel, then remove this entry."
+    "reason": "Precision 0.3846 (5 TP, 8 FP) at the 2026-11-23 rescore. Reduces over enum or literal lists, accumulators keyed by a finite literal type or typed with fixed named keys, generic form objects, JSON Schema properties, reduces in JSX modules and inside UI hooks are contextual. The remaining findings reduce over a few config keys, UI schema maps, tree nodes or filters typed as Record or plain arrays in server or dashboard modules, which no principled signal bounds (name or folder heuristics were tried and dropped). Raise precision or relabel, then remove this entry."
   }
 ]

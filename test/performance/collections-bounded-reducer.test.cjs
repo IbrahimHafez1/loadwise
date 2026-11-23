@@ -160,3 +160,60 @@ test('a reduce in a JSX component module is contextual, while the same reduce in
   assert.deepEqual(contexts('Panel.tsx'), [true]);
   assert.deepEqual(contexts('panel.ts'), [false]);
 });
+
+test('a reduce whose object accumulator is typed with fixed named keys is contextual, while an indexed accumulator still reports', () => {
+  const source = [
+    "enum Channel { Email = 'email', Sms = 'sms' }",
+    'type ChannelSettings = Record<Channel, { enabled: boolean }>;',
+    'export function toSettings(entries: [string, boolean][]) {',
+    '  return entries.reduce((acc, [channel, enabled]) => ({ ...acc, [channel]: { enabled } }), {} as ChannelSettings);',
+    '}',
+    'export function toIndexed(entries: [string, boolean][]) {',
+    '  return entries.reduce<Record<string, boolean>>((acc, [channel, enabled]) => ({ ...acc, [channel]: enabled }), {});',
+    '}',
+    'export function toUntyped(names: string[]) {',
+    '  return names.reduce((acc, name) => ({ ...acc, [name]: true }), {});',
+    '}',
+    'export function toList(names: string[]) {',
+    '  return names.reduce((acc, name) => [...acc, name], [] as string[]);',
+    '}',
+  ].join('\n');
+  assert.deepEqual(reducerContexts(source), [
+    [4, true],
+    [7, false],
+    [10, false],
+    [13, false],
+  ]);
+});
+
+test('a reduce whose accumulator type mixes named keys with an index signature still reports', () => {
+  const source = [
+    'interface Totals { count: number; [key: string]: number }',
+    'export function toTotals(names: string[]) {',
+    '  return names.reduce((acc, name) => ({ ...acc, [name]: 1 }), { count: 0 } as Totals);',
+    '}',
+  ].join('\n');
+  assert.deepEqual(reducerContexts(source), [[3, false]]);
+});
+
+test('a reduce over the properties of a JSON Schema object is contextual, while other property maps still report', () => {
+  const source = [
+    'type SchemaDto = { type?: string; required?: string[]; properties?: Record<string, SchemaDto | boolean> };',
+    'type Lookup = { properties?: Record<string, number> };',
+    'export function defaults(schema: SchemaDto | boolean) {',
+    "  const properties = typeof schema === 'object' ? (schema.properties ?? {}) : {};",
+    '  return Object.keys(properties).reduce((acc, key) => ({ ...acc, [key]: null }), {});',
+    '}',
+    'export function direct(schema: SchemaDto) {',
+    '  return Object.entries(schema.properties ?? {}).reduce((acc, [key]) => ({ ...acc, [key]: null }), {});',
+    '}',
+    'export function indexed(lookup: Lookup) {',
+    '  return Object.keys(lookup.properties ?? {}).reduce((acc, key) => ({ ...acc, [key]: null }), {});',
+    '}',
+  ].join('\n');
+  assert.deepEqual(reducerContexts(source), [
+    [5, true],
+    [8, true],
+    [11, false],
+  ]);
+});
