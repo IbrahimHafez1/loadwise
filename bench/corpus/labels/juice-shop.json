@@ -446,5 +446,77 @@
     "line": 34,
     "verdict": "tp",
     "note": "archive entry name written under uploads with only a weak includes check"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "database-error-in-response",
+    "file": "routes/likeProductReviews.ts",
+    "line": 56,
+    "verdict": "tp",
+    "note": "raw DB error object returned in 500 response"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "json-parse-unguarded",
+    "file": "lib/startup/validateDependencies.ts",
+    "line": 15,
+    "verdict": "fp",
+    "note": "startup check of own package.json; failing loudly is intended"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "whole-payload-in-memory",
+    "file": "server.ts",
+    "line": 281,
+    "verdict": "fp",
+    "note": "small infra text files post-processed in memory, not streamable"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "stream-pipe-unhandled-error",
+    "file": "routes/order.ts",
+    "line": 45,
+    "verdict": "tp",
+    "note": "pdfkit piped to file write stream with no error handler"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "stream-pipe-unhandled-error",
+    "file": "routes/videoHandler.ts",
+    "line": 38,
+    "verdict": "tp",
+    "note": "file read stream piped to res with no error handler"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-list-query",
+    "file": "routes/address.ts",
+    "line": 11,
+    "verdict": "fp",
+    "note": "scoped to one user own addresses"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-list-query",
+    "file": "routes/authenticatedUsers.ts",
+    "line": 12,
+    "verdict": "tp",
+    "note": "findAll over every user returned from handler"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-list-query",
+    "file": "routes/memory.ts",
+    "line": 24,
+    "verdict": "tp",
+    "note": "findAll memories with user include, no limit"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-list-query",
+    "file": "routes/passkey.ts",
+    "line": 247,
+    "verdict": "fp",
+    "note": "scoped to one user own passkeys"
   }
 ]

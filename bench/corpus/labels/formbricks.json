@@ -142,5 +142,13 @@
     "line": 52,
     "verdict": "fp",
     "note": "SHA-1 is required by the HIBP k-anonymity API and never stored"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unused-export",
+    "file": "apps/web/lib/i18n/i18n.mock.ts",
+    "line": 255,
+    "verdict": "fp",
+    "note": "test fixture in .mock.ts file"
   }
 ]

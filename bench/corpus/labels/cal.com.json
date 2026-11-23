@@ -110,5 +110,45 @@
     "line": 114,
     "verdict": "fp",
     "note": "host is a fixed config origin, only the path is tainted"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "deep-control-flow",
+    "file": "apps/api/v2/src/modules/auth/strategies/api-auth/api-auth.strategy.ts",
+    "line": 99,
+    "verdict": "tp",
+    "note": "try>if>if>try>catch>if nesting in authenticate"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-module",
+    "file": "apps/api/v2/src/platform/bookings/2024-08-13/services/input.service.ts",
+    "line": 1,
+    "verdict": "tp",
+    "note": "764-line input service mixing many booking input transforms"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-class",
+    "file": "apps/api/v2/src/platform/event-types/event-types_2024_06_14/services/input-event-types.service.ts",
+    "line": 56,
+    "verdict": "tp",
+    "note": "32 members, over limit; mixes create/update event-type input transforms"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "high-branch-complexity",
+    "file": "apps/api/v2/src/modules/auth/strategies/api-auth/api-auth.strategy.ts",
+    "line": 55,
+    "verdict": "tp",
+    "note": "authenticate chains many auth-method branches"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "long-parameter-list",
+    "file": "apps/api/v2/src/modules/slots/slots-2024-09-04/slots.repository.ts",
+    "line": 59,
+    "verdict": "tp",
+    "note": "createSlot takes six positional params of mixed types"
   }
 ]

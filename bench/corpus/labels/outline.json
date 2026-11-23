@@ -198,5 +198,101 @@
     "line": 38,
     "verdict": "tp",
     "note": "rejectUnauthorized false for rediss connections"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "filter-for-existence",
+    "file": "app/components/Sidebar/components/SharedWithMeLink.tsx",
+    "line": 243,
+    "verdict": "tp",
+    "note": "filter().length>0 for badge; some() fits"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-query-in-loop",
+    "file": "server/commands/documentPermanentDeleter.ts",
+    "line": 36,
+    "verdict": "tp",
+    "note": "findAll per document in permanent-delete batch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-query-in-loop",
+    "file": "server/commands/groupsSyncer.ts",
+    "line": 84,
+    "verdict": "tp",
+    "note": "findByPk plus updates per external group in sync"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-query-in-loop",
+    "file": "server/queues/processors/WebsocketsProcessor.ts",
+    "line": 560,
+    "verdict": "tp",
+    "note": "User.findByPk per group member on websocket fan-out"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-count-materialization",
+    "file": "server/queues/tasks/JSONAPIImportTask.test.ts",
+    "line": 738,
+    "verdict": "fp",
+    "note": "test code asserting a count"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-count-materialization",
+    "file": "server/queues/tasks/JSONAPIImportTask.test.ts",
+    "line": 752,
+    "verdict": "fp",
+    "note": "test code asserting a count"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "json-parse-unguarded",
+    "file": "server/routes/assets.ts",
+    "line": 132,
+    "verdict": "fp",
+    "note": "repo-bundled locale file, not external input"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "async-callback-unhandled-rejection",
+    "file": "app/components/WebsocketProvider.tsx",
+    "line": 569,
+    "verdict": "tp",
+    "note": "revokeCollectionAccess awaited in socket handler, no catch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "dom-unthrottled-scroll-resize",
+    "file": "app/components/DragAndDrop/DragAndDropProvider.tsx",
+    "line": 296,
+    "verdict": "fp",
+    "note": "drag overlay position sync, passive, only active during drag"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "dom-unthrottled-scroll-resize",
+    "file": "app/components/DragAndDrop/DragAndDropProvider.tsx",
+    "line": 301,
+    "verdict": "fp",
+    "note": "wheel needs passive:false to preventDefault; suggestion would break it"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-redundant-prefix",
+    "file": "server/migrations/baseline/schema.sql",
+    "line": 1629,
+    "verdict": "fp",
+    "note": "index flagged against itself; single definition"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-redundant-prefix",
+    "file": "server/migrations/baseline/schema.sql",
+    "line": 1641,
+    "verdict": "fp",
+    "note": "later migration already drops search_queries_user_id"
   }
 ]

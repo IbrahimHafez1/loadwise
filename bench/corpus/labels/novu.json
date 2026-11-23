@@ -574,5 +574,157 @@
     "line": 59,
     "verdict": "fp",
     "note": "only applies to loopback hosts"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-process-in-async",
+    "file": "packages/agentinbox/src/listen/codex.ts",
+    "line": 149,
+    "verdict": "fp",
+    "note": "CLI login check, one-shot with timeout"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-process-in-async",
+    "file": "packages/agentinbox/src/listen/opencode.ts",
+    "line": 126,
+    "verdict": "fp",
+    "note": "CLI version check, one-shot with timeout"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "await-before-early-exit",
+    "file": "apps/dashboard/src/hooks/use-template-store.ts",
+    "line": 222,
+    "verdict": "fp",
+    "note": "guard is isMounted unmount check, not a rejection"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-compression-in-async",
+    "file": "apps/human-dashboard/src/lib/agent-skills.ts",
+    "line": 115,
+    "verdict": "tp",
+    "note": "sync gunzip of whole GitHub archive in request path"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "auth-route-without-rate-limit",
+    "file": "apps/api/src/app/outbound-webhooks/outbound-webhooks.controller.ts",
+    "line": 41,
+    "verdict": "fp",
+    "note": "authenticated webhook portal token creation, not a credential check"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "ssrf-request-url",
+    "file": "playground/nextjs/src/app/api/mcp-proxy/[...path]/route.ts",
+    "line": 46,
+    "verdict": "fp",
+    "note": "fixed backend host, path segments encoded"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "ssrf-request-url",
+    "file": "playground/nextjs/src/pages/api/novu-proxy/[...path].ts",
+    "line": 74,
+    "verdict": "fp",
+    "note": "fixed host, route allowlist and encoded segments"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "hardcoded-secret",
+    "file": "libs/agent-evals/src/suites/agent-onboarding/scenarios/slack-in-chat-rerun/scenario.ts",
+    "line": 18,
+    "verdict": "fp",
+    "note": "fake token in eval test scenario"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "frontend-storage-secret-token",
+    "file": "apps/dashboard/src/utils/better-auth/client.ts",
+    "line": 29,
+    "verdict": "tp",
+    "note": "session token kept in localStorage"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "frontend-storage-secret-token",
+    "file": "apps/dashboard/src/utils/better-auth/components/sign-in.tsx",
+    "line": 70,
+    "verdict": "tp",
+    "note": "session token kept in localStorage"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "frontend-storage-secret-token",
+    "file": "apps/dashboard/src/utils/better-auth/components/sign-up.tsx",
+    "line": 118,
+    "verdict": "tp",
+    "note": "session token kept in localStorage"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "frontend-storage-secret-token",
+    "file": "apps/dashboard/src/utils/better-auth/use-cursor-agent-auto-login.ts",
+    "line": 50,
+    "verdict": "tp",
+    "note": "session token kept in localStorage"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "frontend-storage-secret-token",
+    "file": "apps/dashboard/src/utils/self-hosted/components.tsx",
+    "line": 50,
+    "verdict": "tp",
+    "note": "JWT kept in localStorage"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "frontend-storage-secret-token",
+    "file": "apps/dashboard/src/utils/self-hosted/components.tsx",
+    "line": 209,
+    "verdict": "tp",
+    "note": "JWT kept in localStorage"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "storage-object-public-acl",
+    "file": "libs/application-generic/src/services/storage/storage.service.ts",
+    "line": 160,
+    "verdict": "tp",
+    "note": "uploads set ACL public-read"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "json-parse-unguarded",
+    "file": "libs/application-generic/src/services/auth/shared.ts",
+    "line": 8,
+    "verdict": "tp",
+    "note": "request.query.state parsed unguarded in auth callback"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "async-callback-unhandled-rejection",
+    "file": "apps/dashboard/src/hooks/use-form-autosave.ts",
+    "line": 99,
+    "verdict": "tp",
+    "note": "onSave rejection in setTimeout leaves outer promise unresolved"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "dom-unthrottled-scroll-resize",
+    "file": "apps/dashboard/src/components/primitives/code-block.tsx",
+    "line": 248,
+    "verdict": "fp",
+    "note": "cheap handler sets idempotent boolean state"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "dom-unthrottled-scroll-resize",
+    "file": "apps/dashboard/src/hooks/use-horizontal-scroll-edges.ts",
+    "line": 57,
+    "verdict": "fp",
+    "note": "passive listener, setState bails out when unchanged"
   }
 ]

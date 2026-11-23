@@ -102,5 +102,61 @@
     "line": 137,
     "verdict": "tp",
     "note": "swig autoescape false"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "plaintext-password-storage",
+    "file": "app/data/user-dao.js",
+    "line": 25,
+    "verdict": "tp",
+    "note": "NodeGoat stores req.body.password in plaintext"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "auth-route-without-rate-limit",
+    "file": "app/routes/index.js",
+    "line": 34,
+    "verdict": "tp",
+    "note": "login route with no rate limit, no throttling in app"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "regex-catastrophic-backtracking",
+    "file": "app/routes/profile.js",
+    "line": 61,
+    "verdict": "tp",
+    "note": "([0-9]+)+# nested quantifier tested on req.body value"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-module",
+    "file": "app/assets/vendor/bootstrap/bootstrap-tour.js",
+    "line": 1,
+    "verdict": "fp",
+    "note": "vendored minified-style bootstrap-tour library"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "long-parameter-list",
+    "file": "app/data/user-dao.js",
+    "line": 17,
+    "verdict": "tp",
+    "note": "addUser takes six positional params incl. callback"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "loop-copy-accumulator",
+    "file": "app/assets/vendor/chart/raphael-min.js",
+    "line": 10,
+    "verdict": "fp",
+    "note": "vendored minified third-party library"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "session-memory-store",
+    "file": "server.js",
+    "line": 78,
+    "verdict": "tp",
+    "note": "express-session with default MemoryStore in server.js"
   }
 ]

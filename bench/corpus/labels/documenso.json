@@ -414,5 +414,181 @@
     "line": 20,
     "verdict": "tp",
     "note": "signing token written to the request log"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "postmessage-missing-origin-check",
+    "file": "apps/remix/app/routes/embed+/playground.tsx",
+    "line": 182,
+    "verdict": "fp",
+    "note": "embed playground only displays received messages in a log"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-compared-non-constant-time",
+    "file": "packages/ee/server-only/signing/csc/hono/session-status.ts",
+    "line": 38,
+    "verdict": "tp",
+    "note": "session token compared with === to query token"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-compared-non-constant-time",
+    "file": "packages/ee/server-only/signing/csc/hono/session-status.ts",
+    "line": 45,
+    "verdict": "tp",
+    "note": "recipient token compared with === to query token"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-compared-non-constant-time",
+    "file": "packages/lib/server-only/2fa/verify-2fa-token.ts",
+    "line": 44,
+    "verdict": "tp",
+    "note": "TOTP code compared with === instead of timing-safe"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "ssrf-request-url",
+    "file": "packages/lib/jobs/client/local.ts",
+    "line": 380,
+    "verdict": "fp",
+    "note": "host fixed from internal URL; job id only in path"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "dependency-cycle",
+    "file": "apps/remix/app/components/general/document-signing/document-signing-auth-2fa.tsx",
+    "line": 18,
+    "verdict": "tp",
+    "note": "2fa -> provider -> dialog -> 2fa runtime cycle"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unused-export",
+    "file": "apps/openpage-api/lib/growth/get-signer-conversion.ts",
+    "line": 39,
+    "verdict": "tp",
+    "note": "type unused; remix imports packages/lib copy instead"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "json-parse-unguarded",
+    "file": "packages/ui/primitives/document-flow/field-item-advanced-settings.tsx",
+    "line": 167,
+    "verdict": "tp",
+    "note": "localStorage value parsed unguarded in useState init"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "react-fetch-in-effect-no-abort",
+    "file": "apps/remix/app/components/general/unified-settings-layout.tsx",
+    "line": 113,
+    "verdict": "fp",
+    "note": "fire-and-forget preference POST, no stale state to race"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-query-in-loop",
+    "file": "packages/ee/server-only/signing/csc/materialize-anchors.ts",
+    "line": 195,
+    "verdict": "fp",
+    "note": "per-item update paired with per-item upload, data differs, cannot batch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-query-in-loop",
+    "file": "packages/lib/jobs/client/bullmq.ts",
+    "line": 139,
+    "verdict": "fp",
+    "note": "per-job create run in Promise.all, rows need returned ids"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-filter",
+    "file": "packages/lib/server-only/auth/create-passkey.ts",
+    "line": 44,
+    "verdict": "tp",
+    "note": "userId+identifier lookup on VerificationToken with no index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-filter",
+    "file": "packages/lib/server-only/auth/create-passkey.ts",
+    "line": 60,
+    "verdict": "tp",
+    "note": "userId+identifier deleteMany with no index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-filter",
+    "file": "packages/lib/server-only/user/disable-user.ts",
+    "line": 33,
+    "verdict": "tp",
+    "note": "ApiToken.userId FK filtered with no index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-filter",
+    "file": "packages/lib/server-only/user/disable-user.ts",
+    "line": 40,
+    "verdict": "tp",
+    "note": "Webhook.userId FK filtered with no index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-filter",
+    "file": "packages/lib/server-only/user/disable-user.ts",
+    "line": 47,
+    "verdict": "tp",
+    "note": "VerificationToken.userId filtered with no index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-deep-offset",
+    "file": "packages/trpc/server/admin-router/email-transport/find-email-transports.ts",
+    "line": 27,
+    "verdict": "fp",
+    "note": "admin-only list over small email transport table"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-deep-offset",
+    "file": "packages/trpc/server/envelope-router/find-envelope-audit-logs.ts",
+    "line": 54,
+    "verdict": "tp",
+    "note": "page has min(1) but no max; user-facing audit log offset"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-list-query",
+    "file": "packages/trpc/server/organisation-router/get-organisation-member-invites.ts",
+    "line": 18,
+    "verdict": "fp",
+    "note": "scoped to the user own email invites"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-foreign-key",
+    "file": "packages/prisma/schema.prisma",
+    "line": 52,
+    "verdict": "tp",
+    "note": "User.avatarImageId FK without index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-redundant-prefix",
+    "file": "packages/prisma/schema.prisma",
+    "line": 77,
+    "verdict": "tp",
+    "note": "index on email duplicates the unique email constraint"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-redundant-prefix",
+    "file": "packages/prisma/schema.prisma",
+    "line": 148,
+    "verdict": "tp",
+    "note": "@id @unique on id is a duplicate of the primary key"
   }
 ]

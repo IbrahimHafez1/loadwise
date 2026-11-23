@@ -190,5 +190,165 @@
     "line": 544,
     "verdict": "fp",
     "note": "referrer is checked with isSiteUrl so the redirect stays on the site"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "postmessage-missing-origin-check",
+    "file": "apps/activitypub/src/views/inbox/components/reader.tsx",
+    "line": 353,
+    "verdict": "fp",
+    "note": "handler only sets iframe height; no sensitive effect"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "deep-control-flow",
+    "file": ".lintstagedrc.cjs",
+    "line": 54,
+    "verdict": "tp",
+    "note": "for>for>if>for>if nesting in expandPattern"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-module",
+    "file": "apps/activitypub/src/api/activitypub.ts",
+    "line": 1,
+    "verdict": "tp",
+    "note": "797-line API client module with one huge class"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-class",
+    "file": "apps/activitypub/src/api/activitypub.ts",
+    "line": 320,
+    "verdict": "tp",
+    "note": "ActivityPubAPI class with 55 methods"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "high-branch-complexity",
+    "file": "apps/activitypub/src/components/feed/feed-item.tsx",
+    "line": 78,
+    "verdict": "tp",
+    "note": "renderFeedAttachment: many nested branches and nested switch/default"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "long-parameter-list",
+    "file": "apps/admin/src/analytics/hooks/use-newsletter-period-stats.ts",
+    "line": 48,
+    "verdict": "tp",
+    "note": "six positional string params on fetchNewsletterPeriodStats"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "dependency-cycle",
+    "file": "e2e/data-factory/factories/automated-email-factory.ts",
+    "line": 1,
+    "verdict": "tp",
+    "note": "factory imports its own barrel @/data-factory"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "dependency-cycle",
+    "file": "e2e/helpers/pages/admin/admin-page.ts",
+    "line": 1,
+    "verdict": "tp",
+    "note": "AdminPage imports BasePage via pages barrel"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "json-parse-unguarded",
+    "file": "apps/activitypub/src/lib/feature-flags.tsx",
+    "line": 27,
+    "verdict": "tp",
+    "note": "corrupt localStorage value crashes state initializer"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "promise-return-escapes-catch",
+    "file": "apps/activitypub/src/utils/image.ts",
+    "line": 19,
+    "verdict": "tp",
+    "note": "FileReader promise returned inside try; onerror bypasses catch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "async-callback-unhandled-rejection",
+    "file": "apps/activitypub/src/views/preferences/components/bluesky-sharing.tsx",
+    "line": 114,
+    "verdict": "tp",
+    "note": "mutateAsync awaited in setInterval async callback, no catch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "async-callback-unhandled-rejection",
+    "file": "apps/admin-x-framework/test/unit/utils/api/fetch-api.test.tsx",
+    "line": 49,
+    "verdict": "fp",
+    "note": "test server code"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "frontend-barrel-heavy-import",
+    "file": "apps/admin/src/analytics/hooks/use-growth-stats.ts",
+    "line": 1,
+    "verdict": "tp",
+    "note": "whole moment root imported in admin client bundle"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "frontend-barrel-heavy-import",
+    "file": "apps/admin/src/analytics/views/stats/growth/components/new-subscribers-cadence.tsx",
+    "line": 2,
+    "verdict": "tp",
+    "note": "whole moment root imported in client bundle"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "frontend-barrel-heavy-import",
+    "file": "apps/admin/src/analytics/views/stats/growth/components/paid-subscription-change-chart.tsx",
+    "line": 2,
+    "verdict": "tp",
+    "note": "whole moment root imported in client bundle"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "dom-unthrottled-scroll-resize",
+    "file": "apps/admin/src/comments/analytics/comments-analytics-rail.tsx",
+    "line": 35,
+    "verdict": "fp",
+    "note": "passive listener, sync rail positioning must follow scroll; throttling breaks it"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "dom-unthrottled-scroll-resize",
+    "file": "apps/admin/src/layout/app-sidebar/settings-sidebar.tsx",
+    "line": 34,
+    "verdict": "fp",
+    "note": "passive listener updating idempotent boolean state"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "react-fetch-in-effect-no-abort",
+    "file": "apps/admin/src/hooks/use-private-site-login.ts",
+    "line": 29,
+    "verdict": "fp",
+    "note": "fire-and-forget login POST, no state set from the response"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "whole-payload-in-memory",
+    "file": "ghost/core/frontend/services/routing/controllers/entry/markdown.ts",
+    "line": 45,
+    "verdict": "fp",
+    "note": "small internally generated markdown response, not a large download"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "serial-awaits-in-literal",
+    "file": "ghost/core/server/services/members/import-export/import/importer.ts",
+    "line": 454,
+    "verdict": "tp",
+    "note": "independent awaits in literal run serially"
   }
 ]

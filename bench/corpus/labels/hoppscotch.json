@@ -278,5 +278,149 @@
     "line": 70,
     "verdict": "fp",
     "note": "matches libpq sslmode require and prefer semantics"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-unusable-expression",
+    "file": "packages/hoppscotch-backend/src/admin/admin.service.ts",
+    "line": 100,
+    "verdict": "tp",
+    "note": "ILIKE email lookup on btree, per invite"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-unusable-expression",
+    "file": "packages/hoppscotch-backend/src/admin/admin.service.ts",
+    "line": 175,
+    "verdict": "tp",
+    "note": "insensitive IN on inviteeEmail, no trigram index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-unusable-expression",
+    "file": "packages/hoppscotch-backend/src/user/user.service.ts",
+    "line": 69,
+    "verdict": "tp",
+    "note": "case-insensitive email lookup on login path"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-in-url-query",
+    "file": "packages/hoppscotch-backend/src/infra-config/onboarding.controller.ts",
+    "line": 106,
+    "verdict": "tp",
+    "note": "onboarding token read from query string"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-in-url-query",
+    "file": "packages/hoppscotch-sh-admin/src/helpers/backend/rest/authQuery.ts",
+    "line": 38,
+    "verdict": "tp",
+    "note": "onboarding token appended to query string"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "json-parse-unguarded",
+    "file": "packages/hoppscotch-cli/src/utils/hopp-fetch.ts",
+    "line": 231,
+    "verdict": "fp",
+    "note": "json() mirrors fetch Response.json which throws by contract"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "promise-return-escapes-catch",
+    "file": "packages/hoppscotch-desktop/src/router.ts",
+    "line": 16,
+    "verdict": "tp",
+    "note": "dynamic import returned un-awaited; load failure skips fallback catch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "serial-awaits-in-literal",
+    "file": "packages/hoppscotch-backend/src/team-collection/team-collection.service.ts",
+    "line": 1448,
+    "verdict": "tp",
+    "note": "folders and requests lookups are independent but serial"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-filter",
+    "file": "packages/hoppscotch-backend/src/access-token/access-token.service.ts",
+    "line": 135,
+    "verdict": "tp",
+    "note": "PersonalAccessToken.userUid filtered with no index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-filter",
+    "file": "packages/hoppscotch-backend/src/mock-server/mock-server.service.ts",
+    "line": 1056,
+    "verdict": "tp",
+    "note": "parentID children lookup not leading in any index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-filter",
+    "file": "packages/hoppscotch-backend/src/mock-server/mock-server.service.ts",
+    "line": 1083,
+    "verdict": "tp",
+    "note": "parentID children lookup not leading in any index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-filter",
+    "file": "packages/hoppscotch-backend/src/shortcode/shortcode.service.ts",
+    "line": 165,
+    "verdict": "tp",
+    "note": "creatorUid only second column of unique index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-filter",
+    "file": "packages/hoppscotch-backend/src/shortcode/shortcode.service.ts",
+    "line": 219,
+    "verdict": "tp",
+    "note": "creatorUid only second column of unique index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "list-query-overfetch",
+    "file": "packages/hoppscotch-backend/src/team-collection/team-collection.service.ts",
+    "line": 175,
+    "verdict": "fp",
+    "note": "export needs full data Json of each collection"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "list-query-overfetch",
+    "file": "packages/hoppscotch-backend/src/user-collection/user-collection.service.ts",
+    "line": 923,
+    "verdict": "fp",
+    "note": "tree export needs full data Json of each collection"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "list-query-overfetch",
+    "file": "packages/hoppscotch-backend/src/user-collection/user-collection.service.ts",
+    "line": 986,
+    "verdict": "fp",
+    "note": "export needs full data Json of each collection"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-redundant-prefix",
+    "file": "packages/hoppscotch-backend/prisma/migrations/20230406064219_init/migration.sql",
+    "line": 195,
+    "verdict": "tp",
+    "note": "teamID index is prefix of unique (teamID, inviteeEmail)"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-redundant-prefix",
+    "file": "packages/hoppscotch-backend/prisma/migrations/20231106120154_embeds_addition/migration.sql",
+    "line": 12,
+    "verdict": "tp",
+    "note": "unique index on id duplicates the primary key"
   }
 ]

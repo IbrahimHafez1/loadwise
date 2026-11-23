@@ -190,5 +190,85 @@
     "line": 275,
     "verdict": "fp",
     "note": "sha256 builds a link token from id and password, it is not stored as the password hash"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "password-hash-sync-in-async",
+    "file": "server/src/services/auth.service.ts",
+    "line": 132,
+    "verdict": "tp",
+    "note": "compareSync bcrypt blocks loop in changePassword"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "plaintext-password-storage",
+    "file": "server/src/services/shared-link.service.ts",
+    "line": 101,
+    "verdict": "tp",
+    "note": "shared link password stored and compared in plaintext"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "plaintext-password-storage",
+    "file": "server/src/services/shared-link.service.ts",
+    "line": 138,
+    "verdict": "tp",
+    "note": "shared link password updated in plaintext"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "auth-route-without-rate-limit",
+    "file": "server/src/controllers/auth.controller.ts",
+    "line": 30,
+    "verdict": "tp",
+    "note": "immich login has no throttler anywhere"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "auth-route-without-rate-limit",
+    "file": "server/src/controllers/maintenance.controller.ts",
+    "line": 46,
+    "verdict": "tp",
+    "note": "maintenance token login has no throttle"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "auth-route-without-rate-limit",
+    "file": "server/src/controllers/shared-link.controller.ts",
+    "line": 69,
+    "verdict": "tp",
+    "note": "password-protected shared link login unthrottled"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "auth-route-without-rate-limit",
+    "file": "server/src/maintenance/maintenance-worker.controller.ts",
+    "line": 108,
+    "verdict": "tp",
+    "note": "maintenance login unthrottled"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "json-parse-unguarded",
+    "file": "packages/plugin-sdk/src/cli.ts",
+    "line": 20,
+    "verdict": "fp",
+    "note": "dev CLI reading local manifest file"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "promise-return-escapes-catch",
+    "file": "server/src/repositories/server-info.repository.ts",
+    "line": 78,
+    "verdict": "tp",
+    "note": "response.json() rejection skips catch that wraps the error"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "stream-pipe-unhandled-error",
+    "file": "server/src/controllers/integrity-admin.controller.ts",
+    "line": 92,
+    "verdict": "tp",
+    "note": "CSV stream piped to res with no error handler"
   }
 ]

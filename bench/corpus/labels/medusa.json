@@ -358,5 +358,61 @@
     "line": 37,
     "verdict": "fp",
     "note": "test runner database config"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "filter-for-existence",
+    "file": "packages/admin/dashboard/src/routes/tax-regions/common/components/tax-region-card/tax-region-card.tsx",
+    "line": 80,
+    "verdict": "tp",
+    "note": "filter().length on tax_rates; some() fits"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "json-roundtrip-clone",
+    "file": "packages/core/utils/src/dal/mikro-orm/mikro-orm-repository.ts",
+    "line": 671,
+    "verdict": "tp",
+    "note": "JSON clone per entry in upsert hot path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "json-roundtrip-clone",
+    "file": "packages/modules/link-modules/src/initialize/index.ts",
+    "line": 52,
+    "verdict": "fp",
+    "note": "one-time link module startup, not hot"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-in-url-query",
+    "file": "packages/core/js-sdk/src/admin/invite.ts",
+    "line": 61,
+    "verdict": "tp",
+    "note": "invite token sent in query string of POST"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "tls-verification-disabled",
+    "file": "packages/core/utils/src/modules-sdk/load-module-database-config.ts",
+    "line": 28,
+    "verdict": "tp",
+    "note": "rejectUnauthorized false default for every non-local DB host"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "json-parse-unguarded",
+    "file": "packages/admin/admin-bundler/src/commands/plugin.ts",
+    "line": 17,
+    "verdict": "fp",
+    "note": "build tooling reading own package.json"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "async-callback-unhandled-rejection",
+    "file": "packages/admin/admin-vite-plugin/src/plugin.ts",
+    "line": 171,
+    "verdict": "tp",
+    "note": "handleFileChange awaited in watcher callback with no catch"
   }
 ]

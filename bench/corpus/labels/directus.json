@@ -254,5 +254,85 @@
     "line": 218,
     "verdict": "fp",
     "note": "RelayState is validated by resolveLoginRedirect before redirecting"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-compared-non-constant-time",
+    "file": "api/src/services/mcp-oauth/utils/redirect.ts",
+    "line": 144,
+    "verdict": "fp",
+    "note": "compares URL userinfo in redirect URI matching, not a secret check"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-in-url-query",
+    "file": "tests/sandbox/src/steps/schema.ts",
+    "line": 39,
+    "verdict": "fp",
+    "note": "sandbox test tooling script"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "dependency-cycle",
+    "file": "packages/errors/src/errors/addon-not-available.ts",
+    "line": 1,
+    "verdict": "tp",
+    "note": "error file imports createError via ../index.js barrel"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "json-parse-unguarded",
+    "file": "api/src/deployment/drivers/netlify.ts",
+    "line": 354,
+    "verdict": "tp",
+    "note": "websocket message parsed with no try/catch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "promise-return-escapes-catch",
+    "file": "api/src/ai/providers/anthropic-file-support.ts",
+    "line": 74,
+    "verdict": "tp",
+    "note": "fetch returned inside try; rejection bypasses logging catch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "async-callback-unhandled-rejection",
+    "file": "packages/extensions-sdk/src/cli/commands/build.ts",
+    "line": 477,
+    "verdict": "tp",
+    "note": "event.result.close awaited in rollup watcher handler, no catch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "serial-awaits-in-literal",
+    "file": "api/src/license/manager.ts",
+    "line": 595,
+    "verdict": "tp",
+    "note": "three independent getUsage awaits run serially"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "stream-pipe-unhandled-error",
+    "file": "api/src/controllers/assets.ts",
+    "line": 56,
+    "verdict": "fp",
+    "note": "archive errors surfaced via complete() in try/catch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "stream-pipe-unhandled-error",
+    "file": "api/src/controllers/assets.ts",
+    "line": 125,
+    "verdict": "fp",
+    "note": "archive errors surfaced via complete() in try/catch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "stream-pipe-unhandled-error",
+    "file": "api/src/controllers/extensions.ts",
+    "line": 342,
+    "verdict": "tp",
+    "note": "source stream piped to res; only disconnect handled, not source error"
   }
 ]

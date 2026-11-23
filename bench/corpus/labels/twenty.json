@@ -110,5 +110,165 @@
     "line": 369,
     "verdict": "missed",
     "note": "findOne per channel inside a loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "filter-for-existence",
+    "file": "packages/twenty-front/src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx",
+    "line": 184,
+    "verdict": "tp",
+    "note": "filter().length per column, some() fits"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "filter-for-existence",
+    "file": "packages/twenty-server/src/engine/core-modules/two-factor-authentication/two-factor-authentication.validation.ts",
+    "line": 44,
+    "verdict": "tp",
+    "note": "filter().length>0 on methods; some() fits"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-membership",
+    "file": "packages/twenty-server/src/engine/core-modules/user-session/utils/resolve-allowed-credentialed-origins.util.ts",
+    "line": 84,
+    "verdict": "fp",
+    "note": "small config origin list"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-module-cache",
+    "file": "packages/twenty-front/src/modules/ai/utils/getModelsDevLogoIcon.tsx",
+    "line": 32,
+    "verdict": "fp",
+    "note": "cache keyed by small fixed provider set"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "sequential-http-in-loop",
+    "file": "packages/twenty-front-component-renderer/src/__stories__/twenty-ui-gallery/utils/avatarImageTest.ts",
+    "line": 244,
+    "verdict": "fp",
+    "note": "storybook test cleanup"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "service-query-in-loop",
+    "file": "packages/twenty-server/src/engine/core-modules/application/application-registration/application-registration-asset.service.ts",
+    "line": 66,
+    "verdict": "fp",
+    "note": "handful of gallery images per app sync"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-compression-in-async",
+    "file": "packages/twenty-server/src/engine/core-modules/logic-function/logic-function-drivers/drivers/lambda/sdk-client-generation/sdk-client-generation-lambda.handler.ts",
+    "line": 49,
+    "verdict": "fp",
+    "note": "isolated lambda handler, nothing else to block"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-query-in-loop",
+    "file": "packages/twenty-server/src/engine/core-modules/application/application-translation/application-translation-sync.service.ts",
+    "line": 44,
+    "verdict": "fp",
+    "note": "parallel updates over small locale set"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-query-in-loop",
+    "file": "packages/twenty-server/src/engine/core-modules/application/application-translation/application-translation-sync.service.ts",
+    "line": 50,
+    "verdict": "fp",
+    "note": "parallel inserts over small locale set"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-query-in-loop",
+    "file": "packages/twenty-server/src/modules/calendar/calendar-event-import-manager/commands/calendar-trigger-event-list-fetch.command.ts",
+    "line": 81,
+    "verdict": "tp",
+    "note": "one update per channel in a loop; In(ids) works"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-cartesian-include",
+    "file": "packages/twenty-server/src/engine/core-modules/auth/services/auth-sso.service.ts",
+    "line": 49,
+    "verdict": "fp",
+    "note": "where filters workspaceUsers to one user; domains few"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-cartesian-include",
+    "file": "packages/twenty-server/src/engine/core-modules/user/user.resolver.ts",
+    "line": 157,
+    "verdict": "fp",
+    "note": "nested chain userWorkspaces->2FA, not sibling collections"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "auth-route-without-rate-limit",
+    "file": "packages/twenty-server/src/engine/core-modules/application/application-oauth/controllers/oauth-registration.controller.ts",
+    "line": 54,
+    "verdict": "fp",
+    "note": "handler calls throttlerService.tokenBucketThrottleOrThrow"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "auth-route-without-rate-limit",
+    "file": "packages/twenty-server/src/engine/core-modules/application/application-oauth/controllers/oauth-token.controller.ts",
+    "line": 43,
+    "verdict": "fp",
+    "note": "handler calls throttlerService.tokenBucketThrottleOrThrow"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-in-url-query",
+    "file": "packages/twenty-server/src/engine/core-modules/file/controllers/file.controller.ts",
+    "line": 217,
+    "verdict": "fp",
+    "note": "browser download link; token must be in URL"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "nest-validation-without-whitelist",
+    "file": "packages/twenty-server/src/engine/metadata-modules/view/controllers/view.controller.ts",
+    "line": 147,
+    "verdict": "tp",
+    "note": "ValidationPipe without whitelist; input spread into updateOne"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "whole-payload-in-memory",
+    "file": "packages/twenty-front/vite.config.ts",
+    "line": 48,
+    "verdict": "fp",
+    "note": "vite dev-server middleware over a fixed allowlist of files"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "session-memory-store",
+    "file": "packages/twenty-server/test/integration/utils/create-app.ts",
+    "line": 74,
+    "verdict": "fp",
+    "note": "integration-test app bootstrap"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "stream-pipe-unhandled-error",
+    "file": "packages/twenty-cli/src/transport/__tests__/fetch-with-proxy.spec.ts",
+    "line": 53,
+    "verdict": "fp",
+    "note": "test proxy code with error handling on upstream"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "stream-pipe-unhandled-error",
+    "file": "packages/twenty-cli/src/transport/__tests__/fetch-with-proxy.spec.ts",
+    "line": 54,
+    "verdict": "fp",
+    "note": "test proxy code"
   }
 ]
