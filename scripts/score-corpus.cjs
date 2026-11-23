@@ -28,6 +28,7 @@ const STATUS_ORDER = ['unmeasured', 'thin', 'measured'];
 const RUN_TIMEOUT_MS = 20 * 60 * 1000;
 const MAX_OUTPUT_BYTES = 1024 * 1024 * 1024;
 const GIT_TIMEOUT_MS = 30 * 1000;
+const PRETTIER_BIN = path.join(path.dirname(require.resolve('prettier/package.json')), 'bin', 'prettier.cjs');
 const PILLARS = { perf: 'performance', maint: 'maintainability', sec: 'security' };
 const CORPUS_PATH_MARKER = 'loadwise-corpus/';
 const FLAG_NAMES_WITH_VALUE = new Set(['from', 'loadwise', 'corpus', 'repos']);
@@ -335,6 +336,9 @@ function writeScorecard() {
   const stored = readJson(SCORES_PATH);
   const scorecard = buildScorecard(registry, countLabels(readAllLabels()), stored.rules, fixIdsByPillar);
   fs.writeFileSync(SCORECARD_PATH, formatScorecard(scorecard));
+  // The project's own Prettier aligns the tables, so a fresh scorecard passes `npm run format:check`.
+  const prettier = spawnSync(process.execPath, [PRETTIER_BIN, '--write', SCORECARD_PATH], { encoding: 'utf8' });
+  if (prettier.status !== 0) throw new Error(`prettier failed on the scorecard: ${prettier.stderr}`);
   console.log(`Wrote ${path.relative(process.cwd(), SCORECARD_PATH)}`);
   return 0;
 }
