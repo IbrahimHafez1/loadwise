@@ -218,6 +218,43 @@ test('Drizzle: the shorter index is removed from the array form', (context) => {
   });
 });
 
+// The removed line becomes a comment naming the removed index and the one that replaces it; without comments the
+// same change is the plain removal.
+function assertRemovedIndexComment(finding, plainRemoval, removed, replacement) {
+  const { withoutWhyComment } = require('../../lib/shared/fix-presentation.cjs');
+  const { before, after } = onlyChange(finding);
+  assert.equal(before, plainRemoval.before);
+  const comment = after
+    .slice(plainRemoval.after.length + 1)
+    .trim()
+    .replace(/\n\s*\/\/ /g, ' ');
+  assert.ok(after.startsWith(plainRemoval.after + '\n'), after);
+  assert.match(
+    comment,
+    new RegExp(`^// Loadwise index-redundant-prefix: Removed ${removed}\\. ${replacement} replaces`),
+  );
+  assert.deepEqual(onlyChange({ fix: withoutWhyComment(finding.fix, finding.ruleId) }), plainRemoval);
+}
+
+test('Drizzle: with comments, the removed index line names it and the index that replaces it', (context) => {
+  const { findings } = scanWithFixes(context, {
+    ...drizzleStubs,
+    'src/service.ts': drizzleSource(`(table) => [
+    index('a_idx').on(table.tenantId),
+    index('ab_idx').on(table.tenantId, table.status),
+  ]`),
+  });
+  const redundant = findings.filter((finding) => finding.ruleId === redundantPrefix);
+  for (const finding of redundant) delete finding.fix;
+  attachSiteFixes(redundant, { comments: true });
+  assertRemovedIndexComment(
+    redundant[0],
+    { before: "(table) => [\n  index('a_idx').on(table.tenantId),", after: '(table) => [' },
+    'index `a_idx` \\(tenantId\\)',
+    'Index `ab_idx` \\(tenantId, status\\)',
+  );
+});
+
 test('Drizzle: the shorter index is removed from the object form', (context) => {
   const findings = fixesFor(
     context,
@@ -271,6 +308,38 @@ model Order {
     before: 'status   String\n@@index([tenantId])',
     after: 'status   String',
   });
+});
+
+test('Prisma: with comments, the removed @@index line names it and the index that replaces it', (context) => {
+  const root = withProject(context, {
+    'prisma/schema.prisma': `datasource db {
+  provider = "postgresql"
+}
+
+model Order {
+  id       String @id
+  tenantId String
+  status   String
+  @@index([tenantId])
+  @@index([tenantId, status])
+}
+`,
+  });
+  const previous = process.cwd();
+  process.chdir(root);
+  let findings;
+  try {
+    findings = checkRedundantSchemaIndexes(root);
+    attachSiteFixes(findings, { comments: true });
+  } finally {
+    process.chdir(previous);
+  }
+  assertRemovedIndexComment(
+    findings[0],
+    { before: 'status   String\n@@index([tenantId])', after: 'status   String' },
+    'index \\(tenantId\\)',
+    'Index \\(tenantId, status\\)',
+  );
 });
 
 test('SQL migrations: a redundant index stays manual', (context) => {
