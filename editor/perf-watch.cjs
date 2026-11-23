@@ -11,6 +11,7 @@ function startPerfWatch({ script, project, cwd, env, onFindings, onError, onExit
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+  const maxPendingBytes = 64 * 1024 * 1024;
   let pending = '';
   let stopped = false;
   function readReport(line) {
@@ -26,6 +27,12 @@ function startPerfWatch({ script, project, cwd, env, onFindings, onError, onExit
   }
   child.stdout.setEncoding('utf8');
   child.stdout.on('data', (chunk) => {
+    if (pending.length + chunk.length > maxPendingBytes) {
+      pending = '';
+      onError(new Error('Watch mode output exceeded maximum buffer size.'));
+      child.kill('SIGKILL');
+      return;
+    }
     pending += chunk;
     let newline;
     while ((newline = pending.indexOf('\n')) !== -1) {
@@ -49,6 +56,10 @@ function startPerfWatch({ script, project, cwd, env, onFindings, onError, onExit
     stop() {
       stopped = true;
       child.kill();
+      const killTimer = setTimeout(() => {
+        if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+      }, 2000);
+      killTimer.unref();
     },
   };
 }

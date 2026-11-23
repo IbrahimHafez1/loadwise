@@ -119,13 +119,16 @@ function defaultProjects() {
 function main(argv) {
   const projects = argv.length > 0 ? argv.map((project) => path.resolve(project)) : defaultProjects();
   let different = false;
+  let comparable = 0;
   for (const project of projects) {
     const [jsRun, nativeRun] = ENGINES.map((engine) => runEngine(project, engine));
     const comparison = compareRuns(jsRun, nativeRun);
     console.log(formatComparison(project, comparison).join('\n'));
     if (comparison.kind === 'different') different = true;
+    if (comparison.kind !== 'not-comparable') comparable += 1;
   }
-  return different ? FINDINGS_EXIT_CODE : 0;
+  if (different || (projects.length > 0 && comparable === 0)) return FINDINGS_EXIT_CODE;
+  return 0;
 }
 
 if (require.main === module) process.exitCode = main(process.argv.slice(2));

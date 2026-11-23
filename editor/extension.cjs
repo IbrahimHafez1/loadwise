@@ -139,7 +139,15 @@ function monitor(folder, extensionPath, output, { publishOptions, onStatus }) {
       .then((files) => files.length > 0);
   }
   async function workspaceScanTasks(settings) {
-    const explicitProject = settings.get('project', '');
+    const rawExplicitProject = settings.get('project', '').trim();
+    let explicitProject = '';
+    if (rawExplicitProject && !rawExplicitProject.startsWith('-')) {
+      const candidate = path.resolve(root, rawExplicitProject);
+      const rel = path.relative(root, candidate);
+      if (rel && rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel)) {
+        explicitProject = rel;
+      }
+    }
     const project = explicitProject || (await firstExisting(root, ['tsconfig.json', 'jsconfig.json']));
     const hasMaintainabilityInput =
       project || (await exists(path.join(root, 'maintainability.config.json'))) || (await findOne(sourceGlob));
@@ -217,6 +225,7 @@ function monitor(folder, extensionPath, output, { publishOptions, onStatus }) {
     return current;
   }
   function schedule({ restart = false } = {}) {
+    if (signal.signal.aborted) return;
     restartRequested ||= restart;
     revision++;
     clearTimeout(timer);

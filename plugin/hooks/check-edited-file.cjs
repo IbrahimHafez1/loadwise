@@ -17,13 +17,17 @@ function readStdin() {
   }
 }
 
-function findLocalBinary(startDirectory) {
-  let directory = startDirectory;
+function findLocalBinary(startDirectory, stopRoot) {
+  let directory = path.resolve(startDirectory);
+  const boundary = path.resolve(stopRoot);
   for (;;) {
+    const rel = path.relative(boundary, directory);
+    if (rel === '..' || rel.startsWith('..' + path.sep) || path.isAbsolute(rel)) return null;
     const entry = path.join(directory, 'node_modules', '@loadwise', 'cli', 'bin', 'loadwise.cjs');
     if (fs.existsSync(entry)) return { projectRoot: directory, binary: entry };
     const candidate = path.join(directory, 'node_modules', '.bin', 'loadwise');
     if (fs.existsSync(candidate)) return { projectRoot: directory, binary: candidate };
+    if (directory === boundary) return null;
     const parent = path.dirname(directory);
     if (parent === directory) return null;
     directory = parent;
@@ -82,17 +86,19 @@ function main() {
   const filePath = input?.tool_input?.file_path;
   if (typeof filePath !== 'string' || !SOURCE_EXTENSIONS.has(path.extname(filePath).toLowerCase())) return;
 
-  const absoluteFile = path.resolve(input.cwd ?? process.cwd(), filePath);
+  const workspaceRoot = path.resolve(input.cwd ?? process.cwd());
+  const absoluteFile = path.resolve(workspaceRoot, filePath);
   if (!fs.existsSync(absoluteFile)) return;
-  const local = findLocalBinary(path.dirname(absoluteFile));
+  const local = findLocalBinary(path.dirname(absoluteFile), workspaceRoot);
   if (!local) return;
   const relativeFile = path.relative(local.projectRoot, absoluteFile);
-  if (relativeFile.startsWith('..') || relativeFile.split(path.sep).includes('node_modules')) return;
+  if (relativeFile === '..' || relativeFile.startsWith('..' + path.sep) || relativeFile.split(path.sep).includes('node_modules')) return;
 
+  const safeRelativeFile = relativeFile.startsWith('-') ? `./${relativeFile}` : relativeFile;
   const timeoutMs = Number(process.env.LOADWISE_HOOK_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS;
   const deadline = Date.now() + timeoutMs;
-  const perfReport = runLoadwise(local.binary, ['perf', relativeFile, '--json'], local.projectRoot, deadline);
-  const secReport = runLoadwise(local.binary, ['sec', relativeFile, '--json'], local.projectRoot, deadline);
+  const perfReport = runLoadwise(local.binary, ['perf', '--json', '--', safeRelativeFile], local.projectRoot, deadline);
+  const secReport = runLoadwise(local.binary, ['sec', '--json', '--', safeRelativeFile], local.projectRoot, deadline);
   // maint has no explicit-file mode, so scan the uncommitted changes and keep this file's findings.
   const maintReport = runLoadwise(
     local.binary,

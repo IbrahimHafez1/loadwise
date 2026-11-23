@@ -5,8 +5,12 @@ const path = require('node:path');
 const { createRequire, isBuiltin } = require('node:module');
 const ts = require('typescript');
 
+if (!process.argv[2]) {
+  throw new Error('Usage: node scripts/vendor-native.cjs <path-to-typescript-package>');
+}
 const source = path.resolve(process.argv[2]);
 const destination = path.resolve(__dirname, '../lib/performance/vendor/typescript');
+fs.rmSync(destination, { recursive: true, force: true });
 const manifest = JSON.parse(fs.readFileSync(path.join(source, 'package.json'), 'utf8'));
 if (manifest.name !== 'typescript' || manifest.version !== '7.1.0-beta') {
   throw new Error('Expected the published typescript@7.1.0-beta package.');

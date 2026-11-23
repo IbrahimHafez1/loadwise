@@ -23,7 +23,10 @@ const annotate = LOADWISE_ANNOTATIONS === 'true';
 async function run() {
   const args = [];
   if (LOADWISE_CHECKERS) args.push('--only', LOADWISE_CHECKERS);
-  if (LOADWISE_CHANGED_ONLY === 'true' && LOADWISE_BASE_SHA) args.push('--changed-since', LOADWISE_BASE_SHA);
+  if (LOADWISE_CHANGED_ONLY === 'true') {
+    if (LOADWISE_BASE_SHA) args.push('--changed-since', LOADWISE_BASE_SHA);
+    else console.warn('Warning: changed-only is true but base SHA is empty; running a full scan.');
+  }
   if (LOADWISE_FAIL_ON) args.push('--fail-on', LOADWISE_FAIL_ON);
   if (upload || annotate) args.push('--format', upload ? 'sarif' : 'github');
   args.push('--', LOADWISE_PATH || '.');
