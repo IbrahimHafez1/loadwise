@@ -7,6 +7,7 @@ import path from 'node:path';
 import mongoose from 'mongoose';
 import { Pool } from 'pg';
 import sharp from 'sharp';
+import Stripe from 'stripe';
 
 const app = express();
 const pool = new Pool();
@@ -80,5 +81,36 @@ app.post('/avatar', async (req: Request, res: Response) => {
   const buf = await sharp(req.body).resize(256, 256).toBuffer();
   res.send(buf);
 });
+
+interface Account {
+  balance: number;
+}
+const AccountModel = mongoose.model<Account>('Account', new mongoose.Schema<Account>({ balance: Number }));
+const stripe = new Stripe(String(process.env.STRIPE_KEY));
+
+app.post('/checkout', async (req: Request, res: Response) => {
+  const account = await AccountModel.findOne({ id: req.body.accountId });
+  account.balance -= Number(req.body.amount);
+  await account.save();
+  await stripe.paymentIntents.create({ amount: req.body.amount, currency: 'usd' });
+  res.json({ ok: true });
+});
+
+app.post('/webhooks/stripe', async (req: Request, res: Response) => {
+  await UserModel.create({ paid: true, ref: req.body.ref });
+  res.status(200).end();
+});
+
+export async function fetchAll(urls: string[]) {
+  for (const url of urls) {
+    await fetch(url);
+  }
+}
+
+const jwtSecret = process.env.JWT_SECRET || 'Zq8rT4mXv2LpN7cWk9';
+
+export function attachUsers(orders: { userId: string }[], users: { id: string }[]) {
+  return orders.map((order) => ({ ...order, userIndex: users.findIndex((user) => user.id === order.userId) }));
+}
 
 app.listen(3000);

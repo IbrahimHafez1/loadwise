@@ -7,7 +7,7 @@
       "ruleId": "pg-dynamic-query-text",
       "project": "vulnerable-app",
       "file": "server.ts",
-      "line": 16,
+      "line": 17,
       "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
     },
     {
@@ -16,7 +16,7 @@
       "ruleId": "nosql-operator-injection",
       "project": "vulnerable-app",
       "file": "server.ts",
-      "line": 21,
+      "line": 22,
       "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
     },
     {
@@ -25,7 +25,7 @@
       "ruleId": "command-injection",
       "project": "vulnerable-app",
       "file": "server.ts",
-      "line": 26,
+      "line": 27,
       "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
     },
     {
@@ -34,7 +34,7 @@
       "ruleId": "code-injection",
       "project": "vulnerable-app",
       "file": "server.ts",
-      "line": 30,
+      "line": 31,
       "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
     },
     {
@@ -43,7 +43,7 @@
       "ruleId": "path-traversal",
       "project": "vulnerable-app",
       "file": "server.ts",
-      "line": 36,
+      "line": 37,
       "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
     },
     {
@@ -52,7 +52,7 @@
       "ruleId": "open-redirect",
       "project": "vulnerable-app",
       "file": "server.ts",
-      "line": 40,
+      "line": 41,
       "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
     },
     {
@@ -61,7 +61,7 @@
       "ruleId": "ssrf-request-url",
       "project": "vulnerable-app",
       "file": "server.ts",
-      "line": 44,
+      "line": 45,
       "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
     },
     {
@@ -70,7 +70,7 @@
       "ruleId": "reflected-xss-response",
       "project": "vulnerable-app",
       "file": "server.ts",
-      "line": 49,
+      "line": 50,
       "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
     },
     {
@@ -79,7 +79,7 @@
       "ruleId": "regex-catastrophic-backtracking",
       "project": "vulnerable-app",
       "file": "server.ts",
-      "line": 56,
+      "line": 57,
       "source": "Deliberately vulnerable app (DVNA/NodeGoat style): (a+)+ nested quantifier"
     },
     {
@@ -88,7 +88,7 @@
       "ruleId": "regex-catastrophic-backtracking",
       "project": "vulnerable-app",
       "file": "server.ts",
-      "line": 60,
+      "line": 61,
       "source": "Deliberately vulnerable app (DVNA/NodeGoat style): s+.*s+ overlapping quantifiers"
     },
     {
@@ -97,7 +97,7 @@
       "ruleId": "plaintext-password-storage",
       "project": "vulnerable-app",
       "file": "server.ts",
-      "line": 64,
+      "line": 65,
       "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
     },
     {
@@ -106,7 +106,7 @@
       "ruleId": "mongoose-aggregate-uncast-id",
       "project": "vulnerable-app",
       "file": "server.ts",
-      "line": 70,
+      "line": 71,
       "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
     },
     {
@@ -115,7 +115,7 @@
       "ruleId": "mongoose-hydrate-for-to-object",
       "project": "vulnerable-app",
       "file": "server.ts",
-      "line": 75,
+      "line": 76,
       "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
     },
     {
@@ -124,7 +124,7 @@
       "ruleId": "heavy-media-in-request-handler",
       "project": "vulnerable-app",
       "file": "server.ts",
-      "line": 80,
+      "line": 81,
       "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
     },
     {
@@ -133,7 +133,7 @@
       "ruleId": "express-missing-compression",
       "project": "vulnerable-app",
       "file": "server.ts",
-      "line": 84,
+      "line": 116,
       "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
     },
     {
@@ -306,6 +306,240 @@
       "file": "index.js",
       "line": 6,
       "source": "Generic reduce-spread fix pattern (no single commit)"
+    },
+    {
+      "id": "fe-barrel-import",
+      "pillar": "perf",
+      "ruleId": "frontend-barrel-heavy-import",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 3,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-react-missing-cleanup",
+      "pillar": "perf",
+      "ruleId": "react-missing-cleanup",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 15,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-react-fetch-no-abort",
+      "pillar": "perf",
+      "ruleId": "react-fetch-in-effect-no-abort",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 20,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-react-inline-prop",
+      "pillar": "perf",
+      "ruleId": "react-inline-object-in-jsx-prop",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 25,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-react-dangerously-html",
+      "pillar": "sec",
+      "ruleId": "react-dangerously-set-inner-html",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 26,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-react-index-key",
+      "pillar": "perf",
+      "ruleId": "react-index-as-key",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 28,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-angular-onpush",
+      "pillar": "perf",
+      "ruleId": "angular-default-change-detection",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 34,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-angular-subscribe",
+      "pillar": "perf",
+      "ruleId": "angular-subscribe-without-cleanup",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 38,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-angular-bypass-trust",
+      "pillar": "sec",
+      "ruleId": "angular-bypass-security-trust",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 41,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-vue-mounted-cleanup",
+      "pillar": "perf",
+      "ruleId": "vue-watch-missing-cleanup",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 46,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-vue-v-for-key",
+      "pillar": "perf",
+      "ruleId": "vue-v-for-missing-key",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 49,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-vue-v-html",
+      "pillar": "sec",
+      "ruleId": "vue-v-html-unsanitized",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 50,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-dom-layout-thrash",
+      "pillar": "perf",
+      "ruleId": "dom-layout-thrashing",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 56,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-dom-scroll-passive",
+      "pillar": "perf",
+      "ruleId": "dom-unthrottled-scroll-resize",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 59,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-dom-listener-leak",
+      "pillar": "perf",
+      "ruleId": "dom-listener-without-cleanup",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 59,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-dom-xss-innerhtml",
+      "pillar": "sec",
+      "ruleId": "dom-xss-sink",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 60,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-storage-token",
+      "pillar": "sec",
+      "ruleId": "frontend-storage-secret-token",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 61,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-postmessage-wildcard",
+      "pillar": "sec",
+      "ruleId": "postmessage-missing-origin-check",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 62,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "be-sql-select-star",
+      "pillar": "perf",
+      "ruleId": "sql-select-star-in-query",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 17,
+      "source": "Backend mastery recall case"
+    },
+    {
+      "id": "be-sequential-http-loop",
+      "pillar": "perf",
+      "ruleId": "sequential-http-in-loop",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 106,
+      "source": "Backend mastery recall case"
+    },
+    {
+      "id": "be-check-then-update-race",
+      "pillar": "perf",
+      "ruleId": "check-then-update-race",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 94,
+      "source": "Backend mastery recall case"
+    },
+    {
+      "id": "be-payment-idempotency",
+      "pillar": "perf",
+      "ruleId": "payment-missing-idempotency-key",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 95,
+      "source": "Backend mastery recall case"
+    },
+    {
+      "id": "be-webhook-idempotency",
+      "pillar": "perf",
+      "ruleId": "webhook-missing-idempotency-check",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 100,
+      "source": "Backend mastery recall case"
+    },
+    {
+      "id": "be-express-helmet",
+      "pillar": "sec",
+      "ruleId": "express-missing-helmet",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 116,
+      "source": "Backend mastery recall case"
+    },
+    {
+      "id": "be-jwt-fallback-secret",
+      "pillar": "sec",
+      "ruleId": "hardcoded-secret",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 110,
+      "source": "Backend mastery recall case"
+    },
+    {
+      "id": "be-array-repeated-find",
+      "pillar": "perf",
+      "ruleId": "array-repeated-find",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 113,
+      "source": "Backend mastery recall case"
     }
   ]
 }

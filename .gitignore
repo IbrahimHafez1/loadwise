@@ -1,3 +1,5 @@
 node_modules/
+# Stub type packages the recall bench needs: type-resolved rules only fire on declarations under node_modules.
+!bench/recall/cases/*/node_modules/
 *.tgz
 *.vsix
