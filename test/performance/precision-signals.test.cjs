@@ -91,6 +91,18 @@ test('sync fs in private methods reached only from init or a cached first call i
   ]);
 });
 
+test('sync fs in a private method called twice from the same startup-only caller is contextual', () => {
+  const source = [
+    "import { existsSync } from 'node:fs';",
+    'export class MapRepository {',
+    '  async init() { await this.importGeodata(); }',
+    '  private async importGeodata() { await Promise.all([this.loadAdmin("admin1"), this.loadAdmin("admin2")]); }',
+    '  private async loadAdmin(path: string) { return existsSync(path); }',
+    '}',
+  ].join('\n');
+  assert.deepEqual(contexts(source, 'node-sync-fs-in-async'), [[5, true]]);
+});
+
 test('reduces over a generic object, enum lists, finite keys or inside a hook callback are contextual', () => {
   const source = [
     "import { useMemo } from 'react';",

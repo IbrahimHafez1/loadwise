@@ -1,7 +1,11 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const test = require('node:test');
+const ts = require('typescript');
 const { withProgram } = require('./helpers.cjs');
 const { analyzeFile } = require('../../lib/performance/analyze.cjs');
 
@@ -37,6 +41,30 @@ test('a looping sync read in a build config, container tooling or test support i
   assert.match(findings['docker/box/build.ts'].contextualReason, /container, boot, codemod, tooling or test-support/);
   assert.match(findings['tests-next/shared/database.ts'].contextualReason, /test-support/);
   assert.equal(findings['src/orders/order.service.ts'].contextualReason, undefined);
+});
+
+// The package root has to exist on disk, because project roots are found through real package.json files.
+test('a looping sync read in a package inside a repository test folder is contextual, the app package stays reported', (context) => {
+  const repository = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-test-package-'));
+  context.after(() => fs.rmSync(repository, { recursive: true, force: true }));
+  const files = { sandbox: 'tests/sandbox/src/steps/docker.ts', app: 'api/src/services/files.ts' };
+  fs.mkdirSync(path.join(repository, '.git'));
+  for (const file of Object.values(files)) {
+    const packageRoot = path.join(repository, file.split('/src/')[0]);
+    fs.mkdirSync(path.join(packageRoot, 'src', path.dirname(file.split('/src/')[1])), { recursive: true });
+    fs.writeFileSync(path.join(packageRoot, 'package.json'), '{}');
+    fs.writeFileSync(path.join(repository, file), loopingRead);
+  }
+  const program = ts.createProgram(
+    Object.values(files).map((file) => path.join(repository, file)),
+    { strict: true, skipLibCheck: true, types: [] },
+  );
+  const reasonFor = (file) =>
+    analyzeFile(program, program.getSourceFile(path.join(repository, file))).find(
+      (finding) => finding.ruleId === 'node-sync-fs-in-async',
+    ).contextualReason;
+  assert.match(reasonFor(files.sandbox), /test-support/);
+  assert.equal(reasonFor(files.app), undefined);
 });
 
 const repeatedFind = `export function join(items: { id: number }[], rows: { id: number }[]) {
