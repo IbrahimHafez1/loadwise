@@ -86,11 +86,41 @@ export class UsersController {
   assert.equal(reported(source).all.length, 0);
 });
 
-test('a limiter imported but not connected to the route is contextual', () => {
+const limiterImportLine = "import rateLimit from 'express-rate-limit';\n";
+const loginRoute = `${express}app.post('/login', loginHandler);`;
+
+test('a limiter in a module unrelated to the route is still reported by default', () => {
+  const files = { 'unused.ts': `${limiterImportLine}export const unused = rateLimit({ max: 1 });` };
+  const { defaults, all } = reported(loginRoute, files);
+  assert.equal(defaults.length, 1);
+  assert.equal(all.length, 1);
+});
+
+test('a limiter imported in the route file itself is contextual', () => {
+  const { defaults, all } = reported(`${limiterImportLine}const unused = rateLimit({ max: 1 });
+${loginRoute}`);
+  assert.equal(defaults.length, 0);
+  assert.equal(all.length, 1);
+});
+
+test('a limiter in a module the route file imports is contextual', () => {
+  const files = { 'limits.ts': `${limiterImportLine}export const unused = rateLimit({ max: 1 });` };
+  const { defaults, all } = reported(
+    `import { unused } from './limits';
+void unused;
+${loginRoute}`,
+    files,
+  );
+  assert.equal(defaults.length, 0);
+  assert.equal(all.length, 1);
+});
+
+test('a limiter in app setup that imports the route file is contextual', () => {
   const files = {
-    'unused.ts': "import rateLimit from 'express-rate-limit';\nexport const unused = rateLimit({ max: 1 });",
+    'app.ts': `${limiterImportLine}import './main';
+export const unused = rateLimit({ max: 1 });`,
   };
-  const { defaults, all } = reported(`${express}app.post('/login', loginHandler);`, files);
+  const { defaults, all } = reported(loginRoute, files);
   assert.equal(defaults.length, 0);
   assert.equal(all.length, 1);
 });
