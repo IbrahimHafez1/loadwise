@@ -128,7 +128,7 @@ export class Report {
   ]);
   assert.match(
     changes['lookup.ts'][1].after,
-    /return ids\.map\(\(id\) => rows\.find\(\(row\) => row\.id === id\) \?\? null\);/,
+    /const rowsById = new Map\(rows\.map\(\(row\) => \[row\.id, row\] as const\)\.reverse\(\)\);\n\s*return ids\.map\(\(id\) => rowsById\.get\(id\) \?\? null\);/,
   );
   assert.match(finding.fix.note, /read before the loop/);
 });
