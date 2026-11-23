@@ -273,6 +273,9 @@ test('entry points and framework conventions are never reported', async () => {
     'jest.config.ts': 'export default {};',
     'migrations/1700000000000-init.ts': 'export class Init {}',
     'pages/index.tsx': 'export default function Page() {}',
+    'public/app.js': 'window.ready = true;',
+    'static/widget.js': 'window.widget = 1;',
+    'e2e.global-setup.ts': 'export default async function setup() {}',
     'src/orphan.service.ts': 'export class Orphan {}',
   });
   assert.deepEqual(summary(findings), ['unreferenced-file src/orphan.service.ts']);
