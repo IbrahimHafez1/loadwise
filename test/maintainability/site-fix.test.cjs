@@ -74,7 +74,7 @@ test('deep-control-flow fix turns the if that ends a loop body into a continue g
   assert.equal(change.file, 'collect.cjs');
   assert.match(
     change.after,
-    /^ {4}\/\/ Loadwise deep-control-flow: .*\n {4}if \(!row\.active\) continue;\n {4}for \(const tag of row\.tags\) \{/,
+    /^ {4}\/\/ Loadwise deep-control-flow: .*\n {4}\/\/ .*\n {4}if \(!row\.active\) continue;\n {4}for \(const tag of row\.tags\) \{/,
   );
   const rewritten = load(fixedFiles(directory, finding.fix)['collect.cjs']).collect;
   const original = load(nestedLoops).collect;
@@ -396,8 +396,8 @@ test('dependency-cycle fix turns a type-only import into import type', (context)
       line: 1,
       before: "import { Shape } from './b';",
       after:
-        '// Loadwise dependency-cycle: An eager chain of internal imports leads back to\n' +
-        '// the module it started from.\n' +
+        '// Loadwise dependency-cycle: The shared piece moved out of the cycle, so the\n' +
+        '// modules no longer import each other.\n' +
         "import type { Shape } from './b';",
     },
   ]);

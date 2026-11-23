@@ -26,7 +26,7 @@ const bin = path.resolve(__dirname, '../../bin/loadwise.cjs');
 const loadwisePrettier = path.dirname(require.resolve('prettier/package.json'));
 const ruleId = 'array-repeated-membership';
 const comment =
-  '// Loadwise array-repeated-membership: An array is tested with includes or\n// indexOf repeatedly where a Set would do.';
+  '// Loadwise array-repeated-membership: A Set answers each membership test in\n// constant time, where includes scanned the whole array.';
 // The comment as inserted above a statement indented by two spaces.
 const indentedComment = comment.replace(/^/gm, '  ');
 const hunkJoinDistance = 3;
@@ -103,12 +103,12 @@ test('the why-comment is the rule description, cut to its first sentence', () =>
 
 test('the why-comment wraps at 80 columns, and removing it keeps a project comment matching one of its lines', () => {
   for (const line of comment.split('\n')) assert.ok(line.length <= 80, line);
-  const before = '  // indexOf repeatedly where a Set would do.\n  const hit = ids.includes(1);';
-  const after = indentedComment + '\n  // indexOf repeatedly where a Set would do.\n  const hit = new Set(ids).has(1);';
+  const before = '  // constant time, where includes scanned the whole array.\n  const hit = ids.includes(1);';
+  const after = indentedComment + '\n  // constant time, where includes scanned the whole array.\n  const hit = new Set(ids).has(1);';
   const fix = { changes: [{ file: 'site.ts', line: 1, before, after }] };
   assert.equal(
     withoutWhyComment(fix, ruleId).changes[0].after,
-    '  // indexOf repeatedly where a Set would do.\n  const hit = new Set(ids).has(1);',
+    '  // constant time, where includes scanned the whole array.\n  const hit = new Set(ids).has(1);',
   );
 });
 
@@ -423,7 +423,7 @@ test('loadwise fix comments and formats each applied fix by default; --no-commen
   assert.equal(plain.status, 0, plain.stderr);
   assert.match(
     plain.stdout,
-    /^Fixed: perf slow\.ts:\d+ \[array-repeated-membership #\w+\]\n {2}Why: An array is tested with includes or indexOf repeatedly where a Set would do\.\n/m,
+    /^Fixed: perf slow\.ts:\d+ \[array-repeated-membership #\w+\]\n {2}Why: A Set answers each membership test in constant time, where includes scanned the whole array.\n/m,
     'each applied fix says why it changed the code',
   );
   const plainSource = fs.readFileSync(path.join(directory, 'slow.ts'), 'utf8');
@@ -478,7 +478,7 @@ test('loadwise fix says why once for fixes of the same rule and keeps each fix n
   assert.equal(result.status, 0, result.stderr);
   assert.match(
     result.stdout,
-    /^Fixed 2 \[array-repeated-membership\]:\n {2}Why: An array is tested .*\n {2}perf slow\.ts:6 #\w+\n {4}Note: .*`allowed`[^]*\n {2}perf slow\.ts:14 #\w+\n {4}Note: .*`blocked`/m,
+    /^Fixed 2 \[array-repeated-membership\]:\n {2}Why: A Set answers each membership test .*\n {2}perf slow\.ts:6 #\w+\n {4}Note: .*`allowed`[^]*\n {2}perf slow\.ts:14 #\w+\n {4}Note: .*`blocked`/m,
   );
-  assert.equal(result.stdout.match(/Why: An array is tested/g).length, 1);
+  assert.equal(result.stdout.match(/Why: A Set answers each membership test/g).length, 1);
 });

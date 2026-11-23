@@ -89,7 +89,7 @@ test('findings carry a rewrite of the flagged code in text and JSON', () => {
       line: 6,
       before: '  const visible = orders.filter(order => allowed.includes(order.customerId));',
       after:
-        '  // Loadwise array-repeated-membership: An array is tested with includes or\n  // indexOf repeatedly where a Set would do.\n  const allowedSet = new Set(allowed);\n  const visible = orders.filter(order => allowedSet.has(order.customerId));',
+        '  // Loadwise array-repeated-membership: A Set answers each membership test in\n  // constant time, where includes scanned the whole array.\n  const allowedSet = new Set(allowed);\n  const visible = orders.filter(order => allowedSet.has(order.customerId));',
     },
   ]);
   assert.match(
