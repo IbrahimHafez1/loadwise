@@ -125,6 +125,7 @@ export interface CheckerAdapter {
   getAwaitedType(type: any): TypeAdapter | undefined;
   isArrayType(type: any): boolean;
   getTypeArguments(type: any): readonly TypeAdapter[];
+  getIndexInfosOfType(type: any): readonly { keyType: TypeAdapter; type: TypeAdapter; isReadonly: boolean }[];
   /** Native only: whether a file is one of the compiler's default libraries. */
   isDefaultLibrary?(file: any): boolean;
   /** Native only. */
