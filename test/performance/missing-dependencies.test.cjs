@@ -37,7 +37,7 @@ test('a missing `types` entry is noted on stderr instead of aborting the scan', 
 
 test('other compiler option errors stay fatal', (context) => {
   const directory = uninstalledProject(context, {
-    compilerOptions: { module: 'commonjs', target: 'es2022', outFile: 'out.js', composite: true },
+    compilerOptions: { module: 'commonjs', moduleResolution: 'nodenext', target: 'es2022' },
     include: ['index.ts'],
   });
   const result = runIn(directory, ['-p', 'tsconfig.json']);
