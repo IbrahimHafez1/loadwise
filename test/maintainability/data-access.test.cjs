@@ -155,3 +155,11 @@ test('the CLI loads dataAccess from the config file and fails the default contra
     [['app.ts', 'data-access-boundary']],
   );
 });
+
+test('ambient declarations in a restricted folder do not place the external module implementation there', () => {
+  const declarations = {
+    'protected/ambient.d.ts': "declare module 'external-driver' { export function read(): number }",
+  };
+  const rule = { modules: ['./protected'], allowIn: ['reviewed'] };
+  assert.deepEqual(findings("import {read} from 'external-driver'; read();", rule, declarations), []);
+});
