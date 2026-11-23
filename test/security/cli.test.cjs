@@ -73,10 +73,14 @@ test('a reviewed comment moves the finding to the contextual count', (context) =
 
 test('perf no longer reports the moved rules and still accepts them in --ignore', (context) => {
   const root = project(context, { 'query.ts': dynamicQuery });
-  const run = spawnSync(process.execPath, [bin, 'perf', '--json', '--ignore', 'prisma-scope-unverified'], {
-    cwd: root,
-    encoding: 'utf8',
-  });
+  const run = spawnSync(
+    process.execPath,
+    [bin, 'perf', '--json', '--ignore', 'prisma-scope-unverified', '--ignore', 'sql-select-star-in-query'],
+    {
+      cwd: root,
+      encoding: 'utf8',
+    },
+  );
   assert.equal(run.status, 0, run.stderr);
   assert.deepEqual(JSON.parse(run.stdout).findings, []);
 });

@@ -200,6 +200,31 @@ const securityCases = [
       'node_modules/nunjucks/package.json': '{"types":"./index.d.ts"}',
     },
   },
+  {
+    ruleId: 'dom-xss-sink',
+    files: { 'app.ts': 'declare const el: HTMLElement;\nel.innerHTML = location.hash;\n' },
+  },
+  {
+    ruleId: 'postmessage-missing-origin-check',
+    files: {
+      'app.ts': "window.postMessage('ready', '*');\n",
+      'tsconfig.json': '{"compilerOptions":{"lib":["ES2022","DOM"]}}',
+    },
+  },
+  {
+    ruleId: 'express-missing-helmet',
+    files: {
+      'app.ts': "import express from 'express';\nconst app = express();\napp.listen(3000);\n",
+      'node_modules/express/index.d.ts': [
+        'export interface Application { use(handler: unknown): void; listen(port: number): unknown }',
+        'declare function express(): Application;',
+        'export default express;',
+      ].join('\n'),
+      'node_modules/express/package.json': '{"types":"./index.d.ts"}',
+      'node_modules/helmet/index.d.ts': 'declare function helmet(): unknown;\nexport default helmet;',
+      'node_modules/helmet/package.json': '{"types":"./index.d.ts"}',
+    },
+  },
 ];
 
 module.exports = { securityCases };

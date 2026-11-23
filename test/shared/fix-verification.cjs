@@ -106,7 +106,7 @@ function diagnosticKeys(root) {
     experimentalDecorators: true,
     skipLibCheck: true,
     types: [],
-    lib: ['lib.es2022.d.ts'],
+    lib: ['lib.es2022.d.ts', 'lib.dom.d.ts'],
   });
   return ts.getPreEmitDiagnostics(program).map((diagnostic) => {
     const file = diagnostic.file ? path.relative(root, diagnostic.file.fileName) : '';
