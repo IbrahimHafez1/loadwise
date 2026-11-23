@@ -92,13 +92,18 @@ function main() {
   const local = findLocalBinary(path.dirname(absoluteFile), workspaceRoot);
   if (!local) return;
   const relativeFile = path.relative(local.projectRoot, absoluteFile);
-  if (relativeFile === '..' || relativeFile.startsWith('..' + path.sep) || relativeFile.split(path.sep).includes('node_modules')) return;
+  if (
+    relativeFile === '..' ||
+    relativeFile.startsWith('..' + path.sep) ||
+    relativeFile.split(path.sep).includes('node_modules')
+  )
+    return;
 
   const safeRelativeFile = relativeFile.startsWith('-') ? `./${relativeFile}` : relativeFile;
   const timeoutMs = Number(process.env.LOADWISE_HOOK_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS;
   const deadline = Date.now() + timeoutMs;
-  const perfReport = runLoadwise(local.binary, ['perf', '--json', '--', safeRelativeFile], local.projectRoot, deadline);
-  const secReport = runLoadwise(local.binary, ['sec', '--json', '--', safeRelativeFile], local.projectRoot, deadline);
+  const perfReport = runLoadwise(local.binary, ['perf', safeRelativeFile, '--json'], local.projectRoot, deadline);
+  const secReport = runLoadwise(local.binary, ['sec', safeRelativeFile, '--json'], local.projectRoot, deadline);
   // maint has no explicit-file mode, so scan the uncommitted changes and keep this file's findings.
   const maintReport = runLoadwise(
     local.binary,
