@@ -488,6 +488,30 @@ const standaloneExamples = {
     foreignKeyIndex,
     'Add the index the plan lacks, or rewrite the query, then compare the plan.',
   ),
+  'mongoose-aggregate-uncast-id': {
+    language: 'javascript',
+    before: 'await Order.aggregate([{ $match: { _id: id } }]);',
+    code: 'await Order.aggregate([{ $match: { _id: new Types.ObjectId(id) } }]);',
+    note: 'Mongoose does not auto-cast strings inside aggregate() pipelines; wrap string ids in Types.ObjectId.',
+  },
+  'mongoose-hydrate-for-to-object': {
+    language: 'javascript',
+    before: 'const doc = await User.findById(id); return doc.toObject();',
+    code: 'return await User.findById(id).lean();',
+    note: 'Using .lean() returns a plain JavaScript object directly without hydrating a Mongoose Document.',
+  },
+  'express-missing-compression': {
+    language: 'javascript',
+    before: 'const app = express(); app.listen(3000);',
+    code: "import compression from 'compression';\nconst app = express();\napp.use(compression());\napp.listen(3000);",
+    note: 'Compresses JSON and HTML responses on the wire; skip if your reverse proxy already compresses responses.',
+  },
+  'heavy-media-in-request-handler': {
+    language: 'javascript',
+    before: "app.post('/avatar', async (req, res) => { res.send(await sharp(req.body).resize(256).toBuffer()); });",
+    code: "app.post('/avatar', async (req, res) => { await mediaQueue.add('resize', { fileId }); res.status(202).json({ queued: true }); });",
+    note: 'Move CPU-intensive sharp or PDF rendering to a background worker queue to protect request latency.',
+  },
   'db-missing-index': sqlExample(
     'SELECT id FROM orders WHERE customer_id = $1;',
     foreignKeyIndex,
