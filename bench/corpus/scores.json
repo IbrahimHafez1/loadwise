@@ -7,6 +7,8 @@
     "NodeGoat.perf",
     "NodeGoat.sec",
     "cal.com.maint",
+    "cal.com.perf",
+    "cal.com.sec",
     "directus.maint",
     "directus.perf",
     "directus.sec",
@@ -14,6 +16,8 @@
     "documenso.perf",
     "documenso.sec",
     "formbricks.maint",
+    "formbricks.perf",
+    "formbricks.sec",
     "hoppscotch.maint",
     "hoppscotch.perf",
     "hoppscotch.sec",
@@ -37,6 +41,8 @@
     "outline.perf",
     "outline.sec",
     "payload.maint",
+    "payload.perf",
+    "payload.sec",
     "strapi.maint",
     "strapi.perf",
     "strapi.sec",
@@ -45,6 +51,316 @@
     "twenty.sec"
   ],
   "rules": {
+    "perf/list-query-overfetch": {
+      "tp": 0,
+      "fp": 3,
+      "missed": 0,
+      "unlabelled": 11,
+      "findings": 14,
+      "contextual": 207,
+      "precision": 0,
+      "recall": null
+    },
+    "perf/floating-promise": {
+      "tp": 10,
+      "fp": 1,
+      "missed": 1,
+      "unlabelled": 191,
+      "findings": 202,
+      "contextual": 19,
+      "precision": 0.9091,
+      "recall": 0.9091
+    },
+    "perf/index-missing-filter": {
+      "tp": 10,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 46,
+      "findings": 56,
+      "contextual": 2,
+      "precision": 1,
+      "recall": 1
+    },
+    "perf/reduce-copy-accumulator": {
+      "tp": 6,
+      "fp": 8,
+      "missed": 1,
+      "unlabelled": 115,
+      "findings": 129,
+      "contextual": 64,
+      "precision": 0.4286,
+      "recall": 0.8571
+    },
+    "perf/promise-return-escapes-catch": {
+      "tp": 9,
+      "fp": 1,
+      "missed": 0,
+      "unlabelled": 33,
+      "findings": 43,
+      "contextual": 5,
+      "precision": 0.9,
+      "recall": 1
+    },
+    "perf/json-parse-unguarded": {
+      "tp": 4,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 68,
+      "findings": 72,
+      "contextual": 71,
+      "precision": 1,
+      "recall": 1
+    },
+    "perf/http-call-without-timeout": {
+      "tp": 9,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 235,
+      "findings": 244,
+      "contextual": 74,
+      "precision": 1,
+      "recall": 1
+    },
+    "perf/orm-deep-offset": {
+      "tp": 1,
+      "fp": 1,
+      "missed": 0,
+      "unlabelled": 2,
+      "findings": 4,
+      "contextual": 2,
+      "precision": 0.5,
+      "recall": 1
+    },
+    "perf/unbounded-list-query": {
+      "tp": 2,
+      "fp": 3,
+      "missed": 0,
+      "unlabelled": 4,
+      "findings": 9,
+      "contextual": 25,
+      "precision": 0.4,
+      "recall": 1
+    },
+    "perf/index-missing-order": {
+      "tp": 0,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 1,
+      "findings": 1,
+      "contextual": 8,
+      "precision": null,
+      "recall": null
+    },
+    "perf/prisma-distinct-in-memory": {
+      "tp": 1,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 7,
+      "findings": 8,
+      "contextual": 0,
+      "precision": 1,
+      "recall": 1
+    },
+    "perf/request-number-unvalidated": {
+      "tp": 0,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 2,
+      "findings": 2,
+      "contextual": 0,
+      "precision": null,
+      "recall": null
+    },
+    "perf/node-sync-process-in-async": {
+      "tp": 0,
+      "fp": 7,
+      "missed": 0,
+      "unlabelled": 9,
+      "findings": 16,
+      "contextual": 34,
+      "precision": 0,
+      "recall": null
+    },
+    "perf/node-sync-fs-in-async": {
+      "tp": 12,
+      "fp": 3,
+      "missed": 1,
+      "unlabelled": 101,
+      "findings": 116,
+      "contextual": 1215,
+      "precision": 0.8,
+      "recall": 0.9231
+    },
+    "perf/react-index-as-key": {
+      "tp": 0,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 0,
+      "findings": 0,
+      "contextual": 238,
+      "precision": null,
+      "recall": null
+    },
+    "perf/dom-unthrottled-scroll-resize": {
+      "tp": 0,
+      "fp": 6,
+      "missed": 0,
+      "unlabelled": 9,
+      "findings": 15,
+      "contextual": 103,
+      "precision": 0,
+      "recall": null
+    },
+    "perf/prisma-query-in-loop": {
+      "tp": 9,
+      "fp": 2,
+      "missed": 1,
+      "unlabelled": 70,
+      "findings": 81,
+      "contextual": 64,
+      "precision": 0.8182,
+      "recall": 0.9
+    },
+    "perf/find-then-create-race": {
+      "tp": 0,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 2,
+      "findings": 2,
+      "contextual": 1,
+      "precision": null,
+      "recall": null
+    },
+    "perf/frontend-barrel-heavy-import": {
+      "tp": 3,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 0,
+      "findings": 3,
+      "contextual": 8,
+      "precision": 1,
+      "recall": 1
+    },
+    "perf/loop-copy-accumulator": {
+      "tp": 3,
+      "fp": 5,
+      "missed": 0,
+      "unlabelled": 66,
+      "findings": 74,
+      "contextual": 0,
+      "precision": 0.375,
+      "recall": 1
+    },
+    "perf/react-fetch-in-effect-no-abort": {
+      "tp": 0,
+      "fp": 2,
+      "missed": 0,
+      "unlabelled": 7,
+      "findings": 9,
+      "contextual": 4,
+      "precision": 0,
+      "recall": null
+    },
+    "perf/array-repeated-membership": {
+      "tp": 2,
+      "fp": 3,
+      "missed": 0,
+      "unlabelled": 28,
+      "findings": 33,
+      "contextual": 826,
+      "precision": 0.4,
+      "recall": 1
+    },
+    "perf/dom-listener-without-cleanup": {
+      "tp": 0,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 0,
+      "findings": 0,
+      "contextual": 18,
+      "precision": null,
+      "recall": null
+    },
+    "perf/index-unusable-expression": {
+      "tp": 3,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 2,
+      "findings": 5,
+      "contextual": 0,
+      "precision": 1,
+      "recall": 1
+    },
+    "perf/index-unusable-pattern": {
+      "tp": 0,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 2,
+      "findings": 2,
+      "contextual": 0,
+      "precision": null,
+      "recall": null
+    },
+    "perf/array-repeated-find": {
+      "tp": 26,
+      "fp": 5,
+      "missed": 1,
+      "unlabelled": 67,
+      "findings": 98,
+      "contextual": 95,
+      "precision": 0.8387,
+      "recall": 0.963
+    },
+    "perf/unbounded-module-cache": {
+      "tp": 0,
+      "fp": 9,
+      "missed": 0,
+      "unlabelled": 10,
+      "findings": 19,
+      "contextual": 30,
+      "precision": 0,
+      "recall": null
+    },
+    "perf/serial-awaits-in-literal": {
+      "tp": 9,
+      "fp": 1,
+      "missed": 0,
+      "unlabelled": 46,
+      "findings": 56,
+      "contextual": 216,
+      "precision": 0.9,
+      "recall": 1
+    },
+    "perf/index-missing-foreign-key": {
+      "tp": 10,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 84,
+      "findings": 94,
+      "contextual": 0,
+      "precision": 1,
+      "recall": 1
+    },
+    "perf/index-redundant-prefix": {
+      "tp": 5,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 91,
+      "findings": 96,
+      "contextual": 0,
+      "precision": 1,
+      "recall": 1
+    },
+    "perf/service-query-in-loop": {
+      "tp": 3,
+      "fp": 4,
+      "missed": 7,
+      "unlabelled": 106,
+      "findings": 113,
+      "contextual": 300,
+      "precision": 0.4286,
+      "recall": 0.3
+    },
     "maint/unreferenced-file": {
       "tp": 5,
       "fp": 0,
@@ -135,55 +451,175 @@
       "precision": 0.9,
       "recall": 1
     },
-    "perf/promise-return-escapes-catch": {
-      "tp": 9,
-      "fp": 1,
+    "sec/command-injection": {
+      "tp": 0,
+      "fp": 0,
       "missed": 0,
-      "unlabelled": 9,
-      "findings": 19,
-      "contextual": 2,
-      "precision": 0.9,
+      "unlabelled": 0,
+      "findings": 0,
+      "contextual": 7,
+      "precision": null,
+      "recall": null
+    },
+    "sec/nest-validation-without-whitelist": {
+      "tp": 3,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 6,
+      "findings": 9,
+      "contextual": 3,
+      "precision": 1,
       "recall": 1
     },
-    "perf/floating-promise": {
-      "tp": 10,
+    "sec/open-redirect": {
+      "tp": 2,
       "fp": 1,
-      "missed": 1,
-      "unlabelled": 144,
-      "findings": 155,
-      "contextual": 18,
-      "precision": 0.9091,
-      "recall": 0.9091
-    },
-    "perf/stream-pipe-unhandled-error": {
-      "tp": 4,
-      "fp": 6,
       "missed": 0,
-      "unlabelled": 3,
-      "findings": 13,
-      "contextual": 7,
+      "unlabelled": 11,
+      "findings": 14,
+      "contextual": 13,
+      "precision": 0.6667,
+      "recall": 1
+    },
+    "sec/jwt-decode-for-auth": {
+      "tp": 0,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 0,
+      "findings": 0,
+      "contextual": 63,
+      "precision": null,
+      "recall": null
+    },
+    "sec/jwt-sign-without-expiry": {
+      "tp": 0,
+      "fp": 3,
+      "missed": 0,
+      "unlabelled": 1,
+      "findings": 4,
+      "contextual": 113,
+      "precision": 0,
+      "recall": null
+    },
+    "sec/ssrf-request-url": {
+      "tp": 2,
+      "fp": 4,
+      "missed": 0,
+      "unlabelled": 0,
+      "findings": 6,
+      "contextual": 0,
+      "precision": 0.3333,
+      "recall": 1
+    },
+    "sec/jwt-verify-without-algorithms": {
+      "tp": 2,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 0,
+      "findings": 2,
+      "contextual": 22,
+      "precision": 1,
+      "recall": 1
+    },
+    "sec/secret-compared-non-constant-time": {
+      "tp": 5,
+      "fp": 1,
+      "missed": 0,
+      "unlabelled": 10,
+      "findings": 16,
+      "contextual": 4,
+      "precision": 0.8333,
+      "recall": 1
+    },
+    "sec/secret-in-url-query": {
+      "tp": 3,
+      "fp": 3,
+      "missed": 0,
+      "unlabelled": 12,
+      "findings": 19,
+      "contextual": 36,
+      "precision": 0.5,
+      "recall": 1
+    },
+    "sec/react-dangerously-set-inner-html": {
+      "tp": 0,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 0,
+      "findings": 0,
+      "contextual": 63,
+      "precision": null,
+      "recall": null
+    },
+    "sec/insecure-random-for-secret": {
+      "tp": 2,
+      "fp": 3,
+      "missed": 0,
+      "unlabelled": 1,
+      "findings": 6,
+      "contextual": 87,
       "precision": 0.4,
       "recall": 1
     },
-    "perf/array-repeated-find": {
-      "tp": 26,
-      "fp": 5,
-      "missed": 1,
-      "unlabelled": 47,
-      "findings": 78,
-      "contextual": 78,
-      "precision": 0.8387,
-      "recall": 0.963
-    },
-    "perf/unbounded-module-cache": {
+    "sec/postmessage-missing-origin-check": {
       "tp": 0,
-      "fp": 9,
+      "fp": 2,
       "missed": 0,
-      "unlabelled": 6,
-      "findings": 15,
-      "contextual": 27,
+      "unlabelled": 4,
+      "findings": 6,
+      "contextual": 52,
       "precision": 0,
       "recall": null
+    },
+    "sec/dom-xss-sink": {
+      "tp": 0,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 0,
+      "findings": 0,
+      "contextual": 77,
+      "precision": null,
+      "recall": null
+    },
+    "sec/regex-catastrophic-backtracking": {
+      "tp": 1,
+      "fp": 2,
+      "missed": 0,
+      "unlabelled": 1,
+      "findings": 4,
+      "contextual": 183,
+      "precision": 0.3333,
+      "recall": 1
+    },
+    "sec/dockerfile-runs-as-root": {
+      "tp": 4,
+      "fp": 1,
+      "missed": 0,
+      "unlabelled": 23,
+      "findings": 28,
+      "contextual": 15,
+      "precision": 0.8,
+      "recall": 1
+    },
+    "sec/compose-hardcoded-secret": {
+      "tp": 0,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 12,
+      "findings": 12,
+      "contextual": 26,
+      "precision": null,
+      "recall": null
+    },
+    "perf/stream-pipe-unhandled-error": {
+      "tp": 4,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 3,
+      "findings": 7,
+      "contextual": 16,
+      "precision": 1,
+      "recall": 1
     },
     "perf/filter-for-existence": {
       "tp": 10,
@@ -195,86 +631,6 @@
       "precision": 1,
       "recall": 1
     },
-    "perf/array-repeated-membership": {
-      "tp": 2,
-      "fp": 3,
-      "missed": 0,
-      "unlabelled": 28,
-      "findings": 33,
-      "contextual": 704,
-      "precision": 0.4,
-      "recall": 1
-    },
-    "perf/json-parse-unguarded": {
-      "tp": 4,
-      "fp": 6,
-      "missed": 0,
-      "unlabelled": 59,
-      "findings": 69,
-      "contextual": 36,
-      "precision": 0.4,
-      "recall": 1
-    },
-    "perf/serial-awaits-in-literal": {
-      "tp": 9,
-      "fp": 1,
-      "missed": 0,
-      "unlabelled": 44,
-      "findings": 54,
-      "contextual": 196,
-      "precision": 0.9,
-      "recall": 1
-    },
-    "perf/loop-copy-accumulator": {
-      "tp": 3,
-      "fp": 4,
-      "missed": 0,
-      "unlabelled": 49,
-      "findings": 56,
-      "contextual": 0,
-      "precision": 0.4286,
-      "recall": 1
-    },
-    "perf/reduce-copy-accumulator": {
-      "tp": 4,
-      "fp": 10,
-      "missed": 2,
-      "unlabelled": 70,
-      "findings": 84,
-      "contextual": 41,
-      "precision": 0.2857,
-      "recall": 0.6667
-    },
-    "perf/http-call-without-timeout": {
-      "tp": 9,
-      "fp": 0,
-      "missed": 0,
-      "unlabelled": 156,
-      "findings": 165,
-      "contextual": 66,
-      "precision": 1,
-      "recall": 1
-    },
-    "perf/node-sync-fs-in-async": {
-      "tp": 12,
-      "fp": 1,
-      "missed": 1,
-      "unlabelled": 75,
-      "findings": 88,
-      "contextual": 1158,
-      "precision": 0.9231,
-      "recall": 0.9231
-    },
-    "perf/dom-listener-without-cleanup": {
-      "tp": 0,
-      "fp": 0,
-      "missed": 0,
-      "unlabelled": 0,
-      "findings": 0,
-      "contextual": 14,
-      "precision": null,
-      "recall": null
-    },
     "perf/async-callback-unhandled-rejection": {
       "tp": 6,
       "fp": 1,
@@ -285,22 +641,12 @@
       "precision": 0.8571,
       "recall": 1
     },
-    "perf/node-sync-process-in-async": {
-      "tp": 0,
-      "fp": 7,
-      "missed": 0,
-      "unlabelled": 8,
-      "findings": 15,
-      "contextual": 31,
-      "precision": 0,
-      "recall": null
-    },
     "perf/orm-query-in-loop": {
       "tp": 5,
       "fp": 2,
       "missed": 2,
-      "unlabelled": 22,
-      "findings": 29,
+      "unlabelled": 28,
+      "findings": 35,
       "contextual": 63,
       "precision": 0.7143,
       "recall": 0.7143
@@ -319,30 +665,10 @@
       "tp": 3,
       "fp": 4,
       "missed": 0,
-      "unlabelled": 15,
-      "findings": 22,
-      "contextual": 34,
+      "unlabelled": 16,
+      "findings": 23,
+      "contextual": 41,
       "precision": 0.4286,
-      "recall": 1
-    },
-    "sec/open-redirect": {
-      "tp": 2,
-      "fp": 7,
-      "missed": 0,
-      "unlabelled": 7,
-      "findings": 16,
-      "contextual": 3,
-      "precision": 0.2222,
-      "recall": 1
-    },
-    "sec/auth-route-without-rate-limit": {
-      "tp": 5,
-      "fp": 3,
-      "missed": 0,
-      "unlabelled": 2,
-      "findings": 10,
-      "contextual": 13,
-      "precision": 0.625,
       "recall": 1
     },
     "sec/knex-raw-dynamic-text": {
@@ -354,46 +680,6 @@
       "contextual": 56,
       "precision": null,
       "recall": 0
-    },
-    "sec/jwt-sign-without-expiry": {
-      "tp": 0,
-      "fp": 3,
-      "missed": 0,
-      "unlabelled": 0,
-      "findings": 3,
-      "contextual": 73,
-      "precision": 0,
-      "recall": null
-    },
-    "sec/secret-compared-non-constant-time": {
-      "tp": 5,
-      "fp": 1,
-      "missed": 0,
-      "unlabelled": 1,
-      "findings": 7,
-      "contextual": 4,
-      "precision": 0.8333,
-      "recall": 1
-    },
-    "sec/jwt-decode-for-auth": {
-      "tp": 0,
-      "fp": 0,
-      "missed": 0,
-      "unlabelled": 0,
-      "findings": 0,
-      "contextual": 56,
-      "precision": null,
-      "recall": null
-    },
-    "sec/jwt-verify-without-algorithms": {
-      "tp": 2,
-      "fp": 0,
-      "missed": 0,
-      "unlabelled": 0,
-      "findings": 2,
-      "contextual": 12,
-      "precision": 1,
-      "recall": 1
     },
     "sec/plaintext-password-storage": {
       "tp": 3,
@@ -415,126 +701,6 @@
       "precision": null,
       "recall": null
     },
-    "sec/dom-xss-sink": {
-      "tp": 0,
-      "fp": 0,
-      "missed": 0,
-      "unlabelled": 0,
-      "findings": 0,
-      "contextual": 68,
-      "precision": null,
-      "recall": null
-    },
-    "sec/secret-in-url-query": {
-      "tp": 3,
-      "fp": 3,
-      "missed": 0,
-      "unlabelled": 8,
-      "findings": 15,
-      "contextual": 36,
-      "precision": 0.5,
-      "recall": 1
-    },
-    "sec/command-injection": {
-      "tp": 0,
-      "fp": 0,
-      "missed": 0,
-      "unlabelled": 0,
-      "findings": 0,
-      "contextual": 6,
-      "precision": null,
-      "recall": null
-    },
-    "sec/compose-hardcoded-secret": {
-      "tp": 0,
-      "fp": 0,
-      "missed": 0,
-      "unlabelled": 8,
-      "findings": 8,
-      "contextual": 20,
-      "precision": null,
-      "recall": null
-    },
-    "perf/react-index-as-key": {
-      "tp": 0,
-      "fp": 0,
-      "missed": 0,
-      "unlabelled": 0,
-      "findings": 0,
-      "contextual": 179,
-      "precision": null,
-      "recall": null
-    },
-    "perf/dom-unthrottled-scroll-resize": {
-      "tp": 0,
-      "fp": 6,
-      "missed": 0,
-      "unlabelled": 7,
-      "findings": 13,
-      "contextual": 73,
-      "precision": 0,
-      "recall": null
-    },
-    "perf/react-fetch-in-effect-no-abort": {
-      "tp": 0,
-      "fp": 2,
-      "missed": 0,
-      "unlabelled": 0,
-      "findings": 2,
-      "contextual": 3,
-      "precision": 0,
-      "recall": null
-    },
-    "perf/list-query-overfetch": {
-      "tp": 0,
-      "fp": 3,
-      "missed": 0,
-      "unlabelled": 6,
-      "findings": 9,
-      "contextual": 138,
-      "precision": 0,
-      "recall": null
-    },
-    "perf/prisma-query-in-loop": {
-      "tp": 8,
-      "fp": 2,
-      "missed": 1,
-      "unlabelled": 24,
-      "findings": 34,
-      "contextual": 15,
-      "precision": 0.8,
-      "recall": 0.8889
-    },
-    "perf/index-missing-filter": {
-      "tp": 10,
-      "fp": 0,
-      "missed": 0,
-      "unlabelled": 22,
-      "findings": 32,
-      "contextual": 0,
-      "precision": 1,
-      "recall": 1
-    },
-    "perf/unbounded-list-query": {
-      "tp": 2,
-      "fp": 3,
-      "missed": 0,
-      "unlabelled": 2,
-      "findings": 7,
-      "contextual": 11,
-      "precision": 0.4,
-      "recall": 1
-    },
-    "perf/prisma-distinct-in-memory": {
-      "tp": 1,
-      "fp": 0,
-      "missed": 0,
-      "unlabelled": 0,
-      "findings": 1,
-      "contextual": 0,
-      "precision": 1,
-      "recall": 1
-    },
     "perf/prisma-relation-count-in-list": {
       "tp": 1,
       "fp": 0,
@@ -543,16 +709,6 @@
       "findings": 4,
       "contextual": 0,
       "precision": 1,
-      "recall": 1
-    },
-    "perf/orm-deep-offset": {
-      "tp": 1,
-      "fp": 1,
-      "missed": 0,
-      "unlabelled": 2,
-      "findings": 4,
-      "contextual": 1,
-      "precision": 0.5,
       "recall": 1
     },
     "perf/list-count-per-request": {
@@ -565,66 +721,6 @@
       "precision": null,
       "recall": null
     },
-    "perf/index-missing-foreign-key": {
-      "tp": 10,
-      "fp": 0,
-      "missed": 0,
-      "unlabelled": 14,
-      "findings": 24,
-      "contextual": 0,
-      "precision": 1,
-      "recall": 1
-    },
-    "perf/index-redundant-prefix": {
-      "tp": 5,
-      "fp": 3,
-      "missed": 0,
-      "unlabelled": 37,
-      "findings": 45,
-      "contextual": 0,
-      "precision": 0.625,
-      "recall": 1
-    },
-    "sec/react-dangerously-set-inner-html": {
-      "tp": 0,
-      "fp": 0,
-      "missed": 0,
-      "unlabelled": 0,
-      "findings": 0,
-      "contextual": 45,
-      "precision": null,
-      "recall": null
-    },
-    "sec/postmessage-missing-origin-check": {
-      "tp": 0,
-      "fp": 2,
-      "missed": 0,
-      "unlabelled": 1,
-      "findings": 3,
-      "contextual": 49,
-      "precision": 0,
-      "recall": null
-    },
-    "sec/insecure-random-for-secret": {
-      "tp": 2,
-      "fp": 3,
-      "missed": 0,
-      "unlabelled": 0,
-      "findings": 5,
-      "contextual": 80,
-      "precision": 0.4,
-      "recall": 1
-    },
-    "sec/ssrf-request-url": {
-      "tp": 2,
-      "fp": 3,
-      "missed": 0,
-      "unlabelled": 0,
-      "findings": 5,
-      "contextual": 0,
-      "precision": 0.4,
-      "recall": 1
-    },
     "sec/secret-in-log": {
       "tp": 1,
       "fp": 5,
@@ -635,25 +731,115 @@
       "precision": 0.1667,
       "recall": 1
     },
-    "sec/dockerfile-runs-as-root": {
-      "tp": 4,
+    "perf/node-sync-compression-in-async": {
+      "tp": 1,
       "fp": 1,
       "missed": 0,
-      "unlabelled": 18,
-      "findings": 23,
-      "contextual": 15,
-      "precision": 0.8,
+      "unlabelled": 1,
+      "findings": 3,
+      "contextual": 8,
+      "precision": 0.5,
       "recall": 1
     },
-    "perf/frontend-barrel-heavy-import": {
+    "perf/prisma-count-for-existence": {
+      "tp": 1,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 1,
+      "findings": 2,
+      "contextual": 1,
+      "precision": 1,
+      "recall": 1
+    },
+    "perf/react-inline-object-in-jsx-prop": {
+      "tp": 0,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 0,
+      "findings": 0,
+      "contextual": 14,
+      "precision": null,
+      "recall": null
+    },
+    "perf/sequential-http-in-loop": {
+      "tp": 0,
+      "fp": 3,
+      "missed": 0,
+      "unlabelled": 1,
+      "findings": 4,
+      "contextual": 2,
+      "precision": 0,
+      "recall": null
+    },
+    "perf/json-roundtrip-clone": {
+      "tp": 1,
+      "fp": 1,
+      "missed": 0,
+      "unlabelled": 14,
+      "findings": 16,
+      "contextual": 0,
+      "precision": 0.5,
+      "recall": 1
+    },
+    "sec/prisma-raw-unsafe-dynamic": {
+      "tp": 0,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 0,
+      "findings": 0,
+      "contextual": 12,
+      "precision": null,
+      "recall": null
+    },
+    "sec/weak-password-hash": {
+      "tp": 5,
+      "fp": 4,
+      "missed": 0,
+      "unlabelled": 1,
+      "findings": 10,
+      "contextual": 4,
+      "precision": 0.5556,
+      "recall": 1
+    },
+    "sec/jwt-none-algorithm": {
+      "tp": 0,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 0,
+      "findings": 0,
+      "contextual": 5,
+      "precision": null,
+      "recall": null
+    },
+    "sec/code-injection": {
       "tp": 3,
       "fp": 0,
       "missed": 0,
       "unlabelled": 0,
       "findings": 3,
-      "contextual": 0,
+      "contextual": 12,
       "precision": 1,
       "recall": 1
+    },
+    "sec/path-traversal": {
+      "tp": 0,
+      "fp": 2,
+      "missed": 0,
+      "unlabelled": 4,
+      "findings": 6,
+      "contextual": 4,
+      "precision": 0,
+      "recall": null
+    },
+    "sec/error-stack-in-response": {
+      "tp": 0,
+      "fp": 1,
+      "missed": 1,
+      "unlabelled": 0,
+      "findings": 1,
+      "contextual": 19,
+      "precision": 0,
+      "recall": 0
     },
     "perf/whole-payload-in-memory": {
       "tp": 0,
@@ -665,43 +851,13 @@
       "precision": 0,
       "recall": null
     },
-    "perf/sequential-http-in-loop": {
-      "tp": 0,
-      "fp": 3,
-      "missed": 0,
-      "unlabelled": 0,
-      "findings": 3,
-      "contextual": 2,
-      "precision": 0,
-      "recall": null
-    },
-    "perf/service-query-in-loop": {
-      "tp": 3,
-      "fp": 4,
-      "missed": 5,
-      "unlabelled": 101,
-      "findings": 108,
-      "contextual": 296,
-      "precision": 0.4286,
-      "recall": 0.375
-    },
     "sec/committed-secret": {
       "tp": 4,
       "fp": 0,
       "missed": 0,
-      "unlabelled": 1,
-      "findings": 5,
+      "unlabelled": 11,
+      "findings": 15,
       "contextual": 69,
-      "precision": 1,
-      "recall": 1
-    },
-    "perf/index-unusable-expression": {
-      "tp": 3,
-      "fp": 0,
-      "missed": 0,
-      "unlabelled": 0,
-      "findings": 3,
-      "contextual": 0,
       "precision": 1,
       "recall": 1
     },
@@ -715,16 +871,6 @@
       "precision": null,
       "recall": null
     },
-    "perf/prisma-count-for-existence": {
-      "tp": 1,
-      "fp": 0,
-      "missed": 0,
-      "unlabelled": 0,
-      "findings": 1,
-      "contextual": 0,
-      "precision": 1,
-      "recall": 1
-    },
     "sec/graphql-query-depth-unbounded": {
       "tp": 0,
       "fp": 0,
@@ -734,26 +880,6 @@
       "contextual": 6,
       "precision": null,
       "recall": null
-    },
-    "sec/regex-catastrophic-backtracking": {
-      "tp": 1,
-      "fp": 2,
-      "missed": 0,
-      "unlabelled": 1,
-      "findings": 4,
-      "contextual": 143,
-      "precision": 0.3333,
-      "recall": 1
-    },
-    "sec/error-stack-in-response": {
-      "tp": 0,
-      "fp": 1,
-      "missed": 1,
-      "unlabelled": 0,
-      "findings": 1,
-      "contextual": 18,
-      "precision": 0,
-      "recall": 0
     },
     "sec/hardcoded-secret": {
       "tp": 2,
@@ -795,24 +921,14 @@
       "precision": 1,
       "recall": 1
     },
-    "sec/path-traversal": {
-      "tp": 0,
-      "fp": 2,
-      "missed": 0,
-      "unlabelled": 4,
-      "findings": 6,
-      "contextual": 2,
-      "precision": 0,
-      "recall": null
-    },
-    "sec/weak-password-hash": {
+    "sec/auth-route-without-rate-limit": {
       "tp": 5,
-      "fp": 4,
+      "fp": 3,
       "missed": 0,
-      "unlabelled": 1,
+      "unlabelled": 2,
       "findings": 10,
-      "contextual": 2,
-      "precision": 0.5556,
+      "contextual": 12,
+      "precision": 0.625,
       "recall": 1
     },
     "perf/node-sync-crypto-in-async": {
@@ -885,36 +1001,6 @@
       "precision": 1,
       "recall": 1
     },
-    "perf/json-roundtrip-clone": {
-      "tp": 1,
-      "fp": 1,
-      "missed": 0,
-      "unlabelled": 1,
-      "findings": 3,
-      "contextual": 0,
-      "precision": 0.5,
-      "recall": 1
-    },
-    "perf/react-inline-object-in-jsx-prop": {
-      "tp": 0,
-      "fp": 0,
-      "missed": 0,
-      "unlabelled": 0,
-      "findings": 0,
-      "contextual": 12,
-      "precision": null,
-      "recall": null
-    },
-    "perf/node-sync-compression-in-async": {
-      "tp": 1,
-      "fp": 1,
-      "missed": 0,
-      "unlabelled": 1,
-      "findings": 3,
-      "contextual": 5,
-      "precision": 0.5,
-      "recall": 1
-    },
     "perf/async-route-unhandled-rejection": {
       "tp": 0,
       "fp": 0,
@@ -965,16 +1051,6 @@
       "precision": null,
       "recall": null
     },
-    "sec/jwt-none-algorithm": {
-      "tp": 0,
-      "fp": 0,
-      "missed": 0,
-      "unlabelled": 0,
-      "findings": 0,
-      "contextual": 4,
-      "precision": null,
-      "recall": null
-    },
     "sec/template-autoescape-disabled": {
       "tp": 1,
       "fp": 2,
@@ -983,16 +1059,6 @@
       "findings": 3,
       "contextual": 0,
       "precision": 0.3333,
-      "recall": 1
-    },
-    "sec/code-injection": {
-      "tp": 3,
-      "fp": 0,
-      "missed": 0,
-      "unlabelled": 0,
-      "findings": 3,
-      "contextual": 10,
-      "precision": 1,
       "recall": 1
     },
     "sec/bcrypt-low-cost": {
@@ -1034,16 +1100,6 @@
       "contextual": 0,
       "precision": 0,
       "recall": null
-    },
-    "sec/nest-validation-without-whitelist": {
-      "tp": 3,
-      "fp": 0,
-      "missed": 0,
-      "unlabelled": 6,
-      "findings": 9,
-      "contextual": 2,
-      "precision": 1,
-      "recall": 1
     },
     "sec/cors-origin-regex-unanchored": {
       "tp": 1,
@@ -1105,6 +1161,16 @@
       "precision": 0,
       "recall": null
     },
+    "sec/drizzle-sql-raw-dynamic": {
+      "tp": 0,
+      "fp": 0,
+      "missed": 0,
+      "unlabelled": 0,
+      "findings": 0,
+      "contextual": 37,
+      "precision": null,
+      "recall": null
+    },
     "sec/typeorm-dynamic-query-text": {
       "tp": 0,
       "fp": 0,
@@ -1117,6 +1183,9 @@
     }
   },
   "labels": {
+    "cal.com perf/reduce-copy-accumulator apps/api/v2/src/modules/auth/decorators/get-membership/get-membership.decorator.ts:22": false,
+    "cal.com perf/reduce-copy-accumulator packages/features/bookings/lib/handleNewBooking/loadAndValidateUsers.ts:175": true,
+    "cal.com perf/service-query-in-loop apps/api/v2/src/modules/teams/event-types/services/output-team-event-types.service.ts:178": false,
     "cal.com maint/deep-control-flow apps/api/v2/src/modules/auth/guards/roles/roles.guard.ts:139": true,
     "cal.com maint/duplicate-implementation apps/api/v2/src/lib/services/qualified-hosts.service.ts:23": true,
     "cal.com maint/duplicate-implementation apps/api/v2/src/modules/webhooks/services/event-type-webhooks.service.ts:12": true,
@@ -1131,6 +1200,8 @@
     "cal.com maint/large-class apps/api/v2/src/platform/event-types/event-types_2024_06_14/services/input-event-types.service.ts:56": true,
     "cal.com maint/high-branch-complexity apps/api/v2/src/modules/auth/strategies/api-auth/api-auth.strategy.ts:55": true,
     "cal.com maint/long-parameter-list apps/api/v2/src/modules/slots/slots-2024-09-04/slots.repository.ts:59": true,
+    "cal.com sec/open-redirect apps/api/v2/src/modules/oauth-clients/controllers/oauth-flow/oauth-flow.controller.ts:80": false,
+    "cal.com sec/ssrf-request-url apps/api/v2/src/modules/stripe/controllers/stripe.controller.ts:114": true,
     "directus perf/array-repeated-find api/src/database/get-ast-from-query/lib/parse-fields.ts:376": true,
     "directus perf/array-repeated-find app/src/composables/use-collab.ts:360": false,
     "directus perf/array-repeated-find app/src/utils/get-revision-fields.ts:13": false,
@@ -1157,8 +1228,8 @@
     "directus perf/promise-return-escapes-catch api/src/ai/providers/anthropic-file-support.ts:74": true,
     "directus perf/async-callback-unhandled-rejection packages/extensions-sdk/src/cli/commands/build.ts:477": true,
     "directus perf/serial-awaits-in-literal api/src/license/manager.ts:595": true,
-    "directus perf/stream-pipe-unhandled-error api/src/controllers/assets.ts:56": true,
-    "directus perf/stream-pipe-unhandled-error api/src/controllers/assets.ts:125": true,
+    "directus perf/stream-pipe-unhandled-error api/src/controllers/assets.ts:56": false,
+    "directus perf/stream-pipe-unhandled-error api/src/controllers/assets.ts:125": false,
     "directus perf/stream-pipe-unhandled-error api/src/controllers/extensions.ts:342": true,
     "directus maint/swallowed-error api/src/middleware/respond.ts:57": false,
     "directus maint/dependency-cycle packages/errors/src/errors/addon-not-available.ts:1": true,
@@ -1170,7 +1241,7 @@
     "directus sec/knex-raw-dynamic-text api/src/database/run-ast/lib/apply-query/filter/operator.ts:345": false,
     "directus sec/knex-raw-dynamic-text api/src/services/fields.ts:988": false,
     "directus sec/open-redirect api/src/auth/drivers/oauth2.ts:405": false,
-    "directus sec/open-redirect api/src/auth/drivers/saml.ts:218": true,
+    "directus sec/open-redirect api/src/auth/drivers/saml.ts:218": false,
     "directus sec/secret-compared-non-constant-time api/src/services/mcp-oauth/utils/redirect.ts:144": true,
     "directus sec/secret-in-url-query tests/sandbox/src/steps/schema.ts:39": true,
     "documenso perf/floating-promise packages/lib/server-only/envelope/update-envelope.ts:82": true,
@@ -1237,9 +1308,9 @@
     "documenso maint/unused-export apps/remix/server/api/ai/detect-fields.client.ts:39": true,
     "documenso maint/dependency-cycle apps/remix/app/components/general/document-signing/document-signing-auth-2fa.tsx:18": true,
     "documenso maint/unused-export apps/openpage-api/lib/growth/get-signer-conversion.ts:39": true,
-    "documenso sec/open-redirect apps/remix/app/routes/_authenticated+/t.$teamUrl+/documents.$id._layout.tsx:62": true,
-    "documenso sec/open-redirect apps/remix/app/routes/_authenticated+/t.$teamUrl+/templates.$id._layout.tsx:80": true,
-    "documenso sec/open-redirect apps/remix/app/routes/_unauthenticated+/signin.tsx:63": true,
+    "documenso sec/open-redirect apps/remix/app/routes/_authenticated+/t.$teamUrl+/documents.$id._layout.tsx:62": false,
+    "documenso sec/open-redirect apps/remix/app/routes/_authenticated+/t.$teamUrl+/templates.$id._layout.tsx:80": false,
+    "documenso sec/open-redirect apps/remix/app/routes/_unauthenticated+/signin.tsx:63": false,
     "documenso sec/prototype-pollution packages/trpc/server/admin-router/update-subscription-claim.ts:65": false,
     "documenso sec/secret-in-log packages/trpc/server/envelope-router/signing-status-envelope.ts:20": true,
     "documenso sec/postmessage-missing-origin-check apps/remix/app/routes/embed+/playground.tsx:182": true,
@@ -1247,6 +1318,9 @@
     "documenso sec/secret-compared-non-constant-time packages/ee/server-only/signing/csc/hono/session-status.ts:45": true,
     "documenso sec/secret-compared-non-constant-time packages/lib/server-only/2fa/verify-2fa-token.ts:44": true,
     "documenso sec/ssrf-request-url packages/lib/jobs/client/local.ts:380": true,
+    "formbricks perf/http-call-without-timeout apps/web/modules/survey/list/lib/v3-surveys-client.ts:197": false,
+    "formbricks perf/http-call-without-timeout apps/web/playwright/utils/helper.ts:377": false,
+    "formbricks perf/prisma-query-in-loop apps/web/modules/auth/invite/lib/team.ts:20": true,
     "formbricks maint/deep-control-flow apps/web/app/api/v3/surveys/serializers.ts:175": true,
     "formbricks maint/duplicate-implementation apps/web/app/api/v3/lib/loggable-error.ts:48": true,
     "formbricks maint/duplicate-implementation apps/web/lib/env.ts:32": true,
@@ -1258,6 +1332,11 @@
     "formbricks maint/unused-export apps/web/lib/i18n/i18n.mock.ts:331": true,
     "formbricks maint/unused-export apps/web/lib/i18n/i18n.mock.ts:339": true,
     "formbricks maint/unused-export apps/web/lib/i18n/i18n.mock.ts:255": true,
+    "formbricks sec/error-stack-in-response apps/web/app/lib/api/response.ts:52": false,
+    "formbricks sec/jwt-decode-for-auth apps/web/lib/jwt.ts:118": false,
+    "formbricks sec/open-redirect apps/web/proxy.ts:29": false,
+    "formbricks sec/prisma-raw-unsafe-dynamic apps/web/modules/ee/contacts/segments/lib/filter/prisma-query.ts:184": false,
+    "formbricks sec/weak-password-hash apps/web/modules/auth/lib/better-auth-hibp.ts:52": false,
     "Ghost perf/array-repeated-find apps/admin-x-framework/src/utils/analytics.ts:51": true,
     "Ghost perf/array-repeated-find apps/admin/src/members/use-member-filter-fields.ts:239": false,
     "Ghost perf/array-repeated-find apps/admin/src/members/use-member-filter-fields.ts:262": false,
@@ -1319,7 +1398,7 @@
     "hoppscotch perf/index-unusable-expression packages/hoppscotch-backend/src/admin/admin.service.ts:100": true,
     "hoppscotch perf/index-unusable-expression packages/hoppscotch-backend/src/admin/admin.service.ts:175": true,
     "hoppscotch perf/index-unusable-expression packages/hoppscotch-backend/src/user/user.service.ts:69": true,
-    "hoppscotch perf/json-parse-unguarded packages/hoppscotch-cli/src/utils/hopp-fetch.ts:231": true,
+    "hoppscotch perf/json-parse-unguarded packages/hoppscotch-cli/src/utils/hopp-fetch.ts:231": false,
     "hoppscotch perf/promise-return-escapes-catch packages/hoppscotch-desktop/src/router.ts:16": true,
     "hoppscotch perf/serial-awaits-in-literal packages/hoppscotch-backend/src/team-collection/team-collection.service.ts:1448": true,
     "hoppscotch perf/index-missing-filter packages/hoppscotch-backend/src/access-token/access-token.service.ts:135": true,
@@ -1366,7 +1445,7 @@
     "immich perf/promise-return-escapes-catch server/src/repositories/machine-learning.repository.ts:174": true,
     "immich perf/reduce-copy-accumulator web/src/lib/managers/timeline-manager/timeline-month.svelte.ts:119": true,
     "immich perf/password-hash-sync-in-async server/src/services/auth.service.ts:132": true,
-    "immich perf/json-parse-unguarded packages/plugin-sdk/src/cli.ts:20": true,
+    "immich perf/json-parse-unguarded packages/plugin-sdk/src/cli.ts:20": false,
     "immich perf/promise-return-escapes-catch server/src/repositories/server-info.repository.ts:78": true,
     "immich perf/stream-pipe-unhandled-error server/src/controllers/integrity-admin.controller.ts:92": true,
     "immich maint/swallowed-error server/src/repositories/machine-learning.repository.ts:180": false,
@@ -1377,7 +1456,7 @@
     "immich sec/hardcoded-secret server/src/services/notification-admin.service.ts:74": true,
     "immich sec/open-redirect server/src/controllers/asset-media.controller.ts:134": false,
     "immich sec/open-redirect server/src/controllers/asset-media.controller.ts:159": true,
-    "immich sec/open-redirect server/src/controllers/oauth.controller.ts:34": true,
+    "immich sec/open-redirect server/src/controllers/oauth.controller.ts:34": false,
     "immich sec/path-traversal server/src/repositories/storage.repository.ts:159": false,
     "immich sec/secret-compared-non-constant-time server/src/services/shared-link.service.ts:42": true,
     "immich sec/secret-in-log server/src/commands/reset-admin-password.command.ts:37": true,
@@ -1408,13 +1487,13 @@
     "juice-shop perf/node-sync-fs-in-async routes/videoHandler.ts:21": true,
     "juice-shop perf/node-sync-fs-in-async routes/vulnCodeFixes.ts:82": true,
     "juice-shop perf/node-sync-fs-in-async routes/vulnCodeFixes.ts:83": true,
-    "juice-shop perf/node-sync-fs-in-async rsn/rsnUtil.ts:66": false,
-    "juice-shop perf/node-sync-fs-in-async rsn/rsnUtil.ts:155": false,
-    "juice-shop perf/reduce-copy-accumulator rsn/rsnUtil.ts:55": false,
+    "juice-shop perf/node-sync-fs-in-async rsn/rsnUtil.ts:66": true,
+    "juice-shop perf/node-sync-fs-in-async rsn/rsnUtil.ts:155": true,
+    "juice-shop perf/reduce-copy-accumulator rsn/rsnUtil.ts:55": true,
     "juice-shop perf/unbounded-module-cache routes/vulnCodeFixes.ts:42": true,
     "juice-shop perf/whole-payload-in-memory routes/vulnCodeFixes.ts:83": true,
     "juice-shop perf/whole-payload-in-memory routes/vulnCodeSnippet.ts:90": true,
-    "juice-shop perf/json-parse-unguarded lib/startup/validateDependencies.ts:15": true,
+    "juice-shop perf/json-parse-unguarded lib/startup/validateDependencies.ts:15": false,
     "juice-shop perf/whole-payload-in-memory server.ts:281": true,
     "juice-shop perf/stream-pipe-unhandled-error routes/order.ts:45": true,
     "juice-shop perf/stream-pipe-unhandled-error routes/videoHandler.ts:38": true,
@@ -1498,7 +1577,7 @@
     "medusa perf/filter-for-existence packages/admin/dashboard/src/routes/tax-regions/common/components/tax-region-card/tax-region-card.tsx:80": true,
     "medusa perf/json-roundtrip-clone packages/core/utils/src/dal/mikro-orm/mikro-orm-repository.ts:671": true,
     "medusa perf/json-roundtrip-clone packages/modules/link-modules/src/initialize/index.ts:52": true,
-    "medusa perf/json-parse-unguarded packages/admin/admin-bundler/src/commands/plugin.ts:17": true,
+    "medusa perf/json-parse-unguarded packages/admin/admin-bundler/src/commands/plugin.ts:17": false,
     "medusa perf/async-callback-unhandled-rejection packages/admin/admin-vite-plugin/src/plugin.ts:171": true,
     "medusa maint/deep-control-flow packages/admin/dashboard/src/components/common/sortable-tree/keyboard-coordinates.ts:61": true,
     "medusa maint/dependency-cycle packages/modules/pricing/integration-tests/__fixtures__/price-rule/data.ts:3": true,
@@ -1535,14 +1614,14 @@
     "n8n perf/dom-layout-thrashing packages/frontend/editor-ui/src/features/ndv/parameters/utils/buttonParameter.utils.ts:325": true,
     "n8n perf/sequential-http-in-loop packages/quality/environments/containers/services/tracing.ts:199": true,
     "n8n perf/sequential-http-in-loop packages/quality/testing/playwright/utils/benchmark/instance-ai-driver.ts:266": true,
-    "n8n perf/json-parse-unguarded packages/@n8n/instance-ai/src/workspace/pack-workspace-sdk.ts:230": true,
+    "n8n perf/json-parse-unguarded packages/@n8n/instance-ai/src/workspace/pack-workspace-sdk.ts:230": false,
     "n8n perf/promise-return-escapes-catch packages/@n8n/typeorm/src/query-builder/SelectQueryBuilder.ts:1767": true,
     "n8n perf/async-callback-unhandled-rejection packages/@n8n/backend-services/src/events/relays/event-relay.ts:17": true,
     "n8n perf/whole-payload-in-memory packages/quality/testing/playwright/scripts/sizing-matrix-aggregate.ts:220": true,
     "n8n perf/serial-awaits-in-literal packages/@n8n/db/src/repositories/project.repository.ts:462": true,
-    "n8n perf/stream-pipe-unhandled-error packages/@n8n/backend-network/src/http/__tests__/binary-buffer.test.ts:22": true,
-    "n8n perf/stream-pipe-unhandled-error packages/@n8n/backend-network/src/http/__tests__/binary-buffer.test.ts:30": true,
-    "n8n perf/index-redundant-prefix packages/@n8n/db/src/migrations/common/1750252139167-AddRolesTables.ts:56": true,
+    "n8n perf/stream-pipe-unhandled-error packages/@n8n/backend-network/src/http/__tests__/binary-buffer.test.ts:22": false,
+    "n8n perf/stream-pipe-unhandled-error packages/@n8n/backend-network/src/http/__tests__/binary-buffer.test.ts:30": false,
+    "n8n perf/index-redundant-prefix packages/@n8n/db/src/migrations/common/1750252139167-AddRolesTables.ts:56": false,
     "n8n perf/index-redundant-prefix packages/@n8n/db/src/migrations/common/1776150756000-CreateFavoritesTable.ts:5": true,
     "n8n maint/swallowed-error packages/cli/src/evaluation.ee/evaluation-collections.controller.ee.ts:47": false,
     "n8n maint/swallowed-error packages/cli/src/modules/instance-ai/instance-ai-settings.service.ts:131": false,
@@ -1614,10 +1693,10 @@
     "novu perf/reduce-copy-accumulator apps/api/src/app/inbox/usecases/update-preferences/update-preferences.usecase.ts:332": false,
     "novu perf/reduce-copy-accumulator apps/api/src/app/shared/framework/swagger/headers.decorator.ts:11": false,
     "novu perf/reduce-copy-accumulator apps/dashboard/src/components/workflow-editor/step-utils.ts:142": true,
-    "novu perf/reduce-copy-accumulator apps/dashboard/src/utils/schema.ts:162": true,
+    "novu perf/reduce-copy-accumulator apps/dashboard/src/utils/schema.ts:162": false,
     "novu perf/reduce-copy-accumulator apps/api/src/app/partner-integrations/usecases/update-vercel-integration/update-vercel-integration.usecase.ts:348": true,
     "novu perf/reduce-copy-accumulator apps/api/src/app/shared/framework/swagger/responses.decorator.ts:30": false,
-    "novu perf/reduce-copy-accumulator apps/dashboard/src/components/workflow-editor/schema.ts:86": true,
+    "novu perf/reduce-copy-accumulator apps/dashboard/src/components/workflow-editor/schema.ts:86": false,
     "novu perf/reduce-copy-accumulator apps/dashboard/src/utils/schema.ts:192": true,
     "novu perf/reduce-copy-accumulator libs/application-generic/src/modules/cron.module.ts:62": false,
     "novu perf/reduce-copy-accumulator libs/application-generic/src/usecases/conditions-filter/conditions-filter.usecase.ts:116": true,
@@ -1687,12 +1766,12 @@
     "outline perf/orm-query-in-loop server/queues/processors/WebsocketsProcessor.ts:560": true,
     "outline perf/orm-count-materialization server/queues/tasks/JSONAPIImportTask.test.ts:738": true,
     "outline perf/orm-count-materialization server/queues/tasks/JSONAPIImportTask.test.ts:752": true,
-    "outline perf/json-parse-unguarded server/routes/assets.ts:132": true,
+    "outline perf/json-parse-unguarded server/routes/assets.ts:132": false,
     "outline perf/async-callback-unhandled-rejection app/components/WebsocketProvider.tsx:569": true,
     "outline perf/dom-unthrottled-scroll-resize app/components/DragAndDrop/DragAndDropProvider.tsx:296": true,
     "outline perf/dom-unthrottled-scroll-resize app/components/DragAndDrop/DragAndDropProvider.tsx:301": true,
-    "outline perf/index-redundant-prefix server/migrations/baseline/schema.sql:1629": true,
-    "outline perf/index-redundant-prefix server/migrations/baseline/schema.sql:1641": true,
+    "outline perf/index-redundant-prefix server/migrations/baseline/schema.sql:1629": false,
+    "outline perf/index-redundant-prefix server/migrations/baseline/schema.sql:1641": false,
     "outline maint/deep-control-flow app/components/Sharing/Collection/PublicAccess.tsx:118": true,
     "outline maint/duplicate-implementation .oxlint/bundle.mjs:7": true,
     "outline maint/high-branch-complexity app/components/DocumentMeta.tsx:45": true,
@@ -1707,16 +1786,20 @@
     "outline sec/jwt-sign-without-expiry server/models/User.ts:677": false,
     "outline sec/jwt-sign-without-expiry server/models/User.ts:697": true,
     "outline sec/jwt-sign-without-expiry server/models/User.ts:731": true,
-    "outline sec/open-redirect server/routes/shares.ts:16": true,
+    "outline sec/open-redirect server/routes/shares.ts:16": false,
     "outline sec/sequelize-dynamic-query-text server/models/helpers/Filters.ts:71": false,
     "outline sec/sequelize-dynamic-query-text server/queues/tasks/RevokeDynamicOAuthClientsTask.ts:47": false,
     "outline sec/tls-verification-disabled server/storage/database.ts:247": true,
     "outline sec/tls-verification-disabled server/storage/redis.ts:38": true,
+    "payload perf/loop-copy-accumulator packages/payload/src/database/getLocalizedPaths.ts:238": true,
+    "payload perf/service-query-in-loop packages/payload/src/hierarchy/resolveHierarchyCollections.ts:262": false,
     "payload maint/deep-control-flow examples/form-builder/src/components/RichText/serialize.tsx:85": true,
     "payload maint/duplicate-implementation .agents/skills/record-pr-demo/scripts/prepare-demo.mjs:502": true,
     "payload maint/high-branch-complexity examples/form-builder/src/components/RichText/serialize.tsx:34": true,
     "payload maint/large-class packages/payload/src/index.ts:503": true,
     "payload maint/large-module .agents/skills/record-pr-demo/scripts/record-demo.mjs:1": true,
+    "payload sec/cors-credentials-any-origin packages/payload/src/utilities/headersWithCors.ts:50": false,
+    "payload sec/hardcoded-secret packages/translations/src/languages/de.ts:10": false,
     "strapi perf/array-repeated-find packages/core/core/src/services/auth/index.ts:80": false,
     "strapi perf/floating-promise packages/core/core/src/middlewares/body.ts:92": false,
     "strapi perf/node-sync-fs-in-async tests-next/shared/src/db/database.ts:131": false,
@@ -1753,8 +1836,8 @@
     "twenty perf/orm-cartesian-include packages/twenty-server/src/engine/core-modules/user/user.resolver.ts:157": true,
     "twenty perf/whole-payload-in-memory packages/twenty-front/vite.config.ts:48": true,
     "twenty perf/session-memory-store packages/twenty-server/test/integration/utils/create-app.ts:74": true,
-    "twenty perf/stream-pipe-unhandled-error packages/twenty-cli/src/transport/__tests__/fetch-with-proxy.spec.ts:53": true,
-    "twenty perf/stream-pipe-unhandled-error packages/twenty-cli/src/transport/__tests__/fetch-with-proxy.spec.ts:54": true,
+    "twenty perf/stream-pipe-unhandled-error packages/twenty-cli/src/transport/__tests__/fetch-with-proxy.spec.ts:53": false,
+    "twenty perf/stream-pipe-unhandled-error packages/twenty-cli/src/transport/__tests__/fetch-with-proxy.spec.ts:54": false,
     "twenty sec/auth-route-without-rate-limit packages/twenty-server/src/engine/core-modules/application/application-oauth/controllers/oauth-registration.controller.ts:54": true,
     "twenty sec/auth-route-without-rate-limit packages/twenty-server/src/engine/core-modules/application/application-oauth/controllers/oauth-token.controller.ts:43": true,
     "twenty sec/secret-in-url-query packages/twenty-server/src/engine/core-modules/file/controllers/file.controller.ts:217": true,
