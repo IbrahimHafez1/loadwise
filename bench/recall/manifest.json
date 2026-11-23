@@ -286,7 +286,7 @@
       "ruleId": "floating-promise",
       "project": "perf-floating-promise",
       "file": "index.js",
-      "line": 10,
+      "line": 14,
       "source": "Generic unhandled-rejection fix pattern (no single commit)"
     },
     {
