@@ -33,6 +33,46 @@
   },
   {
     "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "api/src/services/deployment-projects.ts",
+    "line": 62,
+    "verdict": "tp",
+    "note": "providerProjects.find per selected project in a map"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "api/src/services/relations.ts",
+    "line": 563,
+    "verdict": "tp",
+    "note": "results.find per meta row inside a filter"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "api/src/utils/get-schema.ts",
+    "line": 113,
+    "verdict": "tp",
+    "note": "collections.find per database collection in the schema build loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "api/src/services/import/import.ts",
+    "line": 810,
+    "verdict": "fp",
+    "note": "fkFields holds the few foreign-key columns of one collection"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/release-notes-generator/src/utils/process-packages.ts",
+    "line": 175,
+    "verdict": "fp",
+    "note": "release tooling over workspace packages, not a request path"
+  },
+  {
+    "pillar": "perf",
     "ruleId": "array-repeated-membership",
     "file": "packages/composables/src/use-shortcut.ts",
     "line": 104,
@@ -89,6 +129,14 @@
   },
   {
     "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "tests/sandbox/src/steps/docker.ts",
+    "line": 61,
+    "verdict": "fp",
+    "note": "test sandbox setup"
+  },
+  {
+    "pillar": "perf",
     "ruleId": "node-sync-process-in-async",
     "file": "tests/sandbox/src/steps/docker.ts",
     "line": 38,
@@ -118,6 +166,14 @@
     "line": 353,
     "verdict": "tp",
     "note": "object spread of the accumulator in reduce"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "api/src/services/meta.ts",
+    "line": 37,
+    "verdict": "fp",
+    "note": "merges at most two requested meta values"
   },
   {
     "pillar": "perf",

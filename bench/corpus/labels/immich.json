@@ -49,6 +49,30 @@
   },
   {
     "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "server/src/repositories/map.repository.ts",
+    "line": 229,
+    "verdict": "fp",
+    "note": "geodata files are loaded once at startup"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "server/src/repositories/map.repository.ts",
+    "line": 325,
+    "verdict": "fp",
+    "note": "geodata files are loaded once at startup"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "server/src/repositories/map.repository.ts",
+    "line": 400,
+    "verdict": "fp",
+    "note": "geodata files are loaded once at startup"
+  },
+  {
+    "pillar": "perf",
     "ruleId": "password-hash-sync-in-async",
     "file": "server/src/repositories/crypto.repository.ts",
     "line": 22,

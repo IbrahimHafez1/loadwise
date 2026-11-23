@@ -273,6 +273,30 @@
   },
   {
     "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/signing/transports/google-cloud.ts",
+    "line": 15,
+    "verdict": "tp",
+    "note": "readFileSync of the certificate chain in the async signing path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/signing/transports/google-cloud.ts",
+    "line": 27,
+    "verdict": "tp",
+    "note": "readFileSync of the certificate in the async signing path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/signing/transports/google-cloud.ts",
+    "line": 62,
+    "verdict": "tp",
+    "note": "existsSync of the credentials file in the async signing path"
+  },
+  {
+    "pillar": "perf",
     "ruleId": "prisma-distinct-in-memory",
     "file": "packages/lib/server-only/recipient/get-recipient-suggestions.ts",
     "line": 33,

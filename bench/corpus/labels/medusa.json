@@ -97,6 +97,62 @@
   },
   {
     "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/core/core-flows/src/fulfillment/steps/set-shipping-options-prices.ts",
+    "line": 191,
+    "verdict": "tp",
+    "note": "data.find per current shipping option price in a map"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/core/core-flows/src/order/steps/cancel-orders.ts",
+    "line": 41,
+    "verdict": "tp",
+    "note": "orders.find per canceled order in a bulk cancel"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/core/core-flows/src/order/steps/complete-orders.ts",
+    "line": 37,
+    "verdict": "tp",
+    "note": "orders.find per completed order in a bulk complete"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/core/core-flows/src/product/helpers/normalize-for-export.ts",
+    "line": 155,
+    "verdict": "fp",
+    "note": "looks up one variant option among the few options of a single product"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/modules/cart/src/services/cart-module.ts",
+    "line": 343,
+    "verdict": "tp",
+    "note": "fullCarts.find per input id to restore order across a bulk list"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/modules/pricing/src/services/pricing-module.ts",
+    "line": 603,
+    "verdict": "tp",
+    "note": "dbPriceSets.find per input price set to restore order"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/modules/tax/src/services/tax-module-service.ts",
+    "line": 614,
+    "verdict": "tp",
+    "note": "parentRegions.find per region to verify in a loop"
+  },
+  {
+    "pillar": "perf",
     "ruleId": "array-repeated-membership",
     "file": "packages/core/framework/src/http/utils/field-filtering/field-validator.ts",
     "line": 48,
@@ -161,6 +217,22 @@
   },
   {
     "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/cli/medusa-cli/src/codemods/replace-zod-imports.ts",
+    "line": 136,
+    "verdict": "fp",
+    "note": "codemod CLI"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/medusa-telemetry/src/util/outbox-store.js",
+    "line": 72,
+    "verdict": "tp",
+    "note": "existsSync in the async telemetry flush of a running server"
+  },
+  {
+    "pillar": "perf",
     "ruleId": "node-sync-process-in-async",
     "file": "packages/cli/create-medusa-app/src/utils/execute.ts",
     "line": 32,
@@ -182,6 +254,30 @@
     "line": 118,
     "verdict": "fp",
     "note": "reduces over the visible tree nodes of an admin widget"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "packages/admin/dashboard/src/components/common/sortable-tree/utils.ts",
+    "line": 89,
+    "verdict": "fp",
+    "note": "flattens the visible tree nodes of an admin widget"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "packages/admin/dashboard/src/lib/form-helpers.ts",
+    "line": 28,
+    "verdict": "fp",
+    "note": "maps the few values of one form"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "packages/admin/dashboard/src/lib/form-helpers.ts",
+    "line": 69,
+    "verdict": "fp",
+    "note": "maps the few values of one form"
   },
   {
     "pillar": "perf",

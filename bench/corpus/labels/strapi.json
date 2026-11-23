@@ -25,6 +25,22 @@
   },
   {
     "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "tests-next/shared/src/db/database.ts",
+    "line": 131,
+    "verdict": "fp",
+    "note": "test helper that resets a sqlite file"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "tests-next/shared/test-plugin/lib/sqlite-snapshot.js",
+    "line": 35,
+    "verdict": "fp",
+    "note": "test plugin snapshot helper"
+  },
+  {
+    "pillar": "perf",
     "ruleId": "orm-query-in-loop",
     "file": "packages/core/core/src/services/document-service/utils/clean-component-join-table.ts",
     "line": 192,

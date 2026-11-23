@@ -9,6 +9,30 @@
   },
   {
     "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "apps/admin/src/members/use-member-filter-fields.ts",
+    "line": 239,
+    "verdict": "fp",
+    "note": "selected filter values against the few offer options in an admin filter"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "apps/admin/src/members/use-member-filter-fields.ts",
+    "line": 262,
+    "verdict": "fp",
+    "note": "selected filter values against the few offer options in an admin filter"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "tools/gx/services-verify.ts",
+    "line": 201,
+    "verdict": "fp",
+    "note": "developer tooling over a short specialist list"
+  },
+  {
+    "pillar": "perf",
     "ruleId": "http-call-without-timeout",
     "file": "apps/activitypub/src/utils/image.ts",
     "line": 12,
@@ -78,6 +102,30 @@
     "line": 39,
     "verdict": "fp",
     "note": "accumulates a few option keys"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "apps/admin-x-framework/src/utils/api/update-queries.ts",
+    "line": 56,
+    "verdict": "tp",
+    "note": "object spread of the accumulator across every record of an API response"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "apps/admin/src/settings/advanced/history-modal.tsx",
+    "line": 420,
+    "verdict": "fp",
+    "note": "merges the seven date parts of one timestamp"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "apps/admin/src/settings/site/design-and-branding/theme-preview.tsx",
+    "line": 63,
+    "verdict": "fp",
+    "note": "merges the few theme settings of one theme"
   },
   {
     "pillar": "perf",

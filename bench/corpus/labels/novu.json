@@ -105,11 +105,67 @@
   },
   {
     "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "apps/api/src/app/agents/management/usecases/sync-agent-to-environment/sync-agent-to-environment.usecase.ts",
+    "line": 87,
+    "verdict": "tp",
+    "note": "existingTargetLinks.find per target integration in a loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "apps/api/src/app/inbox/usecases/get-inbox-preferences/get-inbox-preferences.usecase.ts",
+    "line": 85,
+    "verdict": "tp",
+    "note": "preference list rescanned twice per comparison inside sort"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "apps/api/src/app/inbox/usecases/get-inbox-preferences/get-inbox-preferences.usecase.ts",
+    "line": 87,
+    "verdict": "tp",
+    "note": "preference list rescanned twice per comparison inside sort"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "apps/api/src/app/subscriptions/usecases/create-subscriptions/create-subscriptions.usecase.ts",
+    "line": 217,
+    "verdict": "tp",
+    "note": "preferencesArray.find per created subscription in a batch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "docker/box/src/box/supervisor.ts",
+    "line": 53,
+    "verdict": "fp",
+    "note": "container tooling checks a handful of stores against a short process list"
+  },
+  {
+    "pillar": "perf",
     "ruleId": "filter-for-existence",
     "file": "apps/api/src/app/domains/usecases/diagnose-domain/diagnose-domain.usecase.ts",
     "line": 54,
     "verdict": "tp",
     "note": "filter().length === 0 used only as an existence check"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "floating-promise",
+    "file": "apps/api/src/app/layouts-v2/usecases/upsert-layout/upsert-layout.usecase.ts",
+    "line": 190,
+    "verdict": "tp",
+    "note": "repository delete is not awaited so the write can fail unseen"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "floating-promise",
+    "file": "apps/worker/src/app/workflow/usecases/send-message/send-message-push.usecase.ts",
+    "line": 313,
+    "verdict": "tp",
+    "note": "message update is not awaited so the write can fail unseen"
   },
   {
     "pillar": "perf",
@@ -150,6 +206,38 @@
     "line": 99,
     "verdict": "fp",
     "note": "container tooling run once at start"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "apps/inbound-mail/src/server/index.ts",
+    "line": 87,
+    "verdict": "fp",
+    "note": "creates the temp directory once while the server starts"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "docker/box/src/box/build.ts",
+    "line": 469,
+    "verdict": "fp",
+    "note": "container build tooling run once"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "docker/box/src/box/lifecycle.ts",
+    "line": 140,
+    "verdict": "fp",
+    "note": "container bootstrap run once"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/js/tsup.config.ts",
+    "line": 22,
+    "verdict": "fp",
+    "note": "build configuration read when the tool starts"
   },
   {
     "pillar": "perf",
@@ -230,6 +318,62 @@
     "line": 162,
     "verdict": "fp",
     "note": "accumulates the keys of one schema object"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "apps/api/src/app/partner-integrations/usecases/update-vercel-integration/update-vercel-integration.usecase.ts",
+    "line": 348,
+    "verdict": "tp",
+    "note": "concat of the accumulator across every organization with the integration"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "apps/api/src/app/shared/framework/swagger/responses.decorator.ts",
+    "line": 30,
+    "verdict": "fp",
+    "note": "runs once at module load over the swagger response decorator names"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "apps/dashboard/src/components/workflow-editor/schema.ts",
+    "line": 86,
+    "verdict": "fp",
+    "note": "builds a schema from the few fields of one workflow step"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "apps/dashboard/src/utils/schema.ts",
+    "line": 192,
+    "verdict": "fp",
+    "note": "builds defaults from the properties of one schema object"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "libs/application-generic/src/modules/cron.module.ts",
+    "line": 62,
+    "verdict": "fp",
+    "note": "module setup over the handful of active workers at bootstrap"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "libs/application-generic/src/usecases/conditions-filter/conditions-filter.usecase.ts",
+    "line": 116,
+    "verdict": "fp",
+    "note": "concatenates the conditions of the few filters on one workflow"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "libs/application-generic/src/utils/template-parser/new-liquid-parser.ts",
+    "line": 905,
+    "verdict": "fp",
+    "note": "collects issues over the few liquid filters used in one template"
   },
   {
     "pillar": "perf",

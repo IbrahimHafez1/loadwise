@@ -97,6 +97,54 @@
   },
   {
     "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "lib/startup/restoreOverwrittenFilesWithOriginals.ts",
+    "line": 34,
+    "verdict": "fp",
+    "note": "one-time boot work"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "routes/videoHandler.ts",
+    "line": 21,
+    "verdict": "tp",
+    "note": "statSync on every video request"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "routes/vulnCodeFixes.ts",
+    "line": 82,
+    "verdict": "tp",
+    "note": "existsSync on every fix request"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "routes/vulnCodeFixes.ts",
+    "line": 83,
+    "verdict": "tp",
+    "note": "readFileSync of the fix info on every request"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "rsn/rsnUtil.ts",
+    "line": 66,
+    "verdict": "fp",
+    "note": "release-check script, not a request path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "rsn/rsnUtil.ts",
+    "line": 155,
+    "verdict": "fp",
+    "note": "release-check script, not a request path"
+  },
+  {
+    "pillar": "perf",
     "ruleId": "reduce-copy-accumulator",
     "file": "rsn/rsnUtil.ts",
     "line": 55,

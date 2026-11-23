@@ -177,6 +177,14 @@
   },
   {
     "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/hoppscotch-backend/src/gql-schema.ts",
+    "line": 114,
+    "verdict": "fp",
+    "note": "schema emit at startup, not per request"
+  },
+  {
+    "pillar": "perf",
     "ruleId": "prisma-count-for-existence",
     "file": "packages/hoppscotch-backend/src/infra-config/helper.ts",
     "line": 367,
