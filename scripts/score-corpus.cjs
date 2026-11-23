@@ -2,12 +2,14 @@
 
 // Scores loadwise against the hand-labelled corpus in bench/corpus and fails on regressions.
 // Usage: node scripts/score-corpus.cjs [--from <dir>] [--loadwise <dir>] [--corpus <dir>] [--repos a,b]
-//        [--write-scores] [--json] [--scorecard]
+//        [--concurrency n] [--write-scores] [--json] [--scorecard]
+// Scans run in parallel, up to 4 at once by default; lower --concurrency when memory is short.
 // --scorecard needs no scan: it reads the label files and bench/corpus/scores.json and writes scorecard.md.
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const os = require('node:os');
+const { spawn, spawnSync } = require('node:child_process');
 
 const CORPUS_DIR = path.join(__dirname, '..', 'bench', 'corpus');
 const MANIFEST_PATH = path.join(CORPUS_DIR, 'manifest.json');
@@ -31,7 +33,7 @@ const GIT_TIMEOUT_MS = 30 * 1000;
 const PRETTIER_BIN = path.join(path.dirname(require.resolve('prettier/package.json')), 'bin', 'prettier.cjs');
 const PILLARS = { perf: 'performance', maint: 'maintainability', sec: 'security' };
 const CORPUS_PATH_MARKER = 'loadwise-corpus/';
-const FLAG_NAMES_WITH_VALUE = new Set(['from', 'loadwise', 'corpus', 'repos']);
+const FLAG_NAMES_WITH_VALUE = new Set(['from', 'loadwise', 'corpus', 'repos', 'concurrency']);
 const RULE_COLUMN_WIDTH = 52;
 const NUMBER_COLUMN_WIDTH = 6;
 
@@ -182,22 +184,58 @@ function gitHead(repoDir) {
   return result.status === 0 ? result.stdout.trim() : null;
 }
 
-function runLoadwise(loadwiseDir, repoDir, pillar) {
+function runLoadwiseAsync(loadwiseDir, repoDir, pillar) {
   const cliPath = path.join(loadwiseDir, 'bin', 'loadwise.cjs');
-  const result = spawnSync(
-    process.execPath,
-    [cliPath, 'check', repoDir, '--only', pillar, '--json', '--include-contextual'],
-    { cwd: loadwiseDir, encoding: 'utf8', timeout: RUN_TIMEOUT_MS, maxBuffer: MAX_OUTPUT_BYTES },
-  );
-  if (result.error) throw new Error(`loadwise ${pillar} on ${repoDir}: ${result.error.message}`);
-  return parseScan(result.stdout, pillar);
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      process.execPath,
+      [cliPath, 'check', repoDir, '--only', pillar, '--json', '--include-contextual'],
+      { cwd: loadwiseDir, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] },
+    );
+    let stdout = '';
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      reject(new Error(`loadwise ${pillar} on ${repoDir}: timed out`));
+    }, RUN_TIMEOUT_MS);
+    child.stdout.setEncoding('utf8').on('data', (chunk) => {
+      if (stdout.length + chunk.length <= MAX_OUTPUT_BYTES) stdout += chunk;
+    });
+    child.on('error', (error) => {
+      clearTimeout(timer);
+      reject(new Error(`loadwise ${pillar} on ${repoDir}: ${error.message}`));
+    });
+    child.on('close', () => {
+      clearTimeout(timer);
+      try {
+        resolve(parseScan(stdout, pillar));
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
 }
 
-function collectUnits(options, repos) {
+async function runPool(tasks, concurrency) {
+  const results = Array.from({ length: tasks.length });
+  let next = 0;
+  async function worker() {
+    while (next < tasks.length) {
+      const index = next++;
+      results[index] = await tasks[index]();
+    }
+  }
+  const count = Math.max(1, Math.min(concurrency, tasks.length));
+  await Promise.all(Array.from({ length: count }, worker));
+  return results;
+}
+
+async function collectUnits(options, repos) {
   const loadwiseDir = path.resolve(options.loadwise ?? path.join(__dirname, '..'));
   const corpusDir = path.resolve(options.corpus ?? path.join(loadwiseDir, '..', 'loadwise-corpus'));
+  const concurrency = Math.max(1, Number(options.concurrency) || Math.min(4, os.cpus().length || 2));
   const units = [];
   const skipped = [];
+  const jobs = [];
   for (const { name, commit } of repos) {
     const repoDir = path.join(corpusDir, name);
     const head = options.from ? commit : gitHead(repoDir);
@@ -206,12 +244,21 @@ function collectUnits(options, repos) {
       continue;
     }
     for (const pillar of Object.keys(PILLARS)) {
+      jobs.push({ name, repoDir, pillar });
+    }
+  }
+  const outputs = await runPool(
+    jobs.map(({ name, repoDir, pillar }) => async () => {
       const findings = options.from
         ? readFromDirectory(path.resolve(options.from), name, pillar)
-        : runLoadwise(loadwiseDir, repoDir, pillar);
-      if (findings) units.push({ repo: name, pillar, findings });
-      else skipped.push(`${name}.${pillar}: no scan output`);
-    }
+        : await runLoadwiseAsync(loadwiseDir, repoDir, pillar);
+      return { name, pillar, findings };
+    }),
+    options.from ? 1 : concurrency,
+  );
+  for (const { name, pillar, findings } of outputs) {
+    if (findings) units.push({ repo: name, pillar, findings });
+    else skipped.push(`${name}.${pillar}: no scan output`);
   }
   return { units, skipped };
 }
@@ -359,13 +406,13 @@ function readFloorExceptions() {
   return fs.existsSync(FLOOR_EXCEPTIONS_PATH) ? readJson(FLOOR_EXCEPTIONS_PATH) : [];
 }
 
-function main(argv) {
+async function main(argv) {
   const options = parseArgs(argv);
   if (options.scorecard) return writeScorecard();
   const manifest = readJson(MANIFEST_PATH);
   const wanted = options.repos ? new Set(options.repos.split(',')) : null;
   const repos = manifest.repos.filter((repo) => !wanted || wanted.has(repo.name));
-  const { units, skipped } = collectUnits(options, repos);
+  const { units, skipped } = await collectUnits(options, repos);
   const current = scoreUnits(units, readLabels(repos.map((repo) => repo.name)));
   const scanned = units.map((unit) => `${unit.repo}.${unit.pillar}`).sort();
 
@@ -400,7 +447,10 @@ function main(argv) {
   return exitCode;
 }
 
-if (require.main === module) process.exitCode = main(process.argv.slice(2));
+if (require.main === module)
+  main(process.argv.slice(2)).then((code) => {
+    process.exitCode = code;
+  });
 
 module.exports = {
   normalizeFile,
