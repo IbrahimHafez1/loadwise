@@ -142,7 +142,7 @@
       "ruleId": "regex-catastrophic-backtracking",
       "project": "advisory-ms-redos",
       "file": "index.js",
-      "line": 2,
+      "line": 6,
       "source": "CVE-2015-8315 / GHSA-3fx5-fwvr-xrjg (ms), pattern re-created"
     },
     {
@@ -295,7 +295,7 @@
       "ruleId": "array-repeated-membership",
       "project": "perf-array-repeated-membership",
       "file": "index.js",
-      "line": 8,
+      "line": 12,
       "source": "Generic Set-instead-of-includes fix pattern (no single commit)"
     },
     {

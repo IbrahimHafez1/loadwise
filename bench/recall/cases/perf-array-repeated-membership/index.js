@@ -3,9 +3,13 @@ const express = require('express');
 const app = express();
 
 app.post('/intersect', (req, res) => {
+  /** @type {string[]} */
+  const left = req.body.left;
+  /** @type {string[]} */
+  const right = req.body.right;
   const shared = [];
-  for (const item of req.body.left) {
-    if (req.body.right.includes(item)) shared.push(item);
+  for (const item of left) {
+    if (right.includes(item)) shared.push(item);
   }
   res.json(shared);
 });
