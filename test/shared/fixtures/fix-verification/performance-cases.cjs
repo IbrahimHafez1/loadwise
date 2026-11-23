@@ -174,6 +174,33 @@ const shapeSamples = [
   ),
 ];
 
-const performanceCases = [...nodeSamples, ...collectionSamples, ...smallRewriteSamples, ...shapeSamples];
+const angularStubs = {
+  'node_modules/@angular/core/index.d.ts':
+    'export declare function Component(metadata: object): ClassDecorator;\nexport declare enum ChangeDetectionStrategy { OnPush = 0, Default = 1 }',
+};
+
+const frontendSamples = [
+  sample(
+    'dom-unthrottled-scroll-resize',
+    "export function track() {\n  window.addEventListener('touchstart', () => {\n    document.body.style.top = document.body.scrollTop + 'px';\n  });\n}\n",
+  ),
+  sample(
+    'angular-default-change-detection',
+    "import { Component } from '@angular/core';\n@Component({ selector: 'app-box' })\nexport class BoxComponent {}\n",
+    angularStubs,
+  ),
+  sample(
+    'sequential-http-in-loop',
+    'export async function load(urls: string[]) {\n  const bodies: string[] = [];\n  for (const url of urls) {\n    const response = await fetch(url);\n    bodies.push(await response.text());\n  }\n  return bodies;\n}\n',
+  ),
+];
+
+const performanceCases = [
+  ...nodeSamples,
+  ...collectionSamples,
+  ...smallRewriteSamples,
+  ...shapeSamples,
+  ...frontendSamples,
+];
 
 module.exports = { performanceCases };
