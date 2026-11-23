@@ -116,6 +116,27 @@ test('opting out preserves existing performance checks and malformed policy file
   assert.equal(invalidAuto.stdout.trim(), '');
 });
 
+const [major, minor] = process.versions.node.split('.').map(Number);
+let nativeSkip = major < 22 || (major === 22 && minor < 13) ? 'native requires Node 22.13+' : false;
+try {
+  if (!nativeSkip) require('../../lib/performance/native-runtime.cjs').executable();
+} catch {
+  nativeSkip = 'optional native compiler is absent';
+}
+
+test('the native CLI agrees with the default engine on opted-in scope findings', { skip: nativeSkip }, (context) => {
+  const { root, write } = project(context);
+  write('app/' + policyName, policyFor('Invoice'));
+  const args = ['-p', 'app'];
+  const stable = checked(root, args, 1, 'sec');
+  assert.deepEqual(locations(stable), [expectedProject[1]]);
+  const native = checked(root, ['--native', ...args], 1, 'sec');
+  assert.equal(native.skippedFiles, undefined);
+  assert.deepEqual(native.findings, stable.findings);
+  const missing = run(root, ['--native', ...args, '--policy', 'missing.json'], 'sec');
+  assert.equal(missing.status, 2, missing.stdout || missing.stderr);
+});
+
 async function exerciseWatch(context, explicit) {
   const { root, write } = project(context);
   const filename = explicit ? 'scope.json' : 'app/' + policyName;

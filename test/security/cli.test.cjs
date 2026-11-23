@@ -56,7 +56,7 @@ test('--ignore takes security and performance ids, --fail-on contract passes and
   const unknown = sec(root, '--ignore', 'sql-everything');
   assert.equal(unknown.code, 2);
   assert.equal(unknown.stderr, 'Unknown source rule: sql-everything\n');
-  assert.equal(sec(root, '--engine', 'native').code, 2);
+  assert.equal(sec(root, '--engine', 'turbo').code, 2);
   assert.equal(sec(root, '--policy', 'missing.json').code, 2);
 });
 
