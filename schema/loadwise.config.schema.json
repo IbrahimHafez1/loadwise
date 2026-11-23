@@ -232,7 +232,14 @@
           "webhook-missing-idempotency-check",
           "whole-payload-in-memory",
           "xml-external-entities",
-          "zip-slip-extraction"
+          "zip-slip-extraction",
+          "angular-bypass-security-trust",
+          "dom-xss-sink",
+          "express-missing-helmet",
+          "frontend-storage-secret-token",
+          "postmessage-missing-origin-check",
+          "react-dangerously-set-inner-html",
+          "vue-v-html-unsanitized"
         ]
       },
       "additionalProperties": {
@@ -476,7 +483,14 @@
                 "webhook-missing-idempotency-check",
                 "whole-payload-in-memory",
                 "xml-external-entities",
-                "zip-slip-extraction"
+                "zip-slip-extraction",
+                "angular-bypass-security-trust",
+                "dom-xss-sink",
+                "express-missing-helmet",
+                "frontend-storage-secret-token",
+                "postmessage-missing-origin-check",
+                "react-dangerously-set-inner-html",
+                "vue-v-html-unsanitized"
               ]
             },
             "additionalProperties": {
