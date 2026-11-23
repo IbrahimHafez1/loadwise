@@ -134,3 +134,16 @@ test('reducers in a test source are contextual while server sources stay reporte
   assert.deepEqual(contexts('helpers.spec.ts'), [true]);
   assert.deepEqual(contexts('service.ts'), [false]);
 });
+
+test('a top-level reduce runs once at module load and is contextual, while the same reduce in a function still reports', () => {
+  const findings = copyingReducers(`
+    declare const exportedNames: string[];
+    export const atLoad = exportedNames.reduce<Record<string, boolean>>((acc, name) => ({ ...acc, [name]: true }), {});
+    export function perRequest(names: string[]) {
+      return names.reduce<Record<string, boolean>>((acc, name) => ({ ...acc, [name]: true }), {});
+    }
+  `);
+  const [atLoad, perRequest] = findings;
+  assert.match(atLoad.contextualReason, /once when the module loads/);
+  assert.equal(perRequest.contextualReason, undefined);
+});
