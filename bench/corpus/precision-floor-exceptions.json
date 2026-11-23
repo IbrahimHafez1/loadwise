@@ -1,9 +1,5 @@
 [
   {
-    "rule": "perf/node-sync-fs-in-async",
-    "reason": "Precision 0.75 over 16 labels at the 2026-11-23 rescore. Functions that create the Nest application, boot lifecycle methods (init, start, onModuleInit) and private methods reached only from them or from a cached first call are now contextual. The remaining false positives include a release-check script (juice-shop rsn) and a sandbox setup step (directus tests/sandbox) whose async functions are exported and called from other files. Raise precision or relabel, then remove this entry."
-  },
-  {
     "rule": "perf/reduce-copy-accumulator",
     "reason": "Precision 0.3529 over 17 labels at the 2026-11-23 rescore. Reduces over enum or literal lists, accumulators keyed by a finite literal type, generic form objects and reduces inside UI hooks are now contextual. Most remaining findings reduce over a few config keys, schema properties, tree nodes or filters typed as Record or plain arrays, which the type checker cannot bound. Raise precision or relabel, then remove this entry."
   }

@@ -105,7 +105,7 @@
 | reduce-copy-accumulator             | medium   |   6 |  22 |      1 |       35% |   100% | yes | measured   |
 | loop-copy-accumulator               | medium   |   3 |   4 |      0 |       50% |   100% | yes | thin       |
 | service-query-in-loop               | high     |   2 |   3 |      8 |       50% |    38% | yes | measured   |
-| node-sync-fs-in-async               | medium   |  12 |  31 |      1 |       75% |    92% | yes | measured   |
+| node-sync-fs-in-async               | medium   |  12 |  31 |      1 |       80% |    92% | yes | measured   |
 | promise-return-escapes-catch        | high     |   4 |   1 |      0 |       80% |   100% | yes | thin       |
 | serial-awaits-in-literal            | medium   |   5 |   1 |      0 |       83% |   100% | yes | thin       |
 | array-repeated-find                 | medium   |  27 |  14 |      0 |       84% |   100% | yes | measured   |

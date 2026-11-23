@@ -257,12 +257,12 @@
     },
     "perf/node-sync-fs-in-async": {
       "tp": 12,
-      "fp": 4,
+      "fp": 3,
       "missed": 1,
       "unlabelled": 75,
-      "findings": 91,
-      "contextual": 1157,
-      "precision": 0.75,
+      "findings": 90,
+      "contextual": 1158,
+      "precision": 0.8,
       "recall": 0.9231
     },
     "perf/async-callback-unhandled-rejection": {
@@ -1135,7 +1135,7 @@
     "immich perf/node-sync-fs-in-async server/src/app.common.ts:68": false,
     "immich perf/node-sync-fs-in-async server/src/repositories/map.repository.ts:229": false,
     "immich perf/node-sync-fs-in-async server/src/repositories/map.repository.ts:325": false,
-    "immich perf/node-sync-fs-in-async server/src/repositories/map.repository.ts:400": true,
+    "immich perf/node-sync-fs-in-async server/src/repositories/map.repository.ts:400": false,
     "immich perf/password-hash-sync-in-async server/src/repositories/crypto.repository.ts:22": true,
     "immich perf/promise-return-escapes-catch server/src/repositories/machine-learning.repository.ts:174": true,
     "immich perf/reduce-copy-accumulator web/src/lib/managers/timeline-manager/timeline-month.svelte.ts:119": true,
