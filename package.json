@@ -73,7 +73,8 @@
     "bench:patterns": "node bench/patterns.cjs",
     "bench:scan": "node bench/scanner.cjs",
     "bench:security": "node bench/security.cjs",
-    "bench:traces": "node bench/traces.cjs"
+    "bench:traces": "node bench/traces.cjs",
+    "bench:recall": "node bench/recall/runner.cjs"
   },
   "dependencies": {
     "libpg-query": "18.2.2",

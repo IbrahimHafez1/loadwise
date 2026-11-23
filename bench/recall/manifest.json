@@ -1,0 +1,311 @@
+{
+  "description": "Recall benchmark: a deliberately vulnerable Express/Mongoose/pg app plus minimal pre-fix snippets modelled on public advisories (scanned read-only, never executed). \"source\" names the advisory or states that the pattern is generic.",
+  "cases": [
+    {
+      "id": "dvna-sqli-pg-query",
+      "pillar": "sec",
+      "ruleId": "pg-dynamic-query-text",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 16,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "dvna-nosqli-mongoose-find",
+      "pillar": "sec",
+      "ruleId": "nosql-operator-injection",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 21,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "dvna-cmdi-exec",
+      "pillar": "sec",
+      "ruleId": "command-injection",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 26,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "dvna-codei-eval",
+      "pillar": "sec",
+      "ruleId": "code-injection",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 30,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "dvna-path-traversal",
+      "pillar": "sec",
+      "ruleId": "path-traversal",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 36,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "dvna-open-redirect",
+      "pillar": "sec",
+      "ruleId": "open-redirect",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 40,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "dvna-ssrf-fetch",
+      "pillar": "sec",
+      "ruleId": "ssrf-request-url",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 44,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "dvna-reflected-xss",
+      "pillar": "sec",
+      "ruleId": "reflected-xss-response",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 49,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "dvna-redos-nested-quantifier",
+      "pillar": "sec",
+      "ruleId": "regex-catastrophic-backtracking",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 56,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style): (a+)+ nested quantifier"
+    },
+    {
+      "id": "dvna-redos-overlapping-quantifiers",
+      "pillar": "sec",
+      "ruleId": "regex-catastrophic-backtracking",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 60,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style): s+.*s+ overlapping quantifiers"
+    },
+    {
+      "id": "dvna-plaintext-password",
+      "pillar": "sec",
+      "ruleId": "plaintext-password-storage",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 64,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "perf-mongoose-aggregate-uncast-id",
+      "pillar": "perf",
+      "ruleId": "mongoose-aggregate-uncast-id",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 70,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "perf-mongoose-hydrate-for-to-object",
+      "pillar": "perf",
+      "ruleId": "mongoose-hydrate-for-to-object",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 75,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "perf-heavy-media-sharp",
+      "pillar": "perf",
+      "ruleId": "heavy-media-in-request-handler",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 80,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "perf-express-missing-compression",
+      "pillar": "perf",
+      "ruleId": "express-missing-compression",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 84,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "advisory-ms-redos",
+      "pillar": "sec",
+      "ruleId": "regex-catastrophic-backtracking",
+      "project": "advisory-ms-redos",
+      "file": "index.js",
+      "line": 2,
+      "source": "CVE-2015-8315 / GHSA-3fx5-fwvr-xrjg (ms), pattern re-created"
+    },
+    {
+      "id": "advisory-trim-redos",
+      "pillar": "sec",
+      "ruleId": "regex-catastrophic-backtracking",
+      "project": "advisory-trim-redos",
+      "file": "index.js",
+      "line": 5,
+      "source": "CVE-2020-7753 / GHSA-w5p7-h5w8-2hfq (trim), pattern re-created"
+    },
+    {
+      "id": "advisory-lodash-defaultsdeep-pollution",
+      "pillar": "sec",
+      "ruleId": "prototype-pollution",
+      "project": "advisory-lodash-defaultsdeep-pollution",
+      "file": "index.js",
+      "line": 11,
+      "source": "CVE-2019-10744 / GHSA-jf85-cpcp-j695 (lodash), shape re-created"
+    },
+    {
+      "id": "advisory-minimist-pollution",
+      "pillar": "sec",
+      "ruleId": "prototype-pollution",
+      "project": "advisory-minimist-pollution",
+      "file": "index.js",
+      "line": 9,
+      "source": "CVE-2020-7598 / GHSA-vh95-rmgr-6w4m (minimist), shape re-created"
+    },
+    {
+      "id": "advisory-adm-zip-slip",
+      "pillar": "sec",
+      "ruleId": "zip-slip-extraction",
+      "project": "advisory-adm-zip-slip",
+      "file": "index.js",
+      "line": 10,
+      "source": "Snyk Zip Slip / CVE-2018-1002204 (adm-zip), shape re-created"
+    },
+    {
+      "id": "advisory-jsonwebtoken-no-algorithms",
+      "pillar": "sec",
+      "ruleId": "jwt-verify-without-algorithms",
+      "project": "advisory-jsonwebtoken-no-algorithms",
+      "file": "index.js",
+      "line": 5,
+      "source": "CVE-2015-9235 / GHSA-c7hr-j4mj-j2w6 (jsonwebtoken)"
+    },
+    {
+      "id": "advisory-node-serialize-rce",
+      "pillar": "sec",
+      "ruleId": "code-injection",
+      "project": "advisory-node-serialize-rce",
+      "file": "index.js",
+      "line": 6,
+      "source": "CVE-2017-5941 (node-serialize), shape re-created"
+    },
+    {
+      "id": "advisory-st-path-traversal",
+      "pillar": "sec",
+      "ruleId": "path-traversal",
+      "project": "advisory-st-path-traversal",
+      "file": "index.js",
+      "line": 11,
+      "source": "CVE-2014-3744 / GHSA-69rr-wvh9-6c4q (st), shape re-created"
+    },
+    {
+      "id": "advisory-ejs-render-rce",
+      "pillar": "sec",
+      "ruleId": "template-injection",
+      "project": "advisory-ejs-render-rce",
+      "file": "index.js",
+      "line": 7,
+      "source": "CVE-2022-29078 / GHSA-phwq-j96m-2c2q (ejs), shape re-created"
+    },
+    {
+      "id": "advisory-mysql-concat-sqli",
+      "pillar": "sec",
+      "ruleId": "mysql-dynamic-query-text",
+      "project": "advisory-mysql-concat-sqli",
+      "file": "index.js",
+      "line": 8,
+      "source": "CWE-89 concatenated mysql2 query (generic pattern, no single advisory)"
+    },
+    {
+      "id": "advisory-tls-verification-disabled",
+      "pillar": "sec",
+      "ruleId": "tls-verification-disabled",
+      "project": "advisory-tls-verification-disabled",
+      "file": "index.js",
+      "line": 5,
+      "source": "CWE-295 generic pattern (no single advisory)"
+    },
+    {
+      "id": "advisory-md5-password-hash",
+      "pillar": "sec",
+      "ruleId": "weak-password-hash",
+      "project": "advisory-md5-password-hash",
+      "file": "index.js",
+      "line": 5,
+      "source": "CWE-916 generic pattern (no single advisory)"
+    },
+    {
+      "id": "perf-n-plus-one-pg-loop",
+      "pillar": "perf",
+      "ruleId": "pg-query-in-loop",
+      "project": "perf-n-plus-one-pg-loop",
+      "file": "index.js",
+      "line": 8,
+      "source": "Generic N+1 fix pattern (no single commit)"
+    },
+    {
+      "id": "perf-sync-fs-in-handler",
+      "pillar": "perf",
+      "ruleId": "node-sync-fs-in-async",
+      "project": "perf-sync-fs-in-handler",
+      "file": "index.js",
+      "line": 7,
+      "source": "Generic sync-fs fix pattern (no single commit)"
+    },
+    {
+      "id": "perf-http-call-without-timeout",
+      "pillar": "perf",
+      "ruleId": "http-call-without-timeout",
+      "project": "perf-http-call-without-timeout",
+      "file": "index.js",
+      "line": 3,
+      "source": "Generic missing-timeout fix pattern (no single commit)"
+    },
+    {
+      "id": "perf-json-roundtrip-clone",
+      "pillar": "perf",
+      "ruleId": "json-roundtrip-clone",
+      "project": "perf-json-roundtrip-clone",
+      "file": "index.js",
+      "line": 6,
+      "source": "Generic structuredClone fix pattern (no single commit)"
+    },
+    {
+      "id": "perf-floating-promise",
+      "pillar": "perf",
+      "ruleId": "floating-promise",
+      "project": "perf-floating-promise",
+      "file": "index.js",
+      "line": 10,
+      "source": "Generic unhandled-rejection fix pattern (no single commit)"
+    },
+    {
+      "id": "perf-array-repeated-membership",
+      "pillar": "perf",
+      "ruleId": "array-repeated-membership",
+      "project": "perf-array-repeated-membership",
+      "file": "index.js",
+      "line": 8,
+      "source": "Generic Set-instead-of-includes fix pattern (no single commit)"
+    },
+    {
+      "id": "perf-reduce-copy-accumulator",
+      "pillar": "perf",
+      "ruleId": "reduce-copy-accumulator",
+      "project": "perf-reduce-copy-accumulator",
+      "file": "index.js",
+      "line": 6,
+      "source": "Generic reduce-spread fix pattern (no single commit)"
+    }
+  ]
+}

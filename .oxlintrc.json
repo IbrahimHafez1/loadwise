@@ -7,5 +7,10 @@
     "node": true,
     "browser": false
   },
-  "ignorePatterns": ["lib/performance/vendor/**", "examples/**", "test/performance/integration/orms/app.ts"]
+  "ignorePatterns": [
+    "lib/performance/vendor/**",
+    "examples/**",
+    "test/performance/integration/orms/app.ts",
+    "bench/recall/cases/**"
+  ]
 }

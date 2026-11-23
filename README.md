@@ -826,9 +826,10 @@ npm run bench:scan -- --large
 npm run bench:traces
 npm run bench:scorecard
 npm run bench:corpus
+npm run bench:recall
 ```
 
-The benchmark commands verify their expected results. The pattern benchmark compares equal application outputs. The scan benchmarks measure the checker itself. Real request latency depends on the workload, instrumentation and database. `bench:scorecard` writes `bench/corpus/scorecard.md`, and `bench:corpus` fails when a default-level rule with at least 10 labels is under 80% precision, unless `bench/corpus/precision-floor-exceptions.json` lists it.
+The benchmark commands verify their expected results. The pattern benchmark compares equal application outputs. The scan benchmarks measure the checker itself. Real request latency depends on the workload, instrumentation and database. `bench:scorecard` writes `bench/corpus/scorecard.md`, and `bench:corpus` fails when a default-level rule with at least 10 labels is under 80% precision, unless `bench/corpus/precision-floor-exceptions.json` lists it. `bench:recall` scans the known-vulnerable and known-slow snippets in `bench/recall/cases`, prints the recall, and exits 1 while any case in `bench/recall/manifest.json` is missed.
 
 To repeat the optional six-package ORM declaration integration from the source checkout, run the commands below. The fixture typechecks the application, compares exact diagnostic locations and checks that clean controls stay quiet.
 
