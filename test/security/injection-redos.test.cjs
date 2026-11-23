@@ -142,3 +142,27 @@ test('a polynomial pattern on request text says it backtracks in polynomial time
   );
   assert.match(findings[0].message, /^This regular expression can backtrack in polynomial time on `req\.query\.q`/);
 });
+
+test('a trailing whitespace run without a leading anchor is polynomial', () => {
+  for (const pattern of [String.raw`\s+$`, String.raw`^\s*|\s*$`, String.raw`\d+$`])
+    assert.equal(isCatastrophicPattern(pattern), true, pattern);
+  for (const pattern of [String.raw`^\s+$`, String.raw`^\s*|^\s*$`, String.raw`\s+x$`, String.raw`\s+`])
+    assert.equal(isCatastrophicPattern(pattern), false, pattern);
+});
+
+test('a polynomial pattern run on a function parameter is contextual, other untraced text is silent', () => {
+  const findingsFor = (body) => lintWithoutTypes(body, stubs.express).filter((finding) => finding.ruleId === ruleId);
+  const [finding] = findingsFor(String.raw`export function trim(str) { return str.replace(/^\s*|\s*$/g, ''); }`);
+  assert.match(finding.contextualReason, /function parameter/);
+  assert.equal(findingsFor('export function parse(input) { return /^(a+)+$/.exec(String(input)); }').length, 1);
+  assert.equal(
+    findingsFor(String.raw`export function trim(str) { return str.slice(0, 9).replace(/\s+$/, ''); }`).length,
+    0,
+  );
+  assert.equal(
+    findingsFor(String.raw`export function trim() { const text = 'a  '; return text.replace(/\s+$/, ''); }`).length,
+    0,
+  );
+  assert.equal(findingsFor(String.raw`export function trim(str) { return str.replace(/^\s+|\s+$/g, ''); }`).length, 1);
+  assert.equal(findingsFor(String.raw`export function trim(str) { return str.replace(/^[a-z]+$/, ''); }`).length, 0);
+});
