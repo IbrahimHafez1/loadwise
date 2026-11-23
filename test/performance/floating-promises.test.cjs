@@ -267,3 +267,19 @@ class TeamService {
 }`);
   assert.equal(reason, undefined);
 });
+
+test('a shorthand-method helper that catches its own failures is contextual when called as obj.method()', () => {
+  const [reason] = contextualReasons(`const service = {
+  async save(id: string) {
+    try {
+      await sendEmail(id);
+    } catch (error) {
+      return;
+    }
+  },
+};
+export async function run(id: string) {
+  service.save(id);
+}`);
+  assert.match(reason, /catches its own failures/);
+});

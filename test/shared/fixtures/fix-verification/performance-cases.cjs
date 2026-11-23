@@ -68,6 +68,10 @@ const collectionSamples = [
     'export function count(rows: number[], ids: number[]) {\n  let total = 0;\n  for (const row of rows) {\n    if (new Set(ids).has(row)) total++;\n  }\n  return total;\n}\n',
   ),
   sample(
+    'floating-promise',
+    'declare function save(id: string): Promise<void>;\nexport async function run(ids: string[]) {\n  ids.forEach(async (id) => {\n    await save(id);\n  });\n}\n',
+  ),
+  sample(
     'promise-combinator-serial-await',
     'declare function loadUser(id: string): Promise<string>;\ndeclare function loadPosts(id: string): Promise<string>;\nexport async function load(id: string) {\n  return Promise.all([await loadUser(id), (await loadPosts(id))]);\n}\n',
   ),
