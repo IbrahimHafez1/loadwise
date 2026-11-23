@@ -70,6 +70,18 @@ test('selected fields, sanitizers, deletes and destructuring are clean', () => {
   for (const body of bodies) assert.equal(findingsOf(ruleId, expressRoute(body), stubs.express).length, 0, body);
 });
 
+test('a project helper that returns the record whole is followed; one that strips the hash is not', () => {
+  const helpers = [
+    'function envelope(user: User | null) { return { data: user }; }',
+    'function strip(user: User) { const { passwordHash, ...rest } = user; return rest; }',
+  ].join('\n');
+  const route = (body) => expressRoute(body).replace('const app = express();', `${helpers}\nconst app = express();`);
+  const wrapped = 'const user = await prisma.user.findUnique({ where: {} }); res.json(envelope(user));';
+  assert.equal(defaultFindingsOf(ruleId, route(wrapped), stubs.express).length, 1);
+  const stripped = 'const user = await prisma.user.findUnique({ where: {} }); if (user) res.json(strip(user));';
+  assert.deepEqual(findingsOf(ruleId, route(stripped), stubs.express), []);
+});
+
 test('a read outside a request handler is clean', () => {
   const source = `${prismaClient}\nexport async function loadUser() { return prisma.user.findUnique({ where: {} }); }`;
   assert.equal(findingsOf(ruleId, source).length, 0);
