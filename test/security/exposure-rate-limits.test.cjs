@@ -135,3 +135,30 @@ app.post('/footprint', loginHandler);
 axios.post('/login', credentials);`;
   assert.equal(reported(source).all.length, 0);
 });
+
+test('a limiter from another module applied to the route app is accepted', () => {
+  const files = { 'limits.ts': `${limiterImportLine}export const loginLimiter = rateLimit({ max: 5 });` };
+  const source = `${express}import { loginLimiter } from './limits';
+app.use(loginLimiter);
+app.post('/login', loginHandler);`;
+  assert.equal(reported(source, files).all.length, 0);
+});
+
+test('a router mounted on an app that applies a limiter is accepted', () => {
+  const source = `${express}${limiterImportLine}const authRouter = express.Router();
+app.use(rateLimit({ max: 100 }));
+app.use('/auth', authRouter);
+authRouter.post('/login', loginHandler);`;
+  assert.equal(reported(source).all.length, 0);
+});
+
+test('a limiter applied only to another router in the route file is contextual', () => {
+  const source = `${express}${limiterImportLine}const adminRouter = express.Router();
+adminRouter.use(rateLimit({ max: 100 }));
+app.use('/admin', adminRouter);
+app.post('/login', loginHandler);`;
+  const { defaults, all } = reported(source);
+  assert.equal(defaults.length, 0);
+  assert.equal(all.length, 1);
+  assert.match(all[0].contextualReason, /another app or router/);
+});

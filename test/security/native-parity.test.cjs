@@ -54,23 +54,27 @@ const files = {
   ].join('\n'),
 };
 
-function makeProject(context) {
+function makeProject(context, projectFiles = files) {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
   const directory = fs.mkdtempSync(path.join(base, 'loadwise-sec-native-parity-'));
   context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
-  for (const [name, contents] of Object.entries(files)) fs.writeFileSync(path.join(directory, name), contents);
+  for (const [name, contents] of Object.entries(projectFiles)) fs.writeFileSync(path.join(directory, name), contents);
   return directory;
 }
 
 const keyOf = (finding) => `${finding.ruleId}:${path.basename(finding.file)}:${finding.line}`;
 const keysOf = (result) => result.findings.map(keyOf).sort();
 
-function runCli(directory, engine) {
-  const run = spawnSync(process.execPath, [bin, 'sec', '-p', 'tsconfig.json', '--engine', engine, '--json'], {
-    cwd: directory,
-    encoding: 'utf8',
-  });
+function runCli(directory, engine, extraArgs = []) {
+  const run = spawnSync(
+    process.execPath,
+    [bin, 'sec', '-p', 'tsconfig.json', '--engine', engine, '--json', ...extraArgs],
+    {
+      cwd: directory,
+      encoding: 'utf8',
+    },
+  );
   const { stdout } = run;
   const result = JSON.parse(stdout.slice(stdout.indexOf('{'), stdout.lastIndexOf('}') + 1));
   return { result, stderr: run.stderr };
@@ -143,4 +147,94 @@ test('native scans a file whose call signature is declared in the same file', { 
   const result = JSON.parse(stdout.slice(stdout.indexOf('{'), stdout.lastIndexOf('}') + 1));
   assert.equal(result.skippedFiles, undefined, run.stderr);
   assert.equal(result.scannedFiles, 1);
+});
+
+// The OWASP NodeGoat shape: a JavaScript constructor function's `this.find = ...` method, called on an instance in
+// another file. TypeScript 7 does not type JavaScript constructor functions, so the call has no signature there.
+const constructorFiles = {
+  'tsconfig.json': JSON.stringify({
+    compilerOptions: { target: 'ES2022', module: 'commonjs', allowJs: true, strict: true, esModuleInterop: true },
+    files: ['user-dao.js', 'allocations-dao.js', 'routes.js'],
+  }),
+  'user-dao.js': [
+    'function UserDAO(db) {',
+    "  const users = db.collection('users');",
+    '  this.findByName = function (userName, callback) {',
+    '    users.findOne({ userName: userName }, callback);',
+    '  };',
+    '}',
+    'module.exports = { UserDAO };',
+  ].join('\n'),
+  'allocations-dao.js': [
+    'const AllocationsDAO = function (db) {',
+    "  const allocations = db.collection('allocations');",
+    '  this.above = (threshold, callback) => {',
+    '    allocations.find({ $where: `this.stocks > ${threshold}` }, callback);',
+    '  };',
+    '};',
+    'module.exports.AllocationsDAO = AllocationsDAO;',
+  ].join('\n'),
+  'routes.js': [
+    "const { UserDAO } = require('./user-dao');",
+    "const AllocationsDAO = require('./allocations-dao').AllocationsDAO;",
+    'function Handler(db) {',
+    '  const userDAO = new UserDAO(db);',
+    '  const allocationsDAO = new AllocationsDAO(db);',
+    '  this.login = (req, res) => userDAO.findByName(req.body.userName, () => res.end());',
+    '  this.allocations = (req, res) => allocationsDAO.above(req.query.threshold, () => res.end());',
+    '}',
+    'module.exports = Handler;',
+  ].join('\n'),
+};
+
+test('native traces request data into JavaScript constructor function methods', { skip: nativeSkip }, (context) => {
+  const directory = makeProject(context, constructorFiles);
+  const js = runCli(directory, 'js');
+  const native = runCli(directory, 'native');
+  assert.deepEqual(keysOf(native.result), keysOf(js.result));
+  for (const key of ['nosql-operator-injection:user-dao.js:4', 'nosql-operator-injection:allocations-dao.js:4'])
+    assert.ok(keysOf(native.result).includes(key), `native engine lacks ${key}`);
+});
+
+const express = "import express from 'express';\nconst app = express();\ndeclare const handler: any;\n";
+const rateLimitFiles = {
+  'tsconfig.json': JSON.stringify({
+    compilerOptions: { target: 'ES2022', module: 'commonjs', strict: true, esModuleInterop: true },
+    files: ['limits.ts', 'applied.ts', 'other-router.ts', 'connected.ts', 'bare.ts'],
+  }),
+  'limits.ts': "import rateLimit from 'express-rate-limit';\nexport const loginLimiter = rateLimit({ max: 5 });",
+  // Accepted: the route's own app applies the limiter.
+  'applied.ts': `${express}import { loginLimiter } from './limits';
+app.use(loginLimiter);
+app.post('/login', handler);`,
+  // Contextual: the limiter is applied to a different router in the same file.
+  'other-router.ts': `${express}import { loginLimiter } from './limits';
+const admin = express.Router();
+admin.use(loginLimiter);
+app.use('/admin', admin);
+app.post('/login', handler);`,
+  // Contextual: a limiter module is imported but not shown applied.
+  'connected.ts': `${express}import { loginLimiter } from './limits';
+void loginLimiter;
+app.post('/login', handler);`,
+  'bare.ts': `${express}app.post('/signup', handler);`,
+};
+
+const reasonKeysOf = (result) =>
+  result.findings.map((finding) => `${keyOf(finding)}:${finding.contextualReason ? 'contextual' : 'default'}`).sort();
+
+test('native decides rate limits on auth routes as the JS engine does', { skip: nativeSkip }, (context) => {
+  const directory = makeProject(context, rateLimitFiles);
+  const js = runCli(directory, 'js', ['--include-contextual']);
+  const native = runCli(directory, 'native', ['--include-contextual']);
+  const nativeKeys = reasonKeysOf(native.result).filter((key) => key.startsWith('auth-route-without-rate-limit:'));
+  assert.deepEqual(
+    nativeKeys,
+    reasonKeysOf(js.result).filter((key) => key.startsWith('auth-route-without-rate-limit:')),
+  );
+  assert.deepEqual(nativeKeys, [
+    'auth-route-without-rate-limit:bare.ts:4:default',
+    'auth-route-without-rate-limit:connected.ts:6:contextual',
+    'auth-route-without-rate-limit:other-router.ts:8:contextual',
+  ]);
 });
