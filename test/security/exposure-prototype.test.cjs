@@ -84,3 +84,19 @@ test('guarded keys, literal keys, safe targets, copies and non-request data are 
     "import { merge } from 'lodash';\ndeclare const a: object; declare const b: object;\nmerge(a, b);";
   assert.equal(findingsOf(ruleId, lodashWithoutRequest).length, 0);
 });
+
+test('a walked key path taken from a parameter is contextual unless it checks prototype keys', () => {
+  const walker = (guard) =>
+    [
+      'function setKey(target: any, keyPath: string[], value: unknown) {',
+      '  let current = target;',
+      '  for (let index = 0; index < keyPath.length - 1; index++) { current = current[keyPath[index]]; }',
+      `  ${guard}current[keyPath[keyPath.length - 1]] = value;`,
+      '}',
+    ].join('\n');
+  const [finding] = findingsOf(ruleId, walker(''), stubs.express);
+  assert.match(finding.contextualReason, /key path is a function parameter/);
+  assert.equal(findingsOf(ruleId, walker("if (keyPath.includes('__proto__')) return; "), stubs.express).length, 0);
+  const fixedTarget = 'function set(keyPath: string[]) { const target: any = {}; target[keyPath[0]] = 1; }';
+  assert.equal(findingsOf(ruleId, fixedTarget, stubs.express).length, 0);
+});
