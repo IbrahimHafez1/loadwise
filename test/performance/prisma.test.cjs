@@ -412,3 +412,34 @@ test(
     );
   },
 );
+
+test('async callbacks report a lookup per item unless findUnique starts in the same tick, and untyped receivers are contextual', () => {
+  const source = `import { PrismaClient } from '@prisma/client';
+    declare function audit(id: number): Promise<void>;
+    async function run(db: PrismaClient, ids: number[], untyped: any) {
+      await Promise.all(ids.map(async (id) => db.user.findUnique({ where: { id } }))); // batched
+      await Promise.all(ids.map(async (id) => { await audit(id); return db.user.findUnique({ where: { id } }); })); // report
+      ids.forEach(async (id) => { await db.user.findFirst({ where: { id } }); }); // report
+      await Promise.all(untyped.map(async (id: number) => { await audit(id); return db.user.findUnique({ where: { id } }); })); // untyped
+      untyped.forEach(async (id: number) => { await db.user.findFirst({ where: { id } }); }); // untyped
+    }`;
+  const firstFiles = {
+    'node_modules/@prisma/client/index.d.ts': `export interface UserDelegate {
+      findUnique(options: object): Promise<{ id: number } | null>;
+      findFirst(options: object): Promise<{ id: number } | null>;
+    }
+    export declare class PrismaClient { user: UserDelegate }`,
+  };
+  const lineOf = (marker) =>
+    source.split('\n').flatMap((line, index) => (line.includes('// ' + marker) ? [index + 1] : []));
+  const findings = lint(source, firstFiles).filter(({ ruleId }) => ruleId === 'prisma-query-in-loop');
+  assert.deepEqual(
+    findings.filter((finding) => !finding.contextualReason).map((finding) => finding.line),
+    lineOf('report'),
+  );
+  assert.deepEqual(
+    findings.filter((finding) => /untyped/.test(finding.contextualReason ?? '')).map((finding) => finding.line),
+    lineOf('untyped'),
+  );
+  assert.ok(!findings.some((finding) => lineOf('batched').includes(finding.line)));
+});
