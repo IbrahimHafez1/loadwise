@@ -199,6 +199,25 @@ test('stays silent on files read from beside the tool, and still reports other p
   assert.equal(parse(uploaded).length, 1, 'a variable path part beside __dirname is still outside input');
 });
 
+test('marks a parse of a project-local file contextual, and keeps request-derived paths at default level', () => {
+  const header =
+    'declare const fs: any; declare const path: any; declare const readFile: any; declare const readdir: any;\n';
+  const listed = `${header}export async function h(req: any, res: any) { const files = await readdir("assets/i18n/"); const all = files.map(async (name: string) => { const text = await readFile("assets/i18n/" + name, "utf-8"); return JSON.parse(text); }); res.json(await Promise.all(all)); }`;
+  const listedFindings = parse(listed);
+  assert.equal(listedFindings.length, 1);
+  assert.match(listedFindings[0].contextualReason, /project's own folder/);
+  const literal = `${header}export async function h(req: any, res: any) { res.json(JSON.parse(await readFile("i18n/en.json", "utf-8"))); }`;
+  assert.match(parse(literal)[0].contextualReason, /project's own folder/);
+  const cwdBased = `${header}declare const process: any;\nexport function h() { return JSON.parse(fs.readFileSync(path.join(process.cwd(), "data", "a.json"), "utf8")); }`;
+  assert.match(parse(cwdBased)[0].contextualReason, /project's own folder/);
+  const requestPath = `${header}export async function h(req: any, res: any) { res.json(JSON.parse(await readFile("i18n/" + req.params.name, "utf-8"))); }`;
+  assert.equal(parse(requestPath)[0].contextualReason, undefined);
+  const requestListing = `${header}export async function h(req: any, res: any) { const files = await readdir(req.query.dir); const all = files.map(async (name: string) => JSON.parse(await readFile("assets/" + name, "utf-8"))); res.json(all); }`;
+  assert.equal(parse(requestListing)[0].contextualReason, undefined);
+  const parameterPath = `${header}export async function h(req: any, res: any, name: string) { res.json(JSON.parse(await readFile("i18n/" + name, "utf-8"))); }`;
+  assert.equal(parse(parameterPath)[0].contextualReason, undefined);
+});
+
 test('marks a parse in a standalone script contextual', () => {
   const source = [
     'declare const require: any; declare const module: any; declare const fs: any;',
