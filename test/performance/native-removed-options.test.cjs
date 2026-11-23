@@ -59,8 +59,8 @@ const translated = {
   'esModuleInterop false': { esModuleInterop: false, target: 'es2022', module: 'commonjs' },
   'allowSyntheticDefaultImports false': { allowSyntheticDefaultImports: false, target: 'es2022', module: 'commonjs' },
   'alwaysStrict false': { alwaysStrict: false, target: 'es2022', module: 'commonjs' },
-  'downlevelIteration': { downlevelIteration: true, target: 'es2022', module: 'commonjs' },
-  'outFile': { outFile: 'out.js', target: 'es2022', module: 'amd', moduleResolution: 'node10' },
+  downlevelIteration: { downlevelIteration: true, target: 'es2022', module: 'commonjs' },
+  outFile: { outFile: 'out.js', target: 'es2022', module: 'amd', moduleResolution: 'node10' },
   'moduleResolution node10 with commonjs': { moduleResolution: 'node10', target: 'es2022', module: 'commonjs' },
   'moduleResolution node alias': { moduleResolution: 'node', target: 'es2022', module: 'esnext' },
   'node10 with module umd': { moduleResolution: 'node10', target: 'es2022', module: 'umd' },
@@ -110,7 +110,7 @@ test('native scan keeps resolving through node10 after the move to bundler', { s
 for (const [name, compilerOptions] of Object.entries({
   'moduleResolution classic': { moduleResolution: 'classic', module: 'commonjs' },
   'target es5 without lib': { target: 'es5', module: 'commonjs' },
-  'keyofStringsOnly': { keyofStringsOnly: true, target: 'es2022', module: 'commonjs' },
+  keyofStringsOnly: { keyofStringsOnly: true, target: 'es2022', module: 'commonjs' },
 })) {
   test(`${name} is still rejected by the native engine, leaving the JS fallback`, { skip }, (context) => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-native-options-'));

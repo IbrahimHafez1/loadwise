@@ -104,7 +104,9 @@ test('the why-comment is the rule description, cut to its first sentence', () =>
 test('the why-comment wraps at 80 columns, and removing it keeps a project comment matching one of its lines', () => {
   for (const line of comment.split('\n')) assert.ok(line.length <= 80, line);
   const before = '  // constant time, where includes scanned the whole array.\n  const hit = ids.includes(1);';
-  const after = indentedComment + '\n  // constant time, where includes scanned the whole array.\n  const hit = new Set(ids).has(1);';
+  const after =
+    indentedComment +
+    '\n  // constant time, where includes scanned the whole array.\n  const hit = new Set(ids).has(1);';
   const fix = { changes: [{ file: 'site.ts', line: 1, before, after }] };
   assert.equal(
     withoutWhyComment(fix, ruleId).changes[0].after,
