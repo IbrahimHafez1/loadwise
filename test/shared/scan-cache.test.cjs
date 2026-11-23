@@ -70,6 +70,20 @@ test('an identical rerun replays the stored report byte for byte', async (contex
   assert.deepEqual(second, first);
 });
 
+test('an install that rewrites node_modules misses even though git ignores it', async (context) => {
+  isolateCache(context);
+  const root = project(context);
+  fs.writeFileSync(path.join(root, '.gitignore'), 'node_modules\n');
+  fs.mkdirSync(path.join(root, 'node_modules'));
+  fs.writeFileSync(path.join(root, 'node_modules', '.package-lock.json'), '{}');
+  await runChecker(['maint', '.', '--json'], root);
+  const before = counts();
+  fs.writeFileSync(path.join(root, 'node_modules', '.package-lock.json'), '{"packages":{}}');
+  await runChecker(['maint', '.', '--json'], root);
+  await runChecker(['maint', '.', '--json'], root);
+  assert.deepEqual(delta(before), { hits: 1, misses: 1, bypasses: 0 });
+});
+
 test('editing a source file or changing the args misses', async (context) => {
   isolateCache(context);
   const root = project(context);
