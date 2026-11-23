@@ -960,14 +960,14 @@ The levels and the `--min-impact` flag work as described under the performance c
 | `duplicate-implementation`          | medium |
 | `folder-boundary`                   | medium |
 | `high-branch-complexity`            | medium |
-| `large-class`                       | medium |
-| `large-module`                      | medium |
 | `query-mutates-state`               | medium |
 | `sql-insert-truncated-at-semicolon` | high   |
 | `swallowed-error`                   | medium |
 | `syntax-error`                      | medium |
 | `deep-control-flow`                 | low    |
 | `file-placement`                    | low    |
+| `large-class`                       | low    |
+| `large-module`                      | low    |
 | `long-parameter-list`               | low    |
 | `unreferenced-file`                 | low    |
 | `unused-export`                     | low    |
