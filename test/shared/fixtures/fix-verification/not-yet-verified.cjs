@@ -22,7 +22,6 @@ const reasonsByRule = {
   'prisma-distinct-in-memory': sampleReason,
   'prisma-relation-count-in-list': sampleReason,
   'external-call-in-transaction': sampleReason,
-  'floating-promise': sampleReason,
   'drizzle-write-preflight': sampleReason,
   'guard-query-per-request': sampleReason,
   'drizzle-unfiltered-write': sampleReason,

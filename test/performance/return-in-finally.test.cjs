@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { lint } = require('./helpers.cjs');
+const { scanWithFixes } = require('./site-fix-helpers.cjs');
 
 const ruleId = 'return-in-finally';
 
@@ -51,5 +52,43 @@ function afterCleanup() {
   assert.deepEqual(
     findings.map(({ line }) => line),
     [8],
+  );
+});
+
+test('only a bare return that ends the finally block and the function is removed, for review', (context) => {
+  const source = `declare function flush(): void;
+export function closing() {
+  try { flush(); } finally {
+    flush();
+    return;
+  }
+}
+export function conditional(flag: boolean) {
+  try { flush(); } finally {
+    if (flag) return;
+  }
+}
+export function valued() {
+  try { return 1; } finally { return 2; }
+}
+export function followed() {
+  try { flush(); } finally { return; }
+  flush();
+}
+`;
+  const findings = scanWithFixes(context, { 'src.ts': source }).findings.filter((finding) => finding.ruleId === ruleId);
+  assert.deepEqual(
+    findings.map(({ line, fix }) => [line, Boolean(fix)]),
+    [
+      [5, true],
+      [10, false],
+      [14, false],
+      [17, false],
+    ],
+  );
+  assert.equal(findings[0].fix.requiresReview, true);
+  assert.deepEqual(
+    findings[0].fix.changes.map(({ before, after }) => [before.trim(), after.trim()]),
+    [['flush();\n    return;', 'flush();']],
   );
 });

@@ -46,6 +46,35 @@ express.get('/items', (request, response) => {
 `,
     },
   },
+  {
+    ruleId: 'return-in-finally',
+    files: {
+      'package.json': '{}',
+      'src.ts': `declare function flush(): Promise<void>;
+export async function close(): Promise<void> {
+  try {
+    await flush();
+  } finally {
+    console.info('closed');
+    return;
+  }
+}
+`,
+    },
+  },
+  {
+    ruleId: 'floating-promise',
+    files: {
+      'package.json': '{}',
+      'src.ts': `declare function save(id: string): Promise<void>;
+export async function run(ids: string[]) {
+  ids.forEach(async (id) => {
+    await save(id);
+  });
+}
+`,
+    },
+  },
 ];
 
 module.exports = { performanceAddedCases };
