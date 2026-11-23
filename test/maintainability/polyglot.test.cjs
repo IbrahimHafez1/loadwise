@@ -199,3 +199,27 @@ test(
     assert.deepEqual([...new Set(report.findings.map((finding) => finding.file))], ['deep.py']);
   },
 );
+
+test(
+  'a Go file the parser cannot verify is skipped and listed while the valid file is reported',
+  nativeOnly,
+  (context) => {
+    const { root, write } = fixture(context);
+    write('invalid.go', 'package main\n\nfunc broken( {\n\tif {{{\n');
+    write(
+      'deep.go',
+      'package main\n\nfunc deep(x int) {\n\tif x > 0 {\n\t\tif x > 1 {\n\t\t\tif x > 2 {\n\t\t\t\tif x > 3 {\n\t\t\t\t\tif x > 4 {\n\t\t\t\t\t\tif x > 5 {\n\t\t\t\t\t\t\t_ = x\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}\n',
+    );
+    const result = spawnSync(process.execPath, [path.join(__dirname, '../../bin/loadwise.cjs'), 'maint', '--json'], {
+      cwd: root,
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 2, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.deepEqual(
+      report.skippedFiles.map((skipped) => skipped.file),
+      ['invalid.go'],
+    );
+    assert.deepEqual([...new Set(report.findings.map((finding) => finding.file))], ['deep.go']);
+  },
+);
