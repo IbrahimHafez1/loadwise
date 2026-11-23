@@ -533,7 +533,7 @@ const standaloneExamples = {
   'react-inline-object-in-jsx-prop': {
     language: 'tsx',
     before: '<Row options={{ dense: true }} />',
-    code: 'const options = { dense: true }; ... <Row options={options} />',
+    code: 'const options = { dense: true };\n<Row options={options} />',
     note: 'Hoist the object or memoise it.',
   },
   'angular-subscribe-without-cleanup': {
@@ -544,8 +544,8 @@ const standaloneExamples = {
   },
   'angular-default-change-detection': {
     language: 'typescript',
-    before: "@Component({ selector: 'x' })",
-    code: "@Component({ selector: 'x', changeDetection: ChangeDetectionStrategy.OnPush })",
+    before: "@Component({ selector: 'x' })\nclass X {}",
+    code: "@Component({ selector: 'x', changeDetection: ChangeDetectionStrategy.OnPush })\nclass X {}",
     note: 'Check inputs are not mutated in place first.',
   },
   'vue-watch-missing-cleanup': {

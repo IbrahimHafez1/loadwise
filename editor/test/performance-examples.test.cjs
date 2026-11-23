@@ -23,8 +23,10 @@ const planAndTraceRules = [
   'mongo-deep-skip',
 ];
 
-function parsesAsJavaScript(code) {
-  return ts.createSourceFile('snippet.js', code, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS).parseDiagnostics;
+function parseDiagnostics(code, language) {
+  const kinds = { tsx: ['snippet.tsx', ts.ScriptKind.TSX], typescript: ['snippet.ts', ts.ScriptKind.TS] };
+  const [fileName, scriptKind] = kinds[language] ?? ['snippet.js', ts.ScriptKind.JS];
+  return ts.createSourceFile(fileName, code, ts.ScriptTarget.Latest, true, scriptKind).parseDiagnostics;
 }
 
 test('each CLI source rule has a syntactically valid hover example', () => {
@@ -34,8 +36,9 @@ test('each CLI source rule has a syntactically valid hover example', () => {
     const { code, language } = exampleFor(id, 'javascript');
     assert.ok(code.length, id);
     if (language === 'sql') continue;
-    assert.equal(language, 'javascript', id);
-    assert.deepEqual(parsesAsJavaScript(code), [], id);
+    // Frontend rules show JSX or decorators, so their examples are tsx or typescript; the rest stay plain JavaScript.
+    assert.ok(['javascript', 'tsx', 'typescript'].includes(language), id);
+    assert.deepEqual(parseDiagnostics(code, language), [], id);
   }
 });
 
@@ -63,9 +66,9 @@ test('plan, trace, index and migration examples show a before and an after that 
     const { before, code, language, note } = exampleFor(id, 'typescript');
     assert.ok(before.split(String.fromCharCode(10)).length <= 6 && note.length > 0, id);
     assert.notEqual(before, code, id);
-    if (language === 'javascript') {
-      assert.deepEqual(parsesAsJavaScript(before), [], id + ' before');
-      assert.deepEqual(parsesAsJavaScript(code), [], id);
+    if (['javascript', 'tsx', 'typescript'].includes(language)) {
+      assert.deepEqual(parseDiagnostics(before, language), [], id + ' before');
+      assert.deepEqual(parseDiagnostics(code, language), [], id);
     }
   }
 });
