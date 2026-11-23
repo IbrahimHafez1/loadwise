@@ -43,6 +43,18 @@ test('boolean guard returns preserve short-circuiting, nonboolean values and cal
   }
 });
 
+test('a parenthesized comparison is returned as is instead of being converted twice', () => {
+  const source = `function same(a, b) {
+  if ((a === b)) return true;
+  return false;
+}`;
+  assert.match(rewrite(source), /return a === b;\n/);
+  assert.match(
+    rewrite(source.replace('return true;', 'return false;').replace('return false;\n}', 'return true;\n}')),
+    /return !\(a === b\);\n/,
+  );
+});
+
 test('a mixed expression retains its grouping and the original semicolon style', () => {
   const source = `function active(check, first, second) {
   if (!check) return false
