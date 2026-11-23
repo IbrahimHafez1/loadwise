@@ -131,6 +131,77 @@ test('the trace keeps a request field read after crossing a call boundary', () =
   assert.equal(result.steps.at(-1).text, 'payload.profile.name');
 });
 
+test('a field destructured after a call hop keeps its request path in the label', () => {
+  const destructuredParameter = traced(
+    expressRoute('save(req.body);', 'function save({ name }: { name: string }) { sink(`name ${name}`); }'),
+  );
+  assert.equal(destructuredParameter.label, 'req.body.name');
+  assert.equal(destructuredParameter.hops, 1);
+  const destructuredInside = traced(
+    expressRoute('save(req.body);', 'function save(payload: any) { const { name } = payload; sink(name); }'),
+  );
+  assert.equal(destructuredInside.label, 'req.body.name');
+  assert.equal(
+    traced(expressRoute('save(req.query.q);', 'function save(text: string) { sink(text); }')).label,
+    'req.query.q',
+  );
+});
+
+test('a Nest controller value passed to a constructor-injected service reaches the service sink', () => {
+  const source = [
+    "import { Body, Controller, Post } from '@nestjs/common';",
+    sinkDeclaration,
+    'class ItemsService { find(term: string) { sink(`SELECT * FROM items WHERE name = ${term}`); } }',
+    '@Controller() class ItemsController {',
+    '  constructor(private readonly items: ItemsService) {}',
+    '  @Post() create(@Body() dto: { name: string }) { return this.items.find(dto.name); }',
+    '}',
+  ].join('\n');
+  for (const files of [stubs.nest, {}]) {
+    const result = traced(source, files);
+    assert.equal(result.label, '@Body() dto.name');
+    assert.equal(result.hops, 1);
+    assert.deepEqual(
+      result.steps.map((entry) => entry.text),
+      ['@Body() dto: { name: string }', 'this.items.find(dto.name)', 'term: string'],
+    );
+  }
+});
+
+const fastifyStub = {
+  'node_modules/fastify/index.d.ts': [
+    'export interface FastifyRequest { body: unknown; query: unknown; ip: string; ips?: string[]; protocol: string;',
+    '  routerPath: string; raw: { url?: string; headers: Record<string, string> } }',
+    'declare function fastify(): { get(path: string, handler: (request: any, reply: any) => unknown): void };',
+    'export default fastify;',
+  ].join('\n'),
+};
+
+test('fastify requests expose proxy-derived fields and the raw Node request, not the route pattern', () => {
+  const typed = (expression) =>
+    traced(
+      [
+        "import { FastifyRequest } from 'fastify';",
+        sinkDeclaration,
+        `export function handle(request: FastifyRequest) { sink(${expression}); }`,
+      ].join('\n'),
+      fastifyStub,
+    );
+  assert.equal(typed('request.raw.url').label, 'request.raw.url');
+  assert.equal(typed('request.raw.headers').whole, true);
+  assert.equal(typed('request.ip').label, 'request.ip');
+  assert.equal(typed('request.ips').whole, true);
+  assert.equal(typed('request.protocol').label, 'request.protocol');
+  assert.equal(typed('request.routerPath'), undefined);
+  const route = [
+    "import fastify from 'fastify';",
+    sinkDeclaration,
+    'const app = fastify();',
+    "app.get('/items', async (request, reply) => { sink(request.raw.url); });",
+  ].join('\n');
+  for (const files of [fastifyStub, {}]) assert.equal(traced(route, files).label, 'request.raw.url');
+});
+
 test('urlControl tells a controlled path from a controlled host', () => {
   const control = (body) =>
     withContext(expressRoute(body), stubs.express, (context, sourceFile) =>
