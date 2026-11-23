@@ -104,3 +104,15 @@ test('a request value reaching an evaluating helper is reported in the helper', 
   ].join('\n');
   assert.deepEqual(findings(source, 'code-injection'), [2]);
 });
+
+test('eval of text derived from a function parameter is contextual, constant text is silent', () => {
+  const evaluate = (body) =>
+    lintWithoutTypes(`export function run(value) { ${body} }`, packages).filter(
+      (finding) => finding.ruleId === 'code-injection',
+    );
+  const [finding] = evaluate("return eval('(' + value.slice(2) + ')');");
+  assert.match(finding.contextualReason, /function parameter/);
+  assert.equal(evaluate("return eval('1 + 1');").length, 0);
+  assert.equal(evaluate('return require(value);').length, 0);
+  assert.equal(evaluate('return setTimeout(value, 10);').length, 0);
+});
