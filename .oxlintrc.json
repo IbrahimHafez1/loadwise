@@ -59,6 +59,8 @@
         "lib/maintainability/review-directive.cts",
         "lib/maintainability/site-fix.cts",
         "lib/performance/analyze.cts",
+        "lib/performance/cli-output.cts",
+        "lib/performance/cli-scan.cts",
         "lib/performance/cli.cts",
         "lib/performance/compiler.cts",
         "lib/performance/db/gateway.cts",
