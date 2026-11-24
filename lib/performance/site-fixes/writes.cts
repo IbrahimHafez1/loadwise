@@ -279,7 +279,6 @@ function awaitedCreateOf(statement: Statement, call: CallExpression): CreateResu
   }
 }
 
-// loadwise-reviewed high-branch-complexity -- a linear chain of independent safety bail-outs (statement pair, parent name, client, transaction use) before one rewrite; splitting scatters the proof from the edit
 function dependentWrites({ node, text }: SiteFixInput): FixResult | undefined {
   if (!node || text === undefined) return;
   const call = calleeCall(node);

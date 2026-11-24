@@ -132,7 +132,6 @@ function movedCallSafe({ call, statement, callback, block }: MovedCall): boolean
   });
 }
 
-// loadwise-reviewed high-branch-complexity -- a linear walk up the syntax tree (await, statement, callback, transaction) where each guard narrows the node for the next; splitting only adds plumbing between the steps
 function moveCallAfterTransaction({ finding, node, text }: SiteFixInput): FixResult | undefined {
   if (!node || text === undefined) return;
   if (/\bwhich reaches\b/.test(finding.message)) return;
@@ -255,7 +254,6 @@ function outdented(statement: Statement, text: string, inner: string, outer: str
   return [lines[0], ...rest];
 }
 
-// loadwise-reviewed high-branch-complexity -- a linear chain of independent safety bail-outs (callback, leading statement, name clashes, async scope) before one edit; splitting scatters the proof from the edit
 function moveCallBeforeTransaction({ node, text }: SiteFixInput): FixResult | undefined {
   if (!node || text === undefined) return;
   const call = calleeCall(node);

@@ -83,7 +83,6 @@ function isStatementList(node: Node): boolean {
 
 // Whether `parent` evaluates everything before `child` without effects, and always evaluates
 // `child`.
-// loadwise-reviewed high-branch-complexity -- a flat dispatch over independent parent expression kinds, one early return per kind; each case is exclusive and splitting scatters the evaluation-order rules
 function reachesChildPurely(parent: Node, child: Node, isFree: FreeCheck): boolean {
   if (transparentKinds.some((test) => test(parent))) return true;
   const before = (list: readonly Node[]): boolean =>

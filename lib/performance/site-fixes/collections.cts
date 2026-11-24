@@ -711,7 +711,6 @@ function isFindLookupFacts(value: unknown): value is FindLookupFacts {
   );
 }
 
-// loadwise-reviewed high-branch-complexity -- a linear chain of independent safety bail-outs (facts, receiver, key shape, placement, eager reads) before a single Map rewrite; splitting scatters the proof from the edit it guards
 function findFix({ node, sourceFile, finding }: SiteFixInput): FixResult | undefined {
   if (!node || !sourceFile) return;
   const facts = finding.findLookup;

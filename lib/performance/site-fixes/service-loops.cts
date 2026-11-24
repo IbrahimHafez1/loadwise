@@ -545,7 +545,6 @@ function rowLookup({
 
 // A batch sibling of a single keyed read: one query for all keys, then the per-item result in input
 // order.
-// loadwise-reviewed high-branch-complexity -- a linear chain of independent bail-outs proving the helper is one keyed read before the batch sibling text is built; splitting scatters the proof from the lines it licenses
 function readBatch(callee: CalleeHelper, family: ClientFamily, typed: boolean): ReadBatch | undefined {
   const { declaration } = callee;
   const parameterNames = simpleParameterNames(declaration);
