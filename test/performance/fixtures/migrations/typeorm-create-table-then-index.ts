@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class AddGuardianLinks1700000000040 implements MigrationInterface {
   name = 'AddGuardianLinks1700000000040';
