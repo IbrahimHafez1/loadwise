@@ -849,6 +849,15 @@ On Redis 7.2.16, the CLI flagged a real `KEYS` call and eight redacted `GET` cal
 
 Use Node.js 22.13+ for the full development workflow, including the in-memory SQLite benchmark.
 
+### Source conventions
+
+The code is TypeScript (`.cts`) compiled in place to CommonJS (`.cjs`, not committed) by `npm run build`; `npm test` builds first and `npm run typecheck` checks without emitting. Import with the `.cjs` extension (`import { x } from './module.cjs'`). The compiler runs in `strict` mode.
+
+- Write ES `import`/`export`, with imports at the top of the file. `require()` is limited to the files listed under `overrides` in `.oxlintrc.json`, where load order or startup cost forbids a top-level import (the compiler must be chosen before the rules load, and `maint --staged` must not load TypeScript). Lazy loads in an async function use `await import()`. Do not add files to that list.
+- No `any` and no `as` assertions (`as const` is fine) in new code. Narrow with type guards, give a function a precise type, or use overloads. A deliberate exception needs a lint-disable comment that says why.
+- Types shared by two or more files live in the `types/` folder of their area (`lib/performance/types/`, `lib/security/types/`, `lib/maintainability/types/`, `lib/shared/types/`, `test/types/`), one topic per file. Cross-pillar types are in `lib/shared/types.cts`. A type used by one file stays in that file.
+- Comments wrap at 100 columns, and Prettier formats everything. `.vscode/settings.json` formats on save, and the pre-commit hook in `hooks/` formats and lints staged files (`npm install` enables it).
+
 ```sh
 npm ci
 npm test
