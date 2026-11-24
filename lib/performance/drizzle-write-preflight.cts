@@ -4,7 +4,7 @@ import { drizzleTable, drizzleColumn } from './schema/drizzle-schema.cjs';
 import { declaredInPackage, resolvedSymbol } from './schema/ts-helpers.cjs';
 import { typeFromPackage } from './package-types.cjs';
 import { createHash } from 'node:crypto';
-import type { CallExpression, Expression, Node, Statement } from 'typescript';
+import type { Block, CallExpression, Expression, Node, Statement } from 'typescript';
 import type { CheckerAdapter, PerformanceRuleContext } from '../shared/types.cjs';
 const ts = loadSyntax();
 
@@ -117,7 +117,43 @@ function plainPredicate(call: Expression): boolean {
   );
 }
 
-function checkWritePreflight(call: CallExpression, context: PerformanceRuleContext): void {
+function hasExactUniqueIndex(
+  table: NonNullable<ReturnType<typeof drizzleTable>>,
+  fields: ReadonlyMap<string, unknown>,
+): boolean {
+  return table.indexes.some(
+    (index) =>
+      index.unique &&
+      !index.predicate &&
+      index.keys.length === fields.size &&
+      index.keys.every((key) => key.column !== undefined && fields.has(key.column)),
+  );
+}
+
+function isMysql2Receiver(receiver: Expression, checker: CheckerAdapter): boolean {
+  const type = checker.getTypeAtLocation(receiver);
+  const members = type.flags & ts.TypeFlags.Intersection ? (type.types ?? [type]) : [type];
+  const getter =
+    ts.isPropertyAccessExpression(receiver) &&
+    resolvedSymbol(receiver.name, checker)?.declarations?.some(ts.isGetAccessorDeclaration);
+  return (
+    !getter &&
+    members.some((member) => typeFromPackage(member, ['drizzle-orm/mysql2'], ['MySql2Database', 'MySql2Transaction']))
+  );
+}
+
+type ExistenceCheck = NonNullable<ReturnType<typeof existenceCheck>>;
+type ExecutedQuery = NonNullable<ReturnType<typeof executedQuery>>;
+
+// An awaited write statement preceded by an existence check and the guard that throws on it.
+interface PreflightSite {
+  statement: Statement;
+  block: Block;
+  position: number;
+  check: ExistenceCheck;
+}
+
+function findPreflightSite(call: CallExpression): PreflightSite | undefined {
   if (!ts.isAwaitExpression(call.parent) || !ts.isExpressionStatement(call.parent.parent)) return;
   const statement = call.parent.parent;
   const block = statement.parent;
@@ -131,82 +167,91 @@ function checkWritePreflight(call: CallExpression, context: PerformanceRuleConte
   if (position < 2 || !ts.isIfStatement(block.statements[position - 1])) return;
   const check = existenceCheck(block.statements[position - 2]);
   if (!check) return;
+  return { statement, block, position, check };
+}
+
+function isGuardedWrite(write: ExecutedQuery, { block, position, check }: PreflightSite): boolean {
+  const operation = write.root.text;
+  return (
+    ['delete', 'insert'].includes(operation) &&
+    write.steps.length === 1 &&
+    write.steps[0].name === (operation === 'delete' ? 'where' : 'values') &&
+    throwsOnExistence(block.statements[position - 1], check.binding, operation)
+  );
+}
+
+// The check must be `select().from(table).where(...).limit(1)` on the same database as the write.
+function isSingleRowRead(read: ExecutedQuery, write: ExecutedQuery): boolean {
+  return (
+    read.root.text === 'select' &&
+    !read.root.parent.parent.arguments.length &&
+    read.steps.map((step) => step.name).join('.') === 'limit.where.from' &&
+    read.steps[0].call.arguments[0]?.getText() === '1' &&
+    sameDatabase(read.root.parent.expression, write.root.parent.expression)
+  );
+}
+
+function unusedAfterWrite({ block, position, check }: PreflightSite): boolean {
+  return !block.statements.slice(position + 1).some((later) => containsBinding(later, check.binding));
+}
+
+function sameFieldValues(readFields: FieldValues, writeFields: FieldValues): boolean {
+  return (
+    writeFields.size === readFields.size && ![...readFields].some(([field, value]) => writeFields.get(field) !== value)
+  );
+}
+
+// Only a delete by plain predicates on a mysql2 database can be fixed by its digest.
+function mysql2DeleteDetails(
+  read: ExecutedQuery,
+  write: ExecutedQuery,
+  site: PreflightSite,
+  checker: CheckerAdapter,
+): { mysql2DeletePreflight: string } | undefined {
+  const readTable = read.steps[2].call.arguments[0];
+  const writeTable = write.root.parent.parent.arguments[0];
+  const argument = write.steps[0].call.arguments[0];
+  if (
+    write.root.text !== 'delete' ||
+    !ts.isIdentifier(readTable) ||
+    !ts.isIdentifier(writeTable) ||
+    !plainPredicate(read.steps[1].call.arguments[0]) ||
+    !plainPredicate(argument) ||
+    !isMysql2Receiver(write.root.parent.expression, checker)
+  )
+    return;
+  return { mysql2DeletePreflight: preflightDigest(site.block.statements[site.position - 2], site.statement) };
+}
+
+function checkWritePreflight(call: CallExpression, context: PerformanceRuleContext): void {
+  const site = findPreflightSite(call);
+  if (!site) return;
   const checker = context.checker;
   const write = executedQuery(call, checker);
-  if (!write) return;
+  if (!write || !isGuardedWrite(write, site)) return;
   const operation = write.root.text;
-  if (
-    !['delete', 'insert'].includes(operation) ||
-    write.steps.length !== 1 ||
-    write.steps[0].name !== (operation === 'delete' ? 'where' : 'values') ||
-    !throwsOnExistence(block.statements[position - 1], check.binding, operation)
-  )
-    return;
-  const read = executedQuery(check.call, checker);
-  if (
-    read?.root.text !== 'select' ||
-    read.root.parent.parent.arguments.length ||
-    read.steps.map((step) => step.name).join('.') !== 'limit.where.from' ||
-    read.steps[0].call.arguments[0]?.getText() !== '1' ||
-    !sameDatabase(read.root.parent.expression, write.root.parent.expression)
-  )
-    return;
+  const read = executedQuery(site.check.call, checker);
+  if (!read || !isSingleRowRead(read, write)) return;
   const readTable = read.steps[2].call.arguments[0];
   const writeTable = write.root.parent.parent.arguments[0];
   if (!readTable || !writeTable) return;
   const table = drizzleTable(readTable, checker);
   if (!table || table !== drizzleTable(writeTable, checker)) return;
   const readFields = predicateFields(read.steps[1].call.arguments[0], table, checker);
-  if (
-    !readFields ||
-    !table.indexes.some(
-      (index) =>
-        index.unique &&
-        !index.predicate &&
-        index.keys.length === readFields.size &&
-        index.keys.every((key) => key.column !== undefined && readFields.has(key.column)),
-    )
-  )
-    return;
+  if (!readFields || !hasExactUniqueIndex(table, readFields)) return;
   const argument = write.steps[0].call.arguments[0];
   const writeFields = operation === 'insert' ? insertedFields(argument) : predicateFields(argument, table, checker);
-  if (
-    !writeFields ||
-    writeFields.size !== readFields.size ||
-    [...readFields].some(([field, value]) => writeFields.get(field) !== value) ||
-    block.statements.slice(position + 1).some((later) => containsBinding(later, check.binding))
-  )
-    return;
+  if (!writeFields || !sameFieldValues(readFields, writeFields) || !unusedAfterWrite(site)) return;
   const advice =
     operation === 'insert'
       ? 'Another request can insert the same unique key after the check. Consider inserting directly and translating only a violation of the matching unique constraint.'
       : 'Another request can delete the row after the check. Consider testing the delete result for a missing row and preserving the existing error.';
-  let details: { mysql2DeletePreflight: string } | undefined;
-  if (
-    operation === 'delete' &&
-    ts.isIdentifier(readTable) &&
-    ts.isIdentifier(writeTable) &&
-    plainPredicate(read.steps[1].call.arguments[0]) &&
-    plainPredicate(argument)
-  ) {
-    const receiver = write.root.parent.expression;
-    const type = checker.getTypeAtLocation(receiver);
-    const members = type.flags & ts.TypeFlags.Intersection ? (type.types ?? [type]) : [type];
-    const getter =
-      ts.isPropertyAccessExpression(receiver) &&
-      resolvedSymbol(receiver.name, checker)?.declarations?.some(ts.isGetAccessorDeclaration);
-    if (
-      !getter &&
-      members.some((member) => typeFromPackage(member, ['drizzle-orm/mysql2'], ['MySql2Database', 'MySql2Transaction']))
-    )
-      details = { mysql2DeletePreflight: preflightDigest(block.statements[position - 2], statement) };
-  }
   context.report(
     read.root,
     'drizzle-write-preflight',
     `A separate existence check before the ${operation} adds a round trip. ${advice}`,
     undefined,
-    details,
+    mysql2DeleteDetails(read, write, site, checker),
   );
 }
 

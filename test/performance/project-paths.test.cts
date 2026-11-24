@@ -20,7 +20,10 @@ function isTypeScriptProgram(program: ProgramAdapter): program is Program {
 test('the same logical source passed twice is counted and analyzed once', () => {
   withProgram('async function read() { return 1; }', {}, (program: ProgramAdapter, source: SourceFile) => {
     assert.ok(isTypeScriptProgram(program));
-    assert.deepEqual(analyzeProgram(program, [source.fileName, source.fileName]), { scannedFiles: 1, findings: [] });
+    assert.deepEqual(analyzeProgram({ program, inputs: [source.fileName, source.fileName] }), {
+      scannedFiles: 1,
+      findings: [],
+    });
   });
 });
 

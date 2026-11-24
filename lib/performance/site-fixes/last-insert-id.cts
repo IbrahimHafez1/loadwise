@@ -2,7 +2,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ts, calleeCall, freshName, nameTaken, replaceNode } from './helpers.cjs';
 import { insertedIdQuery, constDeclaration } from '../last-insert-id.cjs';
-import type { Expression, Identifier, Node, SourceFile, VariableDeclaration } from 'typescript';
+import type {
+  Block,
+  Expression,
+  Identifier,
+  Node,
+  PropertyAccessExpression,
+  SourceFile,
+  VariableDeclaration,
+} from 'typescript';
 import type { FileTarget, FixResult, SiteFixInput, TextEdit } from '../../shared/types.cjs';
 import type { InsertedIdSite } from '../last-insert-id.cjs';
 
@@ -144,31 +152,33 @@ function insertIdOrLookup(
   };
 }
 
-function extractedId(
+// The insert response read directly, as `rows[0][0].alias`: the result expression, if it is one.
+function directResult(value: Node, site: InsertedIdSite): Node | undefined {
+  if (!ts.isPropertyAccessExpression(value) || ts.isOptionalChain(value) || value.name.text !== site.alias) return;
+  const row = firstElement(value.expression);
+  return row && firstElement(row);
+}
+
+function directIdRead(
   site: InsertedIdSite,
-  extracted: VariableDeclaration,
+  initializer: Expression,
+  result: Node,
   helper: SharedHelper | undefined,
 ): ExtractedId | undefined {
-  const initializer = extracted.initializer;
-  if (!initializer) return;
-  const block = site.statement.parent;
-  if (!ts.isBlock(block)) return;
-  const value = ts.skipOuterExpressions(initializer);
-  if (ts.isPropertyAccessExpression(value) && !ts.isOptionalChain(value) && value.name.text === site.alias) {
-    const row = firstElement(value.expression);
-    const result = row && firstElement(row);
-    if (result) {
-      const edit = helper
-        ? replaceNode(initializer, `await ${helperName}(${result.getText()}, ${site.receiver.text})`)
-        : insertIdOrLookup(site, initializer, result);
-      if (!edit) return;
-      return { result, edits: [edit], usesHelper: Boolean(helper) };
-    }
-  }
-  // Keep a separate first-row binding and the caller's exact conversion/fallback.
-  const row = firstElement(value, true);
-  const result = row && firstElement(row);
-  if (!result || extracted.type || !ts.isIdentifier(extracted.name)) return;
+  const edit = helper
+    ? replaceNode(initializer, `await ${helperName}(${result.getText()}, ${site.receiver.text})`)
+    : insertIdOrLookup(site, initializer, result);
+  if (!edit) return;
+  return { result, edits: [edit], usesHelper: Boolean(helper) };
+}
+
+// The `extracted?.alias` read inside the `Number(... ?? ...)` conversion that follows the
+// extraction.
+function fallbackAccess(
+  site: InsertedIdSite,
+  block: Block,
+  extractedName: Identifier,
+): PropertyAccessExpression | undefined {
   const nextIndex = site.next ? block.statements.indexOf(site.next) : -1;
   const next = constDeclaration(block.statements[nextIndex + 1]);
   const convert = next?.initializer;
@@ -185,15 +195,44 @@ function extractedId(
   if (!ts.isPropertyAccessExpression(access) || !access.questionDotToken || access.name.text !== site.alias) return;
   if (
     !ts.isIdentifier(access.expression) ||
-    access.expression.text !== extracted.name.text ||
-    usedElsewhere(block, extracted.name, access.expression)
+    access.expression.text !== extractedName.text ||
+    usedElsewhere(block, extractedName, access.expression)
   )
     return;
+  return access;
+}
+
+// Keep a separate first-row binding and the caller's exact conversion/fallback.
+function separateRowRead(
+  site: InsertedIdSite,
+  extracted: VariableDeclaration,
+  initializer: Expression,
+  block: Block,
+): ExtractedId | undefined {
+  const row = firstElement(ts.skipOuterExpressions(initializer), true);
+  const result = row && firstElement(row);
+  if (!result || extracted.type || !ts.isIdentifier(extracted.name)) return;
+  const access = fallbackAccess(site, block, extracted.name);
+  if (!access) return;
   const id = freshName(extracted.getSourceFile(), extracted.name.text + 'Id');
   if (!id) return;
   const lookupEdit = insertIdOrLookup(site, initializer, result, '?.' + site.alias);
   if (!lookupEdit) return;
   return { result, edits: [replaceNode(extracted.name, id), lookupEdit, replaceNode(access, id)] };
+}
+
+function extractedId(
+  site: InsertedIdSite,
+  extracted: VariableDeclaration,
+  helper: SharedHelper | undefined,
+): ExtractedId | undefined {
+  const initializer = extracted.initializer;
+  if (!initializer) return;
+  const block = site.statement.parent;
+  if (!ts.isBlock(block)) return;
+  const direct = directResult(ts.skipOuterExpressions(initializer), site);
+  if (direct) return directIdRead(site, initializer, direct, helper);
+  return separateRowRead(site, extracted, initializer, block);
 }
 
 const reviewNote =

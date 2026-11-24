@@ -155,34 +155,42 @@ function mergedRun(run: readonly IfStatement[], sourceFile: SourceFile): Counted
   return { start: first.getStart(sourceFile), end: run[run.length - 1].end, text: rewritten, removed: run.length - 1 };
 }
 
+function eligibleExit(statement: Statement): statement is IfStatement {
+  return (
+    ts.isIfStatement(statement) &&
+    !statement.elseStatement &&
+    singleJump(statement.thenStatement) &&
+    ownsLines(statement) &&
+    !hasComments(statement)
+  );
+}
+
+// The index after the run of adjacent ifs that start at `index` and leave the block the same way.
+function sameExitRunEnd(statements: NodeArray<Statement>, index: number, sourceFile: SourceFile): number {
+  const first = statements[index];
+  let end = index + 1;
+  if (!eligibleExit(first)) return end;
+  const exit = first.thenStatement.getText(sourceFile);
+  while (end < statements.length) {
+    const next = statements[end];
+    if (
+      !eligibleExit(next) ||
+      next.thenStatement.getText(sourceFile) !== exit ||
+      sourceFile.text.slice(statements[end - 1].end, next.getStart(sourceFile)).trim()
+    )
+      break;
+    end++;
+  }
+  return end;
+}
+
 // if (a) return x;  if (b) return x;  →  if (a || b) return x;
 // Each branch leaves the block, so the second condition only ever ran when the first was false.
 function sameExitRuns(block: Block, sourceFile: SourceFile): CountedEdit[] {
   const edits: CountedEdit[] = [];
   const statements = block.statements;
-  const text = sourceFile.text;
-  const eligible = (statement: Statement): statement is IfStatement =>
-    ts.isIfStatement(statement) &&
-    !statement.elseStatement &&
-    singleJump(statement.thenStatement) &&
-    ownsLines(statement) &&
-    !hasComments(statement);
   for (let index = 0; index < statements.length;) {
-    const first = statements[index];
-    let end = index + 1;
-    if (eligible(first)) {
-      const exit = first.thenStatement.getText(sourceFile);
-      while (end < statements.length) {
-        const next = statements[end];
-        if (
-          !eligible(next) ||
-          next.thenStatement.getText(sourceFile) !== exit ||
-          text.slice(statements[end - 1].end, next.getStart(sourceFile)).trim()
-        )
-          break;
-        end++;
-      }
-    }
+    let end = sameExitRunEnd(statements, index, sourceFile);
     // A run too long for one readable condition merges its longest readable prefix; the rest starts
     // a new run.
     for (; end - index > 1; end--) {
@@ -271,10 +279,26 @@ function logicalAssignment(statement: IfStatement, sourceFile: SourceFile): Coun
   };
 }
 
-// A literal case such as `if (ch === 'x') value += 'x'` already takes the default
-// action `value += ch`. The remaining tests must be distinct, side-effect-free comparisons.
-function redundantLiteralCases(statement: IfStatement, sourceFile: SourceFile): CountedEdit | undefined {
-  if (!ts.isBlock(statement.parent) || !statement.elseStatement || !ts.isIfStatement(statement.elseStatement)) return;
+// The value a statement returns or assigns to a name.
+function valueOf(node: Node): Expression | undefined {
+  if (ts.isReturnStatement(node)) return node.expression;
+  if (
+    ts.isExpressionStatement(node) &&
+    ts.isBinaryExpression(node.expression) &&
+    ts.isIdentifier(node.expression.left) &&
+    ts.isAssignmentOperator(node.expression.operatorToken.kind)
+  )
+    return node.expression.right;
+}
+
+// An else-if chain of distinct `name === 'literal'` tests, with the final else it ends in.
+interface LiteralChain {
+  cases: LiteralCase[];
+  name: string | undefined;
+  last: Statement;
+}
+
+function literalChain(statement: IfStatement): LiteralChain | undefined {
   const cases: LiteralCase[] = [];
   const literals = new Set<string>();
   let current: Statement = statement;
@@ -296,37 +320,42 @@ function redundantLiteralCases(statement: IfStatement, sourceFile: SourceFile): 
     cases.push({ branch: current, literal: condition.right.text, elseStatement: current.elseStatement });
     current = current.elseStatement;
   }
+  return { cases, name, last: current };
+}
+
+// Whether a case only repeats what the fallback block does for its own literal.
+function repeatsFallback(literalCase: LiteralCase, fallback: Block, name: string, sourceFile: SourceFile): boolean {
+  const { branch, literal, elseStatement } = literalCase;
+  const body = branch.thenStatement;
+  if (!ts.isBlock(body)) return false;
+  const value = body.statements.length ? valueOf(body.statements[0]) : undefined;
+  if (!value || !ts.isStringLiteral(value) || value.text !== literal) return false;
+  const start = body.getStart(sourceFile);
+  const normalized =
+    sourceFile.text.slice(start, value.getStart(sourceFile)) + name + sourceFile.text.slice(value.end, body.end);
+  if (normalized !== fallback.getText(sourceFile)) return false;
+  const removed = sourceFile.text.slice(branch.getStart(sourceFile), elseStatement.getStart(sourceFile));
+  return !/\/\/|\/\*/.test(removed);
+}
+
+// A literal case such as `if (ch === 'x') value += 'x'` already takes the default
+// action `value += ch`. The remaining tests must be distinct, side-effect-free comparisons.
+function redundantLiteralCases(statement: IfStatement, sourceFile: SourceFile): CountedEdit | undefined {
+  if (!ts.isBlock(statement.parent) || !statement.elseStatement || !ts.isIfStatement(statement.elseStatement)) return;
+  const chain = literalChain(statement);
+  if (!chain) return;
+  const { cases, name, last: current } = chain;
   if (!ts.isBlock(current) || !current.statements.length) return;
   // Globals may be accessors. A local const is stable even if evaluating a destination has effects.
   if (name === undefined || !localConstBefore(statement, name)) return;
-  const first = current.statements[0];
-  const valueOf = (node: Node): Expression | undefined => {
-    if (ts.isReturnStatement(node)) return node.expression;
-    if (
-      ts.isExpressionStatement(node) &&
-      ts.isBinaryExpression(node.expression) &&
-      ts.isIdentifier(node.expression.left) &&
-      ts.isAssignmentOperator(node.expression.operatorToken.kind)
-    )
-      return node.expression.right;
-  };
-  const fallbackValue = valueOf(first);
+  const fallbackValue = valueOf(current.statements[0]);
   if (!fallbackValue || !ts.isIdentifier(fallbackValue) || fallbackValue.text !== name) return;
   // Compare exact statements including their order. Later statements must not rely on the narrowed
   // type.
   if (current.statements.slice(1).some((node) => nameUsed(node, name))) return;
   let count = 0;
-  for (const { branch, literal, elseStatement } of cases.slice(0, -1)) {
-    const body = branch.thenStatement;
-    if (!ts.isBlock(body)) break;
-    const value = body.statements.length ? valueOf(body.statements[0]) : undefined;
-    if (!value || !ts.isStringLiteral(value) || value.text !== literal) break;
-    const start = body.getStart(sourceFile);
-    const normalized =
-      sourceFile.text.slice(start, value.getStart(sourceFile)) + name + sourceFile.text.slice(value.end, body.end);
-    if (normalized !== current.getText(sourceFile)) break;
-    const removed = sourceFile.text.slice(branch.getStart(sourceFile), elseStatement.getStart(sourceFile));
-    if (/\/\/|\/\*/.test(removed)) break;
+  for (const literalCase of cases.slice(0, -1)) {
+    if (!repeatsFallback(literalCase, current, name, sourceFile)) break;
     count++;
   }
   if (count)

@@ -251,28 +251,72 @@ function assertSpanShape(span: OtlpRecord): asserts span is OtlpRecord & OtlpSpa
   }
 }
 
+function resolveParentSpanId(parent: unknown, state: TraceState): string {
+  if (parent === undefined || parent === '' || parent === ROOT_PARENT_ID) return '';
+  if (!state.lastParentId || parent !== state.lastParentId) state.lastParentId = id(parent, SPAN_ID, 'parentSpanId');
+  return state.lastParentId;
+}
+
+function databaseSystem(attributes: OtlpAttributes): string {
+  const system = stringAttribute(attributes, 'db.system.name', 'db.system');
+  if (
+    !system &&
+    stringAttribute(attributes, 'rpc.service') === 'DynamoDB' &&
+    stringAttribute(attributes, 'rpc.system.name', 'rpc.system') === 'aws-api'
+  )
+    return 'aws.dynamodb';
+  return system;
+}
+
+interface GroupedSpan {
+  readonly traceId: string;
+  readonly parentSpanId: string;
+  readonly spanId: string;
+  readonly system: string;
+  readonly resource: string;
+  readonly command: string;
+  readonly operation: string[];
+  readonly span: OtlpRecord & OtlpSpan;
+}
+
+function recordGroup(groups: Map<string, RepeatedSpanGroup>, key: string, grouped: GroupedSpan): void {
+  const { traceId, parentSpanId, spanId, system, resource, command, operation, span } = grouped;
+  const existing = groups.get(key);
+  if (existing) {
+    existing.count++;
+    existing.timing.add(span);
+    return;
+  }
+  const timing = new SpanTiming();
+  timing.add(span);
+  const [signatureKind] = operation;
+  const isRead = signatureKind === 'redis-repeated-read';
+  const ruleId = isRead || signatureKind === 'redis-keys-scan' ? signatureKind : 'repeated-db-span';
+  groups.set(key, {
+    ruleId,
+    traceId,
+    parentSpanId,
+    exampleSpanId: spanId,
+    system: DISPLAY_SYSTEMS.has(system) ? system : 'other',
+    count: 1,
+    batchParent: isRead ? resource + traceId + parentSpanId : null,
+    signatureKind,
+    readCommand: isRead ? command : '',
+    timing,
+  });
+}
+
 function addSpan(span: OtlpRecord, resource: string, state: TraceState): void {
   const { seen, groups, signatures, batchParents, duplicateReads } = state;
   if (!state.lastTraceId || span.traceId !== state.lastTraceId)
     state.lastTraceId = id(span.traceId, TRACE_ID, 'traceId');
   const traceId = state.lastTraceId;
   const spanId = id(span.spanId, SPAN_ID, 'spanId');
-  const parent = span.parentSpanId;
-  let parentSpanId = '';
-  if (parent !== undefined && parent !== '' && parent !== ROOT_PARENT_ID) {
-    if (!state.lastParentId || parent !== state.lastParentId) state.lastParentId = id(parent, SPAN_ID, 'parentSpanId');
-    parentSpanId = state.lastParentId;
-  }
+  const parentSpanId = resolveParentSpanId(span.parentSpanId, state);
   const attributes = spanAttributes(span.attributes, state);
   assertSpanShape(span);
   if (!attributes) return;
-  let system = stringAttribute(attributes, 'db.system.name', 'db.system');
-  if (
-    !system &&
-    stringAttribute(attributes, 'rpc.service') === 'DynamoDB' &&
-    stringAttribute(attributes, 'rpc.system.name', 'rpc.system') === 'aws-api'
-  )
-    system = 'aws.dynamodb';
+  const system = databaseSystem(attributes);
   if (!system) return;
   const isRedis = system === 'redis' || system === 'valkey';
   const command = isRedis ? redisCommand(attributes, span.name) : '';
@@ -281,7 +325,7 @@ function addSpan(span: OtlpRecord, resource: string, state: TraceState): void {
     (BATCH_COMMANDS.has(command) ||
       attributes.has('db.redis.pipeline_length') ||
       attributes.has('db.operation.batch.size'));
-  const fingerprint = duplicateReads.observe(traceId, span, attributes, system, command, isRedisBatch);
+  const fingerprint = duplicateReads.observe(traceId, span, attributes, { system, command, isBatch: isRedisBatch });
   if (isRedisBatch) {
     batchParents.add(resource + traceId + spanId);
     return;
@@ -297,29 +341,7 @@ function addSpan(span: OtlpRecord, resource: string, state: TraceState): void {
 
   const signature = JSON.stringify([resource, databaseIdentity(attributes, system), operation]);
   const key = traceId + parentSpanId + signatureFingerprint(signature, signatures);
-  const existing = groups.get(key);
-  if (existing) {
-    existing.count++;
-    existing.timing.add(span);
-  } else {
-    const timing = new SpanTiming();
-    timing.add(span);
-    const [signatureKind] = operation;
-    const isRead = signatureKind === 'redis-repeated-read';
-    const ruleId = isRead || signatureKind === 'redis-keys-scan' ? signatureKind : 'repeated-db-span';
-    groups.set(key, {
-      ruleId,
-      traceId,
-      parentSpanId,
-      exampleSpanId: spanId,
-      system: DISPLAY_SYSTEMS.has(system) ? system : 'other',
-      count: 1,
-      batchParent: isRead ? resource + traceId + parentSpanId : null,
-      signatureKind,
-      readCommand: isRead ? command : '',
-      timing,
-    });
-  }
+  recordGroup(groups, key, { traceId, parentSpanId, spanId, system, resource, command, operation, span });
   const group = groups.get(key);
   if (fingerprint && group) duplicateReads.record(fingerprint, key, group, spanId, span);
 }

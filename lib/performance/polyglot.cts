@@ -61,8 +61,7 @@ function nativeBinary(): string {
   return binary;
 }
 
-async function checkPolyglot(paths: readonly string[]): Promise<PolyglotScan> {
-  if (!paths.length) throw new Error('Pass at least one source file or directory to polyglot.');
+async function resolveInputs(paths: readonly string[]): Promise<{ inputs: Set<string>; explicitFiles: Set<string> }> {
   const inputs = new Set<string>();
   const explicitFiles = new Set<string>();
   for (const requested of new Set(paths)) {
@@ -83,6 +82,12 @@ async function checkPolyglot(paths: readonly string[]): Promise<PolyglotScan> {
     inputs.add(input);
     if (stat.isFile()) explicitFiles.add(input);
   }
+  return { inputs, explicitFiles };
+}
+
+async function checkPolyglot(paths: readonly string[]): Promise<PolyglotScan> {
+  if (!paths.length) throw new Error('Pass at least one source file or directory to polyglot.');
+  const { inputs, explicitFiles } = await resolveInputs(paths);
   const binary = nativeBinary();
   const child = spawn(
     binary,

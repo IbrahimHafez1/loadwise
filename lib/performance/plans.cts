@@ -229,6 +229,59 @@ function checkMongoSort(findings: Finding[], stage: JsonRecord, path: string) {
   }
 }
 
+function isMongoSkip(stage: JsonRecord): boolean {
+  return stage.stage === 'SKIP' || (stage.stage === 'limitskip' && typeof stage.skip === 'number' && stage.skip > 0);
+}
+
+function checkMongoSkip(findings: Finding[], stage: JsonRecord, path: string): void {
+  if (!object(stage.inputStage)) throw new TypeError('Unsupported MongoDB skip with no executed input stage.');
+  const walked = count(stage.inputStage.nReturned, 'SKIP inputStage.nReturned');
+  const returned = count(stage.nReturned, 'SKIP.nReturned');
+  const opens = count(stage.opens ?? 1, 'SKIP opens');
+  const matchingOpens = stage.inputStage.opens === undefined || stage.inputStage.opens === opens;
+  // SBE records the last evaluated skip expression. At one open its value
+  // bounds the skipped rows; across reopens the expression can change.
+  const consistentSkip =
+    stage.stage !== 'limitskip' || opens !== 1 || walked - returned <= count(stage.skip, 'limitskip skip');
+  if (matchingOpens && consistentSkip)
+    reportPage({ findings, ruleId: 'mongo-deep-skip', node: 'SKIP', path, walked, returned }, opens);
+}
+
+function checkMongoScan(
+  findings: Finding[],
+  stage: JsonRecord,
+  path: string,
+  parent: JsonRecord | undefined,
+  logical: Map<number, JsonRecord>,
+): void {
+  // A physical SBE scan returns rows before filtering. Only pair it with
+  // the executed filter for the same logical collection-scan node.
+  const winning = typeof stage.planNodeId === 'number' ? logical.get(stage.planNodeId) : undefined;
+  if (!winning) throw new TypeError('Unsupported MongoDB slot-based scan without a matching winning COLLSCAN.');
+  const matchingFilter = parent?.stage === 'filter' && parent.planNodeId === stage.planNodeId;
+  if (winning.filter !== undefined && !matchingFilter) {
+    throw new TypeError('Unsupported MongoDB slot-based filter layout.');
+  }
+  if (matchingFilter) {
+    reportCollectionScan(
+      findings,
+      path,
+      count(stage.nReturned, 'scan.nReturned'),
+      count(parent.nReturned, 'filter.nReturned'),
+    );
+  }
+}
+
+function shardEntries(stage: JsonRecord, path: string): StageEntry[] {
+  const entries: StageEntry[] = [];
+  for (const [index, shard] of children(stage.shards ?? []).entries()) {
+    if (!object(shard) || shard.executionSuccess === false)
+      throw new TypeError('Invalid or unsuccessful MongoDB shard execution.');
+    entries.push({ stage: shard.executionStages, path: path + '.shards[' + index + '].executionStages' });
+  }
+  return entries;
+}
+
 function inspectMongo(document: JsonRecord): PlanInspection {
   const stats = document.executionStats;
   if (!object(stats) || !object(stats.executionStages))
@@ -246,19 +299,7 @@ function inspectMongo(document: JsonRecord): PlanInspection {
     if (!object(stage) || typeof stage.stage !== 'string') throw new TypeError('Invalid MongoDB execution stage.');
     if (stage.opens === 0) continue;
     if (stage.stage === 'SORT' || stage.stage === 'sort') checkMongoSort(findings, stage, path);
-    if (stage.stage === 'SKIP' || (stage.stage === 'limitskip' && typeof stage.skip === 'number' && stage.skip > 0)) {
-      if (!object(stage.inputStage)) throw new TypeError('Unsupported MongoDB skip with no executed input stage.');
-      const walked = count(stage.inputStage.nReturned, 'SKIP inputStage.nReturned');
-      const returned = count(stage.nReturned, 'SKIP.nReturned');
-      const opens = count(stage.opens ?? 1, 'SKIP opens');
-      const matchingOpens = stage.inputStage.opens === undefined || stage.inputStage.opens === opens;
-      // SBE records the last evaluated skip expression. At one open its value
-      // bounds the skipped rows; across reopens the expression can change.
-      const consistentSkip =
-        stage.stage !== 'limitskip' || opens !== 1 || walked - returned <= count(stage.skip, 'limitskip skip');
-      if (matchingOpens && consistentSkip)
-        reportPage({ findings, ruleId: 'mongo-deep-skip', node: 'SKIP', path, walked, returned }, opens);
-    }
+    if (isMongoSkip(stage)) checkMongoSkip(findings, stage, path);
     if (stage.stage === 'COLLSCAN') {
       reportCollectionScan(
         findings,
@@ -267,29 +308,10 @@ function inspectMongo(document: JsonRecord): PlanInspection {
         count(stage.nReturned, 'nReturned'),
       );
     } else if (stage.stage === 'scan') {
-      // A physical SBE scan returns rows before filtering. Only pair it with
-      // the executed filter for the same logical collection-scan node.
-      const winning = typeof stage.planNodeId === 'number' ? logical.get(stage.planNodeId) : undefined;
-      if (!winning) throw new TypeError('Unsupported MongoDB slot-based scan without a matching winning COLLSCAN.');
-      const matchingFilter = parent?.stage === 'filter' && parent.planNodeId === stage.planNodeId;
-      if (winning.filter !== undefined && !matchingFilter) {
-        throw new TypeError('Unsupported MongoDB slot-based filter layout.');
-      }
-      if (matchingFilter) {
-        reportCollectionScan(
-          findings,
-          path,
-          count(stage.nReturned, 'scan.nReturned'),
-          count(parent.nReturned, 'filter.nReturned'),
-        );
-      }
+      checkMongoScan(findings, stage, path, parent, logical);
     }
     const nested = stageChildren(stage, path);
-    for (const [index, shard] of children(stage.shards ?? []).entries()) {
-      if (!object(shard) || shard.executionSuccess === false)
-        throw new TypeError('Invalid or unsuccessful MongoDB shard execution.');
-      nested.push({ stage: shard.executionStages, path: path + '.shards[' + index + '].executionStages' });
-    }
+    nested.push(...shardEntries(stage, path));
     for (let index = nested.length - 1; index >= 0; index--) pending.push({ ...nested[index], parent: stage });
   }
   return { engine: 'mongodb', findings };

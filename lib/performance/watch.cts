@@ -70,7 +70,7 @@ function watchProject(configPath: string | undefined, { onResult, onError, polic
       }
       const configErrors = program.getConfigFileParsingDiagnostics();
       if (configErrors.length) throw new Error(configErrors.map(diagnosticText).join('\n'));
-      result = analyzeProgram(program, undefined, undefined, policySource?.read(), forEachSourceCandidate);
+      result = analyzeProgram({ program, policy: policySource?.read(), forEachSourceCandidate });
       if (!result.scannedFiles) throw new Error('No JavaScript or TypeScript source files to check.');
     } catch (error) {
       onError(error);

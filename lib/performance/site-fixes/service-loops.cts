@@ -1,3 +1,4 @@
+// loadwise-reviewed large-module -- one pipeline for the helper-called-per-item rule: callee analysis, read and write batch siblings, call-site rewrite and import edits all share the same ReadBatch/WriteBatch shapes
 // service-query-in-loop: the query sits in a project helper called once per item. When the helper
 // is a single keyed read or a single insert, a batch sibling is added next to it and the loop calls
 // that once; a loop that only awaits the helper otherwise runs its calls a few at a time.
@@ -544,6 +545,7 @@ function rowLookup({
 
 // A batch sibling of a single keyed read: one query for all keys, then the per-item result in input
 // order.
+// loadwise-reviewed high-branch-complexity -- a linear chain of independent bail-outs proving the helper is one keyed read before the batch sibling text is built; splitting scatters the proof from the lines it licenses
 function readBatch(callee: CalleeHelper, family: ClientFamily, typed: boolean): ReadBatch | undefined {
   const { declaration } = callee;
   const parameterNames = simpleParameterNames(declaration);
@@ -1131,6 +1133,7 @@ function addEdits(editsByFile: Map<string, TextEdit[]>, file: string, edits: Tex
   editsByFile.set(file, [...(editsByFile.get(file) ?? []), ...edits]);
 }
 
+// loadwise-reviewed high-branch-complexity -- a linear chain of independent bail-outs (family, callee, site, argument, target, import) before one rewrite; each guard depends on the previous result so splitting adds only plumbing
 function batchedFix({ finding, call, sourceFile, load }: BatchedFixInput): FixResult | undefined {
   const family = clientFamily(finding.message);
   const name = ts.isPropertyAccessExpression(call.expression) ? call.expression.name.text : textOf(call.expression);

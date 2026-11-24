@@ -1,4 +1,5 @@
 import type { Finding, SkippedFile } from '../../shared/types.cjs';
+import type { ModuleEdge } from './module-graph.cjs';
 
 /** How a scan is limited and tuned. */
 export interface ScanOptions {
@@ -18,6 +19,16 @@ export interface SourceCoverage {
   placementFiles: number;
   resolvedInternalEdges: number;
   languageCounts: Record<string, number>;
+}
+
+/** What a source scan looked at, from which its coverage is counted. */
+export interface SourceCoverageInput {
+  inventory: readonly string[];
+  jsFiles: readonly string[];
+  otherSources: readonly string[];
+  edges: readonly ModuleEdge[];
+  placementRuleCount: number;
+  inScope?: (file: string) => boolean;
 }
 
 /** The result of scanning a project's source files. */

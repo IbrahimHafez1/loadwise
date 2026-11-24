@@ -1,3 +1,4 @@
+// loadwise-reviewed large-module -- one registry of per-item lookup rewrites (Prisma, TypeORM, counts, picks) that all share the loop-site, key-filter and map-naming helpers; splitting would scatter those shared proofs of safety across modules
 // Rewrites per-item queries inside a for-of loop into one batched query before the loop, and single
 // queries that load every row only to count, pick or filter them. Any shape not proven safe is left
 // to the rule example.
@@ -39,6 +40,7 @@ import type {
   SyntaxKind,
   TypeNode,
   VariableDeclaration,
+  VariableStatement,
 } from 'typescript';
 import type { MethodCall } from '../types/method-call.cjs';
 import type {
@@ -705,13 +707,22 @@ function declarationOf(
     if (!ts.isBlock(scope) && !ts.isSourceFile(scope)) continue;
     for (const statement of scope.statements) {
       if (!ts.isVariableStatement(statement)) continue;
-      for (const declaration of statement.declarationList.declarations) {
-        if (ts.isIdentifier(declaration.name) && declaration.name.text === name) return declaration;
-        if (!ts.isObjectBindingPattern(declaration.name)) continue;
-        const element = declaration.name.elements.find((item) => ts.isIdentifier(item.name) && item.name.text === name);
-        if (element) return element;
-      }
+      const declared = declarationNamed(statement, name);
+      if (declared) return declared;
     }
+  }
+}
+
+// The declaration or destructured element in `statement` that binds `name`.
+function declarationNamed(
+  statement: VariableStatement,
+  name: string,
+): VariableDeclaration | BindingElement | undefined {
+  for (const declaration of statement.declarationList.declarations) {
+    if (ts.isIdentifier(declaration.name) && declaration.name.text === name) return declaration;
+    if (!ts.isObjectBindingPattern(declaration.name)) continue;
+    const element = declaration.name.elements.find((item) => ts.isIdentifier(item.name) && item.name.text === name);
+    if (element) return element;
   }
 }
 
@@ -1025,6 +1036,7 @@ function emptyAggregate(options: ReadonlyMap<string, ObjectLiteralElementLike>):
   return parts.length ? `{ ${parts.join(', ')} }` : undefined;
 }
 
+// loadwise-reviewed high-branch-complexity -- each branch is an independent bail-out of the safety proof (shape, key, options, notes) followed by one exclusive count/aggregate vs list/one build; splitting scatters the checks from the rewrite they guard
 function prismaLookup(call: MethodCall, sourceFile: SourceFile): FixResult | undefined {
   const delegate = call.expression.expression;
   const mode = prismaModes[call.expression.name.text];
@@ -1400,6 +1412,7 @@ function lookupFilter(
   return { options, filter: where.initializer };
 }
 
+// loadwise-reviewed high-branch-complexity -- a linear chain of independent safety bail-outs followed by one exclusive list/one/exists rewrite choice; splitting scatters the proof from the rewrite
 function typeormLookup(call: MethodCall, sourceFile: SourceFile): FixResult | undefined {
   const method = call.expression.name.text;
   const mode = typeormModes[method];

@@ -20,6 +20,7 @@ const pureKeywordKinds: readonly SyntaxKind[] = [
   ts.SyntaxKind.SuperKeyword,
 ];
 
+// loadwise-reviewed high-branch-complexity -- a flat dispatch over independent expression kinds, one early return per kind; each case is exclusive and a lookup table would hide the recursion
 function isPure(node: Node | undefined, isFree: FreeCheck = neverFree): boolean {
   if (!node || isFree(node)) return true;
   if (ts.isIdentifier(node) || ts.isLiteralExpression(node) || node.kind === ts.SyntaxKind.ThisKeyword) return true;
@@ -82,6 +83,7 @@ function isStatementList(node: Node): boolean {
 
 // Whether `parent` evaluates everything before `child` without effects, and always evaluates
 // `child`.
+// loadwise-reviewed high-branch-complexity -- a flat dispatch over independent parent expression kinds, one early return per kind; each case is exclusive and splitting scatters the evaluation-order rules
 function reachesChildPurely(parent: Node, child: Node, isFree: FreeCheck): boolean {
   if (transparentKinds.some((test) => test(parent))) return true;
   const before = (list: readonly Node[]): boolean =>

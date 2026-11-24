@@ -3,7 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import ts from 'typescript';
-import type { ArrayLiteralExpression, Expression, JsonSourceFile } from 'typescript';
+import type { ArrayLiteralExpression, Expression, JsonSourceFile, ObjectLiteralExpression } from 'typescript';
 
 /** One entry of a parsed tasks.json `tasks` array. */
 interface ConfiguredTask {
@@ -143,8 +143,13 @@ function prependItems(text: string, opening: number, items: string, hasExisting:
   return text.slice(0, opening + 1) + newline + insertion + (hasExisting ? ',' : '') + separator + tail;
 }
 
-function updatedTasks(filename: string, text: string | undefined): string {
-  if (text === undefined) return JSON.stringify({ version: '2.0.0', tasks: [watchTask] }, null, 2) + '\n';
+interface ParsedTasksFile {
+  source: JsonSourceFile;
+  config: ConfiguredTasks;
+  object: ObjectLiteralExpression;
+}
+
+function parseTasksFile(filename: string, text: string): ParsedTasksFile {
   const source = ts.parseJsonText(filename, text);
   const errors = [...(source.parseDiagnostics ?? [])];
   const config: ConfiguredTasks = ts.convertToObject(source, errors);
@@ -155,6 +160,10 @@ function updatedTasks(filename: string, text: string | undefined): string {
   if (Object.hasOwn(config, 'version') && config.version !== '2.0.0') {
     throw new Error(filename + ' uses an incompatible task version. Migrate it to 2.0.0 first.');
   }
+  return { source, config, object };
+}
+
+function topLevelSettings(filename: string, object: ObjectLiteralExpression): Map<string, Expression> {
   const settings = new Map<string, Expression>();
   for (const property of object.properties) {
     if (!ts.isPropertyAssignment(property) || !(ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)))
@@ -164,6 +173,26 @@ function updatedTasks(filename: string, text: string | undefined): string {
     if (settings.has(name)) throw new Error(filename + ' contains duplicate ' + name + ' properties.');
     settings.set(name, property.initializer);
   }
+  return settings;
+}
+
+function existingWatchTasks(filename: string, config: ConfiguredTasks): (ConfiguredTask | null)[] {
+  const matches = config.tasks.filter((task) => task?.label === watchTask.label);
+  if (matches.length > 1 || (matches.length && !isDeepStrictEqual(matches[0], watchTask))) {
+    throw new Error(
+      filename +
+        ' already defines a different or duplicate "' +
+        watchTask.label +
+        '". Rename or reconcile it before setup.',
+    );
+  }
+  return matches;
+}
+
+function updatedTasks(filename: string, text: string | undefined): string {
+  if (text === undefined) return JSON.stringify({ version: '2.0.0', tasks: [watchTask] }, null, 2) + '\n';
+  const { source, config, object } = parseTasksFile(filename, text);
+  const settings = topLevelSettings(filename, object);
   const members: string[] = [];
   if (!settings.has('version')) members.push('"version": "2.0.0"');
   const tasks = settings.get('tasks');
@@ -171,15 +200,7 @@ function updatedTasks(filename: string, text: string | undefined): string {
     members.push('"tasks": ' + JSON.stringify([watchTask], null, 2));
   } else {
     if (!ts.isArrayLiteralExpression(tasks)) throw new Error(filename + ' must have an array for tasks.');
-    const matches = config.tasks.filter((task) => task?.label === watchTask.label);
-    if (matches.length > 1 || (matches.length && !isDeepStrictEqual(matches[0], watchTask))) {
-      throw new Error(
-        filename +
-          ' already defines a different or duplicate "' +
-          watchTask.label +
-          '". Rename or reconcile it before setup.',
-      );
-    }
+    const matches = existingWatchTasks(filename, config);
     const legacyIndex = config.tasks.findIndex(
       (task) => task?.label === legacyLabel && isDeepStrictEqual(task, legacyTask),
     );

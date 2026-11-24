@@ -1,5 +1,5 @@
 import ts from 'typescript';
-import type { ConciseBody, Expression, Node } from 'typescript';
+import type { ConciseBody, Expression, Node, VariableDeclaration } from 'typescript';
 
 function selectorKey(expression: Expression): string | undefined {
   const node = ts.skipOuterExpressions(expression);
@@ -72,21 +72,24 @@ function textChoiceContext(body: ConciseBody, score: number, threshold: number):
       (ts.isIdentifier(node) && locals.has(node.text))
     );
   }
+  // A local counts only when it is a plain identifier bound to a selector or literal data.
+  function acceptLocal(declaration: VariableDeclaration): boolean {
+    if (
+      !ts.isIdentifier(declaration.name) ||
+      !declaration.initializer ||
+      (!selectorKey(declaration.initializer) && !literalData(declaration.initializer))
+    )
+      return false;
+    locals.add(declaration.name.text);
+    return true;
+  }
   let result: Node = body;
   if (ts.isBlock(body)) {
     const last = body.statements.at(-1);
     if (!last || !ts.isReturnStatement(last) || !last.expression) return;
     for (const statement of body.statements.slice(0, -1)) {
       if (!ts.isVariableStatement(statement) || !(statement.declarationList.flags & ts.NodeFlags.Const)) return;
-      for (const declaration of statement.declarationList.declarations) {
-        if (
-          !ts.isIdentifier(declaration.name) ||
-          !declaration.initializer ||
-          (!selectorKey(declaration.initializer) && !literalData(declaration.initializer))
-        )
-          return;
-        locals.add(declaration.name.text);
-      }
+      if (!statement.declarationList.declarations.every(acceptLocal)) return;
     }
     result = last.expression;
   }

@@ -1,3 +1,4 @@
+// loadwise-reviewed large-module -- one query-in-loop proof: every helper decides one exemption (bounded, memoised, batched, paged) consumed by shouldReportLoopQuery, and they share the repeat-owner and binding helpers
 import { loadSyntax, isDefaultLibrary } from './compiler.cjs';
 import { elementBinding, findRepeatOwner, isStandardArrayCall, outerExpression } from './repeated.cjs';
 import { isBreakTarget } from './sequential-loops.cjs';
@@ -721,6 +722,64 @@ function isBatchCollection(
   return false;
 }
 
+function prismaMapArm(value: CallExpression, owner: RepeatOwner, checker: CheckerAdapter): boolean {
+  const callback = value.arguments[0];
+  if (
+    !callback ||
+    !ts.isArrowFunction(callback) ||
+    !callback.parameters.length ||
+    !ts.isIdentifier(callback.parameters[0].name)
+  )
+    return false;
+  const filter = ts.skipOuterExpressions(callback.body);
+  // `OR: page.map((row) => filterFor(row.id, row.since))` builds one arm per row through a
+  // helper.
+  if (ts.isCallExpression(filter) && projectsItem(callback, checker)) return true;
+  return (
+    ts.isObjectLiteralExpression(filter) &&
+    filter.properties.some(
+      (field) =>
+        ts.isPropertyAssignment(field) &&
+        !ts.isComputedPropertyName(field.name) &&
+        readProperty(filter, field.name.text) === field.initializer &&
+        ts.isPropertyAccessExpression(field.initializer) &&
+        sameBinding(field.initializer.expression, callback.parameters[0].name, checker),
+    )
+  );
+}
+
+function isPrismaBatchProperty(name: string, value: Expression, owner: RepeatOwner, checker: CheckerAdapter): boolean {
+  if (name !== 'NOT' && name !== 'AND' && name !== 'OR' && isBatchCollection(readProperty(value, 'in'), owner, checker))
+    return true;
+  if (name !== 'OR') return false;
+  if (ts.isArrayLiteralExpression(value) && batchPredicate(value, owner, checker, 'Prisma')) return true;
+  return (
+    ts.isCallExpression(value) &&
+    ts.isPropertyAccessExpression(value.expression) &&
+    value.expression.name.text === 'map' &&
+    isBatchCollection(value, owner, checker) &&
+    prismaMapArm(value, owner, checker)
+  );
+}
+
+function isTypeormInProperty(value: Expression, owner: RepeatOwner, checker: CheckerAdapter): boolean {
+  if (
+    !ts.isCallExpression(value) ||
+    value.arguments.length !== 1 ||
+    !isBatchCollection(value.arguments[0], owner, checker)
+  )
+    return false;
+  const declaration = checker.getResolvedSignature(value)?.declaration;
+  const declaredName = declaration && ts.isFunctionLike(declaration) ? declaration.name : undefined;
+  return (
+    !!declaration &&
+    !!declaredName &&
+    !ts.isComputedPropertyName(declaredName) &&
+    declaredName.text === 'In' &&
+    /\/node_modules\/typeorm\//.test(declaration.getSourceFile().fileName.replaceAll('\\', '/'))
+  );
+}
+
 function batchPredicate(
   predicate: Expression | undefined,
   owner: RepeatOwner,
@@ -743,71 +802,8 @@ function batchPredicate(
     seen.add(name);
     if (!ts.isPropertyAssignment(property)) continue;
     const value = property.initializer;
-    if (
-      family === 'Prisma' &&
-      name !== 'NOT' &&
-      name !== 'AND' &&
-      name !== 'OR' &&
-      isBatchCollection(readProperty(value, 'in'), owner, checker)
-    )
-      return true;
-    if (
-      family === 'Prisma' &&
-      name === 'OR' &&
-      ts.isArrayLiteralExpression(value) &&
-      batchPredicate(value, owner, checker, family)
-    )
-      return true;
-    if (
-      family === 'Prisma' &&
-      name === 'OR' &&
-      ts.isCallExpression(value) &&
-      ts.isPropertyAccessExpression(value.expression) &&
-      value.expression.name.text === 'map' &&
-      isBatchCollection(value, owner, checker)
-    ) {
-      const callback = value.arguments[0];
-      if (
-        callback &&
-        ts.isArrowFunction(callback) &&
-        callback.parameters.length &&
-        ts.isIdentifier(callback.parameters[0].name)
-      ) {
-        const filter = ts.skipOuterExpressions(callback.body);
-        // `OR: page.map((row) => filterFor(row.id, row.since))` builds one arm per row through a
-        // helper.
-        if (ts.isCallExpression(filter) && projectsItem(callback, checker)) return true;
-        if (
-          ts.isObjectLiteralExpression(filter) &&
-          filter.properties.some(
-            (field) =>
-              ts.isPropertyAssignment(field) &&
-              !ts.isComputedPropertyName(field.name) &&
-              readProperty(filter, field.name.text) === field.initializer &&
-              ts.isPropertyAccessExpression(field.initializer) &&
-              sameBinding(field.initializer.expression, callback.parameters[0].name, checker),
-          )
-        )
-          return true;
-      }
-    }
-    if (
-      family === 'TypeORM' &&
-      ts.isCallExpression(value) &&
-      value.arguments.length === 1 &&
-      isBatchCollection(value.arguments[0], owner, checker)
-    ) {
-      const declaration = checker.getResolvedSignature(value)?.declaration;
-      const declaredName = declaration && ts.isFunctionLike(declaration) ? declaration.name : undefined;
-      if (
-        declaration &&
-        declaredName &&
-        !ts.isComputedPropertyName(declaredName) &&
-        declaredName.text === 'In' &&
-        /\/node_modules\/typeorm\//.test(declaration.getSourceFile().fileName.replaceAll('\\', '/'))
-      )
-        return true;
-    }
+    if (family === 'Prisma' && isPrismaBatchProperty(name, value, owner, checker)) return true;
+    if (family === 'TypeORM' && isTypeormInProperty(value, owner, checker)) return true;
   }
   return false;
 }

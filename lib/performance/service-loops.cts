@@ -1,14 +1,15 @@
 import path from 'node:path';
-import { loadSyntax, isDefaultLibrary } from './compiler.cjs';
+import { loadSyntax } from './compiler.cjs';
+import { elementBinding, findRepeatOwner, promiseCombinatorOf } from './repeated.cjs';
+import { familyEntry, isProjectFunction, operationFamily, signatureDeclaration } from './service-call-resolution.cjs';
 import {
-  elementBinding,
-  findRepeatOwner,
-  isStandardArrayCall,
-  outerExpression,
-  promiseCombinatorOf,
-} from './repeated.cjs';
-import { isFunctionLikeDeclaration } from './request-handlers.cjs';
-import { isBatchCollection, isGrownLater, isMemoised, shouldReportLoopQuery } from './query-loops.cjs';
+  hasLiteralDomain,
+  isConstantCollection,
+  isConstantObject,
+  iteratedCollection,
+  passesCollection,
+} from './service-loop-collections.cjs';
+import { isMemoised, shouldReportLoopQuery } from './query-loops.cjs';
 import { transactionLoopTarget } from './typeorm-transaction-loops.cjs';
 import { wrappedQueueAdd } from './queue-loops.cjs';
 import {
@@ -19,12 +20,16 @@ import {
 } from './sequential-loops.cjs';
 import { isGeneratedPrismaFile } from './prisma.cjs';
 import { packageOf, relativeFile, resolvedSymbol } from './schema/ts-helpers.cjs';
-import { declaredTypeormOwner, isTypeormPackage, typeormImportOf } from './orm-queries.cjs';
+import { declaredTypeormOwner } from './orm-queries.cjs';
+import {
+  executingTagPackages,
+  prismaRawTags,
+  transactionMethods,
+  typeormOperations,
+} from './service-loop-operations.cjs';
 import type {
   CallExpression,
-  EnumDeclaration,
   Expression,
-  ForStatement,
   Node,
   PropertyAccessExpression,
   SourceFile,
@@ -66,15 +71,6 @@ interface ReachedOperations {
   complete: boolean;
 }
 
-/** A client package family and the methods of it that cost a round trip. */
-interface PackageOperations {
-  family: string;
-  packages: readonly string[];
-  operations: ReadonlySet<string>;
-  /** Only methods declared on these types count. */
-  owners?: ReadonlySet<string>;
-}
-
 /** A tagged template that sends a statement when awaited. */
 interface TaggedQuery {
   family: string;
@@ -90,304 +86,13 @@ const MAX_LISTED_OPERATIONS = 4;
 const MAX_LABEL_LENGTH = 60;
 // Wrappers up to this many statements are followed into the project functions they call.
 const MAX_WRAPPER_STATEMENTS = 5;
-const MAX_CONSTANT_DEPTH = 6;
-// `list.slice(0, 2)` keeps a handful of items whatever the list holds.
-const MAX_SLICED_ITEMS = 5;
-// Output arguments are followed this many calls deep to find where they are appended to.
-const MAX_FORWARDING_DEPTH = 3;
-const appendingMethods = new Set(['push', 'unshift', 'splice']);
-const objectReaders = new Set(['keys', 'values', 'entries']);
-const arrayNarrowers = new Set(['filter', 'slice', 'map']);
-const listOperators = new Set(['in', '$in']);
 
-const prismaOperations = new Set([
-  'findUnique',
-  'findUniqueOrThrow',
-  'findFirst',
-  'findFirstOrThrow',
-  'findMany',
-  'count',
-  'aggregate',
-  'groupBy',
-  'create',
-  'createMany',
-  'createManyAndReturn',
-  'update',
-  'updateMany',
-  'updateManyAndReturn',
-  'upsert',
-  'delete',
-  'deleteMany',
-  '$queryRaw',
-  '$queryRawUnsafe',
-  '$executeRaw',
-  '$executeRawUnsafe',
-]);
-// Repository.create and merge build entities in memory and are deliberately absent.
-const typeormOperations = new Set([
-  'find',
-  'findBy',
-  'findByIds',
-  'findOne',
-  'findOneBy',
-  'findOneById',
-  'findOneOrFail',
-  'findOneByOrFail',
-  'findAndCount',
-  'findAndCountBy',
-  'count',
-  'countBy',
-  'exist',
-  'exists',
-  'existsBy',
-  'sum',
-  'average',
-  'minimum',
-  'maximum',
-  'save',
-  'insert',
-  'update',
-  'upsert',
-  'delete',
-  'softDelete',
-  'restore',
-  'remove',
-  'softRemove',
-  'increment',
-  'decrement',
-  'query',
-  'getOne',
-  'getOneOrFail',
-  'getMany',
-  'getManyAndCount',
-  'getRawOne',
-  'getRawMany',
-  'getCount',
-  'getExists',
-  'execute',
-]);
-const sequelizeOperations = new Set([
-  'findAll',
-  'findOne',
-  'findByPk',
-  'findAndCountAll',
-  'findOrCreate',
-  'count',
-  'min',
-  'max',
-  'sum',
-  'create',
-  'bulkCreate',
-  'update',
-  'destroy',
-  'upsert',
-  'increment',
-  'decrement',
-  'save',
-  'reload',
-  'query',
-]);
-const mongooseOperations = new Set([
-  'find',
-  'findOne',
-  'findById',
-  'exists',
-  'countDocuments',
-  'estimatedDocumentCount',
-  'distinct',
-  'create',
-  'insertMany',
-  'updateOne',
-  'updateMany',
-  'replaceOne',
-  'deleteOne',
-  'deleteMany',
-  'findOneAndUpdate',
-  'findByIdAndUpdate',
-  'findOneAndDelete',
-  'findByIdAndDelete',
-  'aggregate',
-  'bulkWrite',
-  'save',
-]);
-// Only the call that starts a Drizzle statement is counted, so one chained statement is one
-// operation.
-const drizzleOperations = new Set([
-  'select',
-  'selectDistinct',
-  'selectDistinctOn',
-  'insert',
-  'update',
-  'delete',
-  'execute',
-  'findFirst',
-  'findMany',
-]);
-const redisOperations = new Set([
-  'get',
-  'set',
-  'setex',
-  'getdel',
-  'getex',
-  'mget',
-  'mset',
-  'hget',
-  'hset',
-  'hmget',
-  'hgetall',
-  'hdel',
-  'hincrby',
-  'del',
-  'unlink',
-  'exists',
-  'incr',
-  'incrby',
-  'decr',
-  'expire',
-  'pexpire',
-  'ttl',
-  'sadd',
-  'srem',
-  'smembers',
-  'sismember',
-  'zadd',
-  'zrem',
-  'zrange',
-  'zscore',
-  'lpush',
-  'rpush',
-  'lpop',
-  'rpop',
-  'lrange',
-  'eval',
-  'evalsha',
-]);
-// EntityManager and EntityRepository calls; persist() only queues a change for the next flush.
-const mikroOrmOperations = new Set([
-  'find',
-  'findOne',
-  'findOneOrFail',
-  'findAll',
-  'findAndCount',
-  'findByCursor',
-  'count',
-  'insert',
-  'insertMany',
-  'nativeInsert',
-  'nativeUpdate',
-  'nativeDelete',
-  'upsert',
-  'upsertMany',
-  'flush',
-  'persistAndFlush',
-  'removeAndFlush',
-  'refresh',
-  'populate',
-]);
-// Payload's Local API, each call one or more database round trips.
-const payloadOperations = new Set([
-  'find',
-  'findByID',
-  'findGlobal',
-  'findVersions',
-  'findVersionByID',
-  'create',
-  'update',
-  'updateGlobal',
-  'delete',
-  'count',
-  'duplicate',
-]);
-const queueOperations = new Set(['add', 'remove', 'getJob']);
-const transactionMethods = new Set(['transaction', '$transaction']);
-const literalFlags =
-  ts.TypeFlags.StringLiteral | ts.TypeFlags.NumberLiteral | ts.TypeFlags.BooleanLiteral | ts.TypeFlags.EnumLiteral;
-
-const packageOperations: readonly PackageOperations[] = [
-  { family: 'typeorm', packages: ['typeorm'], operations: typeormOperations },
-  { family: 'pg', packages: ['pg', '@types/pg', 'pg-pool', '@types/pg-pool'], operations: new Set(['query']) },
-  { family: 'drizzle', packages: ['drizzle-orm'], operations: drizzleOperations },
-  { family: 'sequelize', packages: ['sequelize', '@sequelize/core'], operations: sequelizeOperations },
-  { family: 'mongoose', packages: ['mongoose'], operations: mongooseOperations },
-  {
-    family: 'mikro-orm',
-    packages: [
-      '@mikro-orm/core',
-      '@mikro-orm/knex',
-      '@mikro-orm/sql',
-      '@mikro-orm/postgresql',
-      '@mikro-orm/mysql',
-      '@mikro-orm/mariadb',
-      '@mikro-orm/sqlite',
-      '@mikro-orm/libsql',
-      '@mikro-orm/mssql',
-      '@mikro-orm/mongodb',
-    ],
-    operations: mikroOrmOperations,
-  },
-  // The payload package exports much more than the Local API, so only BasePayload's methods count.
-  { family: 'payload', packages: ['payload'], operations: payloadOperations, owners: new Set(['BasePayload']) },
-  { family: 'redis', packages: ['ioredis', 'redis', '@redis/client'], operations: redisOperations },
-  { family: 'queue', packages: ['bullmq', 'bull', '@types/bull'], operations: queueOperations },
-];
-// Tagged templates of these clients send the statement when awaited; builder tags such as Drizzle's
-// `sql` do not.
-const executingTagPackages = new Set(['postgres', '@vercel/postgres', '@neondatabase/serverless']);
-const prismaRawTags = new Set(['$queryRaw', '$executeRaw']);
 // Callbacks handed to these wrappers run only on a cache miss.
 const cacheWrapperName =
   /^(?:(?:get|fetch|load|read)Or(?:Set|Fetch|Load|Compute|Cache)|remember|memoi[sz]e|cached|withCache)/i;
 
 // Per callee declaration: { operations, callees }, computed once per program.
 const bodySummaries = new WeakMap<FunctionWithBody, BodySummary>();
-
-function signatureDeclaration(call: CallExpression, checker: CheckerAdapter): Node | undefined {
-  const declaration = checker.getResolvedSignature(call)?.declaration;
-  if (declaration) return declaration;
-  const name = ts.isPropertyAccessExpression(call.expression) ? call.expression.name : call.expression;
-  return checker.getSymbolAtLocation(name)?.declarations?.[0];
-}
-
-function isProjectFunction(declaration: Node | undefined): declaration is FunctionWithBody {
-  if (!declaration || !isFunctionLikeDeclaration(declaration) || !declaration.body) return false;
-  const file = declaration.getSourceFile();
-  return !file.isDeclarationFile && !file.fileName.replaceAll('\\', '/').includes('/node_modules/');
-}
-
-function methodName(call: CallExpression): string | undefined {
-  const callee = call.expression;
-  if (ts.isPropertyAccessExpression(callee)) return callee.name.text;
-}
-
-// The client family of a database or cache call, or undefined for anything else.
-function operationFamily(method: string, declaration: Node): string | undefined {
-  const owningPackage = packageOf(declaration);
-  if (
-    owningPackage === '@prisma/client' ||
-    owningPackage === '.prisma' ||
-    isGeneratedPrismaFile(declaration.getSourceFile())
-  )
-    return prismaOperations.has(method) ? 'prisma' : undefined;
-  const entry = owningPackage && familyEntry(owningPackage);
-  if (!entry) return;
-  const typeName = enclosingTypeName(declaration);
-  if (entry.owners && (typeName === undefined || !entry.owners.has(typeName))) return;
-  // Redis clients expose each command in both lower and camel case.
-  const command = entry.family === 'redis' ? method.toLowerCase() : method;
-  if (entry.operations.has(command)) return entry.family;
-}
-
-// Forks published under a scope, such as @n8n/typeorm, keep TypeORM's API.
-function familyEntry(owningPackage: string): PackageOperations | undefined {
-  const name = isTypeormPackage(owningPackage) ? 'typeorm' : owningPackage;
-  return packageOperations.find(({ packages }) => packages.includes(name));
-}
-
-function enclosingTypeName(declaration: Node): string | undefined {
-  let current: Node | undefined = declaration;
-  while (current && !ts.isClassLike(current) && !ts.isInterfaceDeclaration(current)) current = current.parent;
-  return current?.name?.text;
-}
 
 function receiverLabel(receiver: Expression): string {
   let current = ts.skipOuterExpressions(receiver);
@@ -455,6 +160,42 @@ function operationAt(file: SourceFile, node: Node, family: string, label: string
   return { family, label, file: file.fileName, line: line + 1, column: character + 1 };
 }
 
+interface MemberCallSite {
+  readonly summary: BodySummary;
+  readonly file: SourceFile;
+  readonly node: CallExpression;
+  readonly access: PropertyAccessExpression;
+  readonly chained: Set<Node>;
+  readonly checker: CheckerAdapter;
+}
+
+function summarizeMemberCall({ summary, file, node, access, chained, checker }: MemberCallSite): void {
+  const method = access.name.text;
+  const operationLabel = `${receiverLabel(access.expression)}.${method}`;
+  const target = signatureDeclaration(node, checker);
+  const family = target && transactionMethods.has(method) && !isProjectFunction(target) && transactionFamily(target);
+  // BEGIN and COMMIT add a round trip around the work inside the callback, which is counted
+  // too.
+  if (family) summary.operations.push(operationAt(file, access.name, family, operationLabel));
+  if (target && isProjectFunction(target)) {
+    summary.callees.push(target);
+    return;
+  }
+  if (target) {
+    const targetFamily = chained.has(node) ? undefined : operationFamily(method, target);
+    if (!targetFamily) return;
+    markInnerQueryCalls(access, chained);
+    summary.operations.push(operationAt(file, access.name, targetFamily, operationLabel));
+    return;
+  }
+  if (!chained.has(node) && typeormOperations.has(method) && declaredTypeormOwner(access.expression, checker)) {
+    // TypeORM's types are not installed, but the receiver is declared as one of its
+    // repositories.
+    markInnerQueryCalls(access, chained);
+    summary.operations.push(operationAt(file, access.name, 'typeorm', operationLabel));
+  }
+}
+
 function summarize(declaration: FunctionWithBody, checker: CheckerAdapter): BodySummary {
   const cached = bodySummaries.get(declaration);
   if (cached) return cached;
@@ -477,31 +218,7 @@ function summarize(declaration: FunctionWithBody, checker: CheckerAdapter): Body
       if (isMemoised(node, checker)) return;
       const access = ts.isPropertyAccessExpression(node.expression) ? node.expression : undefined;
       if (access) {
-        const method = access.name.text;
-        const operationLabel = `${receiverLabel(access.expression)}.${method}`;
-        const target = signatureDeclaration(node, checker);
-        const family =
-          target && transactionMethods.has(method) && !isProjectFunction(target) && transactionFamily(target);
-        // BEGIN and COMMIT add a round trip around the work inside the callback, which is counted
-        // too.
-        if (family) summary.operations.push(operationAt(file, access.name, family, operationLabel));
-        if (target && isProjectFunction(target)) summary.callees.push(target);
-        else if (target) {
-          const targetFamily = chained.has(node) ? undefined : operationFamily(method, target);
-          if (targetFamily) {
-            markInnerQueryCalls(access, chained);
-            summary.operations.push(operationAt(file, access.name, targetFamily, operationLabel));
-          }
-        } else if (
-          !chained.has(node) &&
-          typeormOperations.has(method) &&
-          declaredTypeormOwner(access.expression, checker)
-        ) {
-          // TypeORM's types are not installed, but the receiver is declared as one of its
-          // repositories.
-          markInnerQueryCalls(access, chained);
-          summary.operations.push(operationAt(file, access.name, 'typeorm', operationLabel));
-        }
+        summarizeMemberCall({ summary, file, node, access, chained, checker });
       } else if (ts.isIdentifier(node.expression)) {
         const local = signatureDeclaration(node, checker);
         if (isProjectFunction(local)) summary.callees.push(local);
@@ -577,265 +294,6 @@ function summarizedOperations(
 
 function contains(outer: Node, inner: Node): boolean {
   return outer.getSourceFile() === inner.getSourceFile() && outer.pos <= inner.pos && inner.end <= outer.end;
-}
-
-function isArrayValue(node: Node, checker: CheckerAdapter): boolean {
-  const symbol = checker.getTypeAtLocation(node).getSymbol();
-  return (
-    (symbol?.name === 'Array' || symbol?.name === 'ReadonlyArray') &&
-    !!symbol.declarations?.some((declaration) => isDefaultLibrary(checker, declaration.getSourceFile()))
-  );
-}
-
-// `{ in: ids }`, Mongo's `{ _id: { $in: ids } }` or TypeORM's `{ where: { id: In(ids) } }` hands
-// the callee a whole key set; a relation filter such as `{ where: { folder: { id: In(ids) } } }`
-// nests one level deeper.
-function carriesInList(argument: Expression, checker: CheckerAdapter, depth = 0): boolean {
-  const value = ts.skipOuterExpressions(argument);
-  if (depth > 2 || !ts.isObjectLiteralExpression(value)) return false;
-  return value.properties.some(
-    (property) =>
-      ts.isPropertyAssignment(property) &&
-      ((!ts.isComputedPropertyName(property.name) &&
-        listOperators.has(property.name.text) &&
-        isArrayValue(property.initializer, checker)) ||
-        isTypeormInList(property.initializer, checker) ||
-        carriesInList(property.initializer, checker, depth + 1)),
-  );
-}
-
-function isTypeormInList(expression: Expression, checker: CheckerAdapter): boolean {
-  const value = ts.skipOuterExpressions(expression);
-  if (!ts.isCallExpression(value) || !ts.isIdentifier(value.expression) || value.arguments.length !== 1) return false;
-  return typeormImportOf(value.expression, checker) === 'In' && isArrayValue(value.arguments[0], checker);
-}
-
-// A list the callee appends to, such as `warnings` or a lookup cache, is an output rather than a
-// key batch.
-function appendsTo(declaration: FunctionWithBody, name: string, checker: CheckerAdapter, depth = 0): boolean {
-  if (depth > MAX_FORWARDING_DEPTH) return false;
-  return !!(function visit(node: Node): true | undefined {
-    if (ts.isCallExpression(node)) {
-      const callee = node.expression;
-      if (
-        ts.isPropertyAccessExpression(callee) &&
-        appendingMethods.has(callee.name.text) &&
-        ts.isIdentifier(callee.expression) &&
-        callee.expression.text === name
-      )
-        return true;
-      const index = node.arguments.findIndex((argument) => ts.isIdentifier(argument) && argument.text === name);
-      const target = index >= 0 ? signatureDeclaration(node, checker) : undefined;
-      if (isProjectFunction(target)) {
-        const parameter = target.parameters[index];
-        if (parameter && ts.isIdentifier(parameter.name) && appendsTo(target, parameter.name.text, checker, depth + 1))
-          return true;
-      }
-    }
-    return ts.forEachChild(node, visit);
-  })(declaration.body);
-}
-
-function isDrizzleBatchFilter(argument: Expression, owner: RepeatOwner, checker: CheckerAdapter): boolean {
-  if (!ts.isCallExpression(argument)) return false;
-  const symbol = resolvedSymbol(argument.expression, checker);
-  if (!symbol?.declarations?.some((item) => packageOf(item) === 'drizzle-orm')) return false;
-  if (symbol.name === 'inArray')
-    return argument.arguments.length === 2 && isBatchCollection(argument.arguments[1], owner, checker);
-  return symbol.name === 'and' && argument.arguments.some((term) => isDrizzleBatchFilter(term, owner, checker));
-}
-
-function usesSqlFilter(declaration: FunctionWithBody, checker: CheckerAdapter): boolean {
-  const parameter = declaration.parameters[0]?.name;
-  if (!parameter || !ts.isIdentifier(parameter)) return false;
-  const binding = checker.getSymbolAtLocation(parameter);
-  if (!binding) return false;
-  function visit(node: Node): boolean | undefined {
-    if (ts.isFunctionLike(node)) return false;
-    if (ts.isCallExpression(node) && methodName(node) === 'execute' && node.arguments.length === 1) {
-      const query = node.arguments[0];
-      if (!ts.isTaggedTemplateExpression(query) || !ts.isTemplateExpression(query.template)) return false;
-      const tag = resolvedSymbol(query.tag, checker);
-      const execute = signatureDeclaration(node, checker);
-      if (
-        tag?.name === 'sql' &&
-        execute &&
-        operationFamily('execute', execute) === 'drizzle' &&
-        tag.declarations?.some((item) => packageOf(item) === 'drizzle-orm')
-      ) {
-        const spans = query.template.templateSpans;
-        const predicate = spans.at(-1);
-        const precedingSql = spans.at(-2)?.literal.text ?? query.template.head.text;
-        return (
-          predicate !== undefined &&
-          /\bWHERE\s*$/i.test(precedingSql) &&
-          /^\s*;?\s*$/.test(predicate.literal.text) &&
-          checker.getSymbolAtLocation(predicate.expression) === binding
-        );
-      }
-    }
-    return ts.forEachChild(node, (child) => visit(child) || undefined);
-  }
-  return !!visit(declaration.body);
-}
-
-// A callee that takes the item keys as a list is already a batch API called per group.
-function passesCollection(
-  call: CallExpression,
-  declaration: FunctionWithBody,
-  owner: RepeatOwner,
-  checker: CheckerAdapter,
-): boolean {
-  return call.arguments.some((argument, index) => {
-    if (carriesInList(argument, checker)) return true;
-    if (
-      call.arguments.length === 1 &&
-      isDrizzleBatchFilter(argument, owner, checker) &&
-      usesSqlFilter(declaration, checker)
-    )
-      return true;
-    if (!isArrayValue(argument, checker)) return false;
-    const parameter = declaration.parameters[index];
-    return (
-      !parameter ||
-      !!parameter.dotDotDotToken ||
-      !ts.isIdentifier(parameter.name) ||
-      !appendsTo(declaration, parameter.name.text, checker)
-    );
-  });
-}
-
-function lengthBoundCollection(loop: ForStatement): Expression | undefined {
-  const condition = loop.condition && ts.skipOuterExpressions(loop.condition);
-  if (
-    condition &&
-    ts.isBinaryExpression(condition) &&
-    (condition.operatorToken.kind === ts.SyntaxKind.LessThanToken ||
-      condition.operatorToken.kind === ts.SyntaxKind.LessThanEqualsToken) &&
-    ts.isPropertyAccessExpression(condition.right) &&
-    condition.right.name.text === 'length'
-  )
-    return condition.right.expression;
-}
-
-// The collection a per-item loop walks; undefined for retry, polling and queue-draining loops.
-function iteratedCollection(owner: RepeatOwner): Expression | undefined {
-  if (ts.isForOfStatement(owner) || ts.isForInStatement(owner)) return owner.expression;
-  if (ts.isForStatement(owner)) return lengthBoundCollection(owner);
-  if (!ts.isFunctionLike(owner)) return;
-  const call = outerExpression(owner).parent;
-  if (ts.isCallExpression(call) && ts.isPropertyAccessExpression(call.expression)) return call.expression.expression;
-}
-
-function constantInitializer(
-  expression: Expression,
-  checker: CheckerAdapter,
-): Expression | EnumDeclaration | undefined {
-  const value = ts.skipOuterExpressions(expression);
-  if (!ts.isIdentifier(value)) return;
-  const declaration = resolvedSymbol(value, checker)?.valueDeclaration;
-  if (declaration && ts.isEnumDeclaration(declaration)) return declaration;
-  if (
-    declaration &&
-    ts.isVariableDeclaration(declaration) &&
-    declaration.parent.flags & ts.NodeFlags.Const &&
-    declaration.initializer
-  )
-    return ts.skipOuterExpressions(declaration.initializer);
-}
-
-function isConstantTable(expression: Expression, checker: CheckerAdapter, depth: number): boolean {
-  const table = constantInitializer(expression, checker);
-  if (table && ts.isEnumDeclaration(table)) return true;
-  return (
-    !!table &&
-    ts.isObjectLiteralExpression(table) &&
-    table.properties.length > 0 &&
-    table.properties.every(
-      (property) => ts.isPropertyAssignment(property) && isConstantCollection(property.initializer, checker, depth + 1),
-    )
-  );
-}
-
-// Lists written into the source, such as fallback chains or enum values, have a size fixed by the
-// code.
-function isConstantCollection(expression: Expression | undefined, checker: CheckerAdapter, depth = 0): boolean {
-  if (!expression || depth > MAX_CONSTANT_DEPTH) return false;
-  const value = ts.skipOuterExpressions(expression);
-  const follow = (child: Expression | undefined): boolean => isConstantCollection(child, checker, depth + 1);
-  if (ts.isArrayLiteralExpression(value))
-    return (
-      value.elements.length > 0 &&
-      value.elements.every((element) => !ts.isSpreadElement(element) || follow(element.expression))
-    );
-  if (ts.isConditionalExpression(value)) return follow(value.whenTrue) && follow(value.whenFalse);
-  // `await Promise.all(pair.map(load))` has as many items as the pair.
-  if (ts.isAwaitExpression(value)) return follow(value.expression);
-  if (ts.isIdentifier(value)) {
-    // A work queue seeded from a literal, such as a tree walk, keeps growing while the loop runs.
-    const declaration = resolvedSymbol(value, checker)?.valueDeclaration;
-    if (declaration && ts.isVariableDeclaration(declaration) && isGrownLater(declaration, checker)) return false;
-    const initializer = constantInitializer(value, checker);
-    return initializer !== undefined && !ts.isEnumDeclaration(initializer) && follow(initializer);
-  }
-  if (ts.isElementAccessExpression(value) || ts.isPropertyAccessExpression(value))
-    return isConstantTable(value.expression, checker, depth);
-  if (!ts.isCallExpression(value)) return false;
-  if (!ts.isPropertyAccessExpression(value.expression)) return returnsConstantCollection(value, checker, depth);
-  const method = value.expression.name.text;
-  const receiver = ts.skipOuterExpressions(value.expression.expression);
-  if (ts.isIdentifier(receiver) && receiver.text === 'Object' && objectReaders.has(method))
-    return value.arguments.length === 1 && isConstantObject(value.arguments[0], checker);
-  if (ts.isIdentifier(receiver) && receiver.text === 'Promise' && method === 'all')
-    return value.arguments.length === 1 && follow(value.arguments[0]);
-  if (method === 'slice' && isStandardArrayCall(value, checker) && slicesFewItems(value, checker)) return true;
-  if (arrayNarrowers.has(method) && isStandardArrayCall(value, checker)) return follow(receiver);
-  return returnsConstantCollection(value, checker, depth);
-}
-
-function slicesFewItems(call: CallExpression, checker: CheckerAdapter): boolean {
-  const [start, end] = call.arguments.map((argument) => argument && ts.skipOuterExpressions(argument));
-  return !!start && !!end && ts.isNumericLiteral(start) && Number(start.text) === 0 && isFewItems(end, checker);
-}
-
-// A literal, or a constant such as an imported `BATCH_SIZE = 4`, whose type is that number.
-function isFewItems(end: Expression, checker: CheckerAdapter): boolean {
-  if (ts.isNumericLiteral(end)) return Number(end.text) <= MAX_SLICED_ITEMS;
-  const type = checker.getTypeAtLocation(end);
-  return (
-    !!(type.flags & ts.TypeFlags.NumberLiteral) && typeof type.value === 'number' && type.value <= MAX_SLICED_ITEMS
-  );
-}
-
-function isConstantObject(expression: Expression, checker: CheckerAdapter): boolean {
-  const table = constantInitializer(expression, checker);
-  return (
-    !!table &&
-    (ts.isEnumDeclaration(table) ||
-      (ts.isObjectLiteralExpression(table) && !table.properties.some(ts.isSpreadAssignment)))
-  );
-}
-
-// A project helper such as `selectSources()` that only returns a filtered constant list.
-function returnsConstantCollection(call: CallExpression, checker: CheckerAdapter, depth: number): boolean {
-  const declaration = signatureDeclaration(call, checker);
-  if (!isProjectFunction(declaration) || !ts.isBlock(declaration.body)) return false;
-  const results: (Expression | undefined)[] = [];
-  (function visit(node: Node): void {
-    if (ts.isFunctionLike(node)) return;
-    if (ts.isReturnStatement(node)) results.push(node.expression);
-    ts.forEachChild(node, visit);
-  })(declaration.body);
-  return results.length > 0 && results.every((result) => isConstantCollection(result, checker, depth + 1));
-}
-
-// Items drawn from a literal union (an enum or a list of known names) are a fixed, small domain.
-function hasLiteralDomain(owner: RepeatOwner, checker: CheckerAdapter): boolean {
-  const binding = elementBinding(owner);
-  if (!binding || !ts.isIdentifier(binding)) return false;
-  const type = checker.getTypeAtLocation(binding);
-  const members = type.isUnion() && type.types ? type.types : [type];
-  return members.every((member) => member.flags & literalFlags);
 }
 
 // The project functions between the callee and the first listed operation, outermost first.
@@ -979,8 +437,12 @@ function shouldSkipLoop(node: CallExpression, owner: RepeatOwner, checker: Check
   );
 }
 
-function check(node: CallExpression, context: PerformanceRuleContext): void {
-  const { checker } = context;
+interface LoopCall {
+  readonly owner: RepeatOwner;
+  readonly declaration: FunctionWithBody;
+}
+
+function loopCallOf(node: CallExpression, checker: CheckerAdapter): LoopCall | undefined {
   const callee = node.expression;
   if (!ts.isPropertyAccessExpression(callee) && !ts.isIdentifier(callee)) return;
   const owner = findRepeatOwner(node, checker);
@@ -988,38 +450,78 @@ function check(node: CallExpression, context: PerformanceRuleContext): void {
   if (!owner || !iteratedCollection(owner) || insideCatch(node, owner)) return;
   const declaration = signatureDeclaration(node, checker);
   if (!isProjectFunction(declaration) || contains(declaration, node)) return;
+  return { owner, declaration };
+}
+
+interface ReachedViaCall extends ReachedOperations {
+  readonly deep: ReachedOperations | undefined;
+}
+
+function reachedOperations(
+  node: CallExpression,
+  declaration: FunctionWithBody,
+  context: PerformanceRuleContext,
+): ReachedViaCall {
   // The callee summary is cached per declaration, and most project callees do no database work, so
   // it rules out a call before the per-call loop and argument checks.
-  const shallow = calleeOperations(declaration, checker);
+  const shallow = calleeOperations(declaration, context.checker);
   // Without operations of its own or in a short wrapper, the callee may still reach one several
   // hops down.
-  const deep = shallow.operations.length ? undefined : summarizedOperations(node, checker, context.program);
+  const deep = shallow.operations.length ? undefined : summarizedOperations(node, context.checker, context.program);
   const { operations, complete } = deep ?? shallow;
-  if (!operations.length) return;
-  if (shouldSkipLoop(node, owner, checker) || passesCollection(node, declaration, owner, checker)) return;
+  return { operations, complete, deep };
+}
+
+function isReportedElsewhere(
+  node: CallExpression,
+  loopCall: LoopCall,
+  operations: readonly LoopOperation[],
+  context: PerformanceRuleContext,
+): boolean {
+  const { checker } = context;
+  const { owner, declaration } = loopCall;
+  if (shouldSkipLoop(node, owner, checker) || passesCollection(node, declaration, owner, checker)) return true;
   // typeorm-transaction-in-loop already reports a per-item call to a transaction wrapper.
-  if (transactionLoopTarget(node, checker)) return;
+  if (transactionLoopTarget(node, checker)) return true;
   // queue-add-in-loop already reports a per-item call to a wrapper that only enqueues.
-  if (operations.every((operation) => operation.family === 'queue') && wrappedQueueAdd(node, context)) return;
+  return operations.every((operation) => operation.family === 'queue') && wrappedQueueAdd(node, context) !== undefined;
+}
+
+// Operations on separate branches are listed together, so a complete count is an upper bound.
+// Deeper project calls are not followed, so an incomplete count is a lower bound.
+function roundTrips(count: number, complete: boolean): { amount: string; trips: string } {
+  const amount = complete ? (count === 1 ? 'a' : `up to ${count}`) : `at least ${count === 1 ? 'one' : count}`;
+  return { amount, trips: `${amount} round ${count === 1 ? 'trip' : 'trips'}` };
+}
+
+// Calls started together overlap in time, but each still costs its own round trips and a pooled
+// connection.
+function perItemCost(owner: RepeatOwner, trips: string): string {
+  const combinator = promiseCombinatorOf(owner);
+  return combinator
+    ? `and \`Promise.${combinator}\` starts every item at once, so the waits overlap but each item still costs ${trips} and a pooled connection, and the load grows with the list`
+    : `so the loop pays ${trips} for every item it handles`;
+}
+
+function check(node: CallExpression, context: PerformanceRuleContext): void {
+  const { checker } = context;
+  const callee = node.expression;
+  const loopCall = loopCallOf(node, checker);
+  if (!loopCall) return;
+  const { operations, complete, deep } = reachedOperations(node, loopCall.declaration, context);
+  if (!operations.length) return;
+  if (isReportedElsewhere(node, loopCall, operations, context)) return;
   const label = calleeLabel(node);
   const count = operations.length;
   const families = new Set(operations.map((operation) => operation.family));
-  // Operations on separate branches are listed together, so a complete count is an upper bound.
-  // Deeper project calls are not followed, so an incomplete count is a lower bound.
-  const amount = complete ? (count === 1 ? 'a' : `up to ${count}`) : `at least ${count === 1 ? 'one' : count}`;
-  const trips = `${amount} round ${count === 1 ? 'trip' : 'trips'}`;
+  const { amount, trips } = roundTrips(count, complete);
   const reachedVia = deep && operationPath(operations);
-  const combinator = promiseCombinatorOf(owner);
-  // Calls started together overlap in time, but each still costs its own round trips and a pooled
-  // connection.
-  const cost = combinator
-    ? `and \`Promise.${combinator}\` starts every item at once, so the waits overlap but each item still costs ${trips} and a pooled connection, and the load grows with the list`
-    : `so the loop pays ${trips} for every item it handles`;
+  const cost = perItemCost(loopCall.owner, trips);
   context.report(
     ts.isPropertyAccessExpression(callee) ? callee.name : callee,
     RULE_ID,
     `\`${label}()\` makes ${amount} ${operationNoun(families, count)} per item (${describe(operations)}${reachedVia ? `, reached through ${reachedVia}` : ''}), ${cost}. Add a batch variant that takes all ids (${batchAdvice(families)}) and call it once outside the loop. Keep per-item validation, error isolation, ordering and transaction needs.`,
-    perItemTransactionReason(node, owner, operations, checker) ?? (deep && DEEP_REASON),
+    perItemTransactionReason(node, loopCall.owner, operations, checker) ?? (deep && DEEP_REASON),
     {
       related: operations.slice(0, MAX_LISTED_OPERATIONS).map((operation) => ({
         file: relativeFile(operation.file),

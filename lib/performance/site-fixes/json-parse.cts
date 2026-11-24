@@ -1,7 +1,14 @@
 import { requireReview, ts, ancestor, textOf, indentationAt } from './helpers.cjs';
 import { declaresName } from './scope-names.cjs';
 import { isRequestHandler, parameterName } from '../request-handlers.cjs';
-import type { Node } from 'typescript';
+import type {
+  CallExpression,
+  Identifier,
+  Node,
+  SignatureDeclaration,
+  VariableDeclaration,
+  VariableStatement,
+} from 'typescript';
 import type { FixResult, SiteFixInput } from '../../shared/types.cjs';
 
 const BAD_REQUEST_STATUS = 400;
@@ -33,20 +40,41 @@ function returnsValue(handler: Node, body: Node): boolean {
   return found;
 }
 
-// `const value = JSON.parse(input)` directly in a request handler: a malformed body is the caller's
-// mistake, so the handler answers 400 where it would otherwise throw.
-function answerBadRequest({ node, text }: SiteFixInput): FixResult | undefined {
-  if (!node || text === undefined) return;
+// A `const value = JSON.parse(input)` declaration whose input is a plain read.
+interface ParsedDeclaration {
+  call: CallExpression;
+  declaration: VariableDeclaration;
+  name: Identifier;
+}
+
+// The handler around the statement and how it sends the 400 reply.
+interface HandlerReply {
+  handler: SignatureDeclaration;
+  handlerBody: Node;
+  responseName: string;
+  sendMethod: string;
+}
+
+function parsedDeclaration(node: Node): ParsedDeclaration | undefined {
   const call = ancestor(node, ts.isCallExpression);
   if (!call) return;
   const declaration = call.parent;
   if (!ts.isVariableDeclaration(declaration) || declaration.initializer !== call) return;
   if (!ts.isIdentifier(declaration.name) || call.arguments.length !== 1 || !isPlainInput(call.arguments[0])) return;
+  return { call, declaration, name: declaration.name };
+}
+
+// The sole-declaration, non-exported `const` statement that sits directly in a block.
+function blockConstStatement(declaration: VariableDeclaration): VariableStatement | undefined {
   const list = declaration.parent;
   if (!ts.isVariableDeclarationList(list)) return;
   const statement = list.parent;
   if (list.declarations.length !== 1 || !(list.flags & ts.NodeFlags.Const)) return;
   if (!ts.isVariableStatement(statement) || statement.modifiers || !ts.isBlock(statement.parent)) return;
+  return statement;
+}
+
+function handlerReply(statement: VariableStatement): HandlerReply | undefined {
   const handler = ts.findAncestor(statement.parent, ts.isFunctionLike);
   if (!handler || handler.type || !isRequestHandler(handler) || ts.isMethodDeclaration(handler)) return;
   const handlerBody = 'body' in handler ? handler.body : undefined;
@@ -54,16 +82,31 @@ function answerBadRequest({ node, text }: SiteFixInput): FixResult | undefined {
   if (!handlerBody || !responseName) return;
   const sendMethod = errorResponses[responseName];
   if (!sendMethod || declaresName(handlerBody, responseName)) return;
+  return { handler, handlerBody, responseName, sendMethod };
+}
+
+// `const value = JSON.parse(input)` directly in a request handler: a malformed body is the caller's
+// mistake, so the handler answers 400 where it would otherwise throw.
+function answerBadRequest({ node, text }: SiteFixInput): FixResult | undefined {
+  if (!node || text === undefined) return;
+  const parsed = parsedDeclaration(node);
+  if (!parsed) return;
+  const { call, declaration, name } = parsed;
+  const statement = blockConstStatement(declaration);
+  if (!statement) return;
+  const reply = handlerReply(statement);
+  if (!reply) return;
+  const { handler, handlerBody, responseName, sendMethod } = reply;
 
   const lineBreak = text.includes('\r\n') ? '\r\n' : '\n';
   const indentation = indentationAt(text, statement.getStart());
-  const reply = `${responseName}.status(${BAD_REQUEST_STATUS}).${sendMethod}({ error: '${INVALID_JSON_MESSAGE}' })`;
-  const exit = returnsValue(handler, handlerBody) ? [`return ${reply};`] : [`${reply};`, 'return;'];
+  const replyCall = `${responseName}.status(${BAD_REQUEST_STATUS}).${sendMethod}({ error: '${INVALID_JSON_MESSAGE}' })`;
+  const exit = returnsValue(handler, handlerBody) ? [`return ${replyCall};`] : [`${replyCall};`, 'return;'];
   const typeText = declaration.type ? `: ${textOf(declaration.type)}` : '';
   const lines = [
-    `let ${declaration.name.text}${typeText};`,
+    `let ${name.text}${typeText};`,
     'try {',
-    `  ${declaration.name.text} = ${textOf(call)};`,
+    `  ${name.text} = ${textOf(call)};`,
     '} catch {',
     ...exit.map((line) => `  ${line}`),
     '}',

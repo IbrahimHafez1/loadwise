@@ -1,5 +1,5 @@
 import ts from 'typescript';
-import type { Node, SourceFile } from 'typescript';
+import type { Expression, Node, SourceFile } from 'typescript';
 import type { FindingComparison } from './types/finding-comparison.cjs';
 
 const maximumComparisonLines = 17;
@@ -55,6 +55,22 @@ function nestingAdvice(branch: Node, source: SourceFile): string | undefined {
   return sectionAdvice(branch, source);
 }
 
+// Inverts a strict comparison in place, negates a bare identifier, and parenthesizes anything else.
+function negatedCondition(expression: Expression, condition: string, source: SourceFile): string {
+  if (ts.isIdentifier(expression)) return '!' + condition;
+  if (!ts.isBinaryExpression(expression)) return `!(${condition})`;
+  const { operatorToken } = expression;
+  const inverse =
+    operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken
+      ? '!=='
+      : operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken
+        ? '==='
+        : undefined;
+  if (!inverse) return `!(${condition})`;
+  const index = operatorToken.getStart(source) - expression.getStart(source);
+  return condition.slice(0, index) + inverse + condition.slice(index + inverse.length);
+}
+
 // Flip a nested branch only when the next statement is already an unconditional continue.
 // Its then-body moves out one scope; limit it to statements that introduce no block bindings.
 function loopGuardComparison(branch: Node, source: SourceFile): FindingComparison | undefined {
@@ -106,21 +122,7 @@ function loopGuardComparison(branch: Node, source: SourceFile): FindingCompariso
   if (!step || !elseLines.length || !thenLines.every((line: string) => !line || line.startsWith(step))) return;
   // Dedenting raw multiline literal text would change its value.
   if (lines.some((line: string) => /[\x60\\]/.test(line))) return;
-  let negation = `!(${condition})`;
-  if (ts.isIdentifier(outer.expression)) negation = '!' + condition;
-  else if (ts.isBinaryExpression(outer.expression)) {
-    const { operatorToken } = outer.expression;
-    const inverse =
-      operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken
-        ? '!=='
-        : operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken
-          ? '==='
-          : undefined;
-    if (inverse) {
-      const index = operatorToken.getStart(source) - outer.expression.getStart(source);
-      negation = condition.slice(0, index) + inverse + condition.slice(index + inverse.length);
-    }
-  }
+  const negation = negatedCondition(outer.expression, condition, source);
   return {
     line: first + 1,
     before: lines.join('\n'),

@@ -29,6 +29,19 @@
 // Database, Redis and queue calls are service-query-in-loop's (service-loops.cjs), HTTP calls http-call-without-timeout's,
 // blocking calls node-sync-*'s and password-hash-sync-in-async's, so a rule adopting this keeps its own findings.
 import { loadSyntax } from '../performance/compiler.cjs';
+import {
+  endOfBodySink,
+  fallsThrough,
+  forEachOwnNode,
+  functionLabel,
+  isBooleanLiteral,
+  isConst,
+  isLiteralValue,
+  isProjectFunction,
+  returnStatements,
+  valueLeaves,
+  whenTrueSink,
+} from './function-syntax.cjs';
 import { calleeName } from '../performance/call-syntax.cjs';
 import { location } from '../performance/schema/ts-helpers.cjs';
 import { runsWithBody, signatureDeclaration, summarize } from '../performance/service-loops.cjs';
@@ -40,19 +53,8 @@ import { libraryCall } from '../security/bindings.cjs';
 import { isContainedPath, isAllowedHost, isRelativeRedirect, strip } from '../security/request-forgery/shared.cjs';
 import { isGuardedByCondition, isGuardedUse } from '../security/taint/guards.cjs';
 import { parameterSource } from '../security/taint/sources.cjs';
-import { isProjectSource } from '../security/taint/summaries.cjs';
 import { isUrlConstructor } from '../security/taint/url-parts.cjs';
-import type {
-  Block,
-  CallExpression,
-  Expression,
-  Identifier,
-  Node,
-  ParameterDeclaration,
-  ReturnStatement,
-  Statement,
-  VariableDeclaration,
-} from 'typescript';
+import type { CallExpression, Expression, Identifier, Node, ParameterDeclaration, Statement } from 'typescript';
 import type {
   FileContext,
   LibraryCall,
@@ -77,9 +79,6 @@ import type {
 } from './types/function-summaries.cjs';
 const ts = loadSyntax();
 
-/** A `const` with an identifier name and an initializer. */
-type ConstDeclaration = VariableDeclaration & { name: Identifier; initializer: Expression };
-
 /** The rule context the recognisers get, with the library lookup they share. */
 type SummaryContext = RuleContext & { taint: TaintApi; libraryCall(call: CallExpression): LibraryCall | undefined };
 
@@ -90,6 +89,12 @@ const noFileContext: FileContext = {
   testSourceReason: undefined,
   underNonProductionGuard: () => false,
 };
+
+/** A function reached from the root, with the project functions between them. */
+interface FrontierEntry {
+  declaration: FunctionWithBody;
+  via: string[];
+}
 
 /**
  * What a function does by itself: its calls to databases, blocking calls, and the project functions
@@ -171,103 +176,6 @@ function functionSummaries(program: ProgramAdapter): FunctionSummaries {
   let summaries = summariesByProgram.get(program);
   if (!summaries) summariesByProgram.set(program, (summaries = createSummaries(program)));
   return summaries;
-}
-
-function isProjectFunction(declaration: Node | undefined): declaration is FunctionWithBody {
-  return (
-    !!declaration &&
-    ts.isFunctionLike(declaration) &&
-    'body' in declaration &&
-    !!declaration.body &&
-    isProjectSource(declaration.getSourceFile())
-  );
-}
-
-function functionLabel(fn: FunctionWithBody): string {
-  let name = 'name' in fn && fn.name && ts.isIdentifier(fn.name) ? fn.name.text : undefined;
-  if (!name && ts.isVariableDeclaration(fn.parent) && ts.isIdentifier(fn.parent.name)) name = fn.parent.name.text;
-  const owner = ts.isClassLike(fn.parent) && fn.parent.name ? `${fn.parent.name.text}.` : '';
-  return owner + (name ?? 'anonymous');
-}
-
-function isConst(declaration: Node): declaration is ConstDeclaration {
-  return (
-    ts.isVariableDeclaration(declaration) &&
-    !!(declaration.parent.flags & ts.NodeFlags.Const) &&
-    ts.isIdentifier(declaration.name) &&
-    !!declaration.initializer
-  );
-}
-
-// Visits `fn`'s own body, skipping nested functions.
-function forEachOwnNode(fn: FunctionWithBody, visit: (node: Node) => void): void {
-  (function walk(node: Node): void {
-    if (node !== fn && ts.isFunctionLike(node)) return;
-    visit(node);
-    ts.forEachChild(node, walk);
-  })(fn.body);
-}
-
-function returnStatements(fn: FunctionWithBody): ReturnStatement[] {
-  const returns: ReturnStatement[] = [];
-  forEachOwnNode(fn, (node: Node) => {
-    if (ts.isReturnStatement(node)) returns.push(node);
-  });
-  return returns;
-}
-
-function fallsThrough(body: Block): boolean {
-  const last = body.statements.at(-1);
-  return !last || !(ts.isReturnStatement(last) || ts.isThrowStatement(last));
-}
-
-// The values a returned expression can take: both branches of a conditional, without wrappers or
-// await.
-function valueLeaves(expression: Expression): Expression[] {
-  const value = strip(expression);
-  if (value && ts.isConditionalExpression(value))
-    return [...valueLeaves(value.whenTrue), ...valueLeaves(value.whenFalse)];
-  return value ? [value] : [];
-}
-
-function isLiteralValue(node: Node): boolean {
-  return (
-    ts.isStringLiteralLike(node) ||
-    ts.isNumericLiteral(node) ||
-    node.kind === ts.SyntaxKind.NullKeyword ||
-    (ts.isIdentifier(node) && node.text === 'undefined')
-  );
-}
-
-const isBooleanLiteral = (node: Node, value: boolean): boolean =>
-  node.kind === (value ? ts.SyntaxKind.TrueKeyword : ts.SyntaxKind.FalseKeyword);
-
-// Sink recognisers judge a use by the guards between it and the function start. The end of a body
-// and the true branch of a returned condition have no node of their own, so these stand-ins are
-// placed there.
-function endOfBodySink(fn: FunctionWithBody, body: Block): Statement {
-  const sink = ts.factory.createEmptyStatement();
-  const block = ts.factory.createBlock([...body.statements, sink]);
-  Object.assign(block, { parent: fn });
-  return standIn(sink, block, body.end);
-}
-
-function whenTrueSink(condition: Expression): Statement {
-  const sink = ts.factory.createEmptyStatement();
-  const branch = ts.factory.createIfStatement(condition, sink);
-  Object.assign(branch, { parent: condition });
-  return standIn(sink, branch, condition.end);
-}
-
-// A statement that exists only at `position`, so the recognisers can ask what guards that point.
-function standIn(statement: Statement, parent: Node, position: number): Statement {
-  return Object.assign(statement, {
-    parent,
-    pos: position,
-    end: position,
-    getStart: () => position,
-    getSourceFile: () => parent.parent.getSourceFile(),
-  });
 }
 
 function createSummaries(program: ProgramAdapter): FunctionSummaries {
@@ -421,24 +329,26 @@ function createSummaries(program: ProgramAdapter): FunctionSummaries {
     const blocking: Reached<BlockingFact>[] = [];
     const visited = new Set<FunctionWithBody>([root]);
     let complete = true;
-    let frontier: { declaration: FunctionWithBody; via: string[] }[] = [{ declaration: root, via: [] }];
-    for (let depth = 0; frontier.length > 0; depth++) {
-      const next: { declaration: FunctionWithBody; via: string[] }[] = [];
-      for (const { declaration, via } of frontier) {
-        const facts = ownFacts(declaration);
-        queries.push(...facts.queries.map((effect: QueryFact) => ({ ...effect, via })));
-        blocking.push(...facts.blocking.map((effect: BlockingFact) => ({ ...effect, via })));
-        for (const callee of facts.callees) {
-          if (visited.has(callee)) continue;
-          if (depth === MAX_CALL_DEPTH) {
-            if (doesWork(callee)) complete = false;
-            continue;
-          }
-          visited.add(callee);
-          next.push({ declaration: callee, via: [...via, functionLabel(callee)] });
+    // Records one function's own effects and returns the callees to follow from it next.
+    const expandEntry = ({ declaration, via }: FrontierEntry, depth: number): FrontierEntry[] => {
+      const facts = ownFacts(declaration);
+      queries.push(...facts.queries.map((effect: QueryFact) => ({ ...effect, via })));
+      blocking.push(...facts.blocking.map((effect: BlockingFact) => ({ ...effect, via })));
+      const next: FrontierEntry[] = [];
+      for (const callee of facts.callees) {
+        if (visited.has(callee)) continue;
+        if (depth === MAX_CALL_DEPTH) {
+          if (doesWork(callee)) complete = false;
+          continue;
         }
+        visited.add(callee);
+        next.push({ declaration: callee, via: [...via, functionLabel(callee)] });
       }
-      frontier = next;
+      return next;
+    };
+    let frontier: FrontierEntry[] = [{ declaration: root, via: [] }];
+    for (let depth = 0; frontier.length > 0; depth++) {
+      frontier = frontier.flatMap((entry) => expandEntry(entry, depth));
     }
     return { queries: distinctEffects(queries), blocking: distinctEffects(blocking), complete };
   }

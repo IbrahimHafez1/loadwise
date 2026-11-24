@@ -14,7 +14,7 @@ import type {
   SourceFile,
   VariableStatement,
 } from 'typescript';
-import type { FixResult, SiteFixInput, TextEdit } from '../../shared/types.cjs';
+import type { Finding, FixResult, SiteFixInput, TextEdit } from '../../shared/types.cjs';
 
 /** A `@relation(...)` attribute of a Prisma schema field. */
 interface RelationAttribute {
@@ -333,36 +333,100 @@ function batchRowsBinding({ expression, array, outer }: BatchElement): BatchRows
   return { name: element.name, statement, keyword: list.flags & ts.NodeFlags.Const ? 'const' : 'let' };
 }
 
-function relationCountFix({ finding, node, sourceFile, text }: SiteFixInput): FixResult | undefined {
-  if (!node || !sourceFile || text === undefined) return;
+/** The paged `findMany` call that carries a `_count`, with its model and the client it runs on. */
+interface PagedCall {
+  modelName: string;
+  call: CallExpression;
+  client: string;
+}
+
+/** The `_count` selection inside the projection of a `findMany` call. */
+interface CountProjection {
+  projectionKey: string;
+  projection: ObjectLiteralExpression;
+  countProperty: ObjectLiteralElementLike;
+  countedValue: ObjectLiteralExpression;
+}
+
+/** The counted relations and the single column of the page rows they are grouped by. */
+interface CountedRelations {
+  relations: RelationCount[];
+  reference: string;
+}
+
+/**
+ * The edits that stop selecting the counts inside the page, and the note about extra selected
+ * fields.
+ */
+interface CountRemoval {
+  edits: TextEdit[];
+  added: string;
+}
+
+/** Everything that turns the page read and its counts into the final fix. */
+interface CountRewriteInput extends ThenClauseInput {
+  edits: TextEdit[];
+  added: string;
+  batchRows: BatchRows | undefined;
+}
+
+function pagedCallOf(finding: Finding, node: Node): PagedCall | undefined {
   const modelName = /Paged (\w+)\.findMany/.exec(finding.message)?.[1];
   const call = calleeCall(node);
   if (!modelName || !call || call.arguments.length !== 1) return;
+  const delegate = call.expression;
+  if (!ts.isPropertyAccessExpression(delegate) || !ts.isPropertyAccessExpression(delegate.expression)) return;
+  return { modelName, call, client: textOf(delegate.expression.expression) };
+}
+
+// `undefined` when the call sits in a batch that cannot be rewritten; otherwise the rows binding of
+// the batch, if the call is in one.
+function batchRowsOf(call: CallExpression): { batchRows: BatchRows | undefined } | undefined {
   const batch = batchTransactionElement(call);
   const batchRows = batch && batchRowsBinding(batch);
   if (batch && !batchRows) return;
-  const delegate = call.expression;
-  if (!ts.isPropertyAccessExpression(delegate) || !ts.isPropertyAccessExpression(delegate.expression)) return;
-  const client = textOf(delegate.expression.expression);
-  const options = ts.skipOuterExpressions(call.arguments[0]);
-  if (!ts.isObjectLiteralExpression(options)) return;
-  const projectionKey = ['select', 'include'].find((key) => {
+  return { batchRows };
+}
+
+function projectionKeyOf(options: ObjectLiteralExpression): string | undefined {
+  return ['select', 'include'].find((key) => {
     const property = optionProperty(options, key);
     const value = property && propertyValue(property);
     return value && ts.isObjectLiteralExpression(value) && optionProperty(value, '_count');
   });
-  if (!projectionKey) return;
-  const projectionProperty = optionProperty(options, projectionKey);
-  const projection = projectionProperty && propertyValue(projectionProperty);
-  if (!projection || !ts.isObjectLiteralExpression(projection)) return;
-  const countProperty = optionProperty(projection, '_count');
-  if (!countProperty) return;
+}
+
+// The `select` object of a `_count: { select: { ... } }` property that counts exactly one object.
+function countedSelection(countProperty: ObjectLiteralElementLike): ObjectLiteralExpression | undefined {
   const countValue = propertyValue(countProperty);
   const counted =
     countValue && ts.isObjectLiteralExpression(countValue) ? optionProperty(countValue, 'select') : undefined;
   const countedValue = counted && propertyValue(counted);
   if (!countValue || !ts.isObjectLiteralExpression(countValue) || !countedValue) return;
   if (!ts.isObjectLiteralExpression(countedValue) || countValue.properties.length !== 1) return;
+  return countedValue;
+}
+
+function countProjection(call: CallExpression): CountProjection | undefined {
+  const options = ts.skipOuterExpressions(call.arguments[0]);
+  if (!ts.isObjectLiteralExpression(options)) return;
+  const projectionKey = projectionKeyOf(options);
+  if (!projectionKey) return;
+  const projectionProperty = optionProperty(options, projectionKey);
+  const projection = projectionProperty && propertyValue(projectionProperty);
+  if (!projection || !ts.isObjectLiteralExpression(projection)) return;
+  const countProperty = optionProperty(projection, '_count');
+  if (!countProperty) return;
+  const countedValue = countedSelection(countProperty);
+  if (!countedValue) return;
+  return { projectionKey, projection, countProperty, countedValue };
+}
+
+function countedRelations(
+  countedValue: ObjectLiteralExpression,
+  sourceFile: SourceFile,
+  modelName: string,
+): CountedRelations | undefined {
   const models = parseModels(schemaText(sourceFile.fileName));
   const relations: RelationCount[] = [];
   for (const property of countedValue.properties) {
@@ -376,6 +440,15 @@ function relationCountFix({ finding, node, sourceFile, text }: SiteFixInput): Fi
   }
   const reference = relations[0].reference;
   if (relations.some((relation) => relation.reference !== reference)) return;
+  return { relations, reference };
+}
+
+function countRemoval(
+  { projectionKey, projection, countProperty }: CountProjection,
+  reference: string,
+  sourceFile: SourceFile,
+  text: string,
+): CountRemoval {
   const edits: TextEdit[] = [removeProperty(countProperty, text)];
   const selectsReference = projectionKey === 'include' || optionProperty(projection, reference);
   if (!selectsReference) {
@@ -383,6 +456,20 @@ function relationCountFix({ finding, node, sourceFile, text }: SiteFixInput): Fi
     edits.push({ start: opening, end: opening, text: ` ${reference}: true,` });
   }
   const added = selectsReference ? '' : ` It also selects \`${reference}\`, which the rows did not carry before.`;
+  return { edits, added };
+}
+
+function countRewrite({
+  sourceFile,
+  text,
+  call,
+  client,
+  relations,
+  reference,
+  edits,
+  added,
+  batchRows,
+}: CountRewriteInput): FixResult | undefined {
   if (batchRows) {
     const merged = batchMerge(sourceFile, text, batchRows, { client, relations, reference });
     if (!merged) return;
@@ -398,6 +485,32 @@ function relationCountFix({ finding, node, sourceFile, text }: SiteFixInput): Fi
     edits,
     note: `The page is read first and the counts come from one groupBy per relation over the page's ids, so they are read in a separate query (inside an interactive transaction keep using its client). Rows keep the \`_count\` shape.${added}`,
   };
+}
+
+function relationCountFix({ finding, node, sourceFile, text }: SiteFixInput): FixResult | undefined {
+  if (!node || !sourceFile || text === undefined) return;
+  const paged = pagedCallOf(finding, node);
+  if (!paged) return;
+  const { modelName, call, client } = paged;
+  const batch = batchRowsOf(call);
+  if (!batch) return;
+  const projection = countProjection(call);
+  if (!projection) return;
+  const counted = countedRelations(projection.countedValue, sourceFile, modelName);
+  if (!counted) return;
+  const { relations, reference } = counted;
+  const { edits, added } = countRemoval(projection, reference, sourceFile, text);
+  return countRewrite({
+    sourceFile,
+    text,
+    call,
+    client,
+    relations,
+    reference,
+    edits,
+    added,
+    batchRows: batch.batchRows,
+  });
 }
 
 // The batch binds the page under a fresh name; the lines below the statement count and rebuild the

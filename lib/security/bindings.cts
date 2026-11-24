@@ -5,17 +5,23 @@
 import { loadSyntax, isDefaultLibrary } from '../performance/compiler.cjs';
 import { declaredNameOf } from './declarations.cjs';
 import type {
+  BindingElement,
   CallExpression,
   EntityName,
   Expression,
+  ImportClause,
+  ImportEqualsDeclaration,
+  ImportSpecifier,
   MemberName,
   ModuleDeclaration,
+  NamespaceImport,
   NewExpression,
   Node,
   NodeArray,
   StringLiteral,
   StringLiteralLike,
   TypeNode,
+  VariableDeclaration,
 } from 'typescript';
 import type { CheckerAdapter, LibraryCall, ModuleBinding, RuleContext, SignatureAdapter } from '../shared/types.cjs';
 const ts = loadSyntax();
@@ -78,41 +84,51 @@ function isRequireCall(node: Node | undefined): node is RequireCall {
   );
 }
 
+function importBinding(declaration: ImportSpecifier | ImportClause | NamespaceImport): ModuleBinding | undefined {
+  const statement = ts.findAncestor(declaration, ts.isImportDeclaration);
+  if (!statement || !ts.isStringLiteral(statement.moduleSpecifier)) return;
+  const exported = ts.isImportSpecifier(declaration)
+    ? (declaration.propertyName ?? declaration.name).text
+    : ts.isImportClause(declaration)
+      ? 'default'
+      : '*';
+  return { module: moduleName(statement.moduleSpecifier.text), exported };
+}
+
+function importEqualsBinding(declaration: ImportEqualsDeclaration): ModuleBinding | undefined {
+  const reference = declaration.moduleReference;
+  if (!ts.isExternalModuleReference(reference) || !ts.isStringLiteral(reference.expression)) return;
+  return { module: moduleName(reference.expression.text), exported: '*' };
+}
+
+function requiredModuleBinding(declaration: VariableDeclaration): ModuleBinding | undefined {
+  const requiredInitializer = stripExpression(declaration.initializer);
+  if (!isRequireCall(requiredInitializer)) return;
+  if (!ts.isIdentifier(declaration.name)) return;
+  return { module: moduleName(requiredInitializer.arguments[0].text), exported: '*' };
+}
+
+function destructuredRequireBinding(declaration: BindingElement): ModuleBinding | undefined {
+  const variable = declaration.parent.parent;
+  if (!ts.isVariableDeclaration(variable)) return;
+  const initializer = stripExpression(variable.initializer);
+  if (!isRequireCall(initializer)) return;
+  const property = declaration.propertyName ?? declaration.name;
+  if (!ts.isIdentifier(property)) return;
+  return { module: moduleName(initializer.arguments[0].text), exported: property.text };
+}
+
 // The module export an import or require binding stands for: { module, exported }, where exported
 // is a named export, 'default', or '*' for a namespace or a whole required module.
 function bindingOf(declaration: Node | undefined): ModuleBinding | undefined {
   if (!declaration) return;
-  if (ts.isImportSpecifier(declaration) || ts.isImportClause(declaration) || ts.isNamespaceImport(declaration)) {
-    const statement = ts.findAncestor(declaration, ts.isImportDeclaration);
-    if (!statement || !ts.isStringLiteral(statement.moduleSpecifier)) return;
-    const exported = ts.isImportSpecifier(declaration)
-      ? (declaration.propertyName ?? declaration.name).text
-      : ts.isImportClause(declaration)
-        ? 'default'
-        : '*';
-    return { module: moduleName(statement.moduleSpecifier.text), exported };
-  }
-  if (ts.isImportEqualsDeclaration(declaration)) {
-    const reference = declaration.moduleReference;
-    if (!ts.isExternalModuleReference(reference) || !ts.isStringLiteral(reference.expression)) return;
-    return { module: moduleName(reference.expression.text), exported: '*' };
-  }
-  const requiredInitializer = ts.isVariableDeclaration(declaration)
-    ? stripExpression(declaration.initializer)
-    : undefined;
-  if (ts.isVariableDeclaration(declaration) && isRequireCall(requiredInitializer)) {
-    if (!ts.isIdentifier(declaration.name)) return;
-    return { module: moduleName(requiredInitializer.arguments[0].text), exported: '*' };
-  }
-  if (ts.isBindingElement(declaration) && ts.isObjectBindingPattern(declaration.parent)) {
-    const variable = declaration.parent.parent;
-    if (!ts.isVariableDeclaration(variable)) return;
-    const initializer = stripExpression(variable.initializer);
-    if (!isRequireCall(initializer)) return;
-    const property = declaration.propertyName ?? declaration.name;
-    if (!ts.isIdentifier(property)) return;
-    return { module: moduleName(initializer.arguments[0].text), exported: property.text };
-  }
+  if (ts.isImportSpecifier(declaration) || ts.isImportClause(declaration) || ts.isNamespaceImport(declaration))
+    return importBinding(declaration);
+  if (ts.isImportEqualsDeclaration(declaration)) return importEqualsBinding(declaration);
+  if (ts.isVariableDeclaration(declaration) && isRequireCall(stripExpression(declaration.initializer)))
+    return requiredModuleBinding(declaration);
+  if (ts.isBindingElement(declaration) && ts.isObjectBindingPattern(declaration.parent))
+    return destructuredRequireBinding(declaration);
 }
 
 function declarationOf(identifier: Node, checker: CheckerAdapter): Node | undefined {

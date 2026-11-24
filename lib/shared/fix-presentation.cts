@@ -1,3 +1,4 @@
+// loadwise-reviewed large-module -- one pipeline: the why-comment, row-ownership, Prettier and style-matching stages all share the RowSegment/Owner bookkeeping, and this file is also the child-process entry (require.main) that must load Prettier and TypeScript lazily, so a split would scatter that single formatting flow
 // @ts-check
 // How an applied fix reads in the project: a one-line comment above the fixed statement says why it changed, and the
 // project's own Prettier reformats only the changed lines. Prettier's API is asynchronous while the fix paths are
@@ -562,18 +563,19 @@ function replaceRows(
   const after: RowSegment[] = [];
   let row = 0;
   const side = (start: number, end: number) => (end <= coverStart ? before : start >= coverEnd ? after : covered);
+  const splitAtRegionEdges = (segmentStart: number, segmentEnd: number): void => {
+    let from = segmentStart;
+    for (const cut of [coverStart, coverEnd, segmentEnd].filter((cut) => cut > segmentStart && cut <= segmentEnd)) {
+      if (cut <= from) continue;
+      side(from, cut).push({ length: cut - from, originalLength: cut - from });
+      from = cut;
+    }
+  };
   for (const segment of segments) {
     const segmentEnd = row + segment.length;
     // Rows a change wrote stay whole; unchanged rows split at the region's edges.
     if (segment.owners) side(row, segmentEnd).push(segment);
-    else {
-      let from = row;
-      for (const cut of [coverStart, coverEnd, segmentEnd].filter((cut) => cut > row && cut <= segmentEnd)) {
-        if (cut <= from) continue;
-        side(from, cut).push({ length: cut - from, originalLength: cut - from });
-        from = cut;
-      }
-    }
+    else splitAtRegionEdges(row, segmentEnd);
     row = segmentEnd;
   }
   if (!covered.length) return [...segments];

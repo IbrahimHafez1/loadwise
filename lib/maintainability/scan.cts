@@ -19,7 +19,7 @@ import type { ModuleEdge } from './types/module-graph.cjs';
 import type { ModuleUsage } from './types/module-usage.cjs';
 import type { MaintainabilityPolicy } from './types/policy.cjs';
 import type { PolyglotAnalysis } from './types/polyglot-scan.cjs';
-import type { ScanOptions, SourceCoverage, SourceScan } from './types/scan-report.cjs';
+import type { ScanOptions, SourceCoverage, SourceCoverageInput, SourceScan } from './types/scan-report.cjs';
 import type { BatchReply, BatchRequest, ScanWorkerData } from './types/scan-worker.cjs';
 import type { AnalysisOptions, SourceAnalysis } from './types/source-analysis.cjs';
 import type { SourceFacts } from './types/source-facts.cjs';
@@ -111,14 +111,14 @@ function isOtherSource(file: string): boolean {
   return Object.hasOwn(nonJsLanguages, path.extname(file).toLowerCase());
 }
 
-function sourceCoverage(
-  inventory: readonly string[],
-  jsFiles: readonly string[],
-  otherSources: readonly string[],
-  edges: readonly ModuleEdge[],
-  placementRuleCount: number,
-  inScope?: (file: string) => boolean,
-): SourceCoverage {
+function sourceCoverage({
+  inventory,
+  jsFiles,
+  otherSources,
+  edges,
+  placementRuleCount,
+  inScope,
+}: SourceCoverageInput): SourceCoverage {
   const discoveredFiles = inScope ? inventory.filter(inScope).length : inventory.length;
   const scripts = inScope ? jsFiles.filter(inScope) : jsFiles;
   const other = inScope ? otherSources.filter(inScope) : otherSources;
@@ -259,7 +259,14 @@ async function scan(
   attachContextualReasons(findings, snapshots, generated);
   return {
     mode: 'source',
-    ...sourceCoverage(inventory, jsFiles, otherSources, edges, policy.placement.length, inScope),
+    ...sourceCoverage({
+      inventory,
+      jsFiles,
+      otherSources,
+      edges,
+      placementRuleCount: policy.placement.length,
+      inScope,
+    }),
     findings,
     ...(skippedFiles.length && { skippedFiles }),
     ...(ignoredAllSources && { ignoredAllSources }),

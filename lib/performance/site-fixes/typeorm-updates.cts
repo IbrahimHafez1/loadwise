@@ -269,6 +269,7 @@ function liveRowsWhere(
   return { text: `{ ${inner}, ${column}: ${isNullName}() }`, edits, column };
 }
 
+// loadwise-reviewed high-branch-complexity -- a linear chain of independent safety bail-outs (shape, guards, orFail, comments) before one load-then-save rewrite; splitting scatters the proof from the edit
 function loadThenSaveFix({ node, text, sourceFile, load }: SiteFixInput): FixResult | undefined {
   if (!node || text === undefined || !sourceFile) return;
   const call = calleeCall(node);

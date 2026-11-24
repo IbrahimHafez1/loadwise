@@ -72,6 +72,48 @@ function readLines(root: string, filename: string, cache: LineCache): string[] |
   return lines;
 }
 
+function hasReportableIdentity(finding: Finding): finding is Finding & { file: string; message: string } {
+  if (!finding || typeof finding.file !== 'string' || invalidFilename.test(finding.file)) return false;
+  return (
+    typeof finding.ruleId === 'string' && /^[a-z0-9-]+$/.test(finding.ruleId) && typeof finding.message === 'string'
+  );
+}
+
+function findingPosition(finding: Finding): { line: number; column: number } | undefined {
+  const { line, column } = finding;
+  if (typeof line !== 'number' || !Number.isSafeInteger(line) || line < 1) return;
+  if (typeof column !== 'number' || !Number.isSafeInteger(column) || column < 1) return;
+  return { line, column };
+}
+
+function codeLines(label: string, code: string): string[] {
+  return [label, ...code.split(/\r\n?|\n/).map((codeLine) => codeLine.replaceAll(controlCharacters, ' '))];
+}
+
+function messageParts(
+  finding: Finding,
+  message: string,
+  example: ReturnType<typeof sourceExample>,
+  comparison: ReturnType<typeof getFindingComparison>,
+): string[] {
+  const parts = [message];
+  const preview = inlineComparison(comparison);
+  if (preview) parts.unshift(preview);
+  if (finding.contextualReason) parts.push(String(finding.contextualReason).replaceAll(controlCharacters, ' '));
+  const hotPath = hotPathLabel(finding);
+  if (hotPath) parts.push('Hot path: ' + hotPath);
+  if (comparison) {
+    const paired = comparison.kind === 'source';
+    parts.push(...codeLines(paired ? 'Current code:' : 'Flagged line:', comparison.before));
+    if (comparison.kind === 'review') {
+      if (preview !== 'Review: ' + comparison.inline) parts.push(comparison.inline);
+    } else parts.push(...codeLines(paired ? 'Suggested rewrite:' : 'Illustrative alternative:', comparison.after));
+  } else if (example) parts.push(...codeLines('Illustrative alternative:', example.code));
+  const note = comparison ? comparison.note : example?.note;
+  if (note) parts.push(note.replaceAll(controlCharacters, ' '));
+  return parts;
+}
+
 function formatFinding(
   root: string,
   source: string,
@@ -79,19 +121,10 @@ function formatFinding(
   fileCache: LineCache = new Map(),
 ): string | undefined {
   if (source !== 'loadwise perf' && source !== 'loadwise maint') return;
-  if (!finding || typeof finding.file !== 'string' || invalidFilename.test(finding.file)) return;
-  if (typeof finding.ruleId !== 'string' || !/^[a-z0-9-]+$/.test(finding.ruleId) || typeof finding.message !== 'string')
-    return;
-  const { line, column } = finding;
-  if (
-    typeof line !== 'number' ||
-    !Number.isSafeInteger(line) ||
-    line < 1 ||
-    typeof column !== 'number' ||
-    !Number.isSafeInteger(column) ||
-    column < 1
-  )
-    return;
+  if (!hasReportableIdentity(finding)) return;
+  const position = findingPosition(finding);
+  if (!position) return;
+  const { line, column } = position;
   const filename = path.resolve(root, finding.file);
   if (!inside(root, filename)) return;
   const lines = readLines(root, filename, fileCache);
@@ -123,24 +156,7 @@ function formatFinding(
   const lookup = source === 'loadwise perf' ? sourceExample : maintainabilityExample;
   const example = lookup(finding.ruleId, languageId, message);
   const comparison = getFindingComparison(document, diagnostic, example);
-  const parts = [message];
-  const preview = inlineComparison(comparison);
-  if (preview) parts.unshift(preview);
-  if (finding.contextualReason) parts.push(String(finding.contextualReason).replaceAll(controlCharacters, ' '));
-  const hotPath = hotPathLabel(finding);
-  if (hotPath) parts.push('Hot path: ' + hotPath);
-  function appendCode(label: string, code: string) {
-    parts.push(label, ...code.split(/\r\n?|\n/).map((codeLine) => codeLine.replaceAll(controlCharacters, ' ')));
-  }
-  if (comparison) {
-    const paired = comparison.kind === 'source';
-    appendCode(paired ? 'Current code:' : 'Flagged line:', comparison.before);
-    if (comparison.kind === 'review') {
-      if (preview !== 'Review: ' + comparison.inline) parts.push(comparison.inline);
-    } else appendCode(paired ? 'Suggested rewrite:' : 'Illustrative alternative:', comparison.after);
-  } else if (example) appendCode('Illustrative alternative:', example.code);
-  const note = comparison ? comparison.note : example?.note;
-  if (note) parts.push(note.replaceAll(controlCharacters, ' '));
+  const parts = messageParts(finding, message, example, comparison);
   const tokenLength = /^[\p{L}\p{N}_$]+/u.exec(text.slice(offset))?.[0].length ?? 1;
   return [
     'BACKEND_CHECKER',

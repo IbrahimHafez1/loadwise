@@ -1,6 +1,6 @@
 import { loadSyntax } from './compiler.cjs';
 import { isStandardArrayCall } from './repeated.cjs';
-import type { CallExpression, Expression, Node } from 'typescript';
+import type { CallExpression, ClassDeclaration, Expression, Node } from 'typescript';
 import type { CheckerAdapter, PerformanceRuleContext } from '../shared/types.cjs';
 const ts = loadSyntax();
 
@@ -17,6 +17,11 @@ interface EntityColumns {
   columns: Set<string>;
   wide: Set<string>;
   primary: Set<string>;
+}
+
+/** The columns collected so far plus every property name already seen across the class chain. */
+interface ColumnCollection extends EntityColumns {
+  properties: Set<string>;
 }
 
 /** The entity a row mapper reads and the column names it keeps. */
@@ -99,6 +104,50 @@ function columnInfo(call: CallExpression): ColumnInfo | undefined {
   return { selected, wide: type !== undefined && wideTypes.has(type) };
 }
 
+/**
+ * Reads the class decorators; `undefined` when one is not schema metadata, else whether `@Entity`
+ * is present.
+ */
+function hasEntityDecorator(entity: ClassDeclaration, checker: CheckerAdapter): boolean | undefined {
+  let found = false;
+  for (const modifier of entity.modifiers ?? []) {
+    if (!ts.isDecorator(modifier)) continue;
+    const name = ts.isCallExpression(modifier.expression) ? decoratorName(modifier.expression, checker) : undefined;
+    if (name === undefined || !schemaMetadata.has(name)) return;
+    if (name === 'Entity') found = true;
+  }
+  return found;
+}
+
+/**
+ * Collects the column decorators of one class; `false` when a member is not a plain column
+ * property.
+ */
+function collectMemberColumns(
+  entity: ClassDeclaration,
+  checker: CheckerAdapter,
+  collection: ColumnCollection,
+): boolean {
+  const { columns, wide, primary, properties } = collection;
+  for (const member of entity.members) {
+    if (!ts.isPropertyDeclaration(member) || !ts.isIdentifier(member.name) || properties.has(member.name.text))
+      return false;
+    properties.add(member.name.text);
+    for (const modifier of member.modifiers ?? []) {
+      if (!ts.isDecorator(modifier)) continue;
+      if (!ts.isCallExpression(modifier.expression)) return false;
+      const name = decoratorName(modifier.expression, checker);
+      if (name === 'Index') continue;
+      if (name === undefined || !columnKinds.has(name) || columns.has(member.name.text)) return false;
+      const info = columnInfo(modifier.expression);
+      if (!info) return false;
+      collectSelectedColumn(info, columns, member.name.text, wide);
+      if (name === 'PrimaryColumn' || name === 'PrimaryGeneratedColumn') primary.add(member.name.text);
+    }
+  }
+  return true;
+}
+
 function entityColumns(entity: Node | undefined, checker: CheckerAdapter): EntityColumns | undefined {
   const columns = new Set<string>();
   const wide = new Set<string>();
@@ -109,28 +158,10 @@ function entityColumns(entity: Node | undefined, checker: CheckerAdapter): Entit
   while (entity && !visited.has(entity)) {
     if (!ts.isClassDeclaration(entity) || entity.getSourceFile().isDeclarationFile) return;
     visited.add(entity);
-    for (const modifier of entity.modifiers ?? []) {
-      if (!ts.isDecorator(modifier)) continue;
-      const name = ts.isCallExpression(modifier.expression) ? decoratorName(modifier.expression, checker) : undefined;
-      if (name === undefined || !schemaMetadata.has(name)) return;
-      if (name === 'Entity' && visited.size === 1) isEntity = true;
-    }
-    for (const member of entity.members) {
-      if (!ts.isPropertyDeclaration(member) || !ts.isIdentifier(member.name) || properties.has(member.name.text))
-        return;
-      properties.add(member.name.text);
-      for (const modifier of member.modifiers ?? []) {
-        if (!ts.isDecorator(modifier)) continue;
-        if (!ts.isCallExpression(modifier.expression)) return;
-        const name = decoratorName(modifier.expression, checker);
-        if (name === 'Index') continue;
-        if (name === undefined || !columnKinds.has(name) || columns.has(member.name.text)) return;
-        const info = columnInfo(modifier.expression);
-        if (!info) return;
-        collectSelectedColumn(info, columns, member.name.text, wide);
-        if (name === 'PrimaryColumn' || name === 'PrimaryGeneratedColumn') primary.add(member.name.text);
-      }
-    }
+    const declaresEntity = hasEntityDecorator(entity, checker);
+    if (declaresEntity === undefined) return;
+    if (declaresEntity && visited.size === 1) isEntity = true;
+    if (!collectMemberColumns(entity, checker, { columns, wide, primary, properties })) return;
     const inherited = entity.heritageClauses?.find((clause) => clause.token === ts.SyntaxKind.ExtendsKeyword);
     if (!inherited) return isEntity ? { columns, wide, primary } : undefined;
     const base = inherited.types[0];

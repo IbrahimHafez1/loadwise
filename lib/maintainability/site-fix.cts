@@ -117,14 +117,9 @@ function originalLineLimit(result: ModuleCreatingFix, edits: readonly JumpRemovi
   return maxHunkLines + (edits.some((edit) => edit.removesTrailingJump) ? 1 : 0);
 }
 
-// `comments: false` leaves out the why-comment above the fixed statement.
-function buildFix(
-  finding: Finding,
-  load: ProjectLoad,
-  { comments = true }: SiteFixOptions = {},
-): FindingFix | undefined {
-  const build = buildersByRule().get(finding.ruleId);
-  if (!build || typeof finding.file !== 'string') return;
+// The loaded file and syntax node a builder works on, found from the finding's line and column.
+function builderInputFor(finding: Finding, load: ProjectLoad): (BuilderInput & { entry: LoadedFile }) | undefined {
+  if (typeof finding.file !== 'string') return;
   const entry = load(finding.file);
   const { line, column } = finding;
   if (
@@ -137,13 +132,35 @@ function buildFix(
   const offset = entry.lineStarts[line - 1] + column - 1;
   const node = nodeAtPosition(entry, offset);
   if (!node) return;
-  const input: BuilderInput = { finding, node, offset, sourceFile: entry.sourceFile, text: entry.text, load };
-  const result: ModuleCreatingFix | undefined = build(input);
-  if (!result) return;
+  return { finding, node, offset, sourceFile: entry.sourceFile, text: entry.text, load, entry };
+}
+
+// What the builder's result needs to become reviewable hunks.
+interface ChangeCollection {
+  readonly finding: Finding;
+  readonly file: string;
+  readonly load: ProjectLoad;
+  readonly result: ModuleCreatingFix;
+  readonly comments: boolean;
+  readonly entry: LoadedFile;
+  readonly offset: number;
+}
+
+// The hunks of every file the fix touches, or undefined when any edit is invalid or too long to
+// show.
+function collectChanges({
+  finding,
+  file,
+  load,
+  result,
+  comments,
+  entry,
+  offset,
+}: ChangeCollection): { changes: FixChange[]; commentRow: number | undefined } | undefined {
   let commentRow: number | undefined;
   const changes: FixChange[] = [];
-  for (const target of result.targets ?? [{ file: finding.file, edits: result.edits }]) {
-    const targetEntry = target.file === finding.file ? entry : load(target.file);
+  for (const target of result.targets ?? [{ file, edits: result.edits }]) {
+    const targetEntry = target.file === file ? entry : load(target.file);
     if (!targetEntry || !validFix(targetEntry, target.edits)) return;
     const maxBeforeLines = originalLineLimit(result, target.edits ?? []);
     const { edits, comment, row } =
@@ -163,6 +180,32 @@ function buildFix(
       changes.push({ ...hunk, before: normalize(hunk.before), after: normalize(hunk.after) });
     }
   }
+  return { changes, commentRow };
+}
+
+// `comments: false` leaves out the why-comment above the fixed statement.
+function buildFix(
+  finding: Finding,
+  load: ProjectLoad,
+  { comments = true }: SiteFixOptions = {},
+): FindingFix | undefined {
+  const build = buildersByRule().get(finding.ruleId);
+  if (!build || typeof finding.file !== 'string') return;
+  const input = builderInputFor(finding, load);
+  if (!input) return;
+  const result: ModuleCreatingFix | undefined = build(input);
+  if (!result) return;
+  const collected = collectChanges({
+    finding,
+    file: finding.file,
+    load,
+    result,
+    comments,
+    entry: input.entry,
+    offset: input.offset,
+  });
+  if (!collected) return;
+  const { changes, commentRow } = collected;
   if (!changes.length || changes.every((change) => change.before === change.after)) return;
   if (result.createdModule) {
     const { file, text } = result.createdModule;

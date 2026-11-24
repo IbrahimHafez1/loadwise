@@ -34,6 +34,7 @@ import type {
 } from 'typescript';
 import type { Finding, ProgramAdapter, ScanResult, SkippedFile } from '../shared/types.cjs';
 import type { PerformancePolicy } from './types/performance-policy.cjs';
+import type { ProgramScanOptions } from './types/program-scan.cjs';
 import type { SourceAnalyzer } from './types/source-analyzer.cjs';
 import { noteUnscannedJavaScript } from './unscanned-javascript.cjs';
 
@@ -238,16 +239,60 @@ function uninstalledBaseConfigs(parsed: ParsedCommandLine): Diagnostic[] {
 // the report.
 const performanceAnalyzers: SourceAnalyzer[] = [{ pillar: 'performance', analyzeFile }];
 
-function analyzeProgram(
-  program: Program,
-  inputs: readonly string[] = program.getRootFileNames(),
+interface AnalyzerRun {
+  readonly program: Program;
+  readonly source: SourceFile;
+  readonly file: string;
+  readonly policy?: PerformancePolicy;
+  readonly forEachSourceCandidate?: ProgramAdapter['forEachSourceCandidate'];
+  readonly skippedFiles?: SkippedFile[];
+  readonly analyzers: SourceAnalyzer[];
+}
+
+function runAnalyzers({
+  program,
+  source,
+  file,
+  policy,
+  forEachSourceCandidate,
+  skippedFiles,
+  analyzers,
+}: AnalyzerRun): Finding[] {
+  const findings: Finding[] = [];
+  for (const analyzer of analyzers) {
+    // One failing analyzer must not hide the findings of the other files or analyzers.
+    let analyzerFindings: Finding[];
+    try {
+      analyzerFindings = analyzer.analyzeFile(program, source, policy, forEachSourceCandidate);
+    } catch (error) {
+      if (!skippedFiles) throw error;
+      const failure = error instanceof Error ? error.message : String(error);
+      recordSkippedFile(
+        skippedFiles,
+        { file, reason: failure },
+        `The ${analyzer.pillar} analysis of ${file} failed (${failure}). Skipped that file for that analyzer.`,
+      );
+      continue;
+    }
+    for (const finding of analyzerFindings) {
+      finding.file = relativeToWorkingDirectory(finding.file ?? source.fileName);
+      if (analyzers.length > 1) finding.pillar = analyzer.pillar;
+      findings.push(finding);
+    }
+  }
+  return findings;
+}
+
+function analyzeProgram({
+  program,
+  inputs = program.getRootFileNames(),
   scanned = new Set<string>(),
-  policy?: PerformancePolicy,
-  forEachSourceCandidate?: ProgramAdapter['forEachSourceCandidate'],
+  policy,
+  forEachSourceCandidate,
   unresolvedPackages = new Set<string>(),
-  analyzers: SourceAnalyzer[] = performanceAnalyzers,
-  skippedFiles?: SkippedFile[],
-): ScanResult {
+  analyzers = performanceAnalyzers,
+  skippedFiles,
+}: ProgramScanOptions): ScanResult {
   const optionErrors = program.getOptionsDiagnostics();
   const missingLibraries = optionErrors.filter((diagnostic) => diagnostic.code === missingTypeLibraryCode);
   const fatalErrors = optionErrors.filter((diagnostic) => diagnostic.code !== missingTypeLibraryCode);
@@ -270,27 +315,7 @@ function analyzeProgram(
       continue;
     }
     collectUnresolvedPackages(program, source, unresolvedPackages);
-    for (const analyzer of analyzers) {
-      // One failing analyzer must not hide the findings of the other files or analyzers.
-      let analyzerFindings: Finding[];
-      try {
-        analyzerFindings = analyzer.analyzeFile(program, source, policy, forEachSourceCandidate);
-      } catch (error) {
-        if (!skippedFiles) throw error;
-        const failure = error instanceof Error ? error.message : String(error);
-        recordSkippedFile(
-          skippedFiles,
-          { file, reason: failure },
-          `The ${analyzer.pillar} analysis of ${file} failed (${failure}). Skipped that file for that analyzer.`,
-        );
-        continue;
-      }
-      for (const finding of analyzerFindings) {
-        finding.file = relativeToWorkingDirectory(finding.file ?? source.fileName);
-        if (analyzers.length > 1) finding.pillar = analyzer.pillar;
-        findings.push(finding);
-      }
-    }
+    findings.push(...runAnalyzers({ program, source, file, policy, forEachSourceCandidate, skippedFiles, analyzers }));
     // Symlinked entry paths can resolve their relative imports differently.
     scanned.add(canonicalFileName(path.resolve(directory, source.fileName)));
     localFiles.add(source);
@@ -345,16 +370,15 @@ function analyzeSources({ project, files, policy, onlyFiles, analyzers }: Source
       createHost(settings, sharedLibs, probes, workspacePackages, findWorkspaceEntry),
     );
     if (!files.length && !onlyFiles && !usesReferences && !sharesFilesAcrossConfigs) enableSchemaTooling(program);
-    const { findings: programFindings } = analyzeProgram(
+    const { findings: programFindings } = analyzeProgram({
       program,
       inputs,
       scanned,
       policy,
-      undefined,
       unresolvedPackages,
       analyzers,
       skippedFiles,
-    );
+    });
     for (const finding of programFindings) {
       if (usesReferences || mergesFindings) {
         const key = JSON.stringify([

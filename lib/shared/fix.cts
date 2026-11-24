@@ -460,17 +460,20 @@ function printFixed(applied: readonly FixableFinding[]): void {
     if (!finding.fix.note) return;
     for (const line of labelledLines('Note', finding.fix.note, indentation)) console.log(line);
   };
+  const printWhy = (why: string | undefined): void => {
+    if (why) for (const line of labelledLines('Why', why)) console.log(line);
+  };
   for (const group of groupByReason(applied, (finding) => finding.ruleId)) {
     const [first] = group;
     const why = ruleWhy(first.ruleId);
     if (group.length === 1) {
       console.log('Fixed: ' + location(first));
-      if (why) for (const line of labelledLines('Why', why)) console.log(line);
+      printWhy(why);
       printNote(first, '  ');
       continue;
     }
     console.log(`Fixed ${group.length} [${first.ruleId}]:`);
-    if (why) for (const line of labelledLines('Why', why)) console.log(line);
+    printWhy(why);
     for (const finding of group) {
       console.log(`  ${finding.checker} ${finding.file}:${finding.line} #${finding.id}`);
       printNote(finding, '    ');
@@ -518,6 +521,35 @@ function applyBulkFixes(
   return { automatic, manual, review, ...written };
 }
 
+// The findings with the recipe's fixes attached, when one was asked for.
+async function attachRecipe(scanned: Finding[], recipe: string | undefined): Promise<Finding[]> {
+  if (recipe === 'verified-private-types') {
+    const {
+      attachVerifiedPrivateTypes,
+    }: typeof VerifiedPrivateTypes = require('../maintainability/verified-private-types.cjs');
+    return await attachVerifiedPrivateTypes(scanned, process.cwd());
+  }
+  if (recipe) return await attachRecipeFixes(scanned, recipe, process.cwd());
+  return scanned;
+}
+
+function withoutFixComment(finding: Finding): Finding {
+  return finding.fix ? { ...finding, fix: withoutWhyComment(finding.fix, finding.ruleId) } : finding;
+}
+
+interface FixCounts {
+  applied: number;
+  changedFiles: number;
+  manual: number;
+  review: number;
+}
+
+function fixSummary(includeReview: boolean, { applied, changedFiles, manual, review }: FixCounts): string {
+  return includeReview
+    ? `${applied} generated fix(es) in ${changedFiles} file(s), ${manual} manual, ${review} review-marked fix(es) applied.`
+    : `${applied} automatic fix(es) in ${changedFiles} file(s), ${manual} manual, ${review} requiring individual review.`;
+}
+
 async function runFix(args: string[]): Promise<number> {
   if (args.length === 1 && ['--help', '-h'].includes(args[0])) {
     console.log(usage);
@@ -529,20 +561,8 @@ async function runFix(args: string[]): Promise<number> {
     console.log(formatHandoff(scanned, selected));
     return 0;
   }
-  let findings = scanned;
-  if (recipe === 'verified-private-types') {
-    const {
-      attachVerifiedPrivateTypes,
-    }: typeof VerifiedPrivateTypes = require('../maintainability/verified-private-types.cjs');
-    findings = await attachVerifiedPrivateTypes(scanned, process.cwd());
-  } else if (recipe) {
-    findings = await attachRecipeFixes(scanned, recipe, process.cwd());
-  }
-  if (!comments) {
-    findings = findings.map((finding) =>
-      finding.fix ? { ...finding, fix: withoutWhyComment(finding.fix, finding.ruleId) } : finding,
-    );
-  }
+  const withRecipe = await attachRecipe(scanned, recipe);
+  const findings = comments ? withRecipe : withRecipe.map(withoutFixComment);
   const { applied, manual, review, refused, changedFiles } = applyBulkFixes(findings, process.cwd(), {
     includeReview,
     format,
@@ -572,10 +592,14 @@ async function runFix(args: string[]): Promise<number> {
   for (const finding of manual) console.log('Manual change: ' + location(finding));
   for (const { finding, reason } of refused) console.log(`Not applied: ${location(finding)}: ${reason}`);
   printFixed(applied);
-  const summary = includeReview
-    ? `${applied.length} generated fix(es) in ${changedFiles} file(s), ${manual.length} manual, ${review.length} review-marked fix(es) applied.`
-    : `${applied.length} automatic fix(es) in ${changedFiles} file(s), ${manual.length} manual, ${review.length} requiring individual review.`;
-  console.log(summary);
+  console.log(
+    fixSummary(includeReview, {
+      applied: applied.length,
+      changedFiles,
+      manual: manual.length,
+      review: review.length,
+    }),
+  );
   console.log(instructions);
   return 0;
 }

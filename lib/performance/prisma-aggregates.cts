@@ -42,27 +42,30 @@ function distinctFields(property: ObjectLiteralElementLike): string[] | undefine
   return literals.map((element) => element.text);
 }
 
+function readNativeDistinctFlag(projectRoot: string): boolean {
+  for (const location of SCHEMA_LOCATIONS) {
+    try {
+      return NATIVE_DISTINCT_FEATURE.test(fs.readFileSync(path.join(projectRoot, location), 'utf8'));
+    } catch (error) {
+      // Try the next conventional location; only a schema that exists but cannot be read is worth
+      // a note.
+      if (error instanceof Error)
+        noteUnreadable({
+          error,
+          location: path.join(projectRoot, location),
+          consequence: 'treated nativeDistinct as off',
+        });
+    }
+  }
+  return false;
+}
+
 // The nearest project's schema decides, as `prisma generate` would.
 function nativeDistinctEnabled(sourceFile: SourceFile): boolean {
   const projectRoot = findProjectRoot(path.dirname(sourceFile.fileName));
   let enabled = schemaEnablesNativeDistinct.get(projectRoot);
   if (enabled === undefined) {
-    enabled = false;
-    for (const location of SCHEMA_LOCATIONS) {
-      try {
-        enabled = NATIVE_DISTINCT_FEATURE.test(fs.readFileSync(path.join(projectRoot, location), 'utf8'));
-        break;
-      } catch (error) {
-        // Try the next conventional location; only a schema that exists but cannot be read is worth
-        // a note.
-        if (error instanceof Error)
-          noteUnreadable({
-            error,
-            location: path.join(projectRoot, location),
-            consequence: 'treated nativeDistinct as off',
-          });
-      }
-    }
+    enabled = readNativeDistinctFlag(projectRoot);
     schemaEnablesNativeDistinct.set(projectRoot, enabled);
   }
   return enabled;

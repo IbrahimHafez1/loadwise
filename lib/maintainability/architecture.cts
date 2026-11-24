@@ -1,10 +1,10 @@
 import ts from 'typescript';
 import { checkGraph } from './graph.cjs';
+import { nestForwardReferences } from './architecture-nest.cjs';
+import { childBuffer, bufferChildren } from './child-buffer.cjs';
 import type {
-  ArrayLiteralExpression,
   CallExpression,
   CompilerOptions,
-  Decorator,
   ExportDeclaration,
   Expression,
   ExpressionWithTypeArguments,
@@ -12,9 +12,6 @@ import type {
   ImportClause,
   HasDecorators,
   Node,
-  ObjectLiteralElementLike,
-  ObjectLiteralExpression,
-  PropertyAssignment,
   SourceFile,
   Statement,
   StringLiteralLike,
@@ -44,22 +41,6 @@ interface ImportCollections {
   candidates: Set<string>;
   imports: ImportRecord[];
   used: Set<string>;
-}
-
-// The import a Nest forwardRef callback names: its first named binding and where it comes from.
-interface ForwardRefTarget {
-  firstName: Identifier;
-  moduleSpecifier: StringLiteralLike;
-}
-
-interface NestBindings {
-  framework: Map<string, string>;
-  targets: Map<string, ForwardRefTarget>;
-}
-
-interface ForwardRefRecords {
-  allowed: Set<Node>;
-  imports: Map<string, StringLiteralLike>;
 }
 
 interface ArchitectureFile {
@@ -178,21 +159,6 @@ function conditionallyExecuted(node: Node): boolean {
   );
 }
 
-// One reused buffer with a static callback avoids allocating per node. Callers copy the children
-// out before visiting anything else.
-const childBuffer: Node[] = [];
-let childCount = 0;
-function bufferChild(child: Node): void {
-  childBuffer[childCount++] = child;
-}
-
-// Buffers the node's children in forEachChild order and returns how many there are.
-function bufferChildren(node: Node): number {
-  childCount = 0;
-  ts.forEachChild(node, bufferChild);
-  return childCount;
-}
-
 function isTypeThunk(argument: Expression): boolean {
   return ts.isArrowFunction(argument) || ts.isFunctionExpression(argument);
 }
@@ -262,118 +228,6 @@ function alwaysEvaluatedChild(node: Node, child: Node): boolean {
   if (ts.isForStatement(node)) return child === node.initializer || child === node.condition;
   if (ts.isConditionalExpression(node)) return child === node.condition;
   return ts.isBinaryExpression(node) && child === node.left;
-}
-
-function recordForwardRefImports(
-  array: ArrayLiteralExpression,
-  forwardRefName: string | undefined,
-  targets: ReadonlyMap<string, ForwardRefTarget>,
-  { allowed, imports }: ForwardRefRecords,
-): void {
-  for (const entry of array.elements) {
-    if (
-      !ts.isCallExpression(entry) ||
-      !ts.isIdentifier(entry.expression) ||
-      entry.expression.text !== forwardRefName ||
-      entry.arguments.length !== 1
-    )
-      continue;
-    const callback = entry.arguments[0];
-    if (!ts.isArrowFunction(callback) || callback.parameters.length || !ts.isIdentifier(callback.body)) continue;
-    const binding = targets.get(callback.body.text);
-    if (binding) {
-      allowed.add(binding.firstName);
-      allowed.add(callback.body);
-      imports.set(callback.body.text, binding.moduleSpecifier);
-    }
-  }
-}
-
-function isImportsArray(
-  field: ObjectLiteralElementLike,
-): field is PropertyAssignment & { initializer: ArrayLiteralExpression } {
-  return (
-    ts.isPropertyAssignment(field) &&
-    (ts.isIdentifier(field.name) || ts.isStringLiteralLike(field.name)) &&
-    field.name.text === 'imports' &&
-    ts.isArrayLiteralExpression(field.initializer)
-  );
-}
-
-function nestModuleOptions(decorator: Decorator, moduleName: string | undefined): ObjectLiteralExpression | undefined {
-  const call = decorator.expression;
-  if (
-    !ts.isCallExpression(call) ||
-    !ts.isIdentifier(call.expression) ||
-    call.expression.text !== moduleName ||
-    call.arguments.length !== 1
-  )
-    return;
-  const [options] = call.arguments;
-  if (ts.isObjectLiteralExpression(options)) return options;
-}
-
-function nestModuleBindings(source: SourceFile, resolve: SpecifierResolver): NestBindings | undefined {
-  const framework = new Map<string, string>(),
-    targets = new Map<string, ForwardRefTarget>();
-  for (const statement of source.statements) {
-    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
-    const clause = statement.importClause;
-    if (
-      !clause ||
-      clause.isTypeOnly ||
-      clause.name ||
-      !clause.namedBindings ||
-      !ts.isNamedImports(clause.namedBindings)
-    )
-      continue;
-    const items = clause.namedBindings.elements;
-    if (statement.moduleSpecifier.text === '@nestjs/common') {
-      if (resolve('@nestjs/common', source.fileName, statement.moduleSpecifier)) return;
-      const runtimeImports = items.filter((item) => !item.isTypeOnly);
-      for (const item of runtimeImports) framework.set((item.propertyName || item.name).text, item.name.text);
-    } else if (items.length === 1 && !items[0].isTypeOnly)
-      targets.set(items[0].name.text, { firstName: items[0].name, moduleSpecifier: statement.moduleSpecifier });
-  }
-  if (!framework.has('Module') || !framework.has('forwardRef')) return;
-  return { framework, targets };
-}
-
-// A Nest module cycle still loads its modules. Only tag references whose sole use
-// is the exact deferred callback registered in a top-level @Module imports array.
-function nestForwardReferences(source: SourceFile, resolve: SpecifierResolver): Set<StringLiteralLike> | undefined {
-  if (!source.text.includes('@nestjs/common') || !source.text.includes('forwardRef')) return;
-  const bindings = nestModuleBindings(source, resolve);
-  if (!bindings) return;
-  const { framework, targets } = bindings;
-  const allowed = new Set<Node>(),
-    imports = new Map<string, StringLiteralLike>();
-  for (const declaration of source.statements) {
-    if (!ts.isClassDeclaration(declaration)) continue;
-    for (const decorator of ts.getDecorators(declaration) || []) {
-      const options = nestModuleOptions(decorator, framework.get('Module'));
-      if (!options) continue;
-      for (const field of options.properties.filter(isImportsArray)) {
-        recordForwardRefImports(field.initializer, framework.get('forwardRef'), targets, { allowed, imports });
-      }
-    }
-  }
-  if (!imports.size) return;
-  // An explicit stack keeps long operator chains off the call stack.
-  const pending: Node[] = [source];
-  excludeImportsUsedOutsideForwardRefs(pending, imports, allowed);
-  return new Set(imports.values());
-}
-
-function excludeImportsUsedOutsideForwardRefs(
-  pending: Node[],
-  imports: Map<string, StringLiteralLike>,
-  allowed: ReadonlySet<Node>,
-): void {
-  for (let node = pending.pop(); node && imports.size; node = pending.pop()) {
-    if (ts.isIdentifier(node) && imports.has(node.text) && !allowed.has(node)) imports.delete(node.text);
-    for (let index = bufferChildren(node) - 1; index >= 0; index--) pending.push(childBuffer[index]);
-  }
 }
 
 function collectReexport(
@@ -528,6 +382,7 @@ function collectEdges(
   }
   // Handles one node and queues its children with their deferred flags. The explicit stack below
   // keeps long operator chains off the call stack.
+  // loadwise-reviewed high-branch-complexity -- ordered early-return dispatch over node kinds; each guard consumes one kind and the order decides which rule wins, so splitting would scatter that ordering
   function visit(node: Node, deferred: boolean): void {
     if (ts.isIdentifier(node)) {
       if ((node.text === 'require' || candidates.has(node.text)) && introducesBinding(node)) {
@@ -677,6 +532,12 @@ function valueNames(statement: Statement): string[] {
   return name && ts.isIdentifier(name) ? [name.text] : [];
 }
 
+function recordNamedExports(statement: ExportDeclaration, exported: Map<string, string>): void {
+  const clause = statement.exportClause;
+  if (statement.moduleSpecifier || statement.isTypeOnly || !clause || !ts.isNamedExports(clause)) return;
+  for (const item of clause.elements) exported.set(item.name.text, (item.propertyName || item.name).text);
+}
+
 // Names the module exports that are declared only as const enums, so no runtime value backs them. A
 // name that also merges with a namespace, function, class or variable, or that a re-export
 // forwards, does not count.
@@ -691,9 +552,7 @@ function exportedConstEnums(sourceFile: SourceFile): string[] {
       constEnums.add(name);
       if (hasModifier(statement, ts.SyntaxKind.ExportKeyword)) exported.set(name, name);
     } else if (ts.isExportDeclaration(statement)) {
-      const clause = statement.exportClause;
-      if (!statement.moduleSpecifier && !statement.isTypeOnly && clause && ts.isNamedExports(clause))
-        for (const item of clause.elements) exported.set(item.name.text, (item.propertyName || item.name).text);
+      recordNamedExports(statement, exported);
     } else {
       for (const name of valueNames(statement)) values.add(name);
     }

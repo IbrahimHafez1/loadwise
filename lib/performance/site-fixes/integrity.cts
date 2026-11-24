@@ -7,46 +7,33 @@ import {
   indentationAt,
   lineStart,
   freshName,
-  nameTaken,
   isPlainReference,
   mentionsIdentifier,
   requireReview,
 } from './helpers.cjs';
+import { drizzleScopeUnverified, drizzleUnfilteredWrite } from './integrity-drizzle.cjs';
+import { eolOf, formatterNote, unitFor, wrapStatements } from './integrity-wrap.cjs';
 import type {
   BindingName,
+  Block,
   CallExpression,
   ElementAccessExpression,
   ExpressionStatement,
   Identifier,
   ImportDeclaration,
-  NamedImports,
   Node,
   ObjectLiteralExpression,
   PropertyAccessExpression,
   PropertyAssignment,
+  SignatureDeclaration,
   ShorthandPropertyAssignment,
   SourceFile,
   Statement,
   SyntaxKind,
+  VariableDeclaration,
+  VariableStatement,
 } from 'typescript';
 import type { FixResult, SiteFixInput, TextEdit } from '../../shared/types.cjs';
-
-// What wrapStatements wraps: the statements from `first` to `last`, the lines around them, and the
-// edits inside.
-interface WrapRequest {
-  text: string;
-  sourceFile: SourceFile;
-  first: Node;
-  last: Node;
-  header: readonly string[];
-  footer: readonly string[];
-  replacements: TextEdit[];
-}
-
-interface WrappedStatements {
-  edits: TextEdit[];
-  reindented: boolean;
-}
 
 // The offsets of whole lines to delete.
 interface LineRange {
@@ -54,84 +41,11 @@ interface LineRange {
   end: number;
 }
 
-// One call of a builder chain, such as `.where(...)`.
-interface ChainStep {
-  name: string;
-  call: CallExpression;
-}
-
-// The builder chain that starts at the reported `db.select` / `db.update` / `db.delete`.
-interface DrizzleChain {
-  operation: string;
-  rootCall: CallExpression;
-  steps: ChainStep[];
-}
-
-interface DrizzleImports {
-  local: Record<string, string>;
-  edits: TextEdit[];
-}
-
 type ScopedProperty = PropertyAssignment | ShorthandPropertyAssignment;
 
-// site-fix.cjs drops hunks longer than this, so longer rewrites use the in-place form.
-const maxInlineLines = 14;
 const transactionStart = /^\s*(?:begin|start\s+transaction)\b/i;
 const transactionEnd = /^\s*(?:commit|rollback|end|abort)\b/i;
 const transactionControl = /^\s*(?:begin|start|commit|rollback|end|abort|savepoint|release|set\s+transaction)\b/i;
-
-function eolOf(text: string): string {
-  return text.includes('\r\n') ? '\r\n' : '\n';
-}
-
-function unitFor(indentation: string): string {
-  return indentation.includes('\t') ? '\t' : '  ';
-}
-
-// Wraps the statements from `first` to `last` in `header` and `footer` lines, applying
-// `replacements` inside. Re-indents the statements when the result stays a readable hunk; otherwise
-// wraps them in place.
-function wrapStatements({
-  text,
-  sourceFile,
-  first,
-  last,
-  header,
-  footer,
-  replacements,
-}: WrapRequest): WrappedStatements | undefined {
-  const start = first.getStart(sourceFile);
-  const end = last.end;
-  const firstLineStart = lineStart(text, start);
-  if (text.slice(firstLineStart, start).trim()) return;
-  const indentation = indentationAt(text, start);
-  const unit = unitFor(indentation);
-  const eol = eolOf(text);
-  const outer = (lines: readonly string[]): string[] => lines.map((line) => indentation + line);
-  let body = text.slice(start, end);
-  for (const replacement of [...replacements].sort((left, right) => right.start - left.start)) {
-    body = body.slice(0, replacement.start - start) + replacement.text + body.slice(replacement.end - start);
-  }
-  const bodyLines = body.split(/\r?\n/);
-  if (
-    !hasMultilineTemplate(sourceFile, start, end) &&
-    header.length + bodyLines.length + footer.length <= maxInlineLines
-  ) {
-    const inner = bodyLines.map((line, index) => (index === 0 ? indentation + unit + line : line && unit + line));
-    const lines = [...outer(header), ...inner, ...outer(footer)];
-    return { edits: [{ start, end, text: lines.join(eol).slice(indentation.length) }], reindented: true };
-  }
-  return {
-    edits: [
-      { start: firstLineStart, end: firstLineStart, text: outer(header).join(eol) + eol },
-      ...replacements,
-      { start: end, end, text: eol + outer(footer).join(eol) },
-    ],
-    reindented: false,
-  };
-}
-
-const formatterNote = ' Run your formatter to re-indent the wrapped statements.';
 
 // ---- pg-unreleased-checkout ----
 
@@ -214,69 +128,127 @@ function collectNames(name: BindingName, names: string[]): void {
   else for (const element of name.elements) if (!ts.isOmittedExpression(element)) collectNames(element.name, names);
 }
 
-function transactionOnPool({ node, sourceFile, text }: SiteFixInput): FixResult | undefined {
-  if (!node || !sourceFile || text === undefined) return;
-  const access = node.parent;
-  if (!access || !isQueryAccess(access) || !isPlainReference(access.expression)) return;
-  const poolText = textOf(access.expression);
-  const owner = ancestor(access, ts.isFunctionLike);
-  const body = owner && 'body' in owner ? owner.body : undefined;
-  if (!body || !ts.isBlock(body)) return;
-  const receivers = referencesTo(body, poolText);
-  const queries = receivers.flatMap((receiver) => {
+// The function around a pool query and the block that holds its statements.
+interface PoolUsage {
+  poolText: string;
+  access: Node;
+  body: Block;
+  owner: SignatureDeclaration;
+  receivers: Node[];
+  queries: CallExpression[];
+}
+
+// The statements that the BEGIN-through-COMMIT wrapping covers, with the pool uses inside them.
+interface TransactionRegion {
+  statements: Statement[];
+  start: number;
+  receivers: Node[];
+  queries: CallExpression[];
+}
+
+interface TransactionRange {
+  first: number;
+  last: number;
+  begin: CallExpression;
+}
+
+function poolQueryCalls(receivers: readonly Node[]): CallExpression[] {
+  return receivers.flatMap((receiver) => {
     const parent = receiver.parent;
     return isQueryAccess(parent) && ts.isCallExpression(parent.parent) && parent.parent.expression === parent
       ? [parent.parent]
       : [];
   });
-  const topIndex = (inner: Node): number => {
-    const top = ancestor(inner, (current) => current.parent === body);
-    return top ? body.statements.findIndex((statement) => statement === top) : -1;
-  };
+}
+
+function poolAccessOf(node: Node): PropertyAccessExpression | ElementAccessExpression | undefined {
+  const access = node.parent;
+  if (!access || !isQueryAccess(access) || !isPlainReference(access.expression)) return;
+  return access;
+}
+
+function poolUsageOf(access: PropertyAccessExpression | ElementAccessExpression): PoolUsage | undefined {
+  const poolText = textOf(access.expression);
+  const owner = ancestor(access, ts.isFunctionLike);
+  const body = owner && 'body' in owner ? owner.body : undefined;
+  if (!owner || !body || !ts.isBlock(body)) return;
+  const receivers = referencesTo(body, poolText);
+  return { poolText, access, body, owner, receivers, queries: poolQueryCalls(receivers) };
+}
+
+function topLevelIndex(body: Block, inner: Node): number {
+  const top = ancestor(inner, (current) => current.parent === body);
+  return top ? body.statements.findIndex((statement) => statement === top) : -1;
+}
+
+// The first and last top-level statements between the BEGIN and the last COMMIT, when the finding
+// sits inside them.
+function transactionRange({ body, access, queries }: PoolUsage): TransactionRange | undefined {
   const begin = queries.find((call) => transactionStart.test(queryText(call) ?? ''));
   const ends = queries.filter((call) => transactionEnd.test(queryText(call) ?? ''));
   if (!begin || !ends.length) return;
-  const firstIndex = topIndex(begin);
-  const lastIndex = topIndex(ends[ends.length - 1]);
-  const findingIndex = topIndex(access);
-  if (firstIndex < 0 || findingIndex < firstIndex || findingIndex > lastIndex) return;
-  const region = body.statements.slice(firstIndex, lastIndex + 1);
-  const regionStart = region[0].getStart(sourceFile);
-  const regionEnd = region[region.length - 1].end;
-  const inRegion = (child: Node): boolean => child.getStart(sourceFile) >= regionStart && child.end <= regionEnd;
+  const first = topLevelIndex(body, begin);
+  const last = topLevelIndex(body, ends[ends.length - 1]);
+  const findingIndex = topLevelIndex(body, access);
+  if (first < 0 || findingIndex < first || findingIndex > last) return;
+  return { first, last, begin };
+}
+
+// Wrapping the range in try would hide its declarations from the statements after it.
+function declarationsUsedLater(region: readonly Statement[], later: readonly Statement[]): boolean {
+  return region.some((statement) =>
+    declaredNames(statement).some((name) => later.some((next) => mentionsIdentifier(next, name))),
+  );
+}
+
+function transactionRegion(usage: PoolUsage, sourceFile: SourceFile): TransactionRegion | undefined {
+  const { body, owner, receivers, queries } = usage;
+  const range = transactionRange(usage);
+  if (!range) return;
+  const statements = body.statements.slice(range.first, range.last + 1);
+  const start = statements[0].getStart(sourceFile);
+  const regionEnd = statements[statements.length - 1].end;
+  const inRegion = (child: Node): boolean => child.getStart(sourceFile) >= start && child.end <= regionEnd;
   // Passing the pool to a helper or checking out from it inside the range would still bypass the
   // client.
   const regionReceivers = receivers.filter(inRegion);
   const regionQueries = queries.filter(inRegion);
-  if (regionReceivers.length !== regionQueries.length || regionQueries[0] !== begin) return;
+  if (regionReceivers.length !== regionQueries.length || regionQueries[0] !== range.begin) return;
   // `finally` releases the client as soon as the block exits, so every query must have settled by
   // then.
   const settled = (call: CallExpression) =>
     ts.isAwaitExpression(call.parent) && ancestor(call, ts.isFunctionLike) === owner;
   if (!regionQueries.every(settled)) return;
-  // Wrapping the range in try would hide its declarations from the statements after it.
-  const later = body.statements.slice(lastIndex + 1);
-  for (const statement of region) {
-    if (declaredNames(statement).some((name) => later.some((next) => mentionsIdentifier(next, name)))) return;
-  }
-  const client = freshName(sourceFile, 'client');
-  if (!client) return;
-  const unit = unitFor(indentationAt(text, regionStart));
-  const rollsBack = regionQueries.some((call) => /^\s*(?:rollback|abort)\b/i.test(queryText(call) ?? ''));
-  const footer = [
+  if (declarationsUsedLater(statements, body.statements.slice(range.last + 1))) return;
+  return { statements, start, receivers: regionReceivers, queries: regionQueries };
+}
+
+function transactionFooter(client: string, unit: string, rollsBack: boolean): string[] {
+  return [
     ...(rollsBack ? [] : ['} catch (error) {', `${unit}await ${client}.query('ROLLBACK');`, `${unit}throw error;`]),
     '} finally {',
     `${unit}${client}.release();`,
     '}',
   ];
+}
+
+function wrapPoolTransaction(
+  region: TransactionRegion,
+  poolText: string,
+  client: string,
+  sourceFile: SourceFile,
+  text: string,
+): FixResult | undefined {
+  const unit = unitFor(indentationAt(text, region.start));
+  const rollsBack = region.queries.some((call) => /^\s*(?:rollback|abort)\b/i.test(queryText(call) ?? ''));
   const wrapped = wrapStatements({
     text,
     sourceFile,
-    first: region[0],
-    last: region[region.length - 1],
+    first: region.statements[0],
+    last: region.statements[region.statements.length - 1],
     header: [`const ${client} = await ${poolText}.connect();`, 'try {'],
-    footer,
-    replacements: regionReceivers.map((receiver) => ({
+    footer: transactionFooter(client, unit, rollsBack),
+    replacements: region.receivers.map((receiver) => ({
       start: receiver.getStart(sourceFile),
       end: receiver.end,
       text: client,
@@ -290,6 +262,19 @@ function transactionOnPool({ node, sourceFile, text }: SiteFixInput): FixResult 
       (rollsBack ? '' : ' A failure now rolls back before the connection returns to the pool.') +
       (wrapped.reindented ? '' : formatterNote),
   };
+}
+
+function transactionOnPool({ node, sourceFile, text }: SiteFixInput): FixResult | undefined {
+  if (!node || !sourceFile || text === undefined) return;
+  const access = poolAccessOf(node);
+  if (!access) return;
+  const usage = poolUsageOf(access);
+  if (!usage) return;
+  const region = transactionRegion(usage, sourceFile);
+  if (!region) return;
+  const client = freshName(sourceFile, 'client');
+  if (!client) return;
+  return wrapPoolTransaction(region, usage.poolText, client, sourceFile, text);
 }
 
 // ---- pool-created-per-request-or-item ----
@@ -418,13 +403,28 @@ function connects(scope: Node, name: string): boolean {
   return found;
 }
 
-function poolPerRequest({ finding, node, sourceFile, text }: SiteFixInput): FixResult | undefined {
-  if (!node || !sourceFile || text === undefined) return;
+// The `const pool = new Pool()` statement a per-request pool fix would hoist.
+interface PoolCreation {
+  creation: Node;
+  statement: VariableStatement;
+  scope: Block;
+  name: string;
+}
+
+// The `new X()` or `X()` call that initializes a single plain `const` name.
+function declaredCreation(node: Node): { creation: Node; declaration: VariableDeclaration; name: string } | undefined {
   const creation = ts.isNewExpression(node) ? node : calleeCall(node);
   if (!creation) return;
   const declaration = creation.parent;
   if (!ts.isVariableDeclaration(declaration) || declaration.initializer !== creation) return;
   if (!ts.isIdentifier(declaration.name)) return;
+  return { creation, declaration, name: declaration.name.text };
+}
+
+// The sole-declaration, non-exported `const` statement inside a block.
+function soleConstStatement(
+  declaration: VariableDeclaration,
+): { statement: VariableStatement; scope: Block } | undefined {
   const list = declaration.parent;
   if (!ts.isVariableDeclarationList(list)) return;
   const statement = list.parent;
@@ -432,21 +432,62 @@ function poolPerRequest({ finding, node, sourceFile, text }: SiteFixInput): FixR
     return;
   const scope = statement.parent;
   if (!ts.isBlock(scope) || statement.modifiers?.length) return;
-  const name = declaration.name.text;
+  return { statement, scope };
+}
+
+function poolCreationOf(node: Node): PoolCreation | undefined {
+  const declared = declaredCreation(node);
+  if (!declared) return;
+  const placement = soleConstStatement(declared.declaration);
+  if (!placement) return;
+  return { creation: declared.creation, name: declared.name, ...placement };
+}
+
+// The top-level statement holding the creation when its constructor can run at module scope.
+function moduleScopeAnchor(found: PoolCreation, sourceFile: SourceFile): Node | undefined {
+  const { creation, statement, name } = found;
   const topLevel = ancestor(statement, (current) => current.parent && ts.isSourceFile(current.parent));
   if (!topLevel || topLevelDeclaration(sourceFile, name)) return;
   if (!readableAtModuleScope(creation, topLevel, sourceFile)) return;
   if (hasMultilineTemplate(sourceFile, statement.getStart(), statement.end)) return;
-  // A shared Redis or Mongo client cannot be connected again on each call.
-  if (/^(?:redis|@redis\/client|mongodb)\./.test(finding.message) && connects(scope, name)) return;
-  const closing = closingStatements(scope, name);
-  if (!closing) return;
+  return topLevel;
+}
+
+// A shared Redis or Mongo client cannot be connected again on each call.
+function reconnectsSharedClient(message: string, scope: Node, name: string): boolean {
+  return /^(?:redis|@redis\/client|mongodb)\./.test(message) && connects(scope, name);
+}
+
+// The whole-line removals for the statements, or undefined when any of them shares its lines.
+function removalsFor(text: string, statements: readonly Node[]): LineRange[] | undefined {
   const removals: LineRange[] = [];
-  for (const removed of [statement, ...closing]) {
+  for (const removed of statements) {
     const removal = wholeLines(text, removed);
     if (!removal) return;
     removals.push(removal);
   }
+  return removals;
+}
+
+function poolNote(closingCount: number): string {
+  return (
+    'Created once when the module loads and shared by every call, so its configuration must be available at import time.' +
+    (closingCount ? ' The per-call close was removed; close it once at shutdown instead.' : ' Close it at shutdown.')
+  );
+}
+
+function poolPerRequest({ finding, node, sourceFile, text }: SiteFixInput): FixResult | undefined {
+  if (!node || !sourceFile || text === undefined) return;
+  const found = poolCreationOf(node);
+  if (!found) return;
+  const { statement, scope, name } = found;
+  const topLevel = moduleScopeAnchor(found, sourceFile);
+  if (!topLevel) return;
+  if (reconnectsSharedClient(finding.message, scope, name)) return;
+  const closing = closingStatements(scope, name);
+  if (!closing) return;
+  const removals = removalsFor(text, [statement, ...closing]);
+  if (!removals) return;
 
   const eol = eolOf(text);
   const indentation = indentationAt(text, statement.getStart());
@@ -461,11 +502,7 @@ function poolPerRequest({ finding, node, sourceFile, text }: SiteFixInput): FixR
       { start: insertAt, end: insertAt, text: hoisted + eol + eol },
       ...removals.map((removal) => ({ ...removal, text: '' })),
     ],
-    note:
-      'Created once when the module loads and shared by every call, so its configuration must be available at import time.' +
-      (closing.length
-        ? ' The per-call close was removed; close it once at shutdown instead.'
-        : ' Close it at shutdown.'),
+    note: poolNote(closing.length),
   };
 }
 
@@ -580,172 +617,6 @@ function prismaScopeUnverified({ finding, node, text }: SiteFixInput): FixResult
   return {
     edits: [edit],
     note: `Filters by the \`${field}\` declared above. The checker verified its value comes from the configured authorization function.`,
-  };
-}
-
-// ---- drizzle helpers ----
-
-// Local names for drizzle-orm exports, plus the edits that import the missing ones.
-function drizzleImports(sourceFile: SourceFile, names: readonly string[]): DrizzleImports | undefined {
-  const imports = sourceFile.statements.filter(ts.isImportDeclaration);
-  const importedBindings = imports
-    .flatMap((statement): NamedImports[] => {
-      const clause = statement.importClause;
-      const bindings = clause?.namedBindings;
-      const fromDrizzle =
-        ts.isStringLiteral(statement.moduleSpecifier) && statement.moduleSpecifier.text === 'drizzle-orm';
-      return fromDrizzle && clause && !clause.isTypeOnly && bindings && ts.isNamedImports(bindings) ? [bindings] : [];
-    })
-    .at(0);
-  const elements = importedBindings?.elements ?? [];
-  const local: Record<string, string> = {};
-  const missing: string[] = [];
-  for (const name of names) {
-    const element = elements.find(
-      (candidate) => !candidate.isTypeOnly && (candidate.propertyName ?? candidate.name).text === name,
-    );
-    if (element) local[name] = element.name.text;
-    else if (nameTaken(sourceFile, name)) return;
-    else {
-      local[name] = name;
-      missing.push(name);
-    }
-  }
-  if (!missing.length) return { local, edits: [] };
-  if (elements.length) {
-    const position = elements[elements.length - 1].end;
-    return { local, edits: [{ start: position, end: position, text: ', ' + missing.join(', ') }] };
-  }
-  if (importedBindings) {
-    return {
-      local,
-      edits: [{ start: importedBindings.getStart(), end: importedBindings.end, text: `{ ${missing.join(', ')} }` }],
-    };
-  }
-  const text = sourceFile.text;
-  const quote = imports[0]?.moduleSpecifier.getText().startsWith('"') ? '"' : "'";
-  const line = `import { ${missing.join(', ')} } from ${quote}drizzle-orm${quote};`;
-  const last = imports.at(-1);
-  if (last) return { local, edits: [{ start: last.end, end: last.end, text: eolOf(text) + line }] };
-  return { local, edits: [{ start: 0, end: 0, text: line + eolOf(text) }] };
-}
-
-function drizzleChain(node: Node): DrizzleChain | undefined {
-  if (!ts.isIdentifier(node)) return;
-  const rootAccess = node.parent;
-  const rootCall = rootAccess.parent;
-  if (
-    !ts.isPropertyAccessExpression(rootAccess) ||
-    !ts.isCallExpression(rootCall) ||
-    rootCall.expression !== rootAccess
-  )
-    return;
-  const steps: ChainStep[] = [];
-  for (let current: CallExpression = rootCall; ;) {
-    const access = current.parent;
-    const call = access.parent;
-    if (!ts.isPropertyAccessExpression(access) || !ts.isCallExpression(call) || call.expression !== access) break;
-    steps.push({ name: access.name.text, call });
-    current = call;
-  }
-  return { operation: node.text, rootCall, steps };
-}
-
-// ---- drizzle-scope-unverified ----
-
-function drizzleScopeUnverified({ finding, node, sourceFile }: SiteFixInput): FixResult | undefined {
-  if (!node || !sourceFile) return;
-  const column = /using eq\(([^,]+), <authorized scope>\)\.$/.exec(finding.message)?.[1];
-  const field = column ? /^[^.[]+\.([A-Za-z_$][\w$]*)$/.exec(column)?.[1] : undefined;
-  if (!field) return;
-  const chain = drizzleChain(node);
-  if (!chain) return;
-  const wheres = chain.steps.filter((step) => step.name === 'where');
-  const anchor: CallExpression | undefined =
-    chain.operation === 'select'
-      ? chain.steps.find((step) => step.name === 'from')?.call
-      : chain.operation === 'update'
-        ? chain.steps.find((step) => step.name === 'set')?.call
-        : chain.operation === 'delete'
-          ? chain.rootCall
-          : undefined;
-  const table = chain.operation === 'select' ? anchor?.arguments[0] : chain.rootCall.arguments[0];
-  if (!anchor || !table || !isPlainReference(table) || wheres.length > 1) return;
-  if (finding.verifiedScopeField !== field) return;
-  const [where] = wheres;
-  if (where && where.call.arguments.length !== 1) return;
-  const imports = drizzleImports(sourceFile, where ? ['eq', 'and'] : ['eq']);
-  if (!imports) return;
-  const condition = `${imports.local.eq}(${textOf(table)}.${field}, ${field})`;
-  const edit: TextEdit = where
-    ? {
-        start: where.call.arguments[0].getStart(),
-        end: where.call.arguments[0].end,
-        text: `${imports.local.and}(${condition}, ${textOf(where.call.arguments[0])})`,
-      }
-    : { start: anchor.end, end: anchor.end, text: `.where(${condition})` };
-  return {
-    edits: [...imports.edits, edit],
-    note: `Filters by the \`${field}\` declared above. The checker verified its value comes from the configured authorization function.`,
-  };
-}
-
-// ---- drizzle-unfiltered-write ----
-
-// The rule also counts `void work()` and `and(void work())` as no filter; replacing such an
-// argument would drop the call, so only arguments built from names, literals and Drizzle's
-// `and`/`or` are replaced.
-function isEffectFree(node: Node): boolean {
-  if (ts.isCallExpression(node) && !(ts.isIdentifier(node.expression) && ['and', 'or'].includes(node.expression.text)))
-    return false;
-  if (
-    ts.isNewExpression(node) ||
-    ts.isAwaitExpression(node) ||
-    ts.isDeleteExpression(node) ||
-    ts.isPrefixUnaryExpression(node) ||
-    ts.isPostfixUnaryExpression(node) ||
-    (ts.isBinaryExpression(node) &&
-      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
-      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment)
-  )
-    return false;
-  return !ts.forEachChild(node, (child) => !isEffectFree(child));
-}
-
-function drizzleUnfilteredWrite({ finding, node, sourceFile }: SiteFixInput): FixResult | undefined {
-  if (!node || !sourceFile) return;
-  // Only the same-boolean UPDATE has a filter implied by the code itself; any other filter would be
-  // invented.
-  if (!finding.message.startsWith('This unfiltered UPDATE rewrites every row with the same boolean')) return;
-  const chain = drizzleChain(node);
-  if (!chain || chain.operation !== 'update' || chain.steps.some((step) => step.name === 'returning')) return;
-  const table = chain.rootCall.arguments[0];
-  const set = chain.steps.find((step) => step.name === 'set')?.call;
-  const assignments = set?.arguments[0];
-  if (!set || !table || !isPlainReference(table) || !assignments || !ts.isObjectLiteralExpression(assignments)) return;
-  const [assignment] = assignments.properties;
-  if (!ts.isPropertyAssignment(assignment) || !ts.isIdentifier(assignment.name)) return;
-  const wheres = chain.steps.filter((step) => step.name === 'where');
-  if (wheres.length > 1 || (wheres[0] && wheres[0].call.arguments.length > 1)) return;
-  if (wheres[0]?.call.arguments.length && !isEffectFree(wheres[0].call.arguments[0])) return;
-  // A NOT NULL column never holds null, so `ne` alone is exact.
-  const needsNullCheck = !finding.message.includes('declared NOT NULL');
-  const imports = drizzleImports(sourceFile, needsNullCheck ? ['or', 'ne', 'isNull'] : ['ne']);
-  if (!imports) return;
-  const { or, ne, isNull } = imports.local;
-  const column = `${textOf(table)}.${assignment.name.text}`;
-  const notEqual = `${ne}(${column}, ${textOf(assignment.initializer)})`;
-  const condition = needsNullCheck ? `${or}(${notEqual}, ${isNull}(${column}))` : notEqual;
-  const where = wheres[0]?.call;
-  const edit: TextEdit = !where
-    ? { start: set.end, end: set.end, text: `.where(${condition})` }
-    : where.arguments.length
-      ? { start: where.arguments[0].getStart(), end: where.arguments[0].end, text: condition }
-      : { start: where.end - 1, end: where.end - 1, text: condition };
-  return {
-    edits: [...imports.edits, edit],
-    requiresReview: true,
-    note: 'Rows that already hold this value are no longer rewritten, so the affected-row count drops and update triggers or row locks no longer apply to them. Keep the old form if anything depends on those.',
   };
 }
 

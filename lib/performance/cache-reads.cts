@@ -108,6 +108,12 @@ function identityFingerprint(attributes: OtlpAttributes, lookup: LookupValue): s
     .digest('hex');
 }
 
+interface ObservedCall {
+  readonly system: string;
+  readonly command: string;
+  readonly isBatch: boolean;
+}
+
 class DuplicateReads {
   blockedTraces = new Set<string>();
   candidates = new Map<string, DuplicateCandidate>();
@@ -116,9 +122,7 @@ class DuplicateReads {
     traceId: string,
     span: OtlpObservedSpan,
     attributes: OtlpAttributes,
-    system: string,
-    command: string,
-    isBatch: boolean,
+    { system, command, isBatch }: ObservedCall,
   ): string | null {
     if (this.blockedTraces.has(traceId)) return null;
     const operation = text(attributes, 'db.operation.name', 'db.operation');

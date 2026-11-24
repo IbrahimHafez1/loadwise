@@ -1,3 +1,4 @@
+// loadwise-reviewed large-module -- one registry of per-statement migration rewrites for SQL, TypeORM, Knex and Sequelize that share the statement re-reading and place() helpers; the rules are flat and independent
 // Site fixes for migration findings. A finding carries only its file and position, so the flagged
 // statement, the framework and the transaction around it are re-read here: from the raw text of a
 // .sql file, or from the query literal (or the up() function) of a TypeORM, Knex or Sequelize

@@ -45,6 +45,7 @@ function hopReason(trace: Trace | undefined) {
   return trace?.hops === 2 ? secondHopReason : undefined;
 }
 
+// loadwise-reviewed long-parameter-list -- mirrors the positional shape of context.report (node, ruleId, message, reason) plus the trace; every injection rule calls it positionally and the optional reason is the only trailing argument
 function reportTraced(
   context: SecurityRuleContext,
   node: Node,

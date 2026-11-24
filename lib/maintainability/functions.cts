@@ -3,7 +3,7 @@ import { nestingAdvice, sectionAdvice, loopGuardComparison } from './branch-advi
 import { traversalLeaf } from './traversal-context.cjs';
 import { checklistContext } from './checklist-context.cjs';
 import { textChoiceContext, loopGuard, patchMappingContext } from './advisory-context.cjs';
-import type { Node, SignatureDeclaration, SourceFile, Statement } from 'typescript';
+import type { Block, ConciseBody, Node, SignatureDeclaration, SourceFile, Statement } from 'typescript';
 import type { Finding } from '../shared/types.cjs';
 import type { FindingComparison } from './types/finding-comparison.cjs';
 
@@ -133,6 +133,138 @@ function analyzeFunctions(sourceFile: SourceFile, relativePath: string): Finding
     }
   }
 
+  // Walks one function body in its own scope, then reports the deep nesting and branch complexity
+  // it found.
+  function enterFunction(
+    node: SignatureDeclaration,
+    body: ConciseBody,
+    scope: FunctionScope | undefined,
+    parent: Node | undefined,
+  ): void {
+    const writes: WeakSet<Node> | undefined = annotatedInstanceQuery(node, parent)
+      ? new WeakSet()
+      : invokedQueryArrows.has(node)
+        ? scope?.writes
+        : undefined;
+    const inner: FunctionScope = {
+      complexity: 1,
+      maxDepth: 0,
+      hasTraversalLeaf: false,
+      traversalOnly: true,
+      loops: 0,
+      writes,
+    };
+    // Defaults execute on invocation, but do not contribute to the body's complexity.
+    ts.forEachChild(node, (child) => {
+      if (writes && ts.isParameter(child)) {
+        const parameterScope: FunctionScope = {
+          complexity: 1,
+          maxDepth: 0,
+          hasTraversalLeaf: false,
+          traversalOnly: false,
+          loops: 0,
+          writes,
+        };
+        ts.forEachChild(child, (part) =>
+          visit(part, part === child.name || part === child.initializer ? parameterScope : undefined, 0, child),
+        );
+      } else visit(child, child === body ? inner : undefined, 0, node);
+    });
+    if (inner.maxDepth >= nestingLimit && inner.deepest) {
+      report(
+        {
+          node: inner.deepest,
+          ruleId: 'deep-control-flow',
+          message: `Control flow reaches ${inner.maxDepth} nested levels. Deep nesting hides which conditions lead to the code. Invert the outer condition into an early \`continue\` or \`return\` (a guard clause), or extract the inner block into a named function. Keep side effects and cleanup on both paths.`,
+        },
+        inner.hasTraversalLeaf &&
+          inner.traversalOnly &&
+          inner.complexity < branchComplexityLimit &&
+          'The deepest nested loop branches retain an extreme value or enqueue an unseen item, with optional iteration guards.',
+        nestingAdvice(inner.deepest, sourceFile),
+        loopGuardComparison(inner.deepest, sourceFile),
+        node,
+      );
+    }
+    if (inner.complexity >= branchComplexityLimit) {
+      report(
+        {
+          node: functionAnchor(node, parent),
+          ruleId: 'high-branch-complexity',
+          message: `This function has a branch complexity of ${inner.complexity}. Many branches in one function are hard to read and to test. Extract each distinct decision into a named function, or replace a chain of mutually exclusive cases with a lookup table of handlers. Keep the behavior for unmatched cases.`,
+        },
+        textChoiceContext(body, inner.complexity, branchComplexityLimit) ||
+          patchMappingContext(body, inner.complexity, branchComplexityLimit) ||
+          checklistContext(body, inner.complexity, branchComplexityLimit),
+        sectionAdvice(inner.busiestStatement, sourceFile) ??
+          (ts.isBlock(body)
+            ? 'Group related decisions that share an outcome. A change should simplify more than one independent guard.'
+            : 'Extract related conditions in this expression into a named calculation, preserving the order of evaluation.'),
+        undefined,
+        node,
+      );
+    }
+  }
+
+  // Notes the write a node performs inside a query method, and the arrows it invokes immediately.
+  function recordWrite(node: Node, writes: WeakSet<Node>): void {
+    if (ts.isBinaryExpression(node) && ts.isAssignmentOperator(node.operatorToken.kind)) {
+      checkWriteTarget(node.left, writes);
+    } else if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      (node.operator === ts.SyntaxKind.PlusPlusToken || node.operator === ts.SyntaxKind.MinusMinusToken)
+    ) {
+      checkWriteTarget(node.operand, writes);
+    } else if (ts.isDeleteExpression(node)) {
+      checkWriteTarget(node.expression, writes);
+    } else if (ts.isForInStatement(node) || ts.isForOfStatement(node)) {
+      checkWriteTarget(node.initializer, writes);
+    } else if (ts.isCallExpression(node)) {
+      const callee = ts.skipOuterExpressions(node.expression);
+      if (ts.isArrowFunction(callee)) invokedQueryArrows.add(callee);
+    }
+  }
+
+  // The body that makes a statement one more level of nesting, when it has one.
+  function nestedBodyOf(node: Node): Node | undefined {
+    if (ts.isIfStatement(node)) return node.thenStatement;
+    if (ts.isIterationStatement(node, false)) return node.statement;
+    if (ts.isSwitchStatement(node)) return node.caseBlock;
+    if (ts.isCatchClause(node)) return node.block;
+    return undefined;
+  }
+
+  function visitFunctionBodyStatements(body: Block, scope: FunctionScope, depth: number): void {
+    // Moving an isolated one-decision guard rarely makes the function easier to follow.
+    let mostDecisions = 1;
+    for (const statement of body.statements) {
+      const before = scope.complexity;
+      visit(statement, scope, depth, body);
+      const decisions = scope.complexity - before;
+      if (decisions > mostDecisions) {
+        mostDecisions = decisions;
+        scope.busiestStatement = statement;
+      }
+    }
+  }
+
+  function visitNestedStatement(node: Node, nestedBody: Node, scope: FunctionScope, depth: number): void {
+    scope.complexity++;
+    const nestedDepth = depth + 1;
+    classifyNestedTraversal(nestedDepth, scope, node);
+    if (nestedDepth > scope.maxDepth) {
+      scope.maxDepth = nestedDepth;
+      scope.deepest = node;
+    }
+    ts.forEachChild(node, (child) => {
+      const alternative = ts.isIfStatement(node) && child === node.elseStatement && !ts.isIfStatement(child);
+      const inLoop = child === nestedBody && ts.isIterationStatement(node, false);
+      if (inLoop) scope.loops++;
+      visit(child, scope, child === nestedBody || alternative ? nestedDepth : depth, node);
+      if (inLoop) scope.loops--;
+    });
+  }
+
   // Handles one node. Function bodies and control flow recurse through visit; returns true when the
   // caller should descend into the children as plain syntax.
   function enter(
@@ -142,69 +274,7 @@ function analyzeFunctions(sourceFile: SourceFile, relativePath: string): Finding
     parent: Node | undefined,
   ): true | undefined {
     if (ts.isFunctionLike(node) && 'body' in node && node.body) {
-      const writes: WeakSet<Node> | undefined = annotatedInstanceQuery(node, parent)
-        ? new WeakSet()
-        : invokedQueryArrows.has(node)
-          ? scope?.writes
-          : undefined;
-      const inner: FunctionScope = {
-        complexity: 1,
-        maxDepth: 0,
-        hasTraversalLeaf: false,
-        traversalOnly: true,
-        loops: 0,
-        writes,
-      };
-      // Defaults execute on invocation, but do not contribute to the body's complexity.
-      ts.forEachChild(node, (child) => {
-        if (writes && ts.isParameter(child)) {
-          const parameterScope: FunctionScope = {
-            complexity: 1,
-            maxDepth: 0,
-            hasTraversalLeaf: false,
-            traversalOnly: false,
-            loops: 0,
-            writes,
-          };
-          ts.forEachChild(child, (part) =>
-            visit(part, part === child.name || part === child.initializer ? parameterScope : undefined, 0, child),
-          );
-        } else visit(child, child === node.body ? inner : undefined, 0, node);
-      });
-      if (inner.maxDepth >= nestingLimit && inner.deepest) {
-        report(
-          {
-            node: inner.deepest,
-            ruleId: 'deep-control-flow',
-            message: `Control flow reaches ${inner.maxDepth} nested levels. Deep nesting hides which conditions lead to the code. Invert the outer condition into an early \`continue\` or \`return\` (a guard clause), or extract the inner block into a named function. Keep side effects and cleanup on both paths.`,
-          },
-          inner.hasTraversalLeaf &&
-            inner.traversalOnly &&
-            inner.complexity < branchComplexityLimit &&
-            'The deepest nested loop branches retain an extreme value or enqueue an unseen item, with optional iteration guards.',
-          nestingAdvice(inner.deepest, sourceFile),
-          loopGuardComparison(inner.deepest, sourceFile),
-          node,
-        );
-      }
-      if (inner.complexity >= branchComplexityLimit) {
-        report(
-          {
-            node: functionAnchor(node, parent),
-            ruleId: 'high-branch-complexity',
-            message: `This function has a branch complexity of ${inner.complexity}. Many branches in one function are hard to read and to test. Extract each distinct decision into a named function, or replace a chain of mutually exclusive cases with a lookup table of handlers. Keep the behavior for unmatched cases.`,
-          },
-          textChoiceContext(node.body, inner.complexity, branchComplexityLimit) ||
-            patchMappingContext(node.body, inner.complexity, branchComplexityLimit) ||
-            checklistContext(node.body, inner.complexity, branchComplexityLimit),
-          sectionAdvice(inner.busiestStatement, sourceFile) ??
-            (ts.isBlock(node.body)
-              ? 'Group related decisions that share an outcome. A change should simplify more than one independent guard.'
-              : 'Extract related conditions in this expression into a named calculation, preserving the order of evaluation.'),
-          undefined,
-          node,
-        );
-      }
+      enterFunction(node, node.body, scope, parent);
       return;
     }
 
@@ -212,60 +282,17 @@ function analyzeFunctions(sourceFile: SourceFile, relativePath: string): Finding
     // returns.
     if (!scope || ts.isClassLike(node)) return true;
 
-    if (scope.writes) {
-      if (ts.isBinaryExpression(node) && ts.isAssignmentOperator(node.operatorToken.kind)) {
-        checkWriteTarget(node.left, scope.writes);
-      } else if (
-        (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
-        (node.operator === ts.SyntaxKind.PlusPlusToken || node.operator === ts.SyntaxKind.MinusMinusToken)
-      ) {
-        checkWriteTarget(node.operand, scope.writes);
-      } else if (ts.isDeleteExpression(node)) {
-        checkWriteTarget(node.expression, scope.writes);
-      } else if (ts.isForInStatement(node) || ts.isForOfStatement(node)) {
-        checkWriteTarget(node.initializer, scope.writes);
-      } else if (ts.isCallExpression(node)) {
-        const callee = ts.skipOuterExpressions(node.expression);
-        if (ts.isArrowFunction(callee)) invokedQueryArrows.add(callee);
-      }
-    }
+    if (scope.writes) recordWrite(node, scope.writes);
 
     if (ts.isBlock(node) && parent && ts.isFunctionLike(parent) && 'body' in parent && parent.body === node) {
-      // Moving an isolated one-decision guard rarely makes the function easier to follow.
-      let mostDecisions = 1;
-      for (const statement of node.statements) {
-        const before = scope.complexity;
-        visit(statement, scope, depth, node);
-        const decisions = scope.complexity - before;
-        if (decisions > mostDecisions) {
-          mostDecisions = decisions;
-          scope.busiestStatement = statement;
-        }
-      }
+      visitFunctionBodyStatements(node, scope, depth);
       return;
     }
 
-    let nestedBody: Node | undefined;
-    if (ts.isIfStatement(node)) nestedBody = node.thenStatement;
-    else if (ts.isIterationStatement(node, false)) nestedBody = node.statement;
-    else if (ts.isSwitchStatement(node)) nestedBody = node.caseBlock;
-    else if (ts.isCatchClause(node)) nestedBody = node.block;
+    const nestedBody = nestedBodyOf(node);
 
     if (nestedBody) {
-      scope.complexity++;
-      const nestedDepth = depth + 1;
-      classifyNestedTraversal(nestedDepth, scope, node);
-      if (nestedDepth > scope.maxDepth) {
-        scope.maxDepth = nestedDepth;
-        scope.deepest = node;
-      }
-      ts.forEachChild(node, (child) => {
-        const alternative = ts.isIfStatement(node) && child === node.elseStatement && !ts.isIfStatement(child);
-        const inLoop = child === nestedBody && ts.isIterationStatement(node, false);
-        if (inLoop) scope.loops++;
-        visit(child, scope, child === nestedBody || alternative ? nestedDepth : depth, node);
-        if (inLoop) scope.loops--;
-      });
+      visitNestedStatement(node, nestedBody, scope, depth);
       return;
     }
 

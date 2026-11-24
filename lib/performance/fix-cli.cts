@@ -169,6 +169,27 @@ function applyChosenFixes(
   return failed.length ? 2 : 0;
 }
 
+const applyPrompt = '  Apply this fix? [y]es / [n]o / [a]ll remaining / [q]uit: ';
+
+interface AutomaticSummary {
+  readonly applied: number;
+  readonly failed: number;
+  readonly fixable: number;
+  readonly findings: readonly Finding[];
+  readonly all: boolean;
+}
+
+function printAutomaticSummary({ applied, failed, fixable, findings, all }: AutomaticSummary): void {
+  const review = all ? findings.filter((finding: Finding) => finding.fix?.requiresReview).length : 0;
+  const manual = findings.length - fixable - review;
+  console.log(
+    `\nApplied ${applied} of ${fixable} automatic fix(es)` +
+      (failed ? `, ${failed} could not be applied` : '') +
+      (review ? `; ${review} fix(es) require individual review` : '') +
+      (manual ? `; ${manual} finding(s) need a manual change.` : '.'),
+  );
+}
+
 async function applyFixes(
   findings: Finding[],
   { all = false, project = process.cwd(), checker = 'perf', withheld = [], comments, format }: AllFixOptions = {},
@@ -190,7 +211,7 @@ async function applyFixes(
   for (const [index, finding] of fixable.entries()) {
     printFix(finding, index + 1, fixable.length);
     if (!applyRest || finding.fix.requiresReview) {
-      const choice = await askChoice('  Apply this fix? [y]es / [n]o / [a]ll remaining / [q]uit: ');
+      const choice = await askChoice(applyPrompt);
       if (choice === 'q') break;
       if (choice === 'n') continue;
       if (choice === 'a') applyRest = true;
@@ -209,14 +230,7 @@ async function applyFixes(
   }
   if (format !== false && applied.length) tracker.format(project ?? process.cwd());
   history?.finish([], failed, findings.concat(withheld));
-  const review = all ? findings.filter((finding: Finding) => finding.fix?.requiresReview).length : 0;
-  const manual = findings.length - fixable.length - review;
-  console.log(
-    `\nApplied ${applied.length} of ${fixable.length} automatic fix(es)` +
-      (failed.length ? `, ${failed.length} could not be applied` : '') +
-      (review ? `; ${review} fix(es) require individual review` : '') +
-      (manual ? `; ${manual} finding(s) need a manual change.` : '.'),
-  );
+  printAutomaticSummary({ applied: applied.length, failed: failed.length, fixable: fixable.length, findings, all });
   if (applied.length) console.log('Review the changes and run your tests; rerun the check to confirm.');
   if (failed.length) console.log('Rescan the project to review the remaining fixes.');
   return failed.length ? 2 : 0;

@@ -19,7 +19,7 @@ import type {
   TypeChecker,
   TypeNode,
 } from 'typescript';
-import type { SiteFixBuilder, TextEdit } from '../../shared/types.cjs';
+import type { FixResult, SiteFixBuilder, TextEdit } from '../../shared/types.cjs';
 import type { ProjectLoad, ProjectSiteFixInput } from '../types/site-fix-loader.cjs';
 import type { FunctionWithBody, IdentifierParameter } from '../types/site-fix-nodes.cjs';
 
@@ -190,14 +190,24 @@ function replacedRange(call: CallExpression, first: number, last: number, source
   return { start: open, end: close, whole: true };
 }
 
-function optionsArgument(
-  call: CallExpression,
-  parameters: readonly IdentifierParameter[],
-  sourceFile: SourceFile,
-  firstIndex: number,
-  javaScript: boolean,
-  printWidth: number,
-): TextEdit | undefined {
+// What the call-site rewrite of the grouped arguments is built from.
+interface OptionsArgumentInput {
+  readonly call: CallExpression;
+  readonly parameters: readonly IdentifierParameter[];
+  readonly sourceFile: SourceFile;
+  readonly firstIndex: number;
+  readonly javaScript: boolean;
+  readonly printWidth: number;
+}
+
+function optionsArgument({
+  call,
+  parameters,
+  sourceFile,
+  firstIndex,
+  javaScript,
+  printWidth,
+}: OptionsArgumentInput): TextEdit | undefined {
   const endIndex = firstIndex + parameters.length;
   const grouped = call.arguments.slice(firstIndex, endIndex);
   if (call.arguments.slice(0, endIndex).some(ts.isSpreadElement)) return;
@@ -389,29 +399,33 @@ function documentedSignature(fn: FunctionWithBody): boolean {
   );
 }
 
-const groupLocalParameters: SiteFixBuilder = ({ node, sourceFile, load }: ProjectSiteFixInput) => {
-  if (!node || !sourceFile) return;
-  const fn = flaggedFunction(node);
-  if (!fn || fn.typeParameters || (fn.type && ts.isTypePredicateNode(fn.type))) return;
-  const javaScript = /\.[cm]?jsx?$/i.test(sourceFile.fileName);
-  // A non-simple parameter list makes a function's own "use strict" directive illegal.
-  if (hasStrictDirective(fn.body) || (javaScript && documentedSignature(fn))) return;
-  if (!javaScript && fn.parameters.some((p) => !ts.isIdentifier(p.name))) return;
-  const calls = callsForHelper(fn, sourceFile, load, javaScript);
-  if (!calls.length) return;
-  const checker = javaScript ? undefined : originalProgram(sourceFile).getTypeChecker();
-  if (ts.isArrowFunction(fn) && checker && distinctlyTyped(fn, checker)) return;
-  const grouped = javaScript ? suppliedJsParameters(fn, calls) : suppliedPrefix(fn, calls);
-  if (grouped.length < 2) return;
-  const names = grouped.map((p) =>
-    p.initializer ? p.name.text + ' = ' + p.initializer.getText(sourceFile) : p.name.text,
-  );
-  const firstIndex = fn.parameters.indexOf(grouped[0]);
-  const start = grouped[0].getStart(sourceFile);
-  const end = grouped[grouped.length - 1].end;
-  const original = sourceFile.text.slice(start, end);
-  if (/\/\/|\/\*/.test(original)) return;
-  const printWidth = printWidthOf(load);
+interface GroupedBindingInput {
+  readonly grouped: readonly IdentifierParameter[];
+  readonly names: readonly string[];
+  readonly original: string;
+  readonly sourceFile: SourceFile;
+  readonly start: number;
+  readonly end: number;
+  readonly javaScript: boolean;
+  readonly checker: TypeChecker | undefined;
+  readonly printWidth: number;
+  readonly load: ProjectLoad;
+}
+
+// The destructuring pattern that replaces the grouped parameters, with its type literal in
+// TypeScript.
+function groupedBinding({
+  grouped,
+  names,
+  original,
+  sourceFile,
+  start,
+  end,
+  javaScript,
+  checker,
+  printWidth,
+  load,
+}: GroupedBindingInput): string | undefined {
   let binding = '{ ' + names.join(', ') + ' }';
   if (!javaScript && checker) {
     const typeContext = { sourceFile, start, checker, exact: exactOptionalTypes(load) };
@@ -428,12 +442,10 @@ const groupLocalParameters: SiteFixBuilder = ({ node, sourceFile, load }: Projec
       binding = namesText + ': ' + parameterTypes(grouped, { ...typeContext, multiline: true });
     }
   }
-  const edits: TextEdit[] = [{ start, end, text: binding }];
-  for (const call of calls) {
-    const edit = optionsArgument(call, grouped, sourceFile, firstIndex, javaScript, printWidth);
-    if (!edit) return;
-    edits.push(edit);
-  }
+  return binding;
+}
+
+function groupingFix(fn: FunctionWithBody, edits: TextEdit[]): FixResult {
   if (ts.isMethodDeclaration(fn) && !ts.isPrivateIdentifier(fn.name))
     return {
       edits,
@@ -441,6 +453,64 @@ const groupLocalParameters: SiteFixBuilder = ({ node, sourceFile, load }: Projec
       note: 'Names the arguments at the known internal calls to this TypeScript-private method. Check runtime hooks, external callers and dynamically constructed method names before applying.',
     };
   return { edits, note: 'Names the grouped arguments of this local helper at every direct call site.' };
+}
+
+// Whether the function's own shape allows its parameters to become one destructured object.
+function groupable(fn: FunctionWithBody, javaScript: boolean): boolean {
+  if (fn.typeParameters || (fn.type && ts.isTypePredicateNode(fn.type))) return false;
+  // A non-simple parameter list makes a function's own "use strict" directive illegal.
+  if (hasStrictDirective(fn.body) || (javaScript && documentedSignature(fn))) return false;
+  return javaScript || fn.parameters.every((parameter) => ts.isIdentifier(parameter.name));
+}
+
+const groupLocalParameters: SiteFixBuilder = ({ node, sourceFile, load }: ProjectSiteFixInput) => {
+  if (!node || !sourceFile) return;
+  const fn = flaggedFunction(node);
+  if (!fn) return;
+  const javaScript = /\.[cm]?jsx?$/i.test(sourceFile.fileName);
+  if (!groupable(fn, javaScript)) return;
+  const calls = callsForHelper(fn, sourceFile, load, javaScript);
+  if (!calls.length) return;
+  const checker = javaScript ? undefined : originalProgram(sourceFile).getTypeChecker();
+  if (ts.isArrowFunction(fn) && checker && distinctlyTyped(fn, checker)) return;
+  const grouped = javaScript ? suppliedJsParameters(fn, calls) : suppliedPrefix(fn, calls);
+  if (grouped.length < 2) return;
+  const names = grouped.map((p) =>
+    p.initializer ? p.name.text + ' = ' + p.initializer.getText(sourceFile) : p.name.text,
+  );
+  const firstIndex = fn.parameters.indexOf(grouped[0]);
+  const start = grouped[0].getStart(sourceFile);
+  const end = grouped[grouped.length - 1].end;
+  const original = sourceFile.text.slice(start, end);
+  if (/\/\/|\/\*/.test(original)) return;
+  const printWidth = printWidthOf(load);
+  const binding = groupedBinding({
+    grouped,
+    names,
+    original,
+    sourceFile,
+    start,
+    end,
+    javaScript,
+    checker,
+    printWidth,
+    load,
+  });
+  if (binding === undefined) return;
+  const edits: TextEdit[] = [{ start, end, text: binding }];
+  for (const call of calls) {
+    const edit = optionsArgument({
+      call,
+      parameters: grouped,
+      sourceFile,
+      firstIndex,
+      javaScript,
+      printWidth,
+    });
+    if (!edit) return;
+    edits.push(edit);
+  }
+  return groupingFix(fn, edits);
 };
 
 // A function, constructor or conditional type needs parentheses before `| undefined`.

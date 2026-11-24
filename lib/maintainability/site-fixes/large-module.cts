@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
-import type { SourceFile, Statement, TypeElement, TypeNode } from 'typescript';
+import type { Identifier, SourceFile, Statement, TypeElement, TypeNode } from 'typescript';
 import type { Finding, TextEdit } from '../../shared/types.cjs';
 import type { ModuleCreatingFix } from '../types/created-module.cjs';
 import type { StringLiteralImport } from '../types/duplicate-sites.cjs';
@@ -130,6 +130,40 @@ function importEdits(statement: Statement, sourceFile: SourceFile, text: string,
   return [{ start: insertion, end: insertion, text: importText + newline }, removalEdit(statement, sourceFile, text)];
 }
 
+// A plain, single-declaration record that stands alone on its lines and is the size the finding
+// asks to move.
+function movableRecord(
+  statement: Statement,
+  sourceFile: SourceFile,
+  text: string,
+  finding: Finding,
+): { name: Identifier; before: string; count: number } | undefined {
+  if (
+    (!ts.isInterfaceDeclaration(statement) && !ts.isTypeAliasDeclaration(statement)) ||
+    statement.modifiers?.length ||
+    statement.typeParameters ||
+    (ts.isInterfaceDeclaration(statement) && statement.heritageClauses)
+  )
+    return;
+  const name = statement.name;
+  if (reExported(sourceFile, name.text)) return;
+  if (sourceFile.locals?.get(name.escapedText)?.declarations?.length !== 1) return;
+  const members = ts.isInterfaceDeclaration(statement)
+    ? statement.members
+    : ts.isTypeLiteralNode(statement.type) && statement.type.members;
+  if (!members || !recordFields(members, sourceFile)) return;
+  const before = statement.getText(sourceFile);
+  const count = before.split('\n').length;
+  if (count < minimumRecordLines || count > maximumRecordLines) return;
+  if (!resolvesFinding(finding, before.split('\n').filter((line) => line.trim()).length)) return;
+  const start = statement.getStart(sourceFile);
+  const previousLine = text.lastIndexOf('\n', start - 1) + 1;
+  if (previousLine !== start || !/^(?:\r?\n|$)/.test(text.slice(statement.end))) return;
+  // Comments with directives or documentation links can refer to the original module.
+  if (/\/\/|\/\*/.test(statement.getFullText(sourceFile))) return;
+  return { name, before, count };
+}
+
 function extractRecord({ sourceFile, text, finding, load }: ProjectSiteFixInput): ModuleCreatingFix | undefined {
   if (!sourceFile || text === undefined || finding.file === undefined) return;
   if (
@@ -149,29 +183,9 @@ function extractRecord({ sourceFile, text, finding, load }: ProjectSiteFixInput)
     return;
   ts.bindSourceFile(sourceFile, {});
   for (const statement of sourceFile.statements) {
-    if (
-      (!ts.isInterfaceDeclaration(statement) && !ts.isTypeAliasDeclaration(statement)) ||
-      statement.modifiers?.length ||
-      statement.typeParameters ||
-      (ts.isInterfaceDeclaration(statement) && statement.heritageClauses)
-    )
-      continue;
-    const name = statement.name;
-    if (reExported(sourceFile, name.text)) continue;
-    if (sourceFile.locals?.get(name.escapedText)?.declarations?.length !== 1) continue;
-    const members = ts.isInterfaceDeclaration(statement)
-      ? statement.members
-      : ts.isTypeLiteralNode(statement.type) && statement.type.members;
-    if (!members || !recordFields(members, sourceFile)) continue;
-    const before = statement.getText(sourceFile);
-    const count = before.split('\n').length;
-    if (count < minimumRecordLines || count > maximumRecordLines) continue;
-    if (!resolvesFinding(finding, before.split('\n').filter((line) => line.trim()).length)) continue;
-    const start = statement.getStart(sourceFile);
-    const previousLine = text.lastIndexOf('\n', start - 1) + 1;
-    if (previousLine !== start || !/^(?:\r?\n|$)/.test(text.slice(statement.end))) continue;
-    // Comments with directives or documentation links can refer to the original module.
-    if (/\/\/|\/\*/.test(statement.getFullText(sourceFile))) continue;
+    const record = movableRecord(statement, sourceFile, text, finding);
+    if (!record) continue;
+    const { name, before, count } = record;
     const file = path.posix.join(path.posix.dirname(finding.file.replaceAll('\\', '/')), stem + '.ts');
     return {
       edits: importEdits(

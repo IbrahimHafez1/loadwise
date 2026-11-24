@@ -1,3 +1,4 @@
+// loadwise-reviewed large-module -- one registry of independent collection-rule builders (membership, find, lookups) that share the placement and lookup-declaration helpers; each builder stays beside the rule it proves
 // Site fixes for collection rules. Each builder returns undefined unless the rewrite provably keeps
 // behavior.
 import {
@@ -19,6 +20,7 @@ import type {
   Block,
   BindingName,
   CallExpression,
+  FunctionExpression,
   Identifier,
   ImportDeclaration,
   Node,
@@ -29,6 +31,7 @@ import type {
   SourceFile,
   SpreadAssignment,
   SpreadElement,
+  SyntaxKind,
   Statement,
   VariableDeclaration,
 } from 'typescript';
@@ -511,6 +514,7 @@ function chainSetBase(sourceFile: SourceFile, receiver: Identifier | PropertyAcc
     .join('');
 }
 
+// loadwise-reviewed high-branch-complexity -- a linear chain of independent safety bail-outs (receiver, name, placement, chain reads) before a single Set rewrite; splitting scatters the proof from the edit it guards
 function membershipFix({ node, sourceFile }: SiteFixInput): FixResult | undefined {
   if (!node || !sourceFile) return;
   const flagged = calleeCall(node);
@@ -707,6 +711,7 @@ function isFindLookupFacts(value: unknown): value is FindLookupFacts {
   );
 }
 
+// loadwise-reviewed high-branch-complexity -- a linear chain of independent safety bail-outs (facts, receiver, key shape, placement, eager reads) before a single Map rewrite; splitting scatters the proof from the edit it guards
 function findFix({ node, sourceFile, finding }: SiteFixInput): FixResult | undefined {
   if (!node || !sourceFile) return;
   const facts = finding.findLookup;
@@ -761,60 +766,83 @@ function findFix({ node, sourceFile, finding }: SiteFixInput): FixResult | undef
   };
 }
 
-function existenceRewrite(length: PropertyAccessExpression): ExistenceRewrite | undefined {
-  const parent = length.parent;
-  if (ts.isBinaryExpression(parent)) {
-    const lengthOnLeft = parent.left === length;
-    const other = lengthOnLeft ? parent.right : parent.left;
-    if (!ts.isNumericLiteral(other)) return;
-    const { kind } = parent.operatorToken;
-    const threshold = Number(other.text);
-    let positive: boolean | undefined;
-    if (threshold === 0) {
-      const zeroTable: Record<number, boolean | undefined> = {
-        [ts.SyntaxKind.ExclamationEqualsEqualsToken]: true,
-        [ts.SyntaxKind.ExclamationEqualsToken]: true,
-        [ts.SyntaxKind.EqualsEqualsEqualsToken]: false,
-        [ts.SyntaxKind.EqualsEqualsToken]: false,
-        [ts.SyntaxKind.GreaterThanToken]: lengthOnLeft ? true : undefined,
-        [ts.SyntaxKind.LessThanToken]: lengthOnLeft ? undefined : true,
-        [ts.SyntaxKind.LessThanEqualsToken]: lengthOnLeft ? false : undefined,
-        [ts.SyntaxKind.GreaterThanEqualsToken]: lengthOnLeft ? undefined : false,
-      };
-      positive = zeroTable[kind];
-    } else if (threshold === 1) {
-      const oneTable: Record<number, boolean | undefined> = {
-        [ts.SyntaxKind.GreaterThanEqualsToken]: lengthOnLeft ? true : undefined,
-        [ts.SyntaxKind.LessThanEqualsToken]: lengthOnLeft ? undefined : true,
-        [ts.SyntaxKind.LessThanToken]: lengthOnLeft ? false : undefined,
-        [ts.SyntaxKind.GreaterThanToken]: lengthOnLeft ? undefined : false,
-      };
-      positive = oneTable[kind];
-    }
-    if (positive === undefined) return;
-    return { replaced: parent, negate: !positive };
+// Whether `length <op> threshold` (or the mirrored form) holds exactly when the array is non-empty
+// (true), exactly when it is empty (false), or neither (undefined).
+function lengthComparisonPositive(kind: SyntaxKind, threshold: number, lengthOnLeft: boolean): boolean | undefined {
+  if (threshold === 0) {
+    const zeroTable: Record<number, boolean | undefined> = {
+      [ts.SyntaxKind.ExclamationEqualsEqualsToken]: true,
+      [ts.SyntaxKind.ExclamationEqualsToken]: true,
+      [ts.SyntaxKind.EqualsEqualsEqualsToken]: false,
+      [ts.SyntaxKind.EqualsEqualsToken]: false,
+      [ts.SyntaxKind.GreaterThanToken]: lengthOnLeft ? true : undefined,
+      [ts.SyntaxKind.LessThanToken]: lengthOnLeft ? undefined : true,
+      [ts.SyntaxKind.LessThanEqualsToken]: lengthOnLeft ? false : undefined,
+      [ts.SyntaxKind.GreaterThanEqualsToken]: lengthOnLeft ? undefined : false,
+    };
+    return zeroTable[kind];
   }
-  let expression: Node = length;
-  let consumer = expression.parent;
-  while (
-    ts.isBinaryExpression(consumer) &&
-    (consumer.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
-      consumer.operatorToken.kind === ts.SyntaxKind.BarBarToken)
-  ) {
-    expression = consumer;
-    consumer = expression.parent;
+  if (threshold === 1) {
+    const oneTable: Record<number, boolean | undefined> = {
+      [ts.SyntaxKind.GreaterThanEqualsToken]: lengthOnLeft ? true : undefined,
+      [ts.SyntaxKind.LessThanEqualsToken]: lengthOnLeft ? undefined : true,
+      [ts.SyntaxKind.LessThanToken]: lengthOnLeft ? false : undefined,
+      [ts.SyntaxKind.GreaterThanToken]: lengthOnLeft ? undefined : false,
+    };
+    return oneTable[kind];
   }
-  const inCondition =
+  return undefined;
+}
+
+function comparisonExistenceRewrite(
+  length: PropertyAccessExpression,
+  comparison: BinaryExpression,
+): ExistenceRewrite | undefined {
+  const lengthOnLeft = comparison.left === length;
+  const other = lengthOnLeft ? comparison.right : comparison.left;
+  if (!ts.isNumericLiteral(other)) return;
+  const positive = lengthComparisonPositive(comparison.operatorToken.kind, Number(other.text), lengthOnLeft);
+  if (positive === undefined) return;
+  return { replaced: comparison, negate: !positive };
+}
+
+function isLogicalOperation(node: Node): boolean {
+  return (
+    ts.isBinaryExpression(node) &&
+    (node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+      node.operatorToken.kind === ts.SyntaxKind.BarBarToken)
+  );
+}
+
+function isStatementCondition(consumer: Node, expression: Node): boolean {
+  return (
     ((ts.isIfStatement(consumer) || ts.isWhileStatement(consumer) || ts.isDoStatement(consumer)) &&
       consumer.expression === expression) ||
-    ((ts.isConditionalExpression(consumer) || ts.isForStatement(consumer)) && consumer.condition === expression) ||
+    ((ts.isConditionalExpression(consumer) || ts.isForStatement(consumer)) && consumer.condition === expression)
+  );
+}
+
+// The rule only reports `Boolean(...)` after resolving it to the built-in conversion.
+function isBooleanConversionArgument(consumer: Node, expression: Node): boolean {
+  return (
+    ts.isCallExpression(consumer) &&
+    consumer.arguments.length === 1 &&
+    consumer.arguments[0] === expression &&
+    ts.isIdentifier(consumer.expression) &&
+    consumer.expression.text === 'Boolean'
+  );
+}
+
+function existenceRewrite(length: PropertyAccessExpression): ExistenceRewrite | undefined {
+  const parent = length.parent;
+  if (ts.isBinaryExpression(parent)) return comparisonExistenceRewrite(length, parent);
+  let expression: Node = length;
+  while (isLogicalOperation(expression.parent)) expression = expression.parent;
+  const consumer = expression.parent;
+  const inCondition =
+    isStatementCondition(consumer, expression) ||
     (ts.isPrefixUnaryExpression(consumer) && consumer.operator === ts.SyntaxKind.ExclamationToken) ||
-    // The rule only reports `Boolean(...)` after resolving it to the built-in conversion.
-    (ts.isCallExpression(consumer) &&
-      consumer.arguments.length === 1 &&
-      consumer.arguments[0] === expression &&
-      ts.isIdentifier(consumer.expression) &&
-      consumer.expression.text === 'Boolean');
+    isBooleanConversionArgument(consumer, expression);
   return inCondition ? { replaced: length, negate: false } : undefined;
 }
 
@@ -964,80 +992,155 @@ function propertyTarget(property: ObjectLiteralElementLike, accumulator: string)
   if (ts.isStringLiteralLike(name) && name.text !== '__proto__') return `${accumulator}[${textOf(name)}] = ${value};`;
 }
 
-function reduceCopyFix({ node }: SiteFixInput): FixResult | undefined {
-  if (!node) return;
+type CopyLiteral = ArrayLiteralExpression | ObjectLiteralExpression;
+
+interface CopySpreadSite {
+  readonly literal: CopyLiteral;
+  readonly copiedSource: Identifier;
+}
+
+interface ReduceCallback {
+  readonly callback: ArrowFunction | FunctionExpression;
+  readonly reduce: CallExpression;
+}
+
+interface AccumulatorParameter {
+  readonly name: string;
+  readonly hasType: boolean;
+}
+
+// The leading `...accumulator` spread of the array or object literal that contains the node.
+function findCopySpread(node: Node): CopySpreadSite | undefined {
   const spread = ancestor(
     node,
     (current): current is SpreadElement | SpreadAssignment =>
       ts.isSpreadElement(current) || ts.isSpreadAssignment(current),
   );
   const literal = spread?.parent;
-  if (!literal || (!ts.isArrayLiteralExpression(literal) && !ts.isObjectLiteralExpression(literal))) return;
+  if (!spread || !literal || (!ts.isArrayLiteralExpression(literal) && !ts.isObjectLiteralExpression(literal))) return;
   const entries = ts.isArrayLiteralExpression(literal) ? literal.elements : literal.properties;
   if (entries[0] !== spread) return;
   const copiedSource = skipParentheses(spread.expression);
   if (!ts.isIdentifier(copiedSource)) return;
+  return { literal, copiedSource };
+}
+
+function isReduceWithInitial(reduce: Node, callback: Node): reduce is CallExpression {
+  return (
+    ts.isCallExpression(reduce) &&
+    reduce.arguments[0] === callback &&
+    reduce.arguments.length === 2 &&
+    ts.isPropertyAccessExpression(reduce.expression) &&
+    reduce.expression.name.text === 'reduce' &&
+    !ts.isOptionalChain(reduce)
+  );
+}
+
+function findReduceCallback(literal: CopyLiteral): ReduceCallback | undefined {
   const callback = ancestor(literal, ts.isFunctionLike);
   if (!callback) return;
   const reduce = callback.parent;
-  if (
-    !ts.isCallExpression(reduce) ||
-    reduce.arguments[0] !== callback ||
-    reduce.arguments.length !== 2 ||
-    !ts.isPropertyAccessExpression(reduce.expression) ||
-    reduce.expression.name.text !== 'reduce' ||
-    ts.isOptionalChain(reduce)
-  )
-    return;
+  if (!isReduceWithInitial(reduce, callback)) return;
   if (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback)) return;
+  return { callback, reduce };
+}
+
+function plainAccumulator(callback: ArrowFunction | FunctionExpression): AccumulatorParameter | undefined {
   const [accumulator] = callback.parameters;
   if (!accumulator || !ts.isIdentifier(accumulator.name) || accumulator.initializer || accumulator.dotDotDotToken)
     return;
-  const accumulatorName = accumulator.name.text;
-  if (copiedSource.text !== accumulatorName || countNames(callback.body, accumulatorName) !== 1) return;
+  return { name: accumulator.name.text, hasType: Boolean(accumulator.type) };
+}
+
+// Without a type on the accumulator, reduce() or an assertion on the initial value, TypeScript
+// types the accumulator as the literal's own shape: the spread copy accepts a new key but an
+// assignment of it does not.
+function typesAccumulator(reduce: CallExpression, accumulator: AccumulatorParameter): boolean {
+  return (
+    accumulator.hasType ||
+    Boolean(reduce.typeArguments) ||
+    !ts.isObjectLiteralExpression(skipParentheses(reduce.arguments[1]))
+  );
+}
+
+function initialValueAllowsRewrite(
+  reduce: CallExpression,
+  accumulator: AccumulatorParameter,
+  wantsArray: boolean,
+): boolean {
   const initial = skipOuterExpressionsOf(reduce.arguments[1]);
-  const wantsArray = ts.isArrayLiteralExpression(literal);
-  if (wantsArray ? !ts.isArrayLiteralExpression(initial) : !ts.isObjectLiteralExpression(initial)) return;
-  // Without a type on the accumulator, reduce() or an assertion on the initial value, TypeScript
-  // types the accumulator as the literal's own shape: the spread copy accepts a new key but an
-  // assignment of it does not.
-  const typesAccumulator =
-    accumulator.type || reduce.typeArguments || !ts.isObjectLiteralExpression(skipParentheses(reduce.arguments[1]));
-  if (!wantsArray && typeScriptFile.test(reduce.getSourceFile().fileName) && !typesAccumulator) return;
-  const statements = copiedAccumulatorStatements(literal, accumulatorName);
-  if (!statements) return;
-  const returned = outerParenthesized(literal);
-  const text = callback.getSourceFile().text;
-  if (ts.isBlock(callback.body)) {
-    const statement = returned.parent;
-    if (!ts.isReturnStatement(statement) || statement.parent !== callback.body) return;
-    const indentation = indentationAt(text, statement.getStart());
-    const lines = [...statements, `return ${accumulatorName};`];
-    return {
-      edits: [
-        {
-          start: statement.getStart(),
-          end: statement.end,
-          text: lines.join(`\n${indentation}`),
-        },
-      ],
-      note: accumulatorNote(wantsArray),
-    };
-  }
-  if (returned !== callback.body) return;
-  const indentation = indentationAt(text, callback.body.getStart());
-  const inner = indentation + arrayCopyIndent;
-  const lines = [...statements, `return ${accumulatorName};`].map((line) => inner + line);
+  if (wantsArray ? !ts.isArrayLiteralExpression(initial) : !ts.isObjectLiteralExpression(initial)) return false;
+  return wantsArray || !typeScriptFile.test(reduce.getSourceFile().fileName) || typesAccumulator(reduce, accumulator);
+}
+
+function blockBodyFix(
+  body: Block,
+  returned: Node,
+  lines: string[],
+  text: string,
+  wantsArray: boolean,
+): FixResult | undefined {
+  const statement = returned.parent;
+  if (!ts.isReturnStatement(statement) || statement.parent !== body) return;
+  const indentation = indentationAt(text, statement.getStart());
   return {
     edits: [
       {
-        start: callback.body.getStart(),
-        end: callback.body.end,
-        text: `{\n${lines.join('\n')}\n${indentation}}`,
+        start: statement.getStart(),
+        end: statement.end,
+        text: lines.join(`\n${indentation}`),
       },
     ],
     note: accumulatorNote(wantsArray),
   };
+}
+
+function expressionBodyFix(
+  body: Node,
+  returned: Node,
+  lines: string[],
+  text: string,
+  wantsArray: boolean,
+): FixResult | undefined {
+  if (returned !== body) return;
+  const indentation = indentationAt(text, body.getStart());
+  const inner = indentation + arrayCopyIndent;
+  const indentedLines = lines.map((line) => inner + line);
+  return {
+    edits: [
+      {
+        start: body.getStart(),
+        end: body.end,
+        text: `{\n${indentedLines.join('\n')}\n${indentation}}`,
+      },
+    ],
+    note: accumulatorNote(wantsArray),
+  };
+}
+
+function reduceCopyFix({ node }: SiteFixInput): FixResult | undefined {
+  if (!node) return;
+  const site = findCopySpread(node);
+  if (!site) return;
+  const { literal, copiedSource } = site;
+  const found = findReduceCallback(literal);
+  if (!found) return;
+  const { callback, reduce } = found;
+  const accumulator = plainAccumulator(callback);
+  if (!accumulator) return;
+  const accumulatorName = accumulator.name;
+  if (copiedSource.text !== accumulatorName || countNames(callback.body, accumulatorName) !== 1) return;
+  const wantsArray = ts.isArrayLiteralExpression(literal);
+  if (!initialValueAllowsRewrite(reduce, accumulator, wantsArray)) return;
+  const statements = copiedAccumulatorStatements(literal, accumulatorName);
+  if (!statements) return;
+  const returned = outerParenthesized(literal);
+  const text = callback.getSourceFile().text;
+  const lines = [...statements, `return ${accumulatorName};`];
+  const { body } = callback;
+  return ts.isBlock(body)
+    ? blockBodyFix(body, returned, lines, text, wantsArray)
+    : expressionBodyFix(body, returned, lines, text, wantsArray);
 }
 
 function accumulatorNote(wantsArray: boolean): string {

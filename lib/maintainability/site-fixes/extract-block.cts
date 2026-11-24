@@ -1,3 +1,4 @@
+// loadwise-reviewed large-module -- one extract-block fix pipeline (data flow, naming, edit planning, measurement) over shared private types where each stage feeds the next; splitting would only export private internals across files
 // Moves one statement into a named function and calls it where the statement stood:
 //   processRows(rows, seen);
 //   ...

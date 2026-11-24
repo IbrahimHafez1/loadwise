@@ -4,20 +4,19 @@ import { awaitedResult, consumesLazyQuery, isDiscardedValue, outsideWrappers } f
 import { isBatchCollection, shouldReportLoopQuery } from './query-loops.cjs';
 import { isSequentialByDesign } from './sequential-loops.cjs';
 import { modelFallback } from './models/index.cjs';
+import { declaredTypeormOwner, isTypeormPackage, methodOwner, symbolOwner, typeormImportOf } from './orm-owners.cjs';
 import { returnedRowMap, checkTypeormProjection, isWhereOnlyOptions } from './typeorm-projection.cjs';
 import type {
   AwaitExpression,
   Block,
   CallExpression,
-  ClassLikeDeclaration,
   Expression,
-  Identifier,
   MemberName,
   Node,
   PropertyAccessExpression,
   SyntaxKind,
 } from 'typescript';
-import type { CheckerAdapter, PerformanceRuleContext, SymbolAdapter } from '../shared/types.cjs';
+import type { CheckerAdapter, PerformanceRuleContext } from '../shared/types.cjs';
 import type { ModelFamily } from './types/model-fallback.cjs';
 import type { RepeatOwner } from './types/repeat-owner.cjs';
 const ts = loadSyntax();
@@ -90,22 +89,12 @@ const knexReads = new Set([
 ]);
 const kyselyExecutors = new Set(['execute', 'executeTakeFirst', 'executeTakeFirstOrThrow']);
 const mikroOrmReads = new Set(['find', 'findOne', 'findOneOrFail', 'findAll', 'findAndCount', 'count']);
-const mikroOrmOwners = new Set(['EntityManager', 'SqlEntityManager', 'EntityRepository', 'SqlEntityRepository']);
 const payloadReads = new Set(['find', 'findByID', 'findGlobal', 'findVersions', 'findVersionByID', 'count']);
 // How each owner reads many keys in one call, for the read message.
 const batchReadExamples: Record<string, string> = {
   MikroORM: '`{ id: ids }`, which MikroORM reads as `$in`',
   Payload: '`where: { id: { in: ids } }`',
 };
-const typeormOwnerNames = new Map([
-  ['Repository', 'TypeORM'],
-  ['EntityManager', 'TypeORM EntityManager'],
-  ['DataSource', 'TypeORM DataSource'],
-  ['QueryRunner', 'TypeORM QueryRunner'],
-]);
-// TypeORM and forks published under a scope, such as @n8n/typeorm; @nestjs/typeorm only wires
-// TypeORM into Nest.
-const typeormPackage = /^(?:@[^/]+\/)?typeorm$/;
 // ORMs whose project models are recognised from source when the package types are missing (reduced
 // precision).
 const modelFallbackOwners: Partial<Record<ModelFamily, string>> = {
@@ -115,7 +104,6 @@ const modelFallbackOwners: Partial<Record<ModelFamily, string>> = {
 };
 const UNKNOWN_WRITE_SHAPE_REASON =
   'The ORM package is not installed, so the written value may already be a list saved in one statement.';
-const MAX_HERITAGE_DEPTH = 4;
 // `{ where: { relation: { id: { in: ids } } } }` nests the key list this deep.
 const MAX_FILTER_DEPTH = 3;
 const listOperators = new Set(['in', '$in']);
@@ -142,110 +130,6 @@ const literalKeywords: readonly SyntaxKind[] = [
   ts.SyntaxKind.FalseKeyword,
   ts.SyntaxKind.NullKeyword,
 ];
-
-function isTypeormPackage(name: string | undefined): boolean {
-  return !!name && name !== '@nestjs/typeorm' && typeormPackage.test(name);
-}
-
-function packageNameOf(specifier: string) {
-  const [first, second] = specifier.split('/');
-  return first.startsWith('@') ? `${first}/${second}` : first;
-}
-
-// The exported name an identifier imports from TypeORM, whether or not the package's types are
-// installed.
-function typeormImportOf(identifier: Identifier, checker: CheckerAdapter): string | undefined {
-  const declaration = checker.getSymbolAtLocation(identifier)?.declarations?.[0];
-  if (!declaration || !ts.isImportSpecifier(declaration)) return;
-  const specifier = declaration.parent.parent.parent.moduleSpecifier;
-  if (ts.isStringLiteral(specifier) && isTypeormPackage(packageNameOf(specifier.text)))
-    return (declaration.propertyName ?? declaration.name).text;
-}
-
-function extendedClass(declaration: ClassLikeDeclaration | undefined): Expression | undefined {
-  return declaration?.heritageClauses?.find((clause) => clause.token === ts.SyntaxKind.ExtendsKeyword)?.types[0]
-    ?.expression;
-}
-
-// `Repository` imported from TypeORM, or a project class such as `class UserRepository extends
-// Repository<User>`.
-function classTypeormOwner(name: Node | undefined, checker: CheckerAdapter, depth = 0): string | undefined {
-  if (depth > MAX_HERITAGE_DEPTH || !name || !ts.isIdentifier(name)) return;
-  const imported = typeormImportOf(name, checker);
-  if (imported) return typeormOwnerNames.get(imported);
-  let symbol = checker.getSymbolAtLocation(name);
-  if (symbol && symbol.flags & ts.SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol);
-  return classTypeormOwner(extendedClass(symbol?.declarations?.find(ts.isClassDeclaration)), checker, depth + 1);
-}
-
-function enclosingClass(node: Node): ClassLikeDeclaration | undefined {
-  for (let current = node.parent; current; current = current.parent) {
-    if (ts.isClassLike(current)) return current;
-    if (ts.isFunctionLike(current) && !ts.isArrowFunction(current) && !ts.isClassLike(current.parent)) return;
-  }
-}
-
-// Without TypeORM's types a method call resolves to nothing, but the receiver's declared type, such
-// as an injected
-// `Repository<User>` or `this` inside a class extending it, still names its owner.
-function declaredTypeormOwner(receiver: Expression, checker: CheckerAdapter): string | undefined {
-  const value = ts.skipOuterExpressions(receiver);
-  if (value.kind === ts.SyntaxKind.ThisKeyword) return classTypeormOwner(extendedClass(enclosingClass(value)), checker);
-  const name = ts.isPropertyAccessExpression(value) ? value.name : value;
-  if (!ts.isIdentifier(name)) return;
-  const declaration = checker.getSymbolAtLocation(name)?.valueDeclaration;
-  const type =
-    declaration &&
-    (ts.isParameter(declaration) || ts.isPropertyDeclaration(declaration) || ts.isVariableDeclaration(declaration)) &&
-    declaration.type;
-  if (type && ts.isTypeReferenceNode(type)) return classTypeormOwner(type.typeName, checker);
-}
-
-function declaredOwner(declaration: Node): string | undefined {
-  const owner = declaration.parent;
-  if ((!ts.isClassDeclaration(owner) && !ts.isInterfaceDeclaration(owner)) || !owner.name) return;
-  const file = declaration.getSourceFile();
-  if (!file.isDeclarationFile) return;
-  const segments = file.fileName.replaceAll('\\', '/').split('/node_modules/');
-  if (segments.length < 2) return;
-  const packagePath = segments[segments.length - 1];
-  if (isTypeormPackage(packageNameOf(packagePath))) {
-    if (owner.name.text === 'Repository') return 'TypeORM';
-    if (owner.name.text === 'EntityManager') return 'TypeORM EntityManager';
-    if (owner.name.text === 'DataSource') return 'TypeORM DataSource';
-    if (owner.name.text === 'QueryRunner') return 'TypeORM QueryRunner';
-  }
-  if (owner.name.text === 'Model' && packagePath.startsWith('sequelize/')) return 'Sequelize';
-  if (
-    (owner.name.text === 'Model' || owner.name.text === 'ModelTypeScript') &&
-    packagePath.startsWith('@sequelize/core/')
-  )
-    return 'Sequelize';
-  if (packagePath.startsWith('mongoose/')) {
-    if (owner.name.text === 'Model') return 'Mongoose Model';
-    if (owner.name.text === 'Query') return 'Mongoose Query';
-  }
-  if (packagePath.startsWith('knex/') && (owner.name.text === 'QueryInterface' || owner.name.text === 'QueryBuilder'))
-    return 'Knex';
-  if (
-    packagePath.startsWith('kysely/') &&
-    (owner.name.text === 'SelectQueryBuilder' || owner.name.text === 'QueryCreator')
-  )
-    return 'Kysely';
-  if (packagePath.startsWith('@mikro-orm/') && mikroOrmOwners.has(owner.name.text)) return 'MikroORM';
-  if (packagePath.startsWith('payload/') && owner.name.text === 'BasePayload') return 'Payload';
-}
-
-function symbolOwner(symbol: SymbolAdapter | undefined) {
-  const declarations = symbol?.declarations;
-  if (!declarations?.length) return;
-  const owner = declaredOwner(declarations[0]);
-  if (owner && declarations.every((declaration) => declaredOwner(declaration) === owner)) return owner;
-}
-
-function methodOwner(name: Node, checker: CheckerAdapter) {
-  return symbolOwner(checker.getSymbolAtLocation(name));
-}
 
 const identifierCounts = new WeakMap<Block, Map<string, number>>();
 
@@ -525,6 +409,185 @@ function isArrayType(node: Node, checker: CheckerAdapter) {
   );
 }
 
+interface ResolvedOrmOwner {
+  readonly owner: string | undefined;
+  readonly recognisedFromSource: boolean;
+}
+
+function resolveOrmOwner(
+  access: Expression,
+  propertyAccess: PropertyAccessExpression | undefined,
+  member: MemberName | undefined,
+  context: PerformanceRuleContext,
+): ResolvedOrmOwner {
+  let owner: string | undefined = member && methodOwner(member, context.checker);
+  if (propertyAccess && !owner && !context.checker.getSymbolAtLocation(propertyAccess.name))
+    owner = declaredTypeormOwner(propertyAccess.expression, context.checker);
+  const recognisedFromSource = !!member && !owner && !context.checker.getSymbolAtLocation(member);
+  if (recognisedFromSource) {
+    const fallbackOrm = modelFallback(access, context.checker)?.orm;
+    owner = fallbackOrm === undefined ? undefined : modelFallbackOwners[fallbackOrm];
+  }
+  return { owner, recognisedFromSource };
+}
+
+interface TypeormReadFacts {
+  readonly propertyAccess: PropertyAccessExpression | undefined;
+  readonly owner: string;
+  readonly rowMap: CallExpression | false | undefined;
+  readonly exists: 'exists' | 'existsBy' | undefined;
+  readonly repeated: boolean;
+}
+
+function reportTypeormRead(call: CallExpression, facts: TypeormReadFacts, context: PerformanceRuleContext): void {
+  const { propertyAccess, owner, rowMap, exists, repeated } = facts;
+  if (
+    rowMap &&
+    propertyAccess &&
+    symbolOwner(context.checker.getTypeAtLocation(propertyAccess.expression).getProperty('findBy')) === owner
+  )
+    checkTypeormProjection(call, rowMap, context);
+  if (
+    exists &&
+    propertyAccess &&
+    !repeated &&
+    symbolOwner(context.checker.getTypeAtLocation(propertyAccess.expression).getProperty(exists)) === owner
+  ) {
+    context.report(
+      propertyAccess.name,
+      'typeorm-existence-materialization',
+      `This read hydrates entities only to test existence. Use \`Repository.${exists}()\` with the same filter; entity-load hooks and subscribers will not run.`,
+    );
+  }
+}
+
+interface LoopQueryFacts {
+  readonly owner: string;
+  readonly name: string;
+  readonly write: boolean;
+  readonly recognisedFromSource: boolean;
+}
+
+function reportLoopQuery(call: CallExpression, facts: LoopQueryFacts, context: PerformanceRuleContext): void {
+  const { owner, name, write, recognisedFromSource } = facts;
+  const access = call.expression;
+  const member = ts.isPropertyAccessExpression(access) ? access.name : undefined;
+  if (
+    (write && name !== 'query' && writesList(call, context.checker)) ||
+    isSequentialByDesign(call, findRepeatOwner(call, context.checker)) ||
+    (owner.startsWith('TypeORM') && passesInBatch(call, context.checker)) ||
+    !shouldReportLoopQuery(call, context.checker, { family: owner, method: name })
+  )
+    return;
+  const operation = `${owner}${name ? '.' + name : ''}()`;
+  const combinator = promiseCombinatorOf(findRepeatOwner(call, context.checker));
+  // Started together through a Promise combinator, the calls overlap instead of adding up.
+  const cost = combinator
+    ? `\`Promise.${combinator}\` starts them at once, so the waits overlap, but each item still costs its own round trip and pooled connection.`
+    : undefined;
+  context.report(
+    member || access,
+    'orm-query-in-loop',
+    write
+      ? `${operation} runs one write per item, ${cost ?? 'adding a round trip each time.'} Write the rows in one statement where the per-row values allow it (for example \`insert(rows)\`, \`save(entities)\` in chunks, or \`update({ id: In(ids) }, values)\` when every row gets the same change); keep per-row hooks, ordering and transaction.`
+      : `${operation} can run one database operation per item, ${cost ?? 'adding a round trip each time.'} For independent reads, fetch all keys at once (for example ${batchReadExamples[owner] ?? '`In(ids)` or `$in`'}) and index the rows in a Map; keep per-item filters, ordering and transaction.`,
+    recognisedFromSource && write && !isObjectLiteralArgument(call) ? UNKNOWN_WRITE_SHAPE_REASON : undefined,
+  );
+}
+
+interface QueryShape {
+  readonly propertyAccess: PropertyAccessExpression | undefined;
+  readonly name: string;
+  readonly owner: string | undefined;
+  readonly length: MemberName | undefined;
+  readonly callableTable: boolean;
+  readonly rowMap: CallExpression | false | undefined;
+  readonly exists: 'exists' | 'existsBy' | undefined;
+  readonly repeated: boolean;
+}
+
+interface QueryExecution {
+  readonly owner: string | undefined;
+  readonly executes: boolean;
+  readonly countMethod: string | undefined;
+  readonly write: boolean;
+}
+
+function classifyKysely(shape: QueryShape, context: PerformanceRuleContext): QueryExecution {
+  const { propertyAccess, name, owner, length } = shape;
+  const countable =
+    length &&
+    name === 'execute' &&
+    propertyAccess &&
+    simpleBuilderSelect(ts.skipOuterExpressions(propertyAccess.expression), owner, context);
+  return { owner, executes: true, countMethod: countable ? 'COUNT(*)' : undefined, write: false };
+}
+
+function classifyKnexRead(call: CallExpression, shape: QueryShape, context: PerformanceRuleContext): QueryExecution {
+  const owner = 'Knex';
+  const countable = shape.length && simpleBuilderSelect(call, owner, context);
+  return {
+    owner,
+    executes: consumesLazyQuery(call, context.checker),
+    countMethod: countable ? 'COUNT(*)' : undefined,
+    write: false,
+  };
+}
+
+function classifyTypeormRead(call: CallExpression, shape: QueryShape, context: PerformanceRuleContext): QueryExecution {
+  const { propertyAccess, name, length, rowMap, exists, repeated } = shape;
+  const owner = 'TypeORM';
+  reportTypeormRead(call, { propertyAccess, owner, rowMap, exists, repeated }, context);
+  let countMethod: string | undefined;
+  if (length && name === 'find' && isWhereOnlyOptions(call)) countMethod = 'Repository.count()';
+  if (length && name === 'findBy' && call.arguments.length === 1) countMethod = 'Repository.countBy()';
+  return { owner, executes: true, countMethod, write: false };
+}
+
+function classifyMongoose(call: CallExpression, shape: QueryShape, context: PerformanceRuleContext): QueryExecution {
+  const { propertyAccess, name, owner, length } = shape;
+  let executes = owner === 'Mongoose Query' && mongoTerminals.has(name);
+  if (!executes && (mongoReads.has(name) || (owner === 'Mongoose Query' && mongoModifiers.has(name)))) {
+    executes = consumesLazyQuery(call, context.checker);
+  }
+  const countable = length && propertyAccess && countsModelFind(call, propertyAccess, owner, context.checker);
+  return { owner, executes, countMethod: countable ? 'Model.countDocuments()' : undefined, write: false };
+}
+
+function classifyExecution(call: CallExpression, shape: QueryShape, context: PerformanceRuleContext): QueryExecution {
+  const { propertyAccess, name, owner, length, callableTable } = shape;
+  const none: QueryExecution = { owner, executes: false, countMethod: undefined, write: false };
+  if (owner === 'Kysely' && kyselyExecutors.has(name)) return classifyKysely(shape, context);
+  if (
+    (owner === 'Knex' && knexReads.has(name)) ||
+    (callableTable && context.isPackageType(call.expression, knexPackages, knexDatabases))
+  )
+    return classifyKnexRead(call, shape, context);
+  if (
+    (name === 'then' || name === 'catch' || name === 'finally') &&
+    propertyAccess &&
+    context.isPackageType(propertyAccess.expression, knexPackages, knexBuilders)
+  ) {
+    // Knex exposes these methods via Pick<Promise<T>, ...>; their symbol belongs
+    // to the standard library, so verify the receiver instead.
+    return { ...none, owner: 'Knex', executes: true };
+  }
+  if (owner === 'TypeORM' && repoReads.has(name)) return classifyTypeormRead(call, shape, context);
+  if (
+    ((owner === 'TypeORM' || owner === 'TypeORM EntityManager') && typeormWrites.has(name)) ||
+    (owner !== undefined && typeormRawOwners.has(owner) && name === 'query' && changesRows(call))
+  )
+    return { ...none, executes: true, write: true };
+  if ((owner === 'MikroORM' && mikroOrmReads.has(name)) || (owner === 'Payload' && payloadReads.has(name)))
+    return { ...none, executes: !readsKeyList(call, owner, context.checker) };
+  if (owner === 'Sequelize' && sequelizeReads.has(name)) {
+    const countable = length && name === 'findAll' && isWhereOnlyOptions(call);
+    return { ...none, executes: true, countMethod: countable ? 'Model.count()' : undefined };
+  }
+  if (owner === 'Mongoose Model' || owner === 'Mongoose Query') return classifyMongoose(call, shape, context);
+  return none;
+}
+
 function checkOrmQuery(call: CallExpression, context: PerformanceRuleContext) {
   const access = call.expression;
   const propertyAccess = ts.isPropertyAccessExpression(access) ? access : undefined;
@@ -539,108 +602,14 @@ function checkOrmQuery(call: CallExpression, context: PerformanceRuleContext) {
   if (callableTable && !length && !consumesLazyQuery(call, context.checker)) return;
   const repeated = context.isRepeated(call);
   if (!length && !repeated && !exists && !rowMap) return;
-  let owner: string | undefined = member && methodOwner(member, context.checker);
-  if (propertyAccess && !owner && !context.checker.getSymbolAtLocation(propertyAccess.name))
-    owner = declaredTypeormOwner(propertyAccess.expression, context.checker);
-  const recognisedFromSource = member && !owner && !context.checker.getSymbolAtLocation(member);
-  if (recognisedFromSource) {
-    const fallbackOrm = modelFallback(access, context.checker)?.orm;
-    owner = fallbackOrm === undefined ? undefined : modelFallbackOwners[fallbackOrm];
-  }
-  let executes = false;
-  let countMethod: string | undefined;
-  let write = false;
-  if (owner === 'Kysely' && kyselyExecutors.has(name)) {
-    executes = true;
-    if (
-      length &&
-      name === 'execute' &&
-      propertyAccess &&
-      simpleBuilderSelect(ts.skipOuterExpressions(propertyAccess.expression), owner, context)
-    ) {
-      countMethod = 'COUNT(*)';
-    }
-  } else if (
-    (owner === 'Knex' && knexReads.has(name)) ||
-    (callableTable && context.isPackageType(access, knexPackages, knexDatabases))
-  ) {
-    owner = 'Knex';
-    executes = consumesLazyQuery(call, context.checker);
-    if (length && simpleBuilderSelect(call, owner, context)) countMethod = 'COUNT(*)';
-  } else if (
-    (name === 'then' || name === 'catch' || name === 'finally') &&
-    propertyAccess &&
-    context.isPackageType(propertyAccess.expression, knexPackages, knexBuilders)
-  ) {
-    // Knex exposes these methods via Pick<Promise<T>, ...>; their symbol belongs
-    // to the standard library, so verify the receiver instead.
-    owner = 'Knex';
-    executes = true;
-  } else if (owner === 'TypeORM' && repoReads.has(name)) {
-    executes = true;
-    if (
-      rowMap &&
-      propertyAccess &&
-      symbolOwner(context.checker.getTypeAtLocation(propertyAccess.expression).getProperty('findBy')) === owner
-    )
-      checkTypeormProjection(call, rowMap, context);
-    if (
-      exists &&
-      propertyAccess &&
-      !repeated &&
-      symbolOwner(context.checker.getTypeAtLocation(propertyAccess.expression).getProperty(exists)) === owner
-    ) {
-      context.report(
-        propertyAccess.name,
-        'typeorm-existence-materialization',
-        `This read hydrates entities only to test existence. Use \`Repository.${exists}()\` with the same filter; entity-load hooks and subscribers will not run.`,
-      );
-    }
-    if (length && name === 'find' && isWhereOnlyOptions(call)) countMethod = 'Repository.count()';
-    if (length && name === 'findBy' && call.arguments.length === 1) countMethod = 'Repository.countBy()';
-  } else if (
-    ((owner === 'TypeORM' || owner === 'TypeORM EntityManager') && typeormWrites.has(name)) ||
-    (owner !== undefined && typeormRawOwners.has(owner) && name === 'query' && changesRows(call))
-  ) {
-    executes = true;
-    write = true;
-  } else if ((owner === 'MikroORM' && mikroOrmReads.has(name)) || (owner === 'Payload' && payloadReads.has(name))) {
-    executes = !readsKeyList(call, owner, context.checker);
-  } else if (owner === 'Sequelize' && sequelizeReads.has(name)) {
-    executes = true;
-    if (length && name === 'findAll' && isWhereOnlyOptions(call)) countMethod = 'Model.count()';
-  } else if (owner === 'Mongoose Model' || owner === 'Mongoose Query') {
-    executes = owner === 'Mongoose Query' && mongoTerminals.has(name);
-    if (!executes && (mongoReads.has(name) || (owner === 'Mongoose Query' && mongoModifiers.has(name)))) {
-      executes = consumesLazyQuery(call, context.checker);
-    }
-    if (length && propertyAccess && countsModelFind(call, propertyAccess, owner, context.checker))
-      countMethod = 'Model.countDocuments()';
-  }
-  if (
-    repeated &&
-    executes &&
-    owner &&
-    !(write && name !== 'query' && writesList(call, context.checker)) &&
-    !isSequentialByDesign(call, findRepeatOwner(call, context.checker)) &&
-    !(owner.startsWith('TypeORM') && passesInBatch(call, context.checker)) &&
-    shouldReportLoopQuery(call, context.checker, { family: owner, method: name })
-  ) {
-    const operation = `${owner}${name ? '.' + name : ''}()`;
-    const combinator = promiseCombinatorOf(findRepeatOwner(call, context.checker));
-    // Started together through a Promise combinator, the calls overlap instead of adding up.
-    const cost = combinator
-      ? `\`Promise.${combinator}\` starts them at once, so the waits overlap, but each item still costs its own round trip and pooled connection.`
-      : undefined;
-    context.report(
-      member || access,
-      'orm-query-in-loop',
-      write
-        ? `${operation} runs one write per item, ${cost ?? 'adding a round trip each time.'} Write the rows in one statement where the per-row values allow it (for example \`insert(rows)\`, \`save(entities)\` in chunks, or \`update({ id: In(ids) }, values)\` when every row gets the same change); keep per-row hooks, ordering and transaction.`
-        : `${operation} can run one database operation per item, ${cost ?? 'adding a round trip each time.'} For independent reads, fetch all keys at once (for example ${batchReadExamples[owner] ?? '`In(ids)` or `$in`'}) and index the rows in a Map; keep per-item filters, ordering and transaction.`,
-      recognisedFromSource && write && !isObjectLiteralArgument(call) ? UNKNOWN_WRITE_SHAPE_REASON : undefined,
-    );
-  }
+  const { owner: resolvedOwner, recognisedFromSource } = resolveOrmOwner(access, propertyAccess, member, context);
+  const { owner, executes, countMethod, write } = classifyExecution(
+    call,
+    { propertyAccess, name, owner: resolvedOwner, length, callableTable, rowMap, exists, repeated },
+    context,
+  );
+  if (repeated && executes && owner)
+    reportLoopQuery(call, { owner, name, write, recognisedFromSource: !!recognisedFromSource }, context);
   if (countMethod && length) {
     context.report(
       length,

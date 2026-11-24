@@ -114,6 +114,7 @@ function closingRowOf(lines: readonly string[], openingRow: number): number | un
     for (let column = 0; column < lines[row].length; column++) {
       const character = lines[row][column];
       if (quote) {
+        // loadwise-reviewed deep-control-flow -- a character scanner whose quote, escape, comment and brace states form one cohesive state machine; splitting it would hide the shared column cursor
         if (character === '\\') column++;
         else if (character === quote) quote = '';
       } else if (character === '"' || character === "'") quote = character;

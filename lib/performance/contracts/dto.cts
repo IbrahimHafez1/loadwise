@@ -227,6 +227,78 @@ function allProperties(
   return properties;
 }
 
+type Reporter = (
+  ruleId: string,
+  side: ContractSide,
+  location: { line: number; column: number },
+  message: string,
+) => number;
+
+interface PropertyComparison {
+  readonly report: Reporter;
+  readonly isInput: boolean;
+  readonly isOutput: boolean;
+  readonly forbidsUnknownInput: boolean;
+}
+
+function reportRemovedProperty(
+  { report, isInput, isOutput, forbidsUnknownInput }: PropertyComparison,
+  label: string,
+  oldProperty: DtoProperty,
+): void {
+  const rejected = isInput && forbidsUnknownInput;
+  if (!isOutput && !rejected) return;
+  const responseText = `Response property ${label} was removed. Clients that read it get undefined.`;
+  const requestText = `Request property ${label} was removed and the app rejects unknown properties (ValidationPipe forbidNonWhitelisted). Clients that still send it now get a 400 response.`;
+  report(
+    'api-removed-field',
+    'old',
+    oldProperty,
+    isOutput && rejected ? `${responseText} ${requestText}` : isOutput ? responseText : requestText,
+  );
+}
+
+function comparePresentProperty(
+  { report, isInput, isOutput }: PropertyComparison,
+  label: string,
+  oldProperty: DtoProperty,
+  newProperty: DtoProperty,
+): void {
+  if (isInput && oldProperty.optional && !newProperty.optional && !newProperty.hasDefault) {
+    report(
+      'api-required-input',
+      'new',
+      newProperty,
+      `Request property ${label} is now required. Clients that omit it get a 400 response.`,
+    );
+  }
+  if (oldProperty.literals && newProperty.literals) {
+    const newLiterals = newProperty.literals;
+    const removed = [...oldProperty.literals].filter((literal) => !newLiterals.has(literal));
+    if (isInput && removed.length) {
+      report(
+        'api-enum-value-removed',
+        'new',
+        newProperty,
+        `Request property ${label} no longer accepts ${removed.join(', ')}. Clients that send it are rejected.`,
+      );
+    }
+  } else if (
+    oldProperty.typeText &&
+    newProperty.typeText &&
+    oldProperty.typeText !== newProperty.typeText &&
+    breaksClients(oldProperty, newProperty, { isInput, isOutput })
+  ) {
+    const clients = isInput ? 'Clients that send the old type are rejected' : 'Clients that parse the old type break';
+    report(
+      'api-type-changed',
+      'new',
+      newProperty,
+      `Property ${label} changed type from ${oldProperty.typeText} to ${newProperty.typeText}. ${clients}.`,
+    );
+  }
+}
+
 // Returns findings { ruleId, side: 'old' | 'new', line, column, message } for one class used with
 // the given roles.
 // `options.forbidsUnknownInput`: the app rejects unknown request properties.
@@ -260,59 +332,20 @@ function compareDto(
   const isInput = roles.has('input');
   const isOutput = roles.has('output');
   const findings: ContractFinding[] = [];
-  const report = (ruleId: string, side: ContractSide, location: { line: number; column: number }, message: string) =>
+  const report: Reporter = (ruleId, side, location, message) =>
     findings.push({ ruleId, side, line: location.line, column: location.column, message });
+  const comparison: PropertyComparison = {
+    report,
+    isInput,
+    isOutput,
+    forbidsUnknownInput: Boolean(forbidsUnknownInput),
+  };
 
   for (const [name, oldProperty] of oldProperties) {
-    const newProperty = newProperties.get(name);
     const label = `${className}.${name}`;
-    if (!newProperty) {
-      const rejected = isInput && forbidsUnknownInput;
-      if (isOutput || rejected) {
-        const responseText = `Response property ${label} was removed. Clients that read it get undefined.`;
-        const requestText = `Request property ${label} was removed and the app rejects unknown properties (ValidationPipe forbidNonWhitelisted). Clients that still send it now get a 400 response.`;
-        report(
-          'api-removed-field',
-          'old',
-          oldProperty,
-          isOutput && rejected ? `${responseText} ${requestText}` : isOutput ? responseText : requestText,
-        );
-      }
-      continue;
-    }
-    if (isInput && oldProperty.optional && !newProperty.optional && !newProperty.hasDefault) {
-      report(
-        'api-required-input',
-        'new',
-        newProperty,
-        `Request property ${label} is now required. Clients that omit it get a 400 response.`,
-      );
-    }
-    if (oldProperty.literals && newProperty.literals) {
-      const newLiterals = newProperty.literals;
-      const removed = [...oldProperty.literals].filter((literal) => !newLiterals.has(literal));
-      if (isInput && removed.length) {
-        report(
-          'api-enum-value-removed',
-          'new',
-          newProperty,
-          `Request property ${label} no longer accepts ${removed.join(', ')}. Clients that send it are rejected.`,
-        );
-      }
-    } else if (
-      oldProperty.typeText &&
-      newProperty.typeText &&
-      oldProperty.typeText !== newProperty.typeText &&
-      breaksClients(oldProperty, newProperty, { isInput, isOutput })
-    ) {
-      const clients = isInput ? 'Clients that send the old type are rejected' : 'Clients that parse the old type break';
-      report(
-        'api-type-changed',
-        'new',
-        newProperty,
-        `Property ${label} changed type from ${oldProperty.typeText} to ${newProperty.typeText}. ${clients}.`,
-      );
-    }
+    const newProperty = newProperties.get(name);
+    if (!newProperty) reportRemovedProperty(comparison, label, oldProperty);
+    else comparePresentProperty(comparison, label, oldProperty, newProperty);
   }
   if (isInput) {
     for (const [name, newProperty] of newProperties) {

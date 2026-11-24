@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { awaitedCall } from '../workbook-decodes.cjs';
 import { ts, calleeCall, enclosingStatement, freshName, indentationAt, lineStart, replaceNode } from './helpers.cjs';
-import type { CallExpression, ClassDeclaration, MethodDeclaration, Node } from 'typescript';
+import type { Block, CallExpression, ClassDeclaration, MethodDeclaration, Node, SourceFile } from 'typescript';
 import type { RelatedLocation } from '../types/related-location.cjs';
 import type { Finding, FixResult, SiteFixInput, TextEdit } from '../../shared/types.cjs';
 
@@ -40,6 +40,7 @@ function readerOf(call: CallExpression | undefined, owner: ClassDeclaration): Me
 
 // A second private reader may run under a different catch. Store only a successfully loaded
 // workbook.
+// loadwise-reviewed high-branch-complexity -- a pattern match on a fixed statement sequence (dynamic import, new Workbook, load) where each continue rejects one non-matching shape; splitting scatters one pattern
 function readerEdits(method: MethodDeclaration, cacheName: string, text: string): ReaderEdits | undefined {
   const body = method.body;
   if (!body) return;
@@ -180,54 +181,116 @@ function argumentName(call: CallExpression): string | undefined {
   return argument && ts.isIdentifier(argument) ? argument.text : undefined;
 }
 
-function shareWorkbook({ finding, node, sourceFile, text }: SiteFixInput): FixResult | undefined {
-  if (!node || !sourceFile || text === undefined || finding.file === undefined) return;
-  if (!/\.[cm]?tsx?$/i.test(sourceFile.fileName)) return;
+/** The two reader calls that decode the same upload, the earlier one first. */
+interface ReadPair {
+  earlier: CallExpression;
+  later: CallExpression;
+}
+
+/** The statement list that holds the first read and the class whose private readers are called. */
+interface ReaderScope {
+  firstStatement: Node;
+  siblings: Block;
+  owner: ClassDeclaration;
+}
+
+/** The edits of both readers once they take the shared cache. */
+interface PairEdits {
+  earlierEdits: ReaderEdits;
+  laterEdits: ReaderEdits;
+}
+
+// The call the finding points at and the earlier call that its `related` location names.
+function readPairOf(finding: Finding, node: Node, sourceFile: SourceFile): ReadPair | undefined {
+  const { file } = finding;
+  if (file === undefined || !/\.[cm]?tsx?$/i.test(sourceFile.fileName)) return;
   const later = calleeCall(node);
   const related = firstRelatedLocation(finding);
-  if (!later || !related || path.resolve(related.file) !== path.resolve(finding.file)) return;
+  if (!later || !related || path.resolve(related.file) !== path.resolve(file)) return;
   const offset = sourceFile.getPositionOfLineAndCharacter(related.line - 1, related.column - 1);
   const earlier = calleeCall(ts.getTokenAtPosition(sourceFile, offset));
   if (!earlier) return;
+  return { earlier, later };
+}
+
+function readerScopeOf({ earlier, later }: ReadPair): ReaderScope | undefined {
   const firstStatement = enclosingStatement(earlier);
   if (!firstStatement || firstStatement.parent !== enclosingStatement(later)?.parent) return;
   const siblings = firstStatement.parent;
   if (!ts.isBlock(siblings)) return;
   const owner = siblings.parent.parent;
   if (!owner || !ts.isClassDeclaration(owner)) return;
+  return { firstStatement, siblings, owner };
+}
+
+// The cache edits of two different readers of the same input that share no worksheet.
+function pairEditsOf(
+  { earlier, later }: ReadPair,
+  { owner }: ReaderScope,
+  cacheName: string,
+  text: string,
+): PairEdits | undefined {
   const earlierReader = readerOf(earlier, owner);
   const laterReader = readerOf(later, owner);
   if (!earlierReader || !laterReader || earlierReader === laterReader) return;
   if (argumentName(earlier) !== argumentName(later)) return;
-  const cacheName = freshName(sourceFile, 'workbookCache');
-  if (!cacheName) return;
   const earlierEdits = readerEdits(earlierReader, cacheName, text);
   const laterEdits = readerEdits(laterReader, cacheName, text);
   if (!earlierEdits || !laterEdits) return;
   if ([...earlierEdits.sheets].some((sheet) => laterEdits.sheets.has(sheet))) return;
-  // Three overlapping pairs would each propose a new cache binding in this scope.
+  return { earlierEdits, laterEdits };
+}
+
+// Three overlapping pairs would each propose a new cache binding in this scope.
+function overlapsOtherPair(
+  { siblings, owner }: ReaderScope,
+  { earlier, later }: ReadPair,
+  cacheName: string,
+  text: string,
+): boolean {
   for (const statement of siblings.statements) {
     const call = awaitedCall(statement);
     if (!call || call === earlier || call === later || argumentName(call) !== argumentName(earlier)) continue;
     const reader = readerOf(call, owner);
-    if (reader && readerEdits(reader, cacheName, text)) return;
+    if (reader && readerEdits(reader, cacheName, text)) return true;
   }
+  return false;
+}
+
+// Declares the cache on its own line right before the first read.
+function cacheDeclaration(firstStatement: Node, cacheName: string, text: string): TextEdit | undefined {
   const start = firstStatement.getStart();
   const indent = indentationAt(text, start);
   if (text.slice(lineStart(text, start), start) !== indent) return;
   return {
+    start,
+    end: start,
+    text: 'const ' + cacheName + ': ' + cacheType + ' = {};' + (text.includes('\r\n') ? '\r\n' : '\n') + indent,
+  };
+}
+
+function shareWorkbook({ finding, node, sourceFile, text }: SiteFixInput): FixResult | undefined {
+  if (!node || !sourceFile || text === undefined) return;
+  const pair = readPairOf(finding, node, sourceFile);
+  if (!pair) return;
+  const scope = readerScopeOf(pair);
+  if (!scope) return;
+  const cacheName = freshName(sourceFile, 'workbookCache');
+  if (!cacheName) return;
+  const pairEdits = pairEditsOf(pair, scope, cacheName, text);
+  if (!pairEdits) return;
+  if (overlapsOtherPair(scope, pair, cacheName, text)) return;
+  const declaration = cacheDeclaration(scope.firstStatement, cacheName, text);
+  if (!declaration) return;
+  return {
     edits: [
-      {
-        start,
-        end: start,
-        text: 'const ' + cacheName + ': ' + cacheType + ' = {};' + (text.includes('\r\n') ? '\r\n' : '\n') + indent,
-      },
-      ...[earlier, later].map((call) => ({
+      declaration,
+      ...[pair.earlier, pair.later].map((call) => ({
         start: call.arguments[0].end,
         end: call.arguments[0].end,
         text: ', ' + cacheName,
       })),
-      ...[earlierEdits, laterEdits].flatMap(({ edits }) => edits),
+      ...[pairEdits.earlierEdits, pairEdits.laterEdits].flatMap(({ edits }) => edits),
     ],
     separateEdits: true,
     requiresReview: true,

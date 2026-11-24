@@ -1,3 +1,4 @@
+// loadwise-reviewed large-module -- one cohesive collection-call proof: every helper (size bounds, aliasing, repeat owners) feeds checkCollectionCall/checkCollectionAssignment and shares the same bound and binding state
 import { loadSyntax, isDefaultLibrary } from './compiler.cjs';
 import { findRepeatOwner, isStandardArrayCall, outerExpression, standardInterface } from './repeated.cjs';
 import { checkFilterExistence } from './filter-existence.cjs';
@@ -236,6 +237,7 @@ function writtenBindings(owner: Node, checker: CheckerAdapter): WrittenBindings 
     while (isAccessExpression(accessed)) accessed = ts.skipOuterExpressions(accessed.expression);
     record(accessed);
   }
+  // loadwise-reviewed high-branch-complexity -- flat dispatch over independent, mutually exclusive syntax kinds that feed one shared bindings record; each arm is one line
   function visit(node: Node): void {
     if (ts.isBinaryExpression(node) && ts.isAssignmentOperator(node.operatorToken.kind)) {
       recordAssignment(ts.skipOuterExpressions(node.left));
@@ -364,6 +366,10 @@ function arraySizeBound(
     return constantTableEntryBound(value, checker, bound);
   }
   if (!isMethodCall(value)) return Infinity;
+  return methodCallSizeBound(value, checker, bound);
+}
+
+function methodCallSizeBound(value: MethodCall, checker: CheckerAdapter, bound: BoundFunction): number {
   if (value.expression.expression.kind === ts.SyntaxKind.ThisKeyword && !value.arguments.length) {
     const declaration = checker.getSymbolAtLocation(value.expression.name)?.valueDeclaration;
     if (
@@ -577,43 +583,49 @@ function iterationInput(owner: RepeatOwner): Expression | undefined {
     return parent.expression.expression;
 }
 
+function propertyReceiverOwner(
+  call: MethodCall,
+  receiver: Expression,
+  checker: CheckerAdapter,
+): RepeatOwner | undefined {
+  // Only a pure, direct predicate over a declared data property. A getter or another
+  // expression in the callback can change which array subsequent iterations observe.
+  if (
+    !ts.isPropertyAccessExpression(receiver) ||
+    !ts.isIdentifier(receiver.expression) ||
+    !ts.isArrowFunction(call.parent) ||
+    call.parent.body !== call ||
+    call.parent.parameters.length !== 1
+  )
+    return;
+  const callback = call.parent;
+  const item = callback.parameters[0].name;
+  if (
+    !ts.isIdentifier(item) ||
+    !ts.isIdentifier(call.arguments[0]) ||
+    checker.getSymbolAtLocation(item) !== checker.getSymbolAtLocation(call.arguments[0]) ||
+    !externalBinding(receiver.expression, callback, checker)
+  )
+    return;
+  const declarations = checker.getSymbolAtLocation(receiver.name)?.declarations;
+  if (
+    !declarations?.length ||
+    !declarations.every((property) => ts.isPropertySignature(property) && !hasSmallReadonlyTuple(property.type))
+  )
+    return;
+  const iteration = findRepeatOwner(call, checker);
+  if (
+    iteration === callback &&
+    isStandardArrayCall(call, checker) &&
+    arraySizeBound(iterationInput(iteration), checker) > smallLiteralLimit
+  )
+    return iteration;
+  return;
+}
+
 function reusableArrayOwner(call: MethodCall, checker: CheckerAdapter): RepeatOwner | undefined {
   const receiver = ts.skipOuterExpressions(call.expression.expression);
-  if (!ts.isIdentifier(receiver)) {
-    // Only a pure, direct predicate over a declared data property. A getter or another
-    // expression in the callback can change which array subsequent iterations observe.
-    if (
-      !ts.isPropertyAccessExpression(receiver) ||
-      !ts.isIdentifier(receiver.expression) ||
-      !ts.isArrowFunction(call.parent) ||
-      call.parent.body !== call ||
-      call.parent.parameters.length !== 1
-    )
-      return;
-    const callback = call.parent;
-    const item = callback.parameters[0].name;
-    if (
-      !ts.isIdentifier(item) ||
-      !ts.isIdentifier(call.arguments[0]) ||
-      checker.getSymbolAtLocation(item) !== checker.getSymbolAtLocation(call.arguments[0]) ||
-      !externalBinding(receiver.expression, callback, checker)
-    )
-      return;
-    const declarations = checker.getSymbolAtLocation(receiver.name)?.declarations;
-    if (
-      !declarations?.length ||
-      !declarations.every((property) => ts.isPropertySignature(property) && !hasSmallReadonlyTuple(property.type))
-    )
-      return;
-    const iteration = findRepeatOwner(call, checker);
-    if (
-      iteration === callback &&
-      isStandardArrayCall(call, checker) &&
-      arraySizeBound(iterationInput(iteration), checker) > smallLiteralLimit
-    )
-      return iteration;
-    return;
-  }
+  if (!ts.isIdentifier(receiver)) return propertyReceiverOwner(call, receiver, checker);
   const owner = findRepeatOwner(call, checker);
   if (!owner) return;
   const symbol = externalBinding(receiver, owner, checker);

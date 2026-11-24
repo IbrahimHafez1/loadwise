@@ -72,15 +72,17 @@ function withoutComments(findings: Finding[], comments = true): void {
   for (const finding of findings) if (finding.fix) finding.fix = withoutWhyComment(finding.fix, finding.ruleId);
 }
 
+// What applying one fix needs besides the fix itself.
+interface ApplyContext {
+  readonly root: string;
+  readonly files: FileAccessors;
+  readonly tracker: WriteTracker;
+  readonly capture: ChangeCapture;
+}
+
 // Applies the finding's fix where earlier fixes of this run have moved its lines.
-function applyFinding(
-  finding: Finding,
-  findingFix: FindingFix,
-  root: string,
-  files: FileAccessors,
-  tracker: WriteTracker,
-  capture: ChangeCapture,
-): { error?: string } {
+function applyFinding(finding: Finding, findingFix: FindingFix, context: ApplyContext): { error?: string } {
+  const { root, files, tracker, capture } = context;
   const fix = tracker.rebase(findingFix, (file) => path.resolve(root, file));
   if (!fix.changes.some((change: FixChange) => change.create)) return applyFixSafely(applyFix, fix, files, capture);
   // An extraction must publish the new module and rewrite its consumers together.
@@ -94,6 +96,19 @@ function applyFinding(
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+// Why a chosen id could not be applied, or undefined once its fix went in.
+function chosenFixError(finding: Finding | undefined, context: ApplyContext): string | undefined {
+  if (!finding) return 'unknown id';
+  if (!finding.fix) return 'no automatic fix; this finding needs a manual change';
+  return applyFinding(finding, finding.fix, context).error;
+}
+
+function printChosenOutcome(id: string, error: string | undefined): void {
+  if (!error) console.log('  Applied.');
+  else if (error.endsWith(alreadyAppliedSuffix)) console.log(`  ${id}: already applied by an earlier fix.`);
+  else console.log(`  ${id}: not applied, ${error}.`);
 }
 
 // `--fix --only`: applies exactly the named fixes without asking. An id whose change an earlier id
@@ -117,21 +132,14 @@ function applyChosenFixes(
     const finding = findingsById.get(id);
     if (finding?.fix && !json) printFix(finding, finding.fix, index + 1, ids.length);
     const capture = captureFor(tracker, root, history);
-    const error = !finding
-      ? 'unknown id'
-      : !finding.fix
-        ? 'no automatic fix; this finding needs a manual change'
-        : applyFinding(finding, finding.fix, root, files, tracker, capture).error;
+    const error = chosenFixError(finding, { root, files, tracker, capture });
     if (finding && !error) {
       applied.push(id);
       capture.commit();
       history?.accept(finding);
     } else if (error?.endsWith(alreadyAppliedSuffix)) alreadyApplied.push(id);
     else failed.push({ id, reason: error ?? '' });
-    if (json) continue;
-    if (!error) console.log('  Applied.');
-    else if (error.endsWith(alreadyAppliedSuffix)) console.log(`  ${id}: already applied by an earlier fix.`);
-    else console.log(`  ${id}: not applied, ${error}.`);
+    if (!json) printChosenOutcome(id, error);
   }
   if (format !== false && applied.length) tracker.format(root);
   history?.finish(alreadyApplied, failed);
@@ -142,6 +150,67 @@ Applied ${applied.length} of ${ids.length} chosen fix(es).`);
     if (applied.length) console.log('Review the changes and run your tests; rerun the check to confirm.');
   }
   return failed.length ? 2 : 0;
+}
+
+type Confirmation = 'quit' | 'skip' | 'apply' | 'all';
+
+async function confirmFix(): Promise<Confirmation> {
+  const choice = await askChoice('  Apply this fix? [y]es / [n]o / [a]ll remaining / [q]uit: ');
+  if (choice === 'q') return 'quit';
+  if (choice === 'n') return 'skip';
+  if (choice === 'a') return 'all';
+  return 'apply';
+}
+
+// What an interactive run did with its fixes.
+interface FixTally {
+  applied: number;
+  readonly alreadyApplied: string[];
+  readonly failed: { id: string; reason: string }[];
+}
+
+// Reports one fix's result and counts it; an applied fix is committed to the write tracker and
+// history.
+function recordOutcome(
+  finding: FixableFinding,
+  result: { error?: string },
+  tally: FixTally,
+  settle: { capture: ChangeCapture; history: CheckerHistory | undefined },
+): void {
+  if (result.error?.endsWith(alreadyAppliedSuffix)) {
+    tally.alreadyApplied.push(finding.id ?? '');
+    console.log('  Already applied by an earlier fix.');
+  } else if (result.error) {
+    tally.failed.push({ id: finding.id ?? '', reason: result.error });
+    console.log('  Skipped: ' + result.error + '.');
+  } else {
+    tally.applied++;
+    settle.capture.commit();
+    settle.history?.accept(finding);
+    console.log('  Applied.');
+  }
+}
+
+// How many findings fall outside the automatic fixes.
+interface UnfixedCounts {
+  readonly automatic: number;
+  readonly review: number;
+  readonly manual: number;
+}
+
+function printSummary(tally: FixTally, counts: UnfixedCounts): void {
+  const { applied, alreadyApplied, failed } = tally;
+  const { automatic, review, manual } = counts;
+  console.log(
+    `
+Applied ${applied} of ${automatic} automatic fix(es)` +
+      (alreadyApplied.length ? `, ${alreadyApplied.length} already applied` : '') +
+      (failed.length ? `, ${failed.length} could not be applied` : '') +
+      (review ? `; ${review} fix(es) require individual review` : '') +
+      (manual ? `; ${manual} finding(s) need a manual change.` : '.'),
+  );
+  if (applied) console.log('Review the changes and run your tests; rerun the check to confirm.');
+  if (failed.length) console.log('Run the same scan again to generate fixes against the current files.');
 }
 
 // Findings must already carry their site fixes. Several fixes can touch one function; a later fix
@@ -161,46 +230,25 @@ async function applyFixes(
   withoutComments(findings, comments);
   const tracker = createWriteTracker();
   let applyRest = all;
-  let applied = 0;
-  const alreadyApplied: string[] = [];
-  const failed: { id: string; reason: string }[] = [];
+  const tally: FixTally = { applied: 0, alreadyApplied: [], failed: [] };
   for (const [index, finding] of fixable.entries()) {
     printFix(finding, finding.fix, index + 1, fixable.length);
     if (!applyRest || finding.fix.requiresReview) {
-      const choice = await askChoice('  Apply this fix? [y]es / [n]o / [a]ll remaining / [q]uit: ');
-      if (choice === 'q') break;
-      if (choice === 'n') continue;
-      if (choice === 'a') applyRest = true;
+      const decision = await confirmFix();
+      if (decision === 'quit') break;
+      if (decision === 'skip') continue;
+      if (decision === 'all') applyRest = true;
     }
     const capture = captureFor(tracker, root, history);
-    const result = applyFinding(finding, finding.fix, root, files, tracker, capture);
-    if (result.error?.endsWith(alreadyAppliedSuffix)) {
-      alreadyApplied.push(finding.id ?? '');
-      console.log('  Already applied by an earlier fix.');
-    } else if (result.error) {
-      failed.push({ id: finding.id ?? '', reason: result.error });
-      console.log('  Skipped: ' + result.error + '.');
-    } else {
-      applied++;
-      capture.commit();
-      history?.accept(finding);
-      console.log('  Applied.');
-    }
+    const result = applyFinding(finding, finding.fix, { root, files, tracker, capture });
+    recordOutcome(finding, result, tally, { capture, history });
   }
-  if (format !== false && applied) tracker.format(root);
-  history?.finish(alreadyApplied, failed, findings);
+  if (format !== false && tally.applied) tracker.format(root);
+  history?.finish(tally.alreadyApplied, tally.failed, findings);
   const review = all ? findings.filter((finding: Finding) => finding.fix?.requiresReview).length : 0;
   const manual = findings.length - fixable.length - review;
-  console.log(
-    `\nApplied ${applied} of ${fixable.length} automatic fix(es)` +
-      (alreadyApplied.length ? `, ${alreadyApplied.length} already applied` : '') +
-      (failed.length ? `, ${failed.length} could not be applied` : '') +
-      (review ? `; ${review} fix(es) require individual review` : '') +
-      (manual ? `; ${manual} finding(s) need a manual change.` : '.'),
-  );
-  if (applied) console.log('Review the changes and run your tests; rerun the check to confirm.');
-  if (failed.length) console.log('Run the same scan again to generate fixes against the current files.');
-  return failed.length ? 2 : 0;
+  printSummary(tally, { automatic: fixable.length, review, manual });
+  return tally.failed.length ? 2 : 0;
 }
 
 export { applyFixes, applyChosenFixes };

@@ -256,6 +256,7 @@ function alternatives(left: FixedFragment | undefined, right: FixedFragment | un
 // unknown source.
 function analyzeFragment(expression: Expression, checker: CheckerAdapter): FixedFragment | undefined {
   let remaining = maxExpressionNodes;
+  // loadwise-reviewed high-branch-complexity -- One recursive evaluator that dispatches on the node kind and shares a single node budget (`remaining`) and bound-parameter map through its closure; splitting the kinds apart would scatter that shared state and the order-sensitive fallthrough.
   function fixed(node: Node, bound: ReadonlyMap<ParameterDeclaration, FixedFragment>): FixedFragment | undefined {
     if (--remaining < 0) return;
     node = ts.skipOuterExpressions(node);

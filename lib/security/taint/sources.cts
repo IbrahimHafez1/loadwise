@@ -234,6 +234,7 @@ function registeredHandlerRequest(fn: Node): TaintContainer | undefined {
   if (isPagesApiHandler(fn)) return expressRequest;
 }
 
+// loadwise-reviewed high-branch-complexity -- ordered early-return dispatch over how a handler is registered; each guard claims one framework shape and the order decides which request model wins, so splitting would scatter that precedence
 function shapeSource(parameter: ParameterDeclaration, fn: SignatureDeclaration): ParameterSource | undefined {
   const index = fn.parameters.indexOf(parameter);
   const name = ts.isIdentifier(parameter.name) ? parameter.name.text : undefined;

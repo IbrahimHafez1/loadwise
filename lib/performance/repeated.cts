@@ -68,6 +68,7 @@ function boundedLiteralSize(expression: Expression): number | undefined {
     return collection.elements.length;
 }
 
+// loadwise-reviewed high-branch-complexity -- one ancestor walk where each branch decides continue, stop or report for one kind of repeating ancestor; splitting needs a continue/stop/owner tri-state that hides the single upward scan
 function findRepeatOwner(node: Node, checker: CheckerAdapter): RepeatOwner | undefined {
   let child = node;
   for (let parent = node.parent; parent; child = parent, parent = parent.parent) {

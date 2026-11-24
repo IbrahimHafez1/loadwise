@@ -1,3 +1,4 @@
+// loadwise-reviewed large-module -- one duplicate-implementation fix whose strategies (delegate copies, share arrows, share config callbacks, share class methods) all reuse the same site types and edit helpers and are dispatched from buildDuplicate; splitting would only export private internals across files
 // duplicate-implementation: keeps one top-level function and makes every other copy call it.
 // Applied only when each name the copies use resolves to the same binding, so the call runs exactly
 // the code the copy ran.
@@ -1171,6 +1172,27 @@ function largestSharedMethodGroup(
 
 const maximumHelperSearchFiles = 400;
 
+function folderEntries(folder: string): string[] {
+  try {
+    return fs.readdirSync(folder);
+  } catch {
+    // An unreadable folder offers no candidates.
+    return [];
+  }
+}
+
+function isHelperCandidateFile(name: string, file: string, excludedFiles: ReadonlySet<string>): boolean {
+  return name.endsWith('.ts') && !name.endsWith('.d.ts') && !testFile.test(file) && !excludedFiles.has(file);
+}
+
+function* exportedFunctionsIn(file: string): Generator<FunctionInFile> {
+  const text = fs.readFileSync(file, 'utf8');
+  if (!text.includes('export function')) return;
+  const sourceFile = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+  for (const statement of sourceFile.statements)
+    if (isNamedFunctionDeclaration(statement) && exported(statement)) yield { fn: statement, sourceFile };
+}
+
 // Exported top-level functions in the folders from `folderPath` up to the project root.
 function* exportedFunctionsAbove(
   folderPath: string,
@@ -1179,21 +1201,11 @@ function* exportedFunctionsAbove(
 ): Generator<FunctionInFile> {
   let scanned = 0;
   for (let current = folderPath; current.startsWith(rootPath); current = path.dirname(current)) {
-    let names: string[] = [];
-    try {
-      names = fs.readdirSync(current);
-    } catch {
-      // An unreadable folder offers no candidates.
-    }
-    for (const name of names) {
+    for (const name of folderEntries(current)) {
       const file = path.join(current, name);
-      if (!name.endsWith('.ts') || name.endsWith('.d.ts') || testFile.test(file) || excludedFiles.has(file)) continue;
+      if (!isHelperCandidateFile(name, file, excludedFiles)) continue;
       if (++scanned > maximumHelperSearchFiles) return;
-      const text = fs.readFileSync(file, 'utf8');
-      if (!text.includes('export function')) continue;
-      const sourceFile = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
-      for (const statement of sourceFile.statements)
-        if (isNamedFunctionDeclaration(statement) && exported(statement)) yield { fn: statement, sourceFile };
+      yield* exportedFunctionsIn(file);
     }
     if (current === rootPath) return;
   }

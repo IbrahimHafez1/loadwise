@@ -63,7 +63,14 @@ async function scanChangedFiles(
   }
   return {
     mode: 'source',
-    ...sourceCoverage(inventory, targets, polyglotTargets, edges, policy.placement.length, inScope),
+    ...sourceCoverage({
+      inventory,
+      jsFiles: targets,
+      otherSources: polyglotTargets,
+      edges,
+      placementRuleCount: policy.placement.length,
+      inScope,
+    }),
     findings,
     ...(skippedFiles.length && { skippedFiles }),
   };
