@@ -1,0 +1,484 @@
+import { calleeName, skipParentheses } from '../call-syntax.cjs';
+import { ts, textOf, replaceNode, insertLinesBefore, freshName, indentationAt } from './helpers.cjs';
+import { isPure, hoistAnchor, startsOwnLine } from './hoisting.cjs';
+import { literalAwaiting, directAwaits } from '../literal-awaits.cjs';
+import type {
+  ArrayLiteralExpression,
+  ArrowFunction,
+  AwaitExpression,
+  Identifier,
+  Node,
+  ObjectLiteralExpression,
+  SourceFile,
+} from 'typescript';
+import type { FixResult, SiteFixInput, TextEdit } from '../../shared/types.cjs';
+
+type ValueLiteral = ArrayLiteralExpression | ObjectLiteralExpression;
+
+// One value slot of a literal: its array element or object property, the value it holds, and its
+// key when it has one.
+interface LiteralSlot {
+  node: Node;
+  value: Node | undefined;
+  key?: string;
+}
+
+// A slot and the await it runs first (`null` when it has none, `undefined` when it has an await
+// that cannot move), with the name and shorthand form the hoisted result gets.
+interface HoistSlot extends LiteralSlot {
+  awaited: AwaitExpression | null | undefined;
+  name: string;
+  shorthand: boolean;
+}
+
+interface AwaitingSlot extends HoistSlot {
+  value: Node;
+  awaited: AwaitExpression;
+}
+
+// How promiseAllLines lays the rewritten literal out.
+interface PromiseAllLayout {
+  unit: string;
+  indentation: string;
+  forceBreak?: boolean;
+  trailingComma?: boolean;
+}
+
+// Parents where `await Promise.all(...)` can replace an array literal without extra parentheses.
+function needsNoParentheses(literal: Node): boolean {
+  const parent = literal.parent;
+  return (
+    ts.isVariableDeclaration(parent) ||
+    ts.isReturnStatement(parent) ||
+    ts.isExpressionStatement(parent) ||
+    ts.isPropertyAssignment(parent) ||
+    ts.isArrayLiteralExpression(parent) ||
+    ts.isParenthesizedExpression(parent) ||
+    (ts.isCallExpression(parent) && parent.expression !== literal) ||
+    (ts.isBinaryExpression(parent) && parent.right === literal)
+  );
+}
+
+const startedTogetherNote =
+  'Promise.all starts later calls even if the first one fails. Check shared connection or transaction state, side effects, and concurrency limits before applying.';
+
+// A branch that is the serial twin of a sibling branch already using Promise.all is serial on
+// purpose.
+function deliberatelySerialNote(literal: Node): string | undefined {
+  let branch: Node = literal;
+  while (ts.isParenthesizedExpression(branch.parent) || ts.isAsExpression(branch.parent)) branch = branch.parent;
+  const conditional = branch.parent;
+  if (!ts.isConditionalExpression(conditional) || conditional.condition === branch) return;
+  const sibling = conditional.whenTrue === branch ? conditional.whenFalse : conditional.whenTrue;
+  if (!textOf(sibling).includes('Promise.all')) return;
+  return 'The other branch already uses Promise.all, so this one looks serial on purpose (for example one shared transaction connection); keep it if so.';
+}
+
+// `as const` only applies to literals, so `(await Promise.all(...)) as const` would not compile.
+function assertedConst(literal: Node): boolean {
+  let current: Node = literal;
+  while (ts.isParenthesizedExpression(current.parent)) current = current.parent;
+  const { parent } = current;
+  return (ts.isAsExpression(parent) || ts.isTypeAssertionExpression(parent)) && textOf(parent.type) === 'const';
+}
+
+const lineWidth = 100;
+
+function lineBreakOf(text: string): string {
+  return text.includes('\r\n') ? '\r\n' : '\n';
+}
+
+// The file's indentation step: a tab, else the smallest space indent of 2 or 4 (JSDoc ` *` lines
+// aside).
+function indentUnitOf(text: string, indentation: string): string {
+  if (indentation.includes('\t')) return '\t';
+  let smallest: number | undefined;
+  for (const match of text.matchAll(/^( +)(?=[^ *\r\n])/gm)) {
+    if (smallest === undefined || match[1].length < smallest) smallest = match[1].length;
+  }
+  return ' '.repeat(smallest === 4 ? 4 : 2);
+}
+
+// Re-indenting a string or template that spans lines would change its value.
+function hasMultilineString(node: Node): boolean {
+  let found = false;
+  (function visit(child: Node): void {
+    if (found) return;
+    if ((ts.isStringLiteralLike(child) || ts.isTemplateExpression(child)) && textOf(child).includes('\n')) found = true;
+    else ts.forEachChild(child, visit);
+  })(node);
+  return found;
+}
+
+// The lines of `node`, with continuation lines made relative to the indentation of the line it
+// starts on.
+function relativeLines(node: Node): string[] {
+  const base = indentationAt(node.getSourceFile().text, node.getStart());
+  return textOf(node)
+    .split(/\r?\n/)
+    .map((line, index) => (index > 0 && line.startsWith(base) ? line.slice(base.length) : line));
+}
+
+// `head` + the operands + `tail`, on one line when it fits, else one operand per line one step
+// deeper, with a trailing comma when the original literal had one. Lines after the first are
+// relative to `indentation`, which the caller adds.
+function promiseAllLines(
+  head: string,
+  operands: readonly Node[],
+  tail: string,
+  { unit, indentation, forceBreak = false, trailingComma = false }: PromiseAllLayout,
+): string[] {
+  const single = `${head}${operands.map(textOf).join(', ')}${tail}`;
+  const fits = !single.includes('\n') && indentation.length + single.length <= lineWidth;
+  if ((fits && !forceBreak) || operands.some(hasMultilineString)) return [single];
+  const lines = [head];
+  operands.forEach((operand, index) => {
+    const operandLines = relativeLines(operand);
+    if (trailingComma || index < operands.length - 1) operandLines[operandLines.length - 1] += ',';
+    lines.push(...operandLines.map((line) => (line ? unit + line : line)));
+  });
+  lines.push(tail);
+  return lines;
+}
+
+function arrayFix(literal: ArrayLiteralExpression): FixResult | undefined {
+  const awaits = directAwaits(literal);
+  if (awaits.length !== literal.elements.length || assertedConst(literal)) return;
+  const text = literal.getSourceFile().text;
+  const indentation = indentationAt(text, literal.getStart());
+  const parenthesized = !needsNoParentheses(literal);
+  const lines = promiseAllLines(
+    `${parenthesized ? '(' : ''}await Promise.all([`,
+    awaits.map((awaited) => skipParentheses(awaited.expression)),
+    parenthesized ? ']))' : '])',
+    {
+      unit: indentUnitOf(text, indentation),
+      indentation,
+      forceBreak: textOf(literal).includes('\n'),
+      trailingComma: literal.elements.hasTrailingComma,
+    },
+  );
+  const note = deliberatelySerialNote(literal) ?? startedTogetherNote;
+  return { edits: [replaceNode(literal, lines.join(lineBreakOf(text) + indentation))], note };
+}
+
+// Awaits that sit inside `node`, not counting nested functions (their awaits belong to another
+// call).
+function awaitsWithin(node: Node, found: AwaitExpression[] = []): AwaitExpression[] {
+  if (ts.isAwaitExpression(node)) found.push(node);
+  if (ts.isFunctionLike(node)) return found;
+  ts.forEachChild(node, (child) => void awaitsWithin(child, found));
+  return found;
+}
+
+// The await a slot value runs unconditionally: the value itself or the head of a member/call chain,
+// such as
+// `(await load()).items`. A value with any other await (an argument, a branch) is not hoistable.
+function leadingAwait(value: Node): AwaitExpression | null | undefined {
+  const awaits = awaitsWithin(value);
+  if (awaits.length !== 1) return awaits.length === 0 ? null : undefined;
+  let current: Node = value;
+  for (;;) {
+    if (ts.isAwaitExpression(current)) return current;
+    if (ts.isParenthesizedExpression(current) || ts.isNonNullExpression(current) || ts.isAsExpression(current)) {
+      current = current.expression;
+    } else if (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
+      current = current.expression;
+    } else if (ts.isCallExpression(current)) current = current.expression;
+    else return undefined;
+  }
+}
+
+function slotsOf(literal: ValueLiteral): LiteralSlot[] {
+  if (ts.isArrayLiteralExpression(literal)) {
+    return literal.elements.map((element) => ({
+      node: element,
+      value: ts.isSpreadElement(element) ? element.expression : element,
+      key: undefined,
+    }));
+  }
+  return literal.properties.map((property): LiteralSlot => {
+    if (ts.isPropertyAssignment(property)) {
+      const named = ts.isIdentifier(property.name) || ts.isStringLiteral(property.name);
+      return { node: property, value: property.initializer, key: named ? property.name.text : undefined };
+    }
+    if (ts.isSpreadAssignment(property)) return { node: property, value: property.expression };
+    return { node: property, value: undefined };
+  });
+}
+
+function isIdentifierName(text: string): boolean {
+  return /^[A-Za-z_$][\w$]*$/.test(text);
+}
+
+// The binding name for an awaited slot whose key is taken: the key, else the called function, plus
+// `Result`.
+function baseNameFor(slot: LiteralSlot, awaited: AwaitExpression): string {
+  if (slot.key && isIdentifierName(slot.key)) return slot.key + 'Result';
+  let callee: Node = skipParentheses(awaited.expression);
+  if (ts.isCallExpression(callee)) callee = callee.expression;
+  const name = ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) ? callee.name.text : '';
+  return (name || 'awaited') + 'Result';
+}
+
+// Names a `const` cannot take, or that the generated `await Promise.all` line itself reads.
+const unbindableNames = new Set([
+  'arguments',
+  'eval',
+  'await',
+  'yield',
+  'let',
+  'static',
+  'implements',
+  'interface',
+  'package',
+  'private',
+  'protected',
+  'public',
+  'undefined',
+  'Promise',
+]);
+
+function isBindableName(name: string): boolean {
+  if (!isIdentifierName(name) || unbindableNames.has(name)) return false;
+  const token = ts.stringToToken(name);
+  return token === undefined || token < ts.SyntaxKind.FirstReservedWord || token > ts.SyntaxKind.LastReservedWord;
+}
+
+// Identifiers that name a property or a remote export rather than reading a variable.
+function isPropertyNameOnly(identifier: Identifier): boolean {
+  const { parent } = identifier;
+  if (ts.isPropertyAccessExpression(parent)) return parent.name === identifier;
+  if (ts.isQualifiedName(parent)) return parent.right === identifier;
+  if (ts.isBindingElement(parent) || ts.isImportSpecifier(parent)) return parent.propertyName === identifier;
+  return (
+    (ts.isPropertyAssignment(parent) ||
+      ts.isPropertySignature(parent) ||
+      ts.isPropertyDeclaration(parent) ||
+      ts.isMethodDeclaration(parent) ||
+      ts.isMethodSignature(parent) ||
+      ts.isGetAccessor(parent) ||
+      ts.isSetAccessor(parent)) &&
+    parent.name === identifier
+  );
+}
+
+// A new `const` inside `scope` can only clash with or shadow a variable that `scope` itself
+// mentions.
+function nameFreeIn(scope: Node, name: string): boolean {
+  let free = true;
+  (function visit(node: Node): void {
+    if (!free) return;
+    if (ts.isIdentifier(node) && node.text === name && !isPropertyNameOnly(node)) free = false;
+    else ts.forEachChild(node, visit);
+  })(scope);
+  return free;
+}
+
+// Names each awaited slot after its property key when that name is free, so the literal can use
+// shorthand (`{ seats }`); otherwise `<key>Result` or `<callee>Result`. Returns false when no free
+// name is found.
+function nameSlots(awaiting: AwaitingSlot[], scope: Node, sourceFile: SourceFile): boolean {
+  const used = new Set<string>();
+  for (const slot of awaiting) {
+    const direct = skipParentheses(slot.value) === slot.awaited;
+    if (direct && slot.key && isBindableName(slot.key) && !used.has(slot.key) && nameFreeIn(scope, slot.key)) {
+      slot.name = slot.key;
+      slot.shorthand = true;
+    } else {
+      const base = baseNameFor(slot, slot.awaited);
+      let name = freshName(sourceFile, base);
+      for (let suffix = 2; name && used.has(name); suffix++) name = freshName(sourceFile, base + suffix);
+      if (!name) return false;
+      slot.name = name;
+    }
+    used.add(slot.name);
+  }
+  return true;
+}
+
+function slotReplacement(slot: AwaitingSlot, text: string): TextEdit {
+  let target: Node = slot.awaited;
+  while (ts.isParenthesizedExpression(target.parent)) target = target.parent;
+  // `key: await load()` becomes `key`; a comment between the key and the value keeps the long form.
+  if (
+    slot.shorthand &&
+    ts.isPropertyAssignment(slot.node) &&
+    /^\s*:\s*$/.test(text.slice(slot.node.name.end, target.getStart()))
+  )
+    return replaceNode(slot.node, slot.name);
+  return replaceNode(target, slot.name);
+}
+
+function hoistFix(literal: ValueLiteral, sourceFile: SourceFile): FixResult | undefined {
+  const slots = slotsOf(literal).map((slot): HoistSlot => ({
+    ...slot,
+    awaited: slot.value ? leadingAwait(slot.value) : null,
+    name: '',
+    shorthand: false,
+  }));
+  if (slots.some((slot) => slot.awaited === undefined)) return;
+  const awaiting = slots.filter((slot): slot is AwaitingSlot => Boolean(slot.awaited));
+  const anchor = hoistAnchor(literal);
+  if (awaiting.length < 2 || !anchor || (anchor.statement && !startsOwnLine(anchor.statement))) return;
+  const anchorNode = anchor.arrow ? anchor.arrow : anchor.statement;
+  const scope = ts.findAncestor(anchor.arrow ? anchor.arrow.body : anchor.statement, ts.isFunctionLike) ?? sourceFile;
+  if (!nameSlots(awaiting, scope, sourceFile)) return;
+  const { text } = sourceFile;
+  const indentation = indentationAt(text, anchorNode.getStart());
+  const unit = indentUnitOf(text, indentation);
+  const lines = promiseAllLines(
+    `const [${awaiting.map((slot) => slot.name).join(', ')}] = await Promise.all([`,
+    awaiting.map((slot) => skipParentheses(slot.awaited.expression)),
+    ']);',
+    {
+      unit,
+      indentation: anchor.statement ? indentation : indentation + unit,
+      trailingComma: (ts.isArrayLiteralExpression(literal) ? literal.elements : literal.properties).hasTrailingComma,
+    },
+  );
+  const replacements = awaiting.map((slot) => slotReplacement(slot, text));
+  const lastAwaitIndex = slots.lastIndexOf(awaiting[awaiting.length - 1]);
+  const reordered = slots
+    .slice(0, lastAwaitIndex)
+    .filter((slot): slot is HoistSlot & { value: Node } => !slot.awaited && !!slot.value && !isPure(slot.value));
+  const note = reordered.length
+    ? `Values computed in the literal (${reordered.map((slot) => slot.key ?? textOf(slot.value)).join(', ')}) now run after all the awaited calls, not between them; check none depends on a call that ran before it. ${startedTogetherNote}`
+    : startedTogetherNote;
+  if (anchor.statement) return { edits: [insertLinesBefore(anchor.statement, lines), ...replacements], note };
+  return { edits: arrowBodyEdits(anchor.arrow, lines, literal, replacements, { indentation, unit }), note };
+}
+
+// Turns `async () => ({ ... })` into a block that hoists `lines` and returns the literal, one step
+// deeper.
+function arrowBodyEdits(
+  arrow: ArrowFunction,
+  lines: readonly string[],
+  literal: Node,
+  replacements: TextEdit[],
+  { indentation, unit }: { indentation: string; unit: string },
+): TextEdit[] {
+  const { body } = arrow;
+  const text = body.getSourceFile().text;
+  const inner = indentation + unit;
+  const eol = lineBreakOf(text);
+  // Only the parentheses around a bare literal are dropped; a wrapping call such as `wrap({ ... })`
+  // stays.
+  const dropsParentheses = ts.isParenthesizedExpression(body) && body.expression === literal;
+  const openEnd = dropsParentheses ? literal.getStart() : body.getStart();
+  const closeStart = dropsParentheses ? literal.end : body.end;
+  const hoisted = lines.join(eol + inner);
+  return [
+    { start: body.getStart(), end: openEnd, text: `{${eol}${inner}${hoisted}${eol}${inner}return ` },
+    { start: closeStart, end: body.end, text: `;${eol}${indentation}}` },
+    ...replacements,
+    ...(hasMultilineString(body) ? [] : reindentEdits(text, openEnd, closeStart, unit, replacements)),
+  ];
+}
+
+// Adds one indentation step to every non-blank line that starts inside [from, to). A line that
+// starts where a replacement starts gets the step in that replacement; a line inside a replacement
+// is rewritten anyway.
+function reindentEdits(text: string, from: number, to: number, unit: string, replacements: TextEdit[]): TextEdit[] {
+  const edits: TextEdit[] = [];
+  for (let index = text.indexOf('\n', from); index !== -1 && index + 1 < to; index = text.indexOf('\n', index + 1)) {
+    const start = index + 1;
+    if (/^[ \t]*\r?(?:\n|$)/.test(text.slice(start))) continue;
+    const replaced = replacements.find((edit) => edit.start <= start && start < edit.end);
+    if (replaced?.start === start) replaced.text = unit + replaced.text;
+    else if (!replaced) edits.push({ start, end: start, text: unit });
+  }
+  return edits;
+}
+
+// Tests create fixtures in a fixed order on purpose (ids, timestamps, foreign keys), so their
+// literals stay serial.
+const testFile =
+  /(?:^|[\\/])(?:__tests__|__mocks__|tests?|specs?|e2e|fixtures)[\\/]|[.-](?:test|spec|e2e|itest|e2e-spec|int-spec)\.[cm]?[jt]sx?$/i;
+// A call writes when its name starts with one of these verbs (`create`, `addStore`, `$executeRaw`,
+// Redis `hset`) or joins one with Or/And (`findOrCreate`). Nouns later in a name, such as
+// `getPost`, do not count.
+const writeVerbs = new Set([
+  'create',
+  'insert',
+  'save',
+  'update',
+  'upsert',
+  'delete',
+  'del',
+  'remove',
+  'destroy',
+  'set',
+  'put',
+  'post',
+  'patch',
+  'write',
+  'send',
+  'increment',
+  'decrement',
+  'incr',
+  'decr',
+  'push',
+  'publish',
+  'emit',
+  'add',
+  'lock',
+  'reset',
+  'clear',
+  'mark',
+  'persist',
+  'execute',
+  'exec',
+  'run',
+  'refresh',
+  'sync',
+  'upload',
+  'enqueue',
+  'claim',
+  'seed',
+  'hset',
+  'hdel',
+  'hincrby',
+  'sadd',
+  'srem',
+  'zadd',
+  'zrem',
+  'lpush',
+  'rpush',
+  'expire',
+  'setex',
+  'mset',
+  'unlink',
+]);
+const joiningWords = new Set(['or', 'and']);
+
+// True when the awaited call is named as a write, or is a fetch whose options may pick a writing
+// method. Starting a write together with the other calls could let a later read miss it, or swap
+// the order of two writes.
+function looksLikeWrite(awaited: AwaitExpression): boolean {
+  const operand = skipParentheses(awaited.expression);
+  if (ts.isNewExpression(operand)) return true;
+  if (!ts.isCallExpression(operand)) return false;
+  const name = calleeName(operand, skipParentheses);
+  if (!name) return false;
+  if (name === 'fetch' && operand.arguments.length > 1) return true;
+  const words = name
+    .replace(/^\$/, '')
+    .split(/(?=[A-Z])|_/)
+    .map((word) => word.toLowerCase());
+  return words.some((word, index) => writeVerbs.has(word) && (index === 0 || joiningWords.has(words[index - 1])));
+}
+
+function serialLiteralFix({ node, sourceFile }: SiteFixInput): FixResult | undefined {
+  if (!node || !sourceFile || testFile.test(sourceFile.fileName)) return;
+  let found: ReturnType<typeof literalAwaiting>;
+  for (let current: Node | undefined = node; current && !found; current = current.parent) {
+    found = ts.isCallExpression(current) ? literalAwaiting(current) : undefined;
+  }
+  if (!found || awaitsWithin(found.literal).some(looksLikeWrite)) return;
+  const fix =
+    (ts.isArrayLiteralExpression(found.literal) && arrayFix(found.literal)) || hoistFix(found.literal, sourceFile);
+  return fix && { ...fix, requiresReview: true };
+}
+
+export default { 'serial-awaits-in-literal': serialLiteralFix };

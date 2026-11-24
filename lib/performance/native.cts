@@ -1,0 +1,380 @@
+// @ts-check
+import fs from 'node:fs';
+import path from 'node:path';
+import {
+  compareFindings,
+  isInScope,
+  isSourceInput,
+  mergeFinding,
+  scanEntries,
+  relativeToWorkingDirectory,
+  resolveConfig,
+} from './source-inputs.cjs';
+import { withoutEmitOptions } from './emit-options.cjs';
+import { selectNativeSyntax } from './compiler.cjs';
+import { requireNative, executable } from './native-runtime.cjs';
+import { withWorkspaceSources } from './native-workspaces.cjs';
+import { recordSkippedFile } from './scan-outcome.cjs';
+import type { CompilerOptions, SourceFile } from 'typescript';
+import type { Finding, RulePolicy, ScanResult, SkippedFile } from '../shared/types.cjs';
+import type { NativeApi, NativeBinding, NativeDiagnostic, NativeProgram } from './types/native-typescript.cjs';
+import type { SourceAnalyzer } from './types/source-analyzer.cjs';
+import type { ProgramAdapter } from '../shared/types.cjs';
+import { noteUnscannedJavaScript } from './unscanned-javascript.cjs';
+import type * as NativeSyntax from './native-syntax.cjs';
+import type * as NativeChecker from './native-checker.cjs';
+import type * as Analyze from './analyze.cjs';
+import type * as SchemaTooling from './schema-tooling.cjs';
+
+// What a caller passes: one config or several, or explicit files; `onlyFiles` keeps just the
+// changed ones.
+interface NativeAnalysisOptions {
+  project?: string | string[];
+  files?: string[];
+  policy?: RulePolicy;
+  fallback?: boolean;
+  onlyFiles?: (filename: string) => boolean;
+  analyzers?: SourceAnalyzer[];
+}
+
+// With fallback, an unavailable compiler or a rejected config asks the caller to run the JS engine
+// instead.
+interface NativeFallback {
+  fallback: true;
+  reason?: string;
+}
+
+type NativeOutcome = (ScanResult & { fallback?: undefined }) | NativeFallback;
+
+// One config's roots, its options, and which of the roots to report on.
+type ScanProject = [roots: string[], options: CompilerOptions, analyzes: (filename: string) => boolean];
+
+function openCompiler(): { api: NativeApi; binding: NativeBinding } {
+  const [major, minor] = process.versions.node.split('.').map(Number);
+  if (major < 22 || (major === 22 && minor < 13)) throw new Error('--native requires Node.js 22.13 or newer.');
+  const tsserverPath = executable();
+  const binding = requireNative('typescript/sync');
+  return { api: new binding.API({ tsserverPath }), binding };
+}
+
+// Raised only in fallback mode, while the process can still switch to the JS compiler.
+class IncompatibleProject extends Error {}
+
+// TypeScript's "Cannot find type definition file for '{0}'." diagnostic.
+const missingTypeLibraryCode = 2688;
+// TypeScript's "File '{0}' not found." diagnostic.
+const missingFileCode = 6053;
+
+// The package a missing `extends` names; relative and absolute paths are the project's own
+// mistakes.
+function missingPackageBase(diagnostic: NativeDiagnostic): string | undefined {
+  if (diagnostic.code !== missingFileCode) return undefined;
+  const missing = /'([^']+)'/.exec(diagnostic.text)?.[1];
+  return missing !== undefined && !/^(?:\.|\/|[a-z]:)/i.test(missing) ? missing : undefined;
+}
+
+// TypeScript 7 removed `baseUrl`, so its mapping moves into `paths`, as in the TypeScript 7
+// migration. The parser has already resolved `baseUrl` against the config that declared it, even
+// through `extends`, and earlier compilers resolve every `paths` target against it; absolute
+// targets keep that meaning wherever `paths` was declared. Bare imports that match no pattern still
+// looked in `baseUrl`, which a catch-all pattern keeps, since the longest matching pattern wins.
+// The config on disk is left untouched.
+function withoutBaseUrl(options: CompilerOptions): CompilerOptions {
+  if (options.baseUrl === undefined) return options;
+  const { baseUrl, ...rest } = options;
+  const fromBaseUrl = (target: string) => path.resolve(String(baseUrl), target).replaceAll('\\', '/');
+  const paths: Record<string, string[]> = { '*': [fromBaseUrl('*')] };
+  for (const [pattern, targets] of Object.entries(options.paths ?? {})) paths[pattern] = targets.map(fromBaseUrl);
+  return { ...rest, paths };
+}
+
+// TypeScript 7 rejects these options only to force their removal; dropping a value that is off, or
+// that only shaped emit, leaves the types the rules read unchanged. `esModuleInterop` and
+// `allowSyntheticDefaultImports` off only turn default imports of CommonJS modules from errors into
+// the module type, which TypeScript 7 always does.
+const removedWhenOff: (keyof CompilerOptions)[] = ['esModuleInterop', 'allowSyntheticDefaultImports', 'alwaysStrict'];
+const removedWhenSet: (keyof CompilerOptions)[] = ['downlevelIteration', 'outFile'];
+// Rejected as unknown options. `keyofStringsOnly` is absent because it changes the type of `keyof`.
+const unknownOptionsWithoutEffect = new Set([
+  'importsNotUsedAsValues',
+  'preserveValueImports',
+  'suppressImplicitAnyIndexErrors',
+  'suppressExcessPropertyErrors',
+  'noStrictGenericChecks',
+  'noImplicitUseStrict',
+  'charset',
+  'out',
+]);
+const unknownOptionCode = 5023;
+// TypeScript's ES5 target, which the TypeScript 7 enum no longer lists.
+const es5Target = 1;
+const es2015Target = 2;
+
+function isIgnorableUnknownOption(diagnostic: NativeDiagnostic): boolean {
+  if (diagnostic.code !== unknownOptionCode) return false;
+  const option = /'([^']+)'/.exec(diagnostic.text)?.[1];
+  return option !== undefined && unknownOptionsWithoutEffect.has(option);
+}
+
+// `node10` ignores package `exports`, as do the other choices TypeScript 7 offers except `bundler`,
+// which keeps node10's extensionless and directory-index imports and accepts `module` commonjs,
+// preserve and es2015+, so a commonjs project keeps its `module`. `nodenext` would also demand
+// `module: nodenext` and import extensions.
+// AMD, UMD and System are swapped for ESNext only beside an explicit node10, whose resolution they do not change;
+// without it they implied `classic`, which stays rejected. ES5 only moves to ES2015 when `lib` is
+// explicit, because the target otherwise picks the default libraries that the rules' types come
+// from.
+function withoutRemovedOptions(
+  options: CompilerOptions,
+  { ModuleKind, ModuleResolutionKind }: Pick<NativeBinding, 'ModuleKind' | 'ModuleResolutionKind'>,
+): CompilerOptions {
+  const result = { ...options };
+  for (const name of removedWhenOff) if (result[name] === false) delete result[name];
+  for (const name of removedWhenSet) delete result[name];
+  if (result.moduleResolution === ModuleResolutionKind.Node10) {
+    result.moduleResolution = ModuleResolutionKind.Bundler;
+    const needsModernModule =
+      result.module !== undefined && [ModuleKind.AMD, ModuleKind.UMD, ModuleKind.System].includes(result.module);
+    if (needsModernModule) result.module = ModuleKind.ESNext;
+  }
+  if (result.target === es5Target && result.lib !== undefined) result.target = es2015Target;
+  return result;
+}
+
+// With fallback, an unavailable compiler or a rejected config returns { fallback: true, reason }
+// before the native syntax is selected, so the caller can run the JS engine in this process.
+// `project` is one config or an array of them. `onlyFiles` limits the roots of each config to the changed files;
+// imports still resolve through the config. `analyzers` defaults to the performance rules; each
+// one's
+// `analyzeFile` must load its rules lazily, after the native syntax is selected.
+function analyzeNative({
+  project,
+  files = [],
+  policy,
+  fallback = false,
+  onlyFiles,
+  analyzers,
+}: NativeAnalysisOptions): NativeOutcome {
+  let compiler: ReturnType<typeof openCompiler>;
+  try {
+    compiler = openCompiler();
+  } catch (error) {
+    if (fallback) return { fallback: true };
+    throw error;
+  }
+  const { api, binding } = compiler;
+  let adaptProgram: (program: NativeProgram, options: CompilerOptions) => ProgramAdapter;
+  let enableSchemaTooling: (adapter: ProgramAdapter) => void;
+  // Chosen once the native syntax is selected, because the default analyzer loads its rules lazily.
+  let selectedAnalyzers: SourceAnalyzer[] = [];
+  const visitedConfigs = new Set<string>();
+  // Folders scanned with a config that leaves JavaScript out.
+  const scopesWithoutJs = new Set<string>();
+  const scanned = new Set<string>();
+  const findings = new Map<string, Finding>();
+  const skippedFiles: SkippedFile[] = [];
+  const canonical = (filename: string) => api.getCanonicalFileName(path.resolve(filename));
+
+  // A `types` entry that is not installed leaves only those globals unresolved, as in the
+  // TypeScript engine.
+  const reportedTypeLibraries = new Set<string>();
+  function withoutMissingTypeLibraries(diagnostics: NativeDiagnostic[] = []): NativeDiagnostic[] {
+    const missing = diagnostics.filter((diagnostic) => diagnostic.code === missingTypeLibraryCode);
+    const names = missing
+      .map((diagnostic) => /'([^']+)'/.exec(diagnostic.text)?.[1])
+      .filter((name): name is string => !!name && !reportedTypeLibraries.has(name));
+    if (names.length) {
+      names.forEach((name) => reportedTypeLibraries.add(name));
+      console.error(`Note: type libraries not installed (${names.join(', ')}); analysis continued without them.`);
+    }
+    return diagnostics.filter((diagnostic) => diagnostic.code !== missingTypeLibraryCode);
+  }
+
+  function checkErrors(diagnostics: NativeDiagnostic[]): void {
+    diagnostics = withoutMissingTypeLibraries(diagnostics);
+    if (diagnostics.length) {
+      throw new Error(binding.formatDiagnostics(diagnostics, api).trim());
+    }
+  }
+
+  // An `extends` naming a package that is not installed leaves the config's own settings, as in the
+  // TypeScript engine.
+  const notedBases = new Set<string>();
+  function withoutMissingPackageBases(diagnostics: NativeDiagnostic[] = []): NativeDiagnostic[] {
+    const isMissingBase = (diagnostic: NativeDiagnostic) => missingPackageBase(diagnostic) !== undefined;
+    for (const diagnostic of diagnostics.filter(isMissingBase)) {
+      // Referenced projects usually share their bases, so each missing base is noted once.
+      const base = missingPackageBase(diagnostic);
+      if (base === undefined || notedBases.has(base)) continue;
+      notedBases.add(base);
+      const { line, character } = diagnostic.startPosition;
+      const location = `${path.resolve(diagnostic.fileName)}(${line + 1},${character + 1})`;
+      console.error(
+        `Note: ${location} ${diagnostic.text} Checked with this config's own settings until it is installed.`,
+      );
+    }
+    return diagnostics.filter((diagnostic) => !isMissingBase(diagnostic));
+  }
+
+  function checkConfig(diagnostics: NativeDiagnostic[] | undefined): void {
+    diagnostics = withoutMissingTypeLibraries(withoutMissingPackageBases(diagnostics));
+    if (fallback && diagnostics?.length) {
+      throw new IncompatibleProject([...new Set(diagnostics.map((diagnostic) => diagnostic.text))].join(' '));
+    }
+    checkErrors(diagnostics);
+  }
+
+  // `analyzes` picks the roots to report on; the others still load for types.
+  function scan(roots: string[], options: CompilerOptions, analyzes: (filename: string) => boolean): void {
+    const inputs = roots.filter((filename: string) => isSourceInput(filename) && analyzes(filename));
+    if (!inputs.length) return;
+    const program = api.createProgram(roots, { ...options, noEmit: true });
+    try {
+      checkErrors(program.getProgramDiagnostics());
+      // The native service accepts an array, saving a round-trip per input.
+      const syntaxErrorsByFile = Map.groupBy(program.getSyntacticDiagnostics(inputs), (diagnostic) =>
+        canonical(diagnostic.fileName),
+      );
+      const adapter = adaptProgram(program, options);
+      if (!files.length && !onlyFiles && visitedConfigs.size === 1) enableSchemaTooling(adapter);
+      const localFiles = new Set<SourceFile>();
+      for (const filename of inputs) {
+        const source = program.getSourceFile(filename);
+        if (!source) throw new Error('Unable to load source: ' + filename);
+        if (localFiles.has(source)) continue;
+        localFiles.add(source);
+        const key = canonical(source.fileName);
+        const file = relativeToWorkingDirectory(source.fileName);
+        const syntaxErrors = syntaxErrorsByFile.get(key);
+        if (syntaxErrors) {
+          const reason = binding.formatDiagnostics([syntaxErrors[0]], api).trim();
+          recordSkippedFile(skippedFiles, { file, reason }, `${reason} Skipped that file, which does not parse.`);
+          continue;
+        }
+        const fileFindings = analyzeWithEach(adapter, source, file);
+        if (!fileFindings) continue;
+        scanned.add(key);
+        for (const finding of fileFindings) {
+          if (finding.file !== undefined) finding.file = relativeToWorkingDirectory(finding.file);
+          mergeFinding(
+            findings,
+            JSON.stringify([key, finding.line, finding.column, finding.ruleId, finding.message]),
+            finding,
+          );
+        }
+      }
+    } finally {
+      program.dispose();
+    }
+  }
+
+  // One failing analyzer must not hide the others' findings; a file counts as scanned once any
+  // analyzer read it.
+  function analyzeWithEach(adapter: ProgramAdapter, source: SourceFile, file: string): Finding[] | undefined {
+    let fileFindings: Finding[] | undefined;
+    for (const analyzer of selectedAnalyzers) {
+      try {
+        const analyzerFindings = analyzer.analyzeFile(adapter, source, policy);
+        if (selectedAnalyzers.length > 1)
+          analyzerFindings.forEach((finding: Finding) => (finding.pillar = analyzer.pillar));
+        fileFindings = [...(fileFindings ?? []), ...analyzerFindings];
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        recordSkippedFile(
+          skippedFiles,
+          { file, reason: message },
+          `The ${analyzer.pillar} analysis of ${file} failed (${message}). Skipped that file.`,
+        );
+      }
+    }
+    return fileFindings;
+  }
+
+  // Collects every config with source inputs, in scan order, after validating its options.
+  function visitConfig(filename: string, projects: ScanProject[], scope?: string, companion?: boolean): void {
+    // realpath resolves the reference even before the native API initializes.
+    const key = fs.realpathSync.native(filename);
+    if (visitedConfigs.has(key)) return;
+    visitedConfigs.add(key);
+    const parsed = api.parseConfigFile(filename);
+    checkConfig(parsed.errors?.filter((diagnostic) => !isIgnorableUnknownOption(diagnostic)));
+    const options = withWorkspaceSources(
+      withoutRemovedOptions(withoutBaseUrl(withoutEmitOptions(parsed.options)), binding),
+      path.dirname(filename),
+    );
+    for (const reference of parsed.projectReferences ?? []) {
+      visitConfig(resolveConfig(reference.path), projects, scope);
+    }
+    if (!parsed.options.allowJs && !onlyFiles) scopesWithoutJs.add(scope ?? path.dirname(filename));
+    const rootFiles = onlyFiles ? parsed.fileNames.filter(onlyFiles) : parsed.fileNames;
+    if (!rootFiles.some((filename: string) => isSourceInput(filename) && isInScope(scope, filename))) return;
+    // Option diagnostics do not depend on root files, so an empty program reports them cheaply.
+    const optionsProgram = api.createProgram([], { ...options, noEmit: true });
+    try {
+      checkConfig(optionsProgram.getProgramDiagnostics());
+    } finally {
+      optionsProgram.dispose();
+    }
+    // The companion jsconfig only adds what the tsconfig left out; scans run in visit order.
+    const isNew = (filename: string) => !companion || !scanned.has(canonical(filename));
+    projects.push([rootFiles, options, (filename: string) => isInScope(scope, filename) && isNew(filename)]);
+  }
+
+  function selectSyntax() {
+    const nativeSyntax: typeof NativeSyntax = require('./native-syntax.cjs');
+    selectNativeSyntax(nativeSyntax.default);
+    const nativeChecker: typeof NativeChecker = require('./native-checker.cjs');
+    ({ adaptProgram } = nativeChecker);
+    const performanceAnalyze: typeof Analyze = require('./analyze.cjs');
+    selectedAnalyzers = analyzers ?? [{ pillar: 'performance', analyzeFile: performanceAnalyze.analyzeFile }];
+    const schemaTooling: typeof SchemaTooling = require('./schema-tooling.cjs');
+    ({ enableSchemaTooling } = schemaTooling);
+  }
+
+  try {
+    const projects: ScanProject[] = [];
+    if (files.length) {
+      const roots = files.map((filename) => {
+        if (!isSourceInput(filename) || !fs.statSync(filename, { throwIfNoEntry: false })?.isFile()) {
+          throw new Error('Expected an existing JS or TS source file: ' + filename);
+        }
+        return path.resolve(filename);
+      });
+      const { ScriptTarget } = requireNative('typescript/ast');
+      projects.push([
+        roots,
+        {
+          target: ScriptTarget.ES2022,
+          module: binding.ModuleKind.NodeNext,
+          allowJs: true,
+          checkJs: false,
+          skipLibCheck: true,
+          jsx: binding.JsxEmit.Preserve,
+          ...(policy && { strictNullChecks: true }),
+        },
+        () => true,
+      ]);
+    } else {
+      for (const { config, scope, companion } of scanEntries(project)) {
+        visitConfig(config, projects, scope, companion);
+      }
+    }
+    selectSyntax();
+    for (const [roots, options, analyzes] of projects) scan(roots, options, analyzes);
+    if (!scanned.size && !onlyFiles && !skippedFiles.length)
+      throw new Error('No JavaScript or TypeScript source files to check.');
+    noteUnscannedJavaScript([...scopesWithoutJs], (filename: string) => scanned.has(canonical(filename)));
+    return {
+      scannedFiles: scanned.size,
+      findings: [...findings.values()].sort(compareFindings),
+      ...(skippedFiles.length && { skippedFiles }),
+    };
+  } catch (error) {
+    if (error instanceof IncompatibleProject) return { fallback: true, reason: error.message };
+    throw error;
+  } finally {
+    api.close();
+  }
+}
+
+export { analyzeNative };
