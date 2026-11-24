@@ -2,3 +2,14 @@ package-lock.json
 lib/performance/vendor/
 examples/*.ts
 test/performance/integration/orms/app.ts
+
+# Compiled CJS outputs from *.cts
+bin/*.cjs
+lib/**/*.cjs
+editor/**/*.cjs
+plugin/**/*.cjs
+polyglot/**/*.cjs
+scripts/**/*.cjs
+bench/**/*.cjs
+test/**/*.cjs
+.tsbuildinfo

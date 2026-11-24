@@ -1,19 +1,7 @@
 {
-  "extends": "./jsconfig.json",
+  "extends": "./tsconfig.json",
   "compilerOptions": {
-    "allowJs": true,
-    "checkJs": false,
     "noEmit": true,
-    "strict": false,
-    "skipLibCheck": true,
-    "types": ["node"],
-    "lib": ["ES2024"]
-  },
-  "include": [
-    "lib/shared/types.d.ts",
-    "lib/shared/*.cjs",
-    "lib/performance/native*.cjs",
-    "lib/performance/projects.cjs",
-    "lib/performance/site-fix.cjs"
-  ]
+    "incremental": false
+  }
 }
