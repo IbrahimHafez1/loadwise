@@ -993,7 +993,7 @@ npx loadwise maint . --fix --only <id>[,<id>...] [--json]
 
 `--only` applies exactly those fixes with no prompt and no terminal. `--json` prints `{ applied, alreadyApplied, failed }`. An id whose change an earlier id in the same run already made is reported in `alreadyApplied`; an unknown id, a finding without a fix or a stale fix is in `failed` and the exit code is 2.
 
-To dismiss a false positive, put `// loadwise-reviewed <rule-id> -- <specific reason>` on the line above it. The finding becomes contextual with that reason. Only a real line comment counts, and declared contracts (`file-placement`, `folder-boundary`, `data-access-boundary`, `query-mutates-state`) cannot be dismissed this way.
+To dismiss a false positive, put `// loadwise-reviewed <rule-id> -- <specific reason>` on the line above it (line 1 itself for a finding about a whole file, such as `large-module`). The finding becomes contextual with that reason. Only a real line comment counts, and declared contracts (`file-placement`, `folder-boundary`, `data-access-boundary`, `query-mutates-state`) cannot be dismissed this way.
 
 ## Changed lines
 

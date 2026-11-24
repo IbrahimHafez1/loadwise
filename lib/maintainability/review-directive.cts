@@ -1,7 +1,8 @@
 // `// loadwise-reviewed <rule-id> -- <reason>` on the line above a finding records a human review:
-// the finding becomes contextual with that reason. Declared contracts cannot be dismissed this way.
-// The older `warden-reviewed`, `maintainability-reviewed` and `backend-perf-reviewed` spellings
-// stay accepted so existing comments keep working.
+// the finding becomes contextual with that reason. A finding about a whole file is reported on line
+// 1, so there the comment is line 1 itself. Declared contracts cannot be dismissed this way. The
+// older `warden-reviewed`, `maintainability-reviewed` and `backend-perf-reviewed` spellings stay
+// accepted so existing comments keep working.
 import fs from 'node:fs';
 import path from 'node:path';
 import { noteUnreadable } from '../shared/coverage-notes.cjs';
@@ -85,9 +86,11 @@ function applyReviewDirectives(findings: Finding[], root: string): void {
   const load = createSourceLoader(root);
   for (const finding of findings) {
     const { file, line } = finding;
-    if (!supportsReviewDirective(finding) || file === undefined || line === undefined || !(line > 1)) continue;
+    if (!supportsReviewDirective(finding) || file === undefined || line === undefined || !(line >= 1)) continue;
     const entry = load(file);
-    const previous = entry?.lines[line - 2]?.replace(/\r$/, '');
+    // The comment sits above the flagged line, or is line 1 for a finding about the whole file.
+    const directiveIndex = Math.max(line - 2, 0);
+    const previous = entry?.lines[directiveIndex]?.replace(/\r$/, '');
     if (!entry || !previous) continue;
     const match = directive.exec(previous);
     if (!match || match[1] !== finding.ruleId) continue;
@@ -95,7 +98,7 @@ function applyReviewDirectives(findings: Finding[], root: string): void {
       const ts: typeof Typescript = require('typescript');
       entry.sourceFile = ts.createSourceFile(file, entry.text, ts.ScriptTarget.Latest, true, entry.scriptKind);
     }
-    const lineStart = entry.lines.slice(0, line - 2).reduce((total, text) => total + text.length + 1, 0);
+    const lineStart = entry.lines.slice(0, directiveIndex).reduce((total, text) => total + text.length + 1, 0);
     if (isLineComment(entry.sourceFile, lineStart + previous.indexOf('//')))
       finding.contextualReason = 'Reviewed in source: ' + match[2];
   }

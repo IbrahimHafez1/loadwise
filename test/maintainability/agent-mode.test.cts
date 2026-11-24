@@ -142,6 +142,22 @@ test('old warden-reviewed, maintainability-reviewed and backend-perf-reviewed co
   }
 });
 
+test('a finding about a whole file is dismissed by a reviewed comment on line 1', (context) => {
+  const root = tempRoot(context);
+  const reason = 'one cohesive table of rules';
+  fs.writeFileSync(path.join(root, 'a.js'), `// loadwise-reviewed large-module -- ${reason}\nconst value = 1;\n`);
+  fs.writeFileSync(path.join(root, 'b.js'), 'const value = 1;\n');
+  const findings: Finding[] = [
+    { ruleId: 'large-module', message: 'long', file: 'a.js', line: 1 },
+    { ruleId: 'large-module', message: 'long', file: 'b.js', line: 1 },
+    { ruleId: 'high-branch-complexity', message: 'branches', file: 'a.js', line: 1 },
+  ];
+  applyReviewDirectives(findings, root);
+  assert.equal(findings[0].contextualReason, 'Reviewed in source: ' + reason);
+  assert.equal(findings[1].contextualReason, undefined);
+  assert.equal(findings[2].contextualReason, undefined);
+});
+
 test('contract rules stay non-dismissable under every review comment spelling', (context) => {
   const root = tempRoot(context);
   for (const alias of ['loadwise-reviewed', 'warden-reviewed', 'maintainability-reviewed', 'backend-perf-reviewed']) {
