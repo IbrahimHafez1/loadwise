@@ -5,452 +5,602 @@
       "findings": [
         {
           "ruleId": "deep-control-flow",
-          "file": "../../lib/maintainability/advisory-context.cjs",
-          "fingerprint": "4ea0fd35cf8f",
+          "file": "../../lib/maintainability/advisory-context.cts",
+          "fingerprint": "1040ba475541",
           "count": 1
         },
         {
           "ruleId": "deep-control-flow",
-          "file": "../../lib/maintainability/architecture.cjs",
-          "fingerprint": "f9a5eaf48efd",
+          "file": "../../lib/maintainability/architecture.cts",
+          "fingerprint": "293583c47d94",
           "count": 1
         },
         {
           "ruleId": "deep-control-flow",
-          "file": "../../lib/maintainability/site-fixes/duplicates.cjs",
-          "fingerprint": "7030f150f657",
+          "file": "../../lib/maintainability/site-fixes/branches.cts",
+          "fingerprint": "831eaabd6382",
           "count": 1
         },
         {
           "ruleId": "deep-control-flow",
-          "file": "../../lib/performance/projects.cjs",
-          "fingerprint": "f46db3179309",
+          "file": "../../lib/maintainability/site-fixes/duplicates.cts",
+          "fingerprint": "caacff0f4336",
           "count": 1
         },
         {
           "ruleId": "deep-control-flow",
-          "file": "../../lib/performance/query-loops.cjs",
-          "fingerprint": "9ee508aae9d3",
+          "file": "../../lib/performance/prisma-aggregates.cts",
+          "fingerprint": "206d5903d411",
           "count": 1
         },
         {
           "ruleId": "deep-control-flow",
-          "file": "../../lib/performance/schema/project-indexes.cjs",
-          "fingerprint": "311ff1fd33fd",
+          "file": "../../lib/performance/projects.cts",
+          "fingerprint": "02d9ea977d66",
           "count": 1
         },
         {
           "ruleId": "deep-control-flow",
-          "file": "../../lib/performance/site-fixes/indexes.cjs",
-          "fingerprint": "5bc5e9e3f8bc",
+          "file": "../../lib/performance/query-loops.cts",
+          "fingerprint": "44d250342599",
           "count": 1
         },
         {
           "ruleId": "deep-control-flow",
-          "file": "../../lib/performance/site-fixes/query-loops.cjs",
-          "fingerprint": "68ed2e5f8142",
+          "file": "../../lib/performance/schema/project-indexes.cts",
+          "fingerprint": "eb60588d8ae2",
           "count": 1
         },
         {
           "ruleId": "deep-control-flow",
-          "file": "../../lib/performance/site-fixes/sync-calls.cjs",
-          "fingerprint": "c8f81ce0bb62",
+          "file": "../../lib/performance/service-loops.cts",
+          "fingerprint": "9551d89c9bc6",
           "count": 1
         },
         {
           "ruleId": "deep-control-flow",
-          "file": "../../lib/performance/typeorm-projection.cjs",
-          "fingerprint": "b859022d0d4a",
+          "file": "../../lib/performance/site-fixes/indexes.cts",
+          "fingerprint": "b94edea46c41",
           "count": 1
         },
         {
           "ruleId": "deep-control-flow",
-          "file": "../../lib/shared/fix-presentation.cjs",
-          "fingerprint": "8fe27dc4174d",
+          "file": "../../lib/performance/site-fixes/query-loops.cts",
+          "fingerprint": "7868667b3c16",
           "count": 1
         },
         {
           "ruleId": "deep-control-flow",
-          "file": "../../lib/shared/fix.cjs",
-          "fingerprint": "faebbd71917f",
+          "file": "../../lib/performance/site-fixes/sync-calls.cts",
+          "fingerprint": "32a0418079ad",
           "count": 1
         },
         {
           "ruleId": "deep-control-flow",
-          "file": "../../lib/shared/function-summaries.cjs",
-          "fingerprint": "010d61c0dee0",
+          "file": "../../lib/performance/typeorm-projection.cts",
+          "fingerprint": "45fc8b0fe8ce",
+          "count": 1
+        },
+        {
+          "ruleId": "deep-control-flow",
+          "file": "../../lib/shared/fix-presentation.cts",
+          "fingerprint": "3eacc58bf550",
+          "count": 1
+        },
+        {
+          "ruleId": "deep-control-flow",
+          "file": "../../lib/shared/fix.cts",
+          "fingerprint": "d3e6d4b7c2d0",
+          "count": 1
+        },
+        {
+          "ruleId": "deep-control-flow",
+          "file": "../../lib/shared/function-summaries.cts",
+          "fingerprint": "7045843e7abf",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/maintainability/architecture.cjs",
-          "fingerprint": "b4a9658c0266",
+          "file": "../../lib/maintainability/architecture.cts",
+          "fingerprint": "6dfa3cb12904",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/maintainability/branch-advice.cjs",
-          "fingerprint": "9cce9542e63c",
+          "file": "../../lib/maintainability/branch-advice.cts",
+          "fingerprint": "3a363506bc4a",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/maintainability/fix-cli.cjs",
-          "fingerprint": "0c5a057d5a4b",
+          "file": "../../lib/maintainability/fix-cli.cts",
+          "fingerprint": "3315157f228d",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/maintainability/functions.cjs",
-          "fingerprint": "ea4d411935eb",
+          "file": "../../lib/maintainability/fix-cli.cts",
+          "fingerprint": "5b076ee6bcc2",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/maintainability/site-fix.cjs",
-          "fingerprint": "7237269869b2",
+          "file": "../../lib/maintainability/functions.cts",
+          "fingerprint": "d6209adcb932",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/maintainability/site-fixes/large-module.cjs",
-          "fingerprint": "7e275d15100d",
+          "file": "../../lib/maintainability/site-fix.cts",
+          "fingerprint": "201cc5e24cc2",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/maintainability/site-fixes/parameters.cjs",
-          "fingerprint": "dbaee7bcbbb8",
+          "file": "../../lib/maintainability/site-fixes/branches.cts",
+          "fingerprint": "744584923d99",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/collections.cjs",
-          "fingerprint": "3c9a4126ad29",
+          "file": "../../lib/maintainability/site-fixes/large-module.cts",
+          "fingerprint": "7be02f1eaf94",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/collections.cjs",
-          "fingerprint": "5a4c11829213",
+          "file": "../../lib/maintainability/site-fixes/parameters.cts",
+          "fingerprint": "797aa3c7ffee",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/collections.cjs",
-          "fingerprint": "f669f7a25a01",
+          "file": "../../lib/performance/collections.cts",
+          "fingerprint": "629a738554a4",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/contracts/dto.cjs",
-          "fingerprint": "0830b6a7f1a9",
+          "file": "../../lib/performance/collections.cts",
+          "fingerprint": "7766046ea62b",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/drizzle-write-preflight.cjs",
-          "fingerprint": "b386aa3d6cbb",
+          "file": "../../lib/performance/collections.cts",
+          "fingerprint": "f1f833a1a5f9",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/editor-report.cjs",
-          "fingerprint": "f2f5ecf74cb2",
+          "file": "../../lib/performance/contracts/dto.cts",
+          "fingerprint": "e37e0e9c408f",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/fix-cli.cjs",
-          "fingerprint": "b75d7a1e31a6",
+          "file": "../../lib/performance/drizzle-write-preflight.cts",
+          "fingerprint": "b3cae48010ee",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/orm-queries.cjs",
-          "fingerprint": "a2a5a5f27101",
+          "file": "../../lib/performance/editor-report.cts",
+          "fingerprint": "e4fa0ff4d30c",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/orm-queries.cjs",
-          "fingerprint": "d34c4944c021",
+          "file": "../../lib/performance/editor-setup.cts",
+          "fingerprint": "648a973159cf",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/pg-fragments.cjs",
-          "fingerprint": "c0f538403891",
+          "file": "../../lib/performance/fix-cli.cts",
+          "fingerprint": "01ba9750743f",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/plans.cjs",
-          "fingerprint": "ee0ad8fefc15",
+          "file": "../../lib/performance/orm-queries.cts",
+          "fingerprint": "1bc0694d1d7f",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/polyglot.cjs",
-          "fingerprint": "a0e985c57704",
+          "file": "../../lib/performance/orm-queries.cts",
+          "fingerprint": "79eba107a111",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/query-loops.cjs",
-          "fingerprint": "d89f1e3a91d8",
+          "file": "../../lib/performance/pg-fragments.cts",
+          "fingerprint": "b54eeeab1bf0",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/repeated.cjs",
-          "fingerprint": "88c5b60e08a6",
+          "file": "../../lib/performance/plans.cts",
+          "fingerprint": "28a99d6d876a",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/schema/query-sites.cjs",
-          "fingerprint": "2806b5cf14fd",
+          "file": "../../lib/performance/polyglot.cts",
+          "fingerprint": "97551deef9f2",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/schema/query-sites.cjs",
-          "fingerprint": "785874190217",
+          "file": "../../lib/performance/query-loops.cts",
+          "fingerprint": "c2727eece0e4",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/schema/query-sites.cjs",
-          "fingerprint": "7eb37c8061e0",
+          "file": "../../lib/performance/repeated.cts",
+          "fingerprint": "f410478c72f7",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/service-loops.cjs",
-          "fingerprint": "a4ed725dfa3a",
+          "file": "../../lib/performance/schema/query-sites.cts",
+          "fingerprint": "3cf35fbcbe2c",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/site-fixes/collections.cjs",
-          "fingerprint": "149826f7b77e",
+          "file": "../../lib/performance/schema/query-sites.cts",
+          "fingerprint": "93a767af05b1",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/site-fixes/collections.cjs",
-          "fingerprint": "a596ad45f83c",
+          "file": "../../lib/performance/schema/query-sites.cts",
+          "fingerprint": "f65eeee7251d",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/site-fixes/hoisting.cjs",
-          "fingerprint": "351155974ffb",
+          "file": "../../lib/performance/service-loops.cts",
+          "fingerprint": "6637b9c1b8aa",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/site-fixes/hoisting.cjs",
-          "fingerprint": "768aff49062b",
+          "file": "../../lib/performance/service-loops.cts",
+          "fingerprint": "873e58aed54c",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/site-fixes/query-loops.cjs",
-          "fingerprint": "0dda967310c6",
+          "file": "../../lib/performance/site-fixes/collections.cts",
+          "fingerprint": "3541c035db68",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/site-fixes/query-loops.cjs",
-          "fingerprint": "8996908ad2fe",
+          "file": "../../lib/performance/site-fixes/collections.cts",
+          "fingerprint": "5d40a045552f",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/site-fixes/service-loops.cjs",
-          "fingerprint": "2777f7a8535c",
+          "file": "../../lib/performance/site-fixes/collections.cts",
+          "fingerprint": "cabe40bcfac1",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/site-fixes/service-loops.cjs",
-          "fingerprint": "84e9abd81ba6",
+          "file": "../../lib/performance/site-fixes/collections.cts",
+          "fingerprint": "d4e7c97e3e8f",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/site-fixes/transaction-io.cjs",
-          "fingerprint": "7e456dec19a5",
+          "file": "../../lib/performance/site-fixes/hoisting.cts",
+          "fingerprint": "39f4ec6a4f4d",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/site-fixes/transaction-io.cjs",
-          "fingerprint": "eeba412441c3",
+          "file": "../../lib/performance/site-fixes/hoisting.cts",
+          "fingerprint": "dbe408d838d8",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/site-fixes/typeorm-updates.cjs",
-          "fingerprint": "65ab6d44bd4d",
+          "file": "../../lib/performance/site-fixes/integrity.cts",
+          "fingerprint": "20e94dbd5a7d",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/site-fixes/workbook-decodes.cjs",
-          "fingerprint": "5292f0d69a4c",
+          "file": "../../lib/performance/site-fixes/integrity.cts",
+          "fingerprint": "40b37b520212",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/site-fixes/writes.cjs",
-          "fingerprint": "b0ac4c0958df",
+          "file": "../../lib/performance/site-fixes/integrity.cts",
+          "fingerprint": "eda2d8d36624",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/traces.cjs",
-          "fingerprint": "3db54db4442d",
+          "file": "../../lib/performance/site-fixes/json-parse.cts",
+          "fingerprint": "39603bb14a72",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/performance/typeorm-projection.cjs",
-          "fingerprint": "0b22173d8cb0",
+          "file": "../../lib/performance/site-fixes/last-insert-id.cts",
+          "fingerprint": "c2b9da0367b5",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/security/taint/sources.cjs",
-          "fingerprint": "7ce811b6c391",
+          "file": "../../lib/performance/site-fixes/prisma-aggregates.cts",
+          "fingerprint": "ec9bda480a83",
           "count": 1
         },
         {
           "ruleId": "high-branch-complexity",
-          "file": "../../lib/shared/fix.cjs",
-          "fingerprint": "4d126dae6958",
+          "file": "../../lib/performance/site-fixes/query-loops.cts",
+          "fingerprint": "46dc6e2edef0",
+          "count": 1
+        },
+        {
+          "ruleId": "high-branch-complexity",
+          "file": "../../lib/performance/site-fixes/query-loops.cts",
+          "fingerprint": "917e812b1be6",
+          "count": 1
+        },
+        {
+          "ruleId": "high-branch-complexity",
+          "file": "../../lib/performance/site-fixes/service-loops.cts",
+          "fingerprint": "7946fdb1b955",
+          "count": 1
+        },
+        {
+          "ruleId": "high-branch-complexity",
+          "file": "../../lib/performance/site-fixes/service-loops.cts",
+          "fingerprint": "99b7f1881402",
+          "count": 1
+        },
+        {
+          "ruleId": "high-branch-complexity",
+          "file": "../../lib/performance/site-fixes/transaction-io.cts",
+          "fingerprint": "978090d8edb1",
+          "count": 1
+        },
+        {
+          "ruleId": "high-branch-complexity",
+          "file": "../../lib/performance/site-fixes/transaction-io.cts",
+          "fingerprint": "f2b749e92e0d",
+          "count": 1
+        },
+        {
+          "ruleId": "high-branch-complexity",
+          "file": "../../lib/performance/site-fixes/typeorm-updates.cts",
+          "fingerprint": "52739ce7763e",
+          "count": 1
+        },
+        {
+          "ruleId": "high-branch-complexity",
+          "file": "../../lib/performance/site-fixes/workbook-decodes.cts",
+          "fingerprint": "4bb66ce3e2cc",
+          "count": 1
+        },
+        {
+          "ruleId": "high-branch-complexity",
+          "file": "../../lib/performance/site-fixes/workbook-decodes.cts",
+          "fingerprint": "6ed8d9828b30",
+          "count": 1
+        },
+        {
+          "ruleId": "high-branch-complexity",
+          "file": "../../lib/performance/site-fixes/writes.cts",
+          "fingerprint": "a44c29be0f79",
+          "count": 1
+        },
+        {
+          "ruleId": "high-branch-complexity",
+          "file": "../../lib/performance/traces.cts",
+          "fingerprint": "15278a04320e",
+          "count": 1
+        },
+        {
+          "ruleId": "high-branch-complexity",
+          "file": "../../lib/performance/typeorm-projection.cts",
+          "fingerprint": "bcebfa9e491b",
+          "count": 1
+        },
+        {
+          "ruleId": "high-branch-complexity",
+          "file": "../../lib/security/bindings.cts",
+          "fingerprint": "78ec28055b40",
+          "count": 1
+        },
+        {
+          "ruleId": "high-branch-complexity",
+          "file": "../../lib/security/taint/sources.cts",
+          "fingerprint": "c5f007458d26",
+          "count": 1
+        },
+        {
+          "ruleId": "high-branch-complexity",
+          "file": "../../lib/shared/fix.cts",
+          "fingerprint": "dae68fbcd482",
           "count": 1
         },
         {
           "ruleId": "large-module",
-          "file": "../../lib/maintainability/site-fixes/duplicates.cjs",
-          "fingerprint": "079fd4605f9e",
+          "file": "../../lib/maintainability/architecture.cts",
+          "fingerprint": "0e449c744efa",
           "count": 1
         },
         {
           "ruleId": "large-module",
-          "file": "../../lib/maintainability/site-fixes/extract-block.cjs",
-          "fingerprint": "b01cc6c85a9b",
+          "file": "../../lib/maintainability/module-usage.cts",
+          "fingerprint": "0088027b4d2f",
           "count": 1
         },
         {
           "ruleId": "large-module",
-          "file": "../../lib/performance/cli.cjs",
-          "fingerprint": "1360146f9257",
+          "file": "../../lib/maintainability/site-fixes/duplicates.cts",
+          "fingerprint": "a12238dd2ba6",
           "count": 1
         },
         {
           "ruleId": "large-module",
-          "file": "../../lib/performance/collections.cjs",
-          "fingerprint": "66776460fd7e",
+          "file": "../../lib/maintainability/site-fixes/extract-block.cts",
+          "fingerprint": "45ba39f51fea",
           "count": 1
         },
         {
           "ruleId": "large-module",
-          "file": "../../lib/performance/index-rules.cjs",
-          "fingerprint": "2fcb6151ceb5",
+          "file": "../../lib/performance/cli.cts",
+          "fingerprint": "457d41b0c9d0",
           "count": 1
         },
         {
           "ruleId": "large-module",
-          "file": "../../lib/performance/migrations/extract-code.cjs",
-          "fingerprint": "7ff304900585",
+          "file": "../../lib/performance/collections.cts",
+          "fingerprint": "bf1323279c58",
           "count": 1
         },
         {
           "ruleId": "large-module",
-          "file": "../../lib/performance/query-loops.cjs",
-          "fingerprint": "fc5166ad4e53",
+          "file": "../../lib/performance/db/cli.cts",
+          "fingerprint": "6b2aebdd77fe",
           "count": 1
         },
         {
           "ruleId": "large-module",
-          "file": "../../lib/performance/schema/query-sites.cjs",
-          "fingerprint": "f8cf155c77bd",
+          "file": "../../lib/performance/index-rules.cts",
+          "fingerprint": "be49557d6d68",
           "count": 1
         },
         {
           "ruleId": "large-module",
-          "file": "../../lib/performance/service-loops.cjs",
-          "fingerprint": "da2420a280e1",
+          "file": "../../lib/performance/migrations/extract-code.cts",
+          "fingerprint": "446ac34c6150",
           "count": 1
         },
         {
           "ruleId": "large-module",
-          "file": "../../lib/performance/site-fixes/collections.cjs",
-          "fingerprint": "b0eca07f59e3",
+          "file": "../../lib/performance/migrations/rules-postgres.cts",
+          "fingerprint": "74a5f720f3fd",
           "count": 1
         },
         {
           "ruleId": "large-module",
-          "file": "../../lib/performance/site-fixes/migrations.cjs",
-          "fingerprint": "e2661938d72e",
+          "file": "../../lib/performance/query-loops.cts",
+          "fingerprint": "5bf2536297e1",
           "count": 1
         },
         {
           "ruleId": "large-module",
-          "file": "../../lib/performance/site-fixes/query-loops.cjs",
-          "fingerprint": "c483e410d5eb",
+          "file": "../../lib/performance/schema/project-indexes.cts",
+          "fingerprint": "dc2c68230924",
           "count": 1
         },
         {
           "ruleId": "large-module",
-          "file": "../../lib/performance/site-fixes/service-loops.cjs",
-          "fingerprint": "ed0ffa5729d0",
+          "file": "../../lib/performance/schema/query-sites.cts",
+          "fingerprint": "293788c90d03",
           "count": 1
         },
         {
           "ruleId": "large-module",
-          "file": "../../lib/shared/fix-presentation.cjs",
-          "fingerprint": "3449f1d0fb6e",
+          "file": "../../lib/performance/service-loops.cts",
+          "fingerprint": "68c814646667",
+          "count": 1
+        },
+        {
+          "ruleId": "large-module",
+          "file": "../../lib/performance/site-fixes/collections.cts",
+          "fingerprint": "5c2bffc02eaa",
+          "count": 1
+        },
+        {
+          "ruleId": "large-module",
+          "file": "../../lib/performance/site-fixes/integrity.cts",
+          "fingerprint": "a4d353800412",
+          "count": 1
+        },
+        {
+          "ruleId": "large-module",
+          "file": "../../lib/performance/site-fixes/migrations.cts",
+          "fingerprint": "a7086b6d79ac",
+          "count": 1
+        },
+        {
+          "ruleId": "large-module",
+          "file": "../../lib/performance/site-fixes/query-loops.cts",
+          "fingerprint": "5ce995807ae8",
+          "count": 1
+        },
+        {
+          "ruleId": "large-module",
+          "file": "../../lib/performance/site-fixes/service-loops.cts",
+          "fingerprint": "fb5a3cee88be",
+          "count": 1
+        },
+        {
+          "ruleId": "large-module",
+          "file": "../../lib/shared/fix-presentation.cts",
+          "fingerprint": "20efe20d2191",
+          "count": 1
+        },
+        {
+          "ruleId": "large-module",
+          "file": "../../lib/shared/function-summaries.cts",
+          "fingerprint": "c77b5533f195",
           "count": 1
         },
         {
           "ruleId": "long-parameter-list",
-          "file": "../../lib/maintainability/scan.cjs",
-          "fingerprint": "9fa05e3a62bc",
+          "file": "../../lib/maintainability/fix-cli.cts",
+          "fingerprint": "48400ebeca7c",
           "count": 1
         },
         {
           "ruleId": "long-parameter-list",
-          "file": "../../lib/maintainability/site-fixes/parameters.cjs",
-          "fingerprint": "c65b1bb87bb0",
+          "file": "../../lib/maintainability/scan.cts",
+          "fingerprint": "b1f0daf3d6ad",
           "count": 1
         },
         {
           "ruleId": "long-parameter-list",
-          "file": "../../lib/performance/cache-reads.cjs",
-          "fingerprint": "9f247a1b35f6",
+          "file": "../../lib/maintainability/site-fixes/parameters.cts",
+          "fingerprint": "af249c37fb12",
           "count": 1
         },
         {
           "ruleId": "long-parameter-list",
-          "file": "../../lib/performance/projects.cjs",
-          "fingerprint": "fe4a56ff9fd7",
+          "file": "../../lib/performance/cache-reads.cts",
+          "fingerprint": "98be0b912433",
           "count": 1
         },
         {
           "ruleId": "long-parameter-list",
-          "file": "../../lib/security/exposure/report.cjs",
-          "fingerprint": "a8cc633431f8",
+          "file": "../../lib/performance/projects.cts",
+          "fingerprint": "59efeb7e3bc9",
           "count": 1
         },
         {
           "ruleId": "long-parameter-list",
-          "file": "../../lib/security/injection/shared.cjs",
-          "fingerprint": "829dc000b9c4",
+          "file": "../../lib/security/exposure/report.cts",
+          "fingerprint": "09a366e9e156",
+          "count": 1
+        },
+        {
+          "ruleId": "long-parameter-list",
+          "file": "../../lib/security/injection/shared.cts",
+          "fingerprint": "2edd0d4e0f8f",
           "count": 1
         }
       ]
