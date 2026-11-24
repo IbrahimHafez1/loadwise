@@ -50,7 +50,7 @@ function project(context: TestContext) {
       '  }',
       '}',
       'function dispatch(value) {',
-      ...Array.from({ length: 16 }, (_, index) => `  if (value === ${index}) return ${index};`),
+      ...Array.from({ length: 16 }, (_, index) => `  if (value === ${index}) console.log(${index});`),
       '}',
     ].join('\n'),
   );

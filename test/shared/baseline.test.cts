@@ -16,7 +16,7 @@ const tsconfig = JSON.stringify({ compilerOptions: { strict: true }, include: ['
 const complexFunction = (name: string) =>
   [
     `export function ${name}(value) {`,
-    ...Array.from({ length: 16 }, (_, index) => `if (value === ${index}) return ${index};`),
+    ...Array.from({ length: 16 }, (_, index) => `if (value === ${index}) console.log(${index});`),
     '}',
     '',
   ].join('\n');

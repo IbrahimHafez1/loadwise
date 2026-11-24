@@ -8,7 +8,13 @@ function analyze(source: string) {
   return analyzeFunctions(ts.createSourceFile(file, source, ts.ScriptTarget.Latest), file);
 }
 
+// Plain decisions, each of which counts in full.
 function guards(count: number) {
+  return Array.from({ length: count }, (_, index) => `if (status === ${index}) handle(${index});`).join('\n');
+}
+
+// Independent bail-outs at the top of a function, which count half up to a limit.
+function bailOuts(count: number) {
   return Array.from({ length: count }, (_, index) => `if (status === ${index}) return ${index};`).join('\n');
 }
 
@@ -146,4 +152,31 @@ test('the explicit query contract leaves local writes, aliases, reads and deferr
     '};',
   ].join('\n');
   assert.deepEqual(analyze(source), []);
+});
+
+test('a straight run of bail-out guards counts half until twenty, while any other branch counts in full', () => {
+  const ruleIds = (body: string) => analyze(`function check(status) { ${body} }`).map((finding) => finding.ruleId);
+  assert.deepEqual(ruleIds(bailOuts(19)), []);
+  const flagged = analyze(`function check(status) { ${bailOuts(20)} }`);
+  assert.deepEqual(
+    flagged.map((finding) => finding.ruleId),
+    ['high-branch-complexity'],
+  );
+  assert.match(flagged[0].message, /complexity of 21/);
+  assert.match(analyze(`function check(status) { ${bailOuts(30)} }`)[0].message, /complexity of 31/);
+  // An else, a nested guard, an effect before the exit and a ternary in the condition are not plain guards.
+  const notPlain = [
+    'if (status === 1) return 1; else return 2;',
+    'if (ready) { if (status === 1) return 1; }',
+    'if (status === 1) { log(); return 1; }',
+    'if (status === 1 ? ready : other) return 1;',
+  ];
+  for (const guard of notPlain) {
+    assert.deepEqual(ruleIds(Array.from({ length: 15 }, () => guard).join('\n')), ['high-branch-complexity'], guard);
+  }
+  assert.deepEqual(
+    ruleIds(`${bailOuts(14)} ${guards(2)}`),
+    [],
+    'half weight: 17 decisions, 14 of them guards, weigh 10',
+  );
 });

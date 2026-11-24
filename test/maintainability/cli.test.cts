@@ -27,7 +27,7 @@ test('generated-source advisories stay retrievable and contract thresholds are i
     'generated.ts': [
       '// GENERATED from canonical schema - do not edit.',
       'export function dispatch(value) {',
-      ...Array.from({ length: 16 }, (_, index) => `if (value === ${index}) return ${index};`),
+      ...Array.from({ length: 16 }, (_, index) => `if (value === ${index}) console.log(${index});`),
       '}',
     ].join('\n'),
   });

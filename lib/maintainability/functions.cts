@@ -15,6 +15,8 @@ interface FunctionScope {
   deepest?: Node;
   // The top-level statement that added the most decisions.
   busiestStatement?: Statement;
+  // Plain bail-out guards at the top of the function body, which weigh less than other branches.
+  guards: number;
   hasTraversalLeaf: boolean;
   traversalOnly: boolean;
   loops: number;
@@ -45,6 +47,34 @@ function bufferChildren(node: Node): number {
 
 const nestingLimit = 4;
 const branchComplexityLimit = 15;
+// A run of independent `if (...) return;` guards reads straight through, so each counts half toward the
+// limit. Past this many in one function they count in full again, so a function of twenty guards is
+// still reported. The reported number stays the plain count of decisions.
+const guardWeight = 0.5;
+const maxDiscountedGuards = 12;
+
+// Only a function that is mostly guards gets the discount; a few guards among other branches do not
+// make a mixed function simpler.
+function weightedComplexity(scope: FunctionScope): number {
+  const decisions = scope.complexity - 1;
+  if (scope.guards * 2 < decisions) return scope.complexity;
+  return scope.complexity - (1 - guardWeight) * Math.min(scope.guards, maxDiscountedGuards);
+}
+
+// A statement that only leaves the function or loop early when its condition holds.
+function leavesEarly(statement: Statement): boolean {
+  if (ts.isBlock(statement)) return statement.statements.length === 1 && leavesEarly(statement.statements[0]);
+  return (
+    ts.isReturnStatement(statement) ||
+    ts.isThrowStatement(statement) ||
+    ts.isContinueStatement(statement) ||
+    ts.isBreakStatement(statement)
+  );
+}
+
+function isBailOutGuard(statement: Statement): boolean {
+  return ts.isIfStatement(statement) && !statement.elseStatement && leavesEarly(statement.thenStatement);
+}
 
 function annotatedInstanceQuery(node: Node, parent: Node | undefined): boolean {
   return Boolean(
@@ -149,6 +179,7 @@ function analyzeFunctions(sourceFile: SourceFile, relativePath: string): Finding
     const inner: FunctionScope = {
       complexity: 1,
       maxDepth: 0,
+      guards: 0,
       hasTraversalLeaf: false,
       traversalOnly: true,
       loops: 0,
@@ -160,6 +191,7 @@ function analyzeFunctions(sourceFile: SourceFile, relativePath: string): Finding
         const parameterScope: FunctionScope = {
           complexity: 1,
           maxDepth: 0,
+          guards: 0,
           hasTraversalLeaf: false,
           traversalOnly: false,
           loops: 0,
@@ -186,7 +218,7 @@ function analyzeFunctions(sourceFile: SourceFile, relativePath: string): Finding
         node,
       );
     }
-    if (inner.complexity >= branchComplexityLimit) {
+    if (weightedComplexity(inner) >= branchComplexityLimit) {
       report(
         {
           node: functionAnchor(node, parent),
@@ -241,6 +273,7 @@ function analyzeFunctions(sourceFile: SourceFile, relativePath: string): Finding
       const before = scope.complexity;
       visit(statement, scope, depth, body);
       const decisions = scope.complexity - before;
+      if (decisions === 1 && isBailOutGuard(statement)) scope.guards++;
       if (decisions > mostDecisions) {
         mostDecisions = decisions;
         scope.busiestStatement = statement;

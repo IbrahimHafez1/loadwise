@@ -186,7 +186,7 @@ test('deep-control-flow rewrites no if that would need intent, and extracts the 
 test('combining matching conditional labels preserves evaluation order and short circuiting', (context) => {
   const source = [
     'module.exports = function status(first, second, fallback, flags) {',
-    ...Array.from({ length: 12 }, (_, index) => `  if (flags[${index}]) return "other";`),
+    ...Array.from({ length: 12 }, (_, index) => `  if (flags[${index}]) Math.abs(${index});`),
     '  return (first() ?? fallback()) ? "ready" : (second() ? "ready" : "pending");',
     '};',
   ].join('\n');
@@ -268,7 +268,7 @@ test('literal cases that repeat the default preserve decoding and its side effec
     '    decoded += character;',
     '    consumed += 2;',
     '  }',
-    ...Array.from({ length: 11 }, (_, index) => `  if (consumed === ${index + 5}) return ${index};`),
+    ...Array.from({ length: 11 }, (_, index) => `  if (consumed === ${index + 5}) Math.abs(${index});`),
     '  return [decoded, consumed];',
     '}',
     'module.exports = { decode };',
@@ -315,7 +315,7 @@ test('branch rewrites preserve a getter that rebinds its receiver and native boo
     '  with (scope) {',
     '    if (!selected) selected = "assigned";',
     '  }',
-    ...Array.from({ length: 13 }, (_, index) => `  if (value === ${index}) return ${index};`),
+    ...Array.from({ length: 13 }, (_, index) => `  if (value === ${index}) Math.abs(${index});`),
     '  return [replacement.name, selected, active];',
     '}',
     'module.exports = { update };',
@@ -607,14 +607,14 @@ test('high-branch-complexity groups && inside || and withholds merged conditions
     '  input.step = 1;',
     `  if (${long} === 1) return 1;`,
     `  if (${long} === 2) return 1;`,
-    ...Array.from({ length: 11 }, (_, index) => `  if (input.level === ${index}) input.step += ${index};`),
+    ...Array.from({ length: 13 }, (_, index) => `  if (input.level === ${index}) input.step += ${index};`),
     '  return input.step;',
     '}',
     'module.exports = { check };',
   ].join('\n');
   const directory = project(context, { 'check.cjs': source });
   const [finding] = ruleFindings(directory, 'high-branch-complexity');
-  assert.match(fixNoteOf(fixOf(finding)), /from 16 to 15\./);
+  assert.match(fixNoteOf(fixOf(finding)), /from 18 to 17\./);
   const text = fixedFiles(directory, fixOf(finding))['check.cjs'];
   assert.match(text, /if \(\(input\.kind === 1 && input\.flag\) \|\| input\.kind === 2\) return 0;/);
   assert.match(text, /=== 1\) return 1;\n {2}if \(input\.someRatherLong/, 'the over-long merge is withheld');
