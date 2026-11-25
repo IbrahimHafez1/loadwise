@@ -150,5 +150,125 @@
     "line": 255,
     "verdict": "fp",
     "note": "test fixture in .mock.ts file"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-in-url-query",
+    "file": "apps/web/lib/googleSheet/service.ts",
+    "line": 208,
+    "verdict": "tp",
+    "note": "access_token passed in URL query string to tokeninfo endpoint"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "jwt-sign-without-expiry",
+    "file": "apps/web/modules/ee/contacts/lib/contact-survey-link.ts",
+    "line": 65,
+    "verdict": "tp",
+    "note": "jwt.sign called without expiresIn when expirationDays is omitted"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "tls-verification-disabled",
+    "file": "packages/database/src/pg-connection-config.ts",
+    "line": 11,
+    "verdict": "fp",
+    "note": "explicit translation of Prisma sslaccept=accept_invalid_certs option"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "dockerfile-runs-as-root",
+    "file": "apps/deployment-check/Dockerfile",
+    "line": 37,
+    "verdict": "tp",
+    "note": "final stage has no USER instruction and runs as root"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "compose-hardcoded-secret",
+    "file": "docker/docker-compose.yml",
+    "line": 447,
+    "verdict": "fp",
+    "note": "explicitly documented inert unused placeholder value"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "compose-hardcoded-secret",
+    "file": "docker/docker-compose.yml",
+    "line": 449,
+    "verdict": "fp",
+    "note": "explicitly documented inert unused placeholder value"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "compose-hardcoded-secret",
+    "file": "docker/docker-compose.yml",
+    "line": 476,
+    "verdict": "fp",
+    "note": "explicitly documented inert unused placeholder value"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "compose-hardcoded-secret",
+    "file": "docker/docker-compose.yml",
+    "line": 478,
+    "verdict": "fp",
+    "note": "explicitly documented inert unused placeholder value"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-count-for-existence",
+    "file": "apps/web/lib/authzed/backfill-source.ts",
+    "line": 353,
+    "verdict": "tp",
+    "note": "uses count() > 0 instead of findFirst with select id"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-order",
+    "file": "apps/web/lib/instance.ts",
+    "line": 24,
+    "verdict": "tp",
+    "note": "orders Organization by createdAt, id without a supporting index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-distinct-in-memory",
+    "file": "apps/web/lib/telemetry/usage-update.ts",
+    "line": 299,
+    "verdict": "tp",
+    "note": "Prisma distinct on integration.type deduplicates in memory"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-distinct-in-memory",
+    "file": "apps/web/lib/telemetry/usage-update.ts",
+    "line": 300,
+    "verdict": "tp",
+    "note": "Prisma distinct on account.provider deduplicates in memory"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "list-query-overfetch",
+    "file": "apps/web/modules/api/v2/organizations/[organizationId]/users/lib/users.ts",
+    "line": 32,
+    "verdict": "tp",
+    "note": "findMany with nested include fetches all user and team columns"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-unusable-expression",
+    "file": "apps/web/modules/auth/lib/better-auth-two-factor-backfill.ts",
+    "line": 44,
+    "verdict": "tp",
+    "note": "case-insensitive email filter prevents plain btree index lookup"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "sequential-http-in-loop",
+    "file": "apps/web/playwright/utils/hub.ts",
+    "line": 57,
+    "verdict": "fp",
+    "note": "intentional bounded-concurrency worker pool of 24 workers"
   }
 ]

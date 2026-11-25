@@ -5,10 +5,13 @@ import type {
   CaseOrDefaultClause,
   HasDecorators,
   HasModifiers,
+  IterationStatement,
   Modifier,
   ModifierLike,
   Node,
   OptionalChain,
+  ParameterPropertyDeclaration,
+  SourceFile,
 } from 'typescript';
 import type { NativeNode } from './types/native-typescript.js';
 const ast = requireNative('typescript/ast');
@@ -66,6 +69,36 @@ function getDecorators(node: HasDecorators) {
 
 function isCaseOrDefaultClause(node: Node): node is CaseOrDefaultClause {
   return guards.isCaseClause(node) || guards.isDefaultClause(node);
+}
+
+function hasStatement(node: Node): node is Node & { statement: Node } {
+  return 'statement' in node;
+}
+
+function isIterationStatement(node: Node, lookInLabeledStatement: boolean): node is IterationStatement {
+  if (
+    node.kind === ast.SyntaxKind.ForStatement ||
+    guards.isForInStatement(node) ||
+    guards.isForOfStatement(node) ||
+    node.kind === ast.SyntaxKind.WhileStatement ||
+    node.kind === ast.SyntaxKind.DoStatement
+  ) {
+    return true;
+  }
+  return (
+    lookInLabeledStatement &&
+    node.kind === ast.SyntaxKind.LabeledStatement &&
+    hasStatement(node) &&
+    isIterationStatement(node.statement, true)
+  );
+}
+
+function isParameterPropertyDeclaration(node: Node, parent: Node): node is ParameterPropertyDeclaration {
+  return (
+    guards.isParameterDeclaration(node) &&
+    parent.kind === ast.SyntaxKind.Constructor &&
+    Boolean(getCombinedModifierFlags(node) & ModifierFlags.ParameterPropertyModifier)
+  );
 }
 
 // Any native node that carries a modifier list can have modifiers; the rest read as having none.
@@ -127,6 +160,9 @@ const nativeSyntax: Partial<typeof TypeScript> = {
   isPropertySignature: guards.isPropertySignatureDeclaration,
   isMethodSignature: guards.isMethodSignatureDeclaration,
   isCaseOrDefaultClause,
+  isIterationStatement,
+  isParameterPropertyDeclaration,
+  getModeForUsageLocation: (file: SourceFile) => file.impliedNodeFormat,
   getDecorators,
   canHaveDecorators,
   getModifiers,

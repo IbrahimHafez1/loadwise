@@ -61,6 +61,7 @@ interface SourceScanOptions {
   policy?: PerformancePolicy;
   onlyFiles?: (filename: string) => boolean;
   analyzers?: SourceAnalyzer[];
+  preRead?: ReadonlyMap<string, string | undefined>;
 }
 import { fileURLToPath } from 'node:url';
 const compilerLibDirectory = path.dirname(fileURLToPath(import.meta.resolve('typescript')));
@@ -86,17 +87,80 @@ const maximumCachedCharacters = 64 * 1024 * 1024;
 
 // Every config of a monorepo loads the shared packages again, so a one-shot run reads each file
 // once. Files beyond the budget are read again on demand, which only costs time.
-function cacheFileText(read: (filename: string) => string | undefined) {
+function cacheFileText(
+  read: (filename: string) => string | undefined,
+  preRead?: ReadonlyMap<string, string | undefined>,
+) {
   const texts = new Map<string, string | undefined>();
   let cachedCharacters = 0;
   return (filename: string): string | undefined => {
     if (texts.has(filename)) return texts.get(filename);
+    if (preRead) {
+      const canonical = canonicalFileName(path.resolve(filename));
+      if (preRead.has(canonical)) return preRead.get(canonical);
+    }
     const text = read(filename);
     if (text !== undefined && cachedCharacters + text.length > maximumCachedCharacters) return text;
     texts.set(filename, text);
     cachedCharacters += text?.length ?? 0;
     return text;
   };
+}
+
+const preReadConcurrency = 32;
+
+// Reads the project's source files concurrently before synchronous TypeScript program creation so
+// disk IO does not serialize across thousands of files.
+async function preReadSources({
+  project,
+  files = [],
+}: {
+  project?: string | string[];
+  files?: readonly string[];
+}): Promise<Map<string, string | undefined>> {
+  const candidates = new Map<string, string>();
+  const addCandidate = (filename: string) => {
+    const resolved = path.resolve(filename);
+    const canonical = canonicalFileName(resolved);
+    if (!candidates.has(canonical)) candidates.set(canonical, resolved);
+  };
+  if (files.length) {
+    for (const file of files) if (isSourceInput(file)) addCandidate(file);
+  } else {
+    try {
+      for (const { config } of scanEntries(project)) {
+        const parsed = ts.getParsedCommandLineOfConfigFile(
+          config,
+          {},
+          { ...ts.sys, onUnRecoverableConfigFileDiagnostic() {} },
+        );
+        for (const file of parsed?.fileNames ?? []) if (isSourceInput(file)) addCandidate(file);
+      }
+    } catch {
+      // Invalid or missing configs are surfaced by analyzeSources with its full error context.
+    }
+  }
+  const entries = [...candidates.entries()];
+  const result = new Map<string, string | undefined>();
+  let totalCharacters = 0;
+  let index = 0;
+  const worker = async () => {
+    while (index < entries.length) {
+      const [canonical, resolved] = entries[index++];
+      if (totalCharacters >= maximumCachedCharacters) break;
+      try {
+        const text = await fs.promises.readFile(resolved, 'utf8');
+        if (totalCharacters + text.length <= maximumCachedCharacters) {
+          totalCharacters += text.length;
+          result.set(canonical, text);
+        }
+      } catch {
+        // Unreadable files fall back to synchronous ts.sys.readFile.
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(preReadConcurrency, entries.length) }, worker));
+  return result;
 }
 
 // A workspace entry is looked up for every unresolved import of the package, and each lookup probes
@@ -166,11 +230,12 @@ function createHost(
   if (!sharedLibs) return host;
   const loadSource = host.getSourceFile;
   host.getSourceFile = (filename, languageOptions, onError, forceNew) => {
-    if (
-      !forceNew &&
+    const isBundledLib =
       /^lib(?:\.[\w.-]+)?\.d\.ts$/.test(path.basename(filename)) &&
-      path.dirname(path.resolve(filename)) === compilerLibDirectory
-    ) {
+      path.dirname(path.resolve(filename)) === compilerLibDirectory;
+    const isPackageDeclaration =
+      filename.endsWith('.d.ts') && (filename.includes('/node_modules/') || filename.includes('\\node_modules\\'));
+    if (!forceNew && (isBundledLib || isPackageDeclaration)) {
       let snapshot = sharedLibs.snapshots.get(filename);
       if (!snapshot) {
         const contents = host.readFile(filename);
@@ -326,7 +391,7 @@ function analyzeProgram({
 
 // `project` is one config or an array of them. `onlyFiles` limits the roots of each config to the changed files;
 // imports still resolve through the config.
-function analyzeSources({ project, files, policy, onlyFiles, analyzers }: SourceScanOptions): ScanResult {
+function analyzeSources({ project, files, policy, onlyFiles, analyzers, preRead }: SourceScanOptions): ScanResult {
   const findings: Finding[] = [];
   const scanned = new Set<string>();
   const configs = new Set<string>();
@@ -339,7 +404,7 @@ function analyzeSources({ project, files, policy, onlyFiles, analyzers }: Source
   const probes: HostProbes = {
     fileExists: cachePathTest(ts.sys.fileExists),
     directoryExists: cachePathTest(ts.sys.directoryExists),
-    readFile: cacheFileText(ts.sys.readFile),
+    readFile: cacheFileText(ts.sys.readFile, preRead),
   };
   const findWorkspaceEntry = cacheWorkspaceEntries();
   let sharedLibs: SharedLibs | undefined;
@@ -477,4 +542,12 @@ function analyzeSources({ project, files, policy, onlyFiles, analyzers }: Source
   };
 }
 
-export { analysisOptions, analyzeProgram, analyzeSources, diagnosticText, resolveConfig, performanceAnalyzers };
+export {
+  analysisOptions,
+  analyzeProgram,
+  analyzeSources,
+  diagnosticText,
+  preReadSources,
+  resolveConfig,
+  performanceAnalyzers,
+};

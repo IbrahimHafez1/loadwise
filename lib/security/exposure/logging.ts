@@ -22,11 +22,8 @@ const secretNamePattern =
 const loggerNamePattern = /^(?:console|log|logger|_logger)$|Logger$/;
 const requestPattern = /^(?:req|request)$/;
 const requestObjectNames = new Set(['body', 'headers']);
-const joiningOperators = new Set([
-  ts.SyntaxKind.PlusToken,
-  ts.SyntaxKind.QuestionQuestionToken,
-  ts.SyntaxKind.BarBarToken,
-]);
+const joiningOperators = () =>
+  new Set([ts.SyntaxKind.PlusToken, ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarToken]);
 const wholeRequestReason = 'The whole request is logged; confirm it carries no credentials.';
 const commandSource = /\.command\.[cm]?[jt]s$/i;
 const commandPackages = new Set(['commander', 'nest-commander']);
@@ -108,7 +105,7 @@ function collectSecrets(expression: Expression, secrets: SecretSite[]): void {
   if (!node) return;
   if (ts.isTemplateExpression(node))
     return node.templateSpans.forEach((span) => collectSecrets(span.expression, secrets));
-  if (ts.isBinaryExpression(node) && joiningOperators.has(node.operatorToken.kind)) {
+  if (ts.isBinaryExpression(node) && joiningOperators().has(node.operatorToken.kind)) {
     collectSecrets(node.left, secrets);
     return collectSecrets(node.right, secrets);
   }

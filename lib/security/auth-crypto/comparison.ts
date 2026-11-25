@@ -5,12 +5,10 @@ import type { BinaryExpression, Expression, Node } from 'typescript';
 import type { CheckerAdapter, SecurityRuleContext } from '../../shared/types.js';
 
 const timingSafeStringComparison = Symbol('timingSafeStringComparison');
-const strictComparisons = new Set([ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken]);
-const comparisonOperators = new Set([
-  ...strictComparisons,
-  ts.SyntaxKind.EqualsEqualsToken,
-  ts.SyntaxKind.ExclamationEqualsToken,
-]);
+const strictComparisons = () =>
+  new Set([ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken]);
+const comparisonOperators = () =>
+  new Set([...strictComparisons(), ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsToken]);
 const secretName = /(?:signature|hmac|digest|secret|apiKey|api_key|token|otp|password|passwordHash|csrf)$/i;
 const message =
   'This compares a secret with `===`, which stops at the first differing character and leaks timing. Compare with `crypto.timingSafeEqual` on equal-length buffers.';
@@ -67,7 +65,7 @@ function isDigestOfHash(node: Expression, context: SecurityRuleContext) {
 }
 
 function checkSecretComparison(comparison: BinaryExpression, context: SecurityRuleContext) {
-  if (!comparisonOperators.has(comparison.operatorToken.kind)) return;
+  if (!comparisonOperators().has(comparison.operatorToken.kind)) return;
   const { left, right } = comparison;
   if (isConstantOperand(left) || isConstantOperand(right)) return;
   const candidates = [
@@ -82,7 +80,7 @@ function checkSecretComparison(comparison: BinaryExpression, context: SecurityRu
     const ambiguous = !hashed && lastSegment(secret) === 'token';
     const canFix =
       !ambiguous &&
-      strictComparisons.has(comparison.operatorToken.kind) &&
+      strictComparisons().has(comparison.operatorToken.kind) &&
       isStringOperand(left, context.checker) &&
       isStringOperand(right, context.checker);
     return context.report(

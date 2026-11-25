@@ -16,7 +16,7 @@ import type { CheckerAdapter, LibraryCall, SecurityRuleContext, SymbolAdapter, T
 const secondHopReason = 'Reached through two calls; confirm the intermediate functions do not validate the value.';
 // Bounds the alias chains followed when a value is created by a library call in another statement.
 const maxAliasDepth = 4;
-const fallbackOperators: readonly SyntaxKind[] = [ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken];
+const fallbackOperators = (): readonly SyntaxKind[] => [ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken];
 
 /**
  * A symbol that lists what a module exports; TypeScript symbols do, the adapter's shared surface
@@ -148,7 +148,7 @@ function createdBy(
   if (ts.isPropertyAccessExpression(value) && isNamespaceImport(value.expression, checker))
     return createdBy(initializerOf(value.name, checker), isFactory, checker, depth + 1);
   if (ts.isCallExpression(value) || ts.isNewExpression(value)) return isFactory(value);
-  if (ts.isBinaryExpression(value) && fallbackOperators.includes(value.operatorToken.kind))
+  if (ts.isBinaryExpression(value) && fallbackOperators().includes(value.operatorToken.kind))
     return (
       createdBy(value.left, isFactory, checker, depth + 1) || createdBy(value.right, isFactory, checker, depth + 1)
     );

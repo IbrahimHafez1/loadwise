@@ -25,16 +25,17 @@ const valueCarryingStringMethods = new Set([
   'replace',
   'concat',
 ]);
-const carryingOperators = new Set([
-  ts.SyntaxKind.PlusToken,
-  ts.SyntaxKind.MinusToken,
-  ts.SyntaxKind.AsteriskToken,
-  ts.SyntaxKind.SlashToken,
-  ts.SyntaxKind.PercentToken,
-  ts.SyntaxKind.AsteriskAsteriskToken,
-  ts.SyntaxKind.BarBarToken,
-  ts.SyntaxKind.QuestionQuestionToken,
-]);
+const carryingOperators = () =>
+  new Set([
+    ts.SyntaxKind.PlusToken,
+    ts.SyntaxKind.MinusToken,
+    ts.SyntaxKind.AsteriskToken,
+    ts.SyntaxKind.SlashToken,
+    ts.SyntaxKind.PercentToken,
+    ts.SyntaxKind.AsteriskAsteriskToken,
+    ts.SyntaxKind.BarBarToken,
+    ts.SyntaxKind.QuestionQuestionToken,
+  ]);
 const followDepthLimit = 2;
 const message =
   '`Math.random()` is predictable and must not produce tokens, codes or secrets. Use `crypto.randomBytes`, `crypto.randomInt` or `crypto.randomUUID`.';
@@ -64,7 +65,7 @@ function valueCarryingParent(current: Node): Node | undefined {
     ts.isTemplateExpression(parent)
   )
     return parent;
-  if (ts.isBinaryExpression(parent) && carryingOperators.has(parent.operatorToken.kind)) return parent;
+  if (ts.isBinaryExpression(parent) && carryingOperators().has(parent.operatorToken.kind)) return parent;
   if (ts.isPropertyAccessExpression(parent) && parent.expression === current) {
     const call = parent.parent;
     if (ts.isCallExpression(call) && call.expression === parent && valueCarryingStringMethods.has(parent.name.text))

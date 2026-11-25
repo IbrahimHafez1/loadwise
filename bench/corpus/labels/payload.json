@@ -70,5 +70,93 @@
     "line": 10,
     "verdict": "fp",
     "note": "German UI label, not a credential"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "committed-secret",
+    "file": "test/plugin-cloud-storage/.env.emulated",
+    "line": 4,
+    "verdict": "fp",
+    "note": "sample local emulator credentials for docker-compose tests"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "committed-secret",
+    "file": "test/plugin-cloud-storage/.env.emulated",
+    "line": 13,
+    "verdict": "fp",
+    "note": "sample local emulator credentials for docker-compose tests"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "committed-secret",
+    "file": "test/plugin-cloud-storage/.env.emulated",
+    "line": 14,
+    "verdict": "fp",
+    "note": "sample local emulator credentials for docker-compose tests"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "committed-secret",
+    "file": "test/plugin-cloud-storage/.env.emulated",
+    "line": 25,
+    "verdict": "fp",
+    "note": "sample local emulator credentials for docker-compose tests"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "committed-secret",
+    "file": "test/plugin-cloud-storage/.env.emulated",
+    "line": 26,
+    "verdict": "fp",
+    "note": "sample local emulator credentials for docker-compose tests"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "committed-secret",
+    "file": "test/plugin-import-export/.env.emulated",
+    "line": 4,
+    "verdict": "fp",
+    "note": "sample local emulator credentials for docker-compose tests"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "committed-secret",
+    "file": "test/plugin-import-export/.env.emulated",
+    "line": 13,
+    "verdict": "fp",
+    "note": "sample local emulator credentials for docker-compose tests"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "committed-secret",
+    "file": "test/plugin-import-export/.env.emulated",
+    "line": 14,
+    "verdict": "fp",
+    "note": "sample local emulator credentials for docker-compose tests"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "committed-secret",
+    "file": "test/plugin-import-export/.env.emulated",
+    "line": 25,
+    "verdict": "fp",
+    "note": "sample local emulator credentials for docker-compose tests"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "committed-secret",
+    "file": "test/plugin-import-export/.env.emulated",
+    "line": 26,
+    "verdict": "fp",
+    "note": "sample local emulator credentials for docker-compose tests"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-process-in-async",
+    "file": "scripts/build-generated-templates.ts",
+    "line": 34,
+    "verdict": "fp",
+    "note": "one-off build CLI script running pnpm build sequentially"
   }
 ]

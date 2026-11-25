@@ -25,7 +25,7 @@ import { noteOffline, main as mainCli } from './deps/cli.js';
 import { scanDependencies } from './deps/scan.js';
 import { analyzeFile as analyzeSecurityFile } from './analyze.js';
 import { scanProjectFiles } from './files/index.js';
-import { analyzeSources } from '../performance/projects.js';
+import { analyzeSources, preReadSources } from '../performance/projects.js';
 import * as report from '../shared/source-report.js';
 import { sourceHistoryProject } from '../shared/fix-history.js';
 import { applyChosenFixes, applyFixes } from '../performance/fix-cli.js';
@@ -247,7 +247,8 @@ const nativeCoverageNote =
 // engine binds the shared rules to TypeScript 6, so it is required only when native is not chosen.
 async function analyzeWithEngine(options: SourceScanOptions, engine: SourceEngine): Promise<ScanResult> {
   if (engine !== 'native') {
-    return analyzeSources(options);
+    const preRead = await preReadSources(options);
+    return analyzeSources({ ...options, preRead });
   }
   console.error(nativeCoverageNote);
   const { analyzeNative } = await import('../performance/native.js');

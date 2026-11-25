@@ -26,7 +26,7 @@ import { scanDependencies as scanDependenciesScan } from '../security/deps/scan.
 import { noteOffline } from '../security/deps/cli.js';
 import { projectDialect } from './schema/project-indexes.js';
 import { checkSchemaFile, findPrismaSchemaFiles } from './schema/prisma-schema.js';
-import { analyzeSources, performanceAnalyzers } from './projects.js';
+import { analyzeSources, performanceAnalyzers, preReadSources } from './projects.js';
 import { version as tsVersion } from 'typescript';
 import { checkRedundantSchemaIndexes } from './redundant-indexes.js';
 import { errorMessage, parseCommand, showHelp } from './cli-arguments.js';
@@ -218,12 +218,17 @@ async function checkWithSecurity({
   inferredFiles,
 }: CheckWithSecurityInput): Promise<number> {
   const performancePillar: SourceReportPillar = { command: 'perf', contractRules: contractRules.performance };
+  const preRead = await preReadSources({
+    project: workspace?.configs ?? values.project,
+    files: inferredFiles ?? positionals,
+  });
   const result: PerformanceScanResult = analyzeSources({
     project: workspace?.configs ?? values.project,
     files: inferredFiles ?? positionals,
     policy,
     onlyFiles: scanFilter(values.settings, scope),
     analyzers: [...performanceAnalyzers, security.analyzer],
+    preRead,
   });
   if (!positionals.length) appendPrismaSchemaFindings(result, workspace?.configs ?? [project ?? '.'], scope);
   if (workspace) result.packages = workspace.packages;
@@ -315,14 +320,18 @@ function firstReason(reason: string): string {
 // Loading the JS engine binds the shared rules to TypeScript 6, so it is required only once native
 // is ruled out.
 async function analyzeSourceCode(options: SourceCodeOptions, engine: string): Promise<AnalyzedSource> {
-  if (engine === 'js') return { result: { ...analyzeSources(options), engine }, usedFallback: false };
+  if (engine === 'js') {
+    const preRead = await preReadSources(options);
+    return { result: { ...analyzeSources({ ...options, preRead }), engine }, usedFallback: false };
+  }
   const { analyzeNative } = await import('./native.js');
   const result = analyzeNative({
     ...options,
     fallback: engine === 'auto',
   });
   if (!result.fallback) return { result: { ...result, engine: 'native' }, usedFallback: false };
-  const fallbackResult = analyzeSources(options);
+  const preRead = await preReadSources(options);
+  const fallbackResult = analyzeSources({ ...options, preRead });
   if (result.reason) {
     console.error(
       `Note: TypeScript 7 cannot load this project (${firstReason(result.reason)}); used TypeScript ${tsVersion}.`,

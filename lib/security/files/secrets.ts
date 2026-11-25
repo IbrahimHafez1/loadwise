@@ -13,7 +13,7 @@ import type { FileFinding, FileFindingBody } from '../types/file-finding.js';
 
 const ruleId = 'committed-secret';
 const templateEnvSuffix = /\.(?:example|sample|template|dist)$/i;
-const testFileName = /(?:^|[._-])(?:test|tests|mock|fake|e2e)(?:[._-]|$)/i;
+const testFileName = /(?:^|[._-])(?:test|tests|mock|fake|e2e|emulated)(?:[._-]|$)/i;
 // A file that declares itself a local or test environment holds that environment's values.
 const developmentEnvironment =
   /^\s*(?:export\s+)?NODE_ENV\s*=\s*["']?(?:local|development|dev|test)["']?\s*(?:#.*)?$/im;

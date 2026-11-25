@@ -4,6 +4,12 @@
     "maintainability": {
       "findings": [
         {
+          "ruleId": "deep-control-flow",
+          "file": "../../lib/performance/projects.ts",
+          "fingerprint": "f92fb0c15929",
+          "count": 1
+        },
+        {
           "ruleId": "duplicate-implementation",
           "file": "../../lib/maintainability/inputs.ts",
           "fingerprint": "fc9f4fb51369",

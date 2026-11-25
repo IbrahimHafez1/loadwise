@@ -49,7 +49,7 @@ function listSources(directory: string, files: string[] = []): string[] {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const absolute = path.join(directory, entry.name);
     if (entry.isDirectory()) listSources(absolute, files);
-    else if (entry.name.endsWith('.cjs')) files.push(absolute);
+    else if (entry.name.endsWith('.js') || entry.name.endsWith('.cjs')) files.push(absolute);
   }
   return files;
 }
