@@ -430,5 +430,69 @@
     "line": 60,
     "verdict": "tp",
     "note": "unbounded prisma.user.findMany() with TODO for pagination"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-distinct-in-memory",
+    "file": "apps/api/v2/src/modules/users/users.repository.ts",
+    "line": 409,
+    "verdict": "tp",
+    "note": "Prisma distinct on attendee.email deduplicates in memory"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-distinct-in-memory",
+    "file": "packages/trpc/server/routers/viewer/availability/team/listTeamAvailability.handler.ts",
+    "line": 36,
+    "verdict": "tp",
+    "note": "Prisma distinct on membership deduplicates in memory"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "list-query-overfetch",
+    "file": "packages/features/bookings/lib/handleConfirmation.ts",
+    "line": 170,
+    "verdict": "tp",
+    "note": "findMany without select fetches full booking rows when only id, status, uid are read"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "list-query-overfetch",
+    "file": "packages/features/membership/repositories/MembershipRepository.ts",
+    "line": 193,
+    "verdict": "tp",
+    "note": "findMany with nested include fetches full membership and team records"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "list-query-overfetch",
+    "file": "packages/features/membership/repositories/MembershipRepository.ts",
+    "line": 318,
+    "verdict": "tp",
+    "note": "findMany with nested include fetches full membership and team records"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-unusable-expression",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "line": 976,
+    "verdict": "tp",
+    "note": "case-insensitive email filter prevents plain btree index lookup"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-list-query",
+    "file": "packages/platform/examples/base/src/pages/api/get-users.ts",
+    "line": 17,
+    "verdict": "tp",
+    "note": "unbounded prisma.user.findMany without take"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "react-fetch-in-effect-no-abort",
+    "file": "apps/web/modules/auth/forgot-password/[id]/forgot-password-single-view.tsx",
+    "line": 80,
+    "verdict": "tp",
+    "note": "fetch in useEffect without AbortController cleanup"
   }
 ]

@@ -158,5 +158,21 @@
     "line": 34,
     "verdict": "fp",
     "note": "one-off build CLI script running pnpm build sequentially"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "react-fetch-in-effect-no-abort",
+    "file": "packages/admin-bar/src/AdminBar.tsx",
+    "line": 43,
+    "verdict": "tp",
+    "note": "fetch in useEffect without AbortController cleanup"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-module-cache",
+    "file": "packages/storage-s3/src/index.ts",
+    "line": 127,
+    "verdict": "fp",
+    "note": "caches one S3 client per configured storage bucket rather than unbounded user input"
   }
 ]

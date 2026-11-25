@@ -25,14 +25,6 @@
   },
   {
     "pillar": "maint",
-    "ruleId": "high-branch-complexity",
-    "file": "apps/web/app/api/v1/client/[workspaceId]/responses/route.ts",
-    "line": 252,
-    "verdict": "tp",
-    "note": "POST handler has branch complexity 15"
-  },
-  {
-    "pillar": "maint",
     "ruleId": "large-class",
     "file": "apps/web/modules/survey/import/qsf/read-qsf.ts",
     "line": 279,
@@ -270,5 +262,13 @@
     "line": 57,
     "verdict": "fp",
     "note": "intentional bounded-concurrency worker pool of 24 workers"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-distinct-in-memory",
+    "file": "apps/web/modules/ee/contacts/lib/contact-attributes.ts",
+    "line": 143,
+    "verdict": "tp",
+    "note": "Prisma distinct on value deduplicates in memory"
   }
 ]
