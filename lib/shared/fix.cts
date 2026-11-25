@@ -226,7 +226,7 @@ function writeUpdates(updates: readonly FileUpdate[]): void {
         else if (before === undefined) fs.unlinkSync(file);
         else {
           fs.writeFileSync(temporary, before, { flag: 'wx', mode: fs.statSync(file).mode });
-          fs.renameSync(temporary, file);
+          renameWithRetry(temporary, file);
         }
       } catch {
         unrestored.push(file);
@@ -245,13 +245,32 @@ function writeUpdates(updates: readonly FileUpdate[]): void {
   }
 }
 
+const TRANSIENT_RENAME_ERRORS = new Set(['EPERM', 'EACCES', 'EBUSY']);
+const RENAME_RETRY_DELAYS_MS = [10, 20, 40, 80];
+
+function renameWithRetry(from: string, to: string): void {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      fs.renameSync(from, to);
+      return;
+    } catch (error) {
+      const code = errorCode(error);
+      if (code && TRANSIENT_RENAME_ERRORS.has(code) && attempt < RENAME_RETRY_DELAYS_MS.length) {
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, RENAME_RETRY_DELAYS_MS[attempt]);
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
 function commitStagedUpdates(staged: readonly StagedUpdate[], written: StagedUpdate[]): void {
   for (const update of staged) {
     const { file, before, temporary } = update;
     if (currentText(file) !== before || realTarget(file) !== file)
       throw new Error('File changed while applying fixes: ' + file);
     if (before === undefined) fs.copyFileSync(temporary, file, fs.constants.COPYFILE_EXCL);
-    else fs.renameSync(temporary, file);
+    else renameWithRetry(temporary, file);
     written.push(update);
   }
 }

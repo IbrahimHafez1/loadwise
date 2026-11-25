@@ -189,3 +189,20 @@ test('a failed file replacement preserves previous file contents and cleans up s
   assert.equal(read('second.txt'), 'two');
   assert.deepEqual(fs.readdirSync(directory).sort(), ['first.txt', 'second.txt']);
 });
+
+test('transient EPERM errors during file replacement are retried before succeeding', (context) => {
+  const { directory, read } = project(context, { 'file.txt': 'before' });
+  const rename = fs.renameSync;
+  let attempts = 0;
+  context.mock.method(fs, 'renameSync', (from: string, to: string) => {
+    attempts++;
+    if (attempts <= 2) {
+      const error = Object.assign(new Error('operation not permitted'), { code: 'EPERM' });
+      throw error;
+    }
+    return rename(from, to);
+  });
+  applyBulkFixes([finding('file.txt', 1, 'before', 'after')], directory);
+  assert.equal(attempts, 3);
+  assert.equal(read('file.txt'), 'after');
+});
