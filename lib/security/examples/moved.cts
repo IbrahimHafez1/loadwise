@@ -1,5 +1,5 @@
 // Rule id -> [code, note] for the rules that moved from the performance checker.
-import type { RuleExamples } from '../types/rule-example.cjs';
+import type { RuleExamples } from '../types/rule-example.js';
 
 const examples: RuleExamples = {
   'pg-dynamic-query-text': [

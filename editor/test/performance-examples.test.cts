@@ -5,14 +5,6 @@ import test from 'node:test';
 import ts from 'typescript';
 import { exampleFor } from '../performance-examples.cjs';
 import type { FixExample } from '../types/fix-example.cjs';
-import {
-  sourceRules,
-  knownRules,
-  indexRules,
-  migrationRules,
-  contractRules,
-  databaseRules,
-} from '../../lib/performance/rule-ids.cjs';
 
 const root = path.resolve(__dirname, '../..');
 
@@ -48,7 +40,8 @@ function parseDiagnostics(code: string, language: string) {
   return parseDiagnostics;
 }
 
-test('each CLI source rule has a syntactically valid hover example', () => {
+test('each CLI source rule has a syntactically valid hover example', async () => {
+  const { sourceRules } = await import('../../lib/performance/rule-ids.js');
   assert.ok(sourceRules.length > 0);
   for (const id of sourceRules) {
     const { code, language } = exampleOf(id, 'javascript');
@@ -61,7 +54,8 @@ test('each CLI source rule has a syntactically valid hover example', () => {
   }
 });
 
-test('every known rule and every plan or trace rule has a compact example', () => {
+test('every known rule and every plan or trace rule has a compact example', async () => {
+  const { knownRules } = await import('../../lib/performance/rule-ids.js');
   for (const id of [...knownRules, ...planAndTraceRules]) {
     const example = exampleFor(id, 'typescript');
     assert.ok(example?.code, id + ' has no example');
@@ -69,7 +63,9 @@ test('every known rule and every plan or trace rule has a compact example', () =
   }
 });
 
-test('plan, trace, index and migration examples show a before and an after that parse', () => {
+test('plan, trace, index and migration examples show a before and an after that parse', async () => {
+  const { indexRules, migrationRules, contractRules, databaseRules } =
+    await import('../../lib/performance/rule-ids.js');
   const standalone = [
     ...indexRules,
     ...migrationRules,

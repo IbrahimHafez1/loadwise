@@ -1,6 +1,6 @@
 // Rule id -> [code, note]. A dependency finding points at a lockfile or package.json, so the
 // example is the fix command.
-import type { RuleExamples } from '../types/rule-example.cjs';
+import type { RuleExamples } from '../types/rule-example.js';
 
 const examples: RuleExamples = {
   'dependency-known-vulnerability': [

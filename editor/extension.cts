@@ -7,7 +7,7 @@ import { publish, refreshDocument, registerCodeLenses, registerExamples, registe
 import { createDismissals } from './dismissals.cjs';
 import { startPerfWatch } from './perf-watch.cjs';
 import type { PerfWatchHandle } from './perf-watch.cjs';
-import type { Finding } from '../lib/shared/types.cjs';
+import type { Finding } from '../lib/shared/types.js';
 import type { DismissalEntry } from './types/dismissal.cjs';
 import type { PublishOptions } from './types/publish-options.cjs';
 import type {

@@ -8,7 +8,7 @@ import {
 import type { Dismissals } from '../../editor/types/dismissal.cjs';
 import type { PublishOptions } from '../../editor/types/publish-options.cjs';
 import type { EditorApi, EditorDiagnosticCollection, EditorDocument } from '../../editor/types/vscode-api.cjs';
-import type { Finding } from '../../lib/shared/types.cjs';
+import type { Finding } from '../../lib/shared/types.js';
 
 // The editor tests fake the `vscode` module with plain objects and use a file path as its own URI,
 // so their fakes only approximate the real EditorApi. The shapes below describe what the fakes

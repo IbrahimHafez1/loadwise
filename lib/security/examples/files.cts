@@ -1,6 +1,6 @@
 // Rule id -> [code, note] for the project-file rules. These show env, Dockerfile and compose text,
 // not TypeScript.
-import type { RuleExamples } from '../types/rule-example.cjs';
+import type { RuleExamples } from '../types/rule-example.js';
 
 const examples: RuleExamples = {
   'committed-secret': [

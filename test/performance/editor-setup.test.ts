@@ -1,0 +1,210 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+import type { TestContext } from 'node:test';
+import ts from 'typescript';
+import { setupEditor } from '../../lib/performance/editor-setup.js';
+import type { EditorTask, ProblemMatcherPattern, TasksFile } from '../types/editor-tasks.js';
+
+function parseTasks(text: string): TasksFile {
+  return JSON.parse(text);
+}
+
+function workspace(context: TestContext, contents?: string) {
+  const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
+  fs.mkdirSync(base, { recursive: true });
+  const root = fs.mkdtempSync(path.join(base, 'checker-editor-setup-'));
+  const folder = path.join(root, '.vscode');
+  const filename = path.join(folder, 'tasks.json');
+  if (contents !== undefined) {
+    fs.mkdirSync(folder);
+    fs.writeFileSync(filename, contents);
+  }
+  context.after(() => {
+    if (fs.existsSync(filename)) fs.unlinkSync(filename);
+    if (fs.existsSync(folder)) fs.rmdirSync(folder);
+    fs.rmdirSync(root);
+  });
+  return { root, filename };
+}
+
+test('setup creates one background process task whose matcher captures paths, severity, rule and full example', (context) => {
+  const { root, filename } = workspace(context);
+  assert.deepEqual(setupEditor(root), { filename, changed: true });
+  const original = fs.readFileSync(filename, 'utf8');
+  const task = parseTasks(original).tasks[0];
+  assert.equal(task.type, 'process');
+  assert.equal(task.command, 'node');
+  assert.deepEqual(task.args, [
+    '${workspaceFolder}/node_modules/@loadwise/cli/bin/loadwise.js',
+    'perf',
+    'editor',
+    'watch',
+  ]);
+  assert.equal(task.runOptions.runOn, 'folderOpen');
+  assert.equal(task.runOptions.instanceLimit, 1);
+  assert.equal(task.isBackground, true);
+  const matcher = task.problemMatcher;
+  const pattern = matcher.pattern;
+  const fields = [
+    'src/a | b.ts',
+    '12',
+    '2',
+    '9',
+    'warning',
+    'deep-control-flow',
+    'Use a guard. Example: if (!ok) return; | or skip',
+  ];
+  const marker = new RegExp(pattern.regexp).exec(['BACKEND_CHECKER', ...fields].join(' | '));
+  assert.ok(marker);
+  const markerFields: Exclude<keyof ProblemMatcherPattern, 'regexp'>[] = [
+    'file',
+    'line',
+    'column',
+    'endColumn',
+    'severity',
+    'code',
+    'message',
+  ];
+  assert.deepEqual(
+    markerFields.map((key) => marker[pattern[key]]),
+    fields,
+  );
+  assert.deepEqual(matcher.fileLocation, ['relative', '${workspaceFolder}']);
+  assert.ok(new RegExp(matcher.background.beginsPattern).test('Loadwise: scan started'));
+  assert.ok(new RegExp(matcher.background.endsPattern).test('Loadwise: scan finished'));
+  assert.deepEqual(setupEditor(root), { filename, changed: false });
+  assert.equal(fs.readFileSync(filename, 'utf8'), original);
+});
+
+test('setup edits JSONC without dropping existing comments, BOM, CRLF, task order or settings', (context) => {
+  const contents =
+    '\uFEFF{\r\n  // existing inputs\r\n  "inputs": [],\r\n  "tasks": [\r\n    // keep with build\r\n    { "label": "build", "command": "echo \\"text\\"" },\r\n  ],\r\n}\r\n';
+  const { root, filename } = workspace(context, contents);
+  setupEditor(root);
+  const text = fs.readFileSync(filename, 'utf8');
+  assert.ok(text.startsWith('\uFEFF{'));
+  assert.ok(text.includes('// keep with build\r\n    { "label": "build", "command": "echo \\"text\\"" },'));
+  assert.ok(text.includes('// existing inputs\r\n  "inputs": [],'));
+  assert.doesNotMatch(text, /(?<!\r)\n/);
+  const result = ts.parseConfigFileTextToJson(filename, text);
+  assert.equal(result.error, undefined);
+  assert.equal(result.config.version, '2.0.0');
+  assert.equal(result.config.tasks.length, 2);
+  assert.deepEqual(result.config.inputs, []);
+  assert.equal(setupEditor(root).changed, false);
+});
+
+test('setup adds missing tasks to existing task files and reports a conflicting label without altering the file', (context) => {
+  const seed = '{ /* retained */ "version": "2.0.0", "inputs": [], }';
+  const { root, filename } = workspace(context, seed);
+  setupEditor(root);
+  const text = fs.readFileSync(filename, 'utf8');
+  const result = ts.parseConfigFileTextToJson(filename, text);
+  assert.equal(result.error, undefined);
+  assert.ok(text.includes('/* retained */'));
+  result.config.tasks[0].command = 'owner-command';
+  const owned = JSON.stringify(result.config);
+  fs.writeFileSync(filename, owned);
+  assert.throws(() => setupEditor(root), /different or duplicate/);
+  assert.equal(fs.readFileSync(filename, 'utf8'), owned);
+});
+
+test('invalid JSONC, unsupported versions, duplicates and malformed task lists fail before writing', (context) => {
+  const { root, filename } = workspace(context, '{}');
+  for (const original of ['{', '[]', '{"version":"0.1.0"}', '{"tasks":null}', '{"tasks":[], "tasks":[]}']) {
+    fs.writeFileSync(filename, original);
+    assert.throws(() => setupEditor(root));
+    assert.equal(fs.readFileSync(filename, 'utf8'), original);
+  }
+  assert.deepEqual(fs.readdirSync(path.dirname(filename)), ['tasks.json']);
+});
+
+function legacyWatcher(current: EditorTask): EditorTask {
+  const legacy = structuredClone(current);
+  legacy.label = 'Backend Checkers: Watch';
+  legacy.args = ['${workspaceFolder}/node_modules/backend-perf-check/bin/backend-perf-check.cjs', 'editor', 'watch'];
+  Object.assign(legacy.problemMatcher, { owner: 'backend-checkers', source: 'Backend Checkers' });
+  Object.assign(legacy.problemMatcher.background, {
+    beginsPattern: '^Backend Checkers: scan started$',
+    endsPattern: '^Backend Checkers: scan finished$',
+  });
+  return legacy;
+}
+
+test('setup upgrades the old generated watcher in place, preserving comments, options and custom tasks', (context) => {
+  const { root, filename } = workspace(context);
+  setupEditor(root);
+  const current = parseTasks(fs.readFileSync(filename, 'utf8')).tasks[0];
+  const legacy = legacyWatcher(current);
+  const custom = { ...legacy, options: { cwd: './api' }, label: 'Watch API' };
+  const initial = JSON.stringify({ tasks: [custom, legacy], inputs: [] }, null, 2)
+    .replace('"Backend Checkers: Watch"', '/* old watcher */ "Backend Checkers: Watch"')
+    .replaceAll('\n', '\r\n');
+  fs.writeFileSync(filename, '\uFEFF' + initial);
+  assert.equal(setupEditor(root).changed, true);
+  const migrated = fs.readFileSync(filename, 'utf8');
+  assert.ok(migrated.startsWith('\uFEFF'));
+  assert.ok(migrated.includes('/* old watcher */ "Loadwise: Watch"'));
+  assert.doesNotMatch(migrated, /(?<!\r)\n/);
+  const result = ts.parseConfigFileTextToJson(filename, migrated);
+  assert.equal(result.error, undefined);
+  assert.deepEqual(result.config, { version: '2.0.0', tasks: [custom, current], inputs: [] });
+  assert.equal(setupEditor(root).changed, false);
+});
+
+test(
+  'bounded Windows sharing retries preserve concurrent editor task changes',
+  { skip: process.platform !== 'win32' },
+  (context) => {
+    const { root, filename } = workspace(context, '{}');
+    const rename = fs.renameSync;
+    const sharingError = Object.assign(new Error('sharing violation'), { code: 'EPERM' });
+    let attempts = 0;
+    let editDuringRetry = false;
+    let persistentlyLocked = false;
+    context.mock.method(fs, 'renameSync', (from: fs.PathLike, to: fs.PathLike) => {
+      if (to === filename && (attempts++ === 0 || persistentlyLocked)) {
+        if (editDuringRetry) fs.writeFileSync(filename, '{"owner": "concurrent change"}');
+        throw sharingError;
+      }
+      return rename(from, to);
+    });
+    assert.equal(setupEditor(root).changed, true);
+    assert.equal(attempts, 2);
+    attempts = 0;
+    editDuringRetry = true;
+    fs.writeFileSync(filename, '{}');
+    assert.throws(() => setupEditor(root), /changed during setup/);
+    assert.equal(attempts, 1);
+    assert.deepEqual(JSON.parse(fs.readFileSync(filename, 'utf8')), { owner: 'concurrent change' });
+    attempts = 0;
+    editDuringRetry = false;
+    persistentlyLocked = true;
+    assert.throws(
+      () => setupEditor(root),
+      (error) => error === sharingError,
+    );
+    assert.equal(attempts, 4);
+    assert.deepEqual(JSON.parse(fs.readFileSync(filename, 'utf8')), { owner: 'concurrent change' });
+  },
+);
+
+test('an existing current watcher replaces only an exact legacy generator task, including at either end', (context) => {
+  const { root, filename } = workspace(context);
+  setupEditor(root);
+  const current = parseTasks(fs.readFileSync(filename, 'utf8')).tasks[0];
+  const legacy = legacyWatcher(current);
+  const custom = { ...legacy, presentation: { ...legacy.presentation, reveal: 'always' } };
+  for (const tasks of [
+    [legacy, custom, current],
+    [custom, current, legacy],
+  ]) {
+    fs.writeFileSync(filename, JSON.stringify({ version: '2.0.0', tasks }));
+    assert.equal(setupEditor(root).changed, true);
+    assert.deepEqual(JSON.parse(fs.readFileSync(filename, 'utf8')).tasks, [custom, current]);
+    assert.equal(setupEditor(root).changed, false);
+  }
+});

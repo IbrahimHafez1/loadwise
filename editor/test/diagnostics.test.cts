@@ -23,7 +23,6 @@ import type {
   FakeUri,
   FakeVscode,
 } from '../../test/types/fake-vscode.cjs';
-import { whyComment } from '../../lib/shared/fix-presentation.cjs';
 
 class FakeRangeImpl implements FakeRange {
   start: FakePosition;
@@ -404,6 +403,7 @@ test('a finding with a site fix offers a one-click quick fix that edits only the
     after: 'const found = await repo.exists(where);',
   };
   const finding = { file: 'orders.ts', line: 2, column: 21, ruleId: 'typeorm-existence-materialization', message: 'm' };
+  const { whyComment } = await import('../../lib/shared/fix-presentation.js');
   // The quick fix writes the report's why-comment, like a default --fix.
   const commented = { ...change, after: whyComment(finding.ruleId) + '\n' + change.after };
   publish(vscode, collection, root, 'loadwise perf', [

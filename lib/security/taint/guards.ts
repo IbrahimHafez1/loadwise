@@ -1,0 +1,326 @@
+// Guards that leave a value no room for injected text before it is used: an anchored closed regex,
+// a literal allowlist, equality with a literal, `typeof value === 'number'`,
+// `Number.isInteger(value)`, or a `switch` case over literals. Every guard is recognised from
+// project syntax, so it applies the same with or without types.
+import { ts } from '../../performance/compiler.js';
+import { isValidation } from '../pg-identifier-guards.js';
+import { filenameValidation, containsSeparator } from './filename-guard.js';
+import type {
+  BinaryExpression,
+  CaseClause,
+  Declaration,
+  Expression,
+  Identifier,
+  Node,
+  Statement,
+  SyntaxKind,
+} from 'typescript';
+import type { CheckerAdapter, SymbolAdapter } from '../../shared/types.js';
+import type { EvidenceTest, SubjectTest } from '../types/condition-guards.js';
+
+const scalarTypeofResults = new Set(['number', 'boolean', 'bigint']);
+const numberChecks = new Set(['isInteger', 'isSafeInteger', 'isFinite']);
+
+type ConditionTest = (condition: Expression) => boolean;
+
+/**
+ * What a guard needs to recognise the protected value; `filename` is set when the value is used as
+ * a file name.
+ */
+interface Guard {
+  name: string;
+  checker: CheckerAdapter;
+  isSubject: SubjectTest;
+  filename?: boolean;
+}
+
+function stripParentheses(node: Expression): Expression {
+  return ts.skipOuterExpressions(node);
+}
+
+function isLiteral(node: Expression) {
+  const value = stripParentheses(node);
+  return (
+    ts.isStringLiteralLike(value) ||
+    ts.isNumericLiteral(value) ||
+    value.kind === ts.SyntaxKind.TrueKeyword ||
+    value.kind === ts.SyntaxKind.FalseKeyword ||
+    (ts.isPrefixUnaryExpression(value) &&
+      value.operator === ts.SyntaxKind.MinusToken &&
+      ts.isNumericLiteral(value.operand))
+  );
+}
+
+function equalityKind(operator: SyntaxKind): 'equal' | 'unequal' | undefined {
+  if (operator === ts.SyntaxKind.EqualsEqualsEqualsToken || operator === ts.SyntaxKind.EqualsEqualsToken)
+    return 'equal';
+  if (operator === ts.SyntaxKind.ExclamationEqualsEqualsToken || operator === ts.SyntaxKind.ExclamationEqualsToken)
+    return 'unequal';
+}
+
+// The guarded value is `name` and nothing else.
+function createSubject(symbol: SymbolAdapter, checker: CheckerAdapter): SubjectTest {
+  return (node) => {
+    const value = stripParentheses(node);
+    return ts.isIdentifier(value) && checker.getSymbolAtLocation(value) === symbol;
+  };
+}
+
+// `value === 'asc'` or `typeof value === 'number'` (either operand order): 'equal' or 'unequal'
+// when the comparison pins the value to a scalar, otherwise undefined.
+function pinningComparison(condition: Expression, isSubject: SubjectTest): 'equal' | 'unequal' | undefined {
+  if (!ts.isBinaryExpression(condition)) return;
+  const kind = equalityKind(condition.operatorToken.kind);
+  if (!kind) return;
+  for (const [operand, other] of [
+    [condition.left, condition.right],
+    [condition.right, condition.left],
+  ]) {
+    if (isSubject(operand) && isLiteral(other)) return kind;
+    const typeOf = stripParentheses(operand);
+    const result = stripParentheses(other);
+    if (
+      ts.isTypeOfExpression(typeOf) &&
+      isSubject(typeOf.expression) &&
+      ts.isStringLiteralLike(result) &&
+      scalarTypeofResults.has(result.text)
+    )
+      return kind;
+  }
+}
+
+function isNumberCheck(condition: Expression, isSubject: SubjectTest) {
+  if (!ts.isCallExpression(condition) || condition.arguments.length !== 1 || !isSubject(condition.arguments[0]))
+    return false;
+  const callee = stripParentheses(condition.expression);
+  return (
+    ts.isPropertyAccessExpression(callee) &&
+    ts.isIdentifier(callee.expression) &&
+    callee.expression.text === 'Number' &&
+    numberChecks.has(callee.name.text)
+  );
+}
+
+// When `condition` is true, the value is safe.
+function confirms(node: Expression, guard: Guard): boolean {
+  const condition = stripParentheses(node);
+  if (ts.isBinaryExpression(condition)) {
+    const operator = condition.operatorToken.kind;
+    if (operator === ts.SyntaxKind.AmpersandAmpersandToken)
+      return confirms(condition.left, guard) || confirms(condition.right, guard);
+    if (operator === ts.SyntaxKind.BarBarToken)
+      return confirms(condition.left, guard) && confirms(condition.right, guard);
+    return pinningComparison(condition, guard.isSubject) === 'equal';
+  }
+  if (ts.isPrefixUnaryExpression(condition) && condition.operator === ts.SyntaxKind.ExclamationToken)
+    return rejects(condition.operand, guard);
+  if (guard.filename) {
+    const filename = filenameValidation(condition, guard.isSubject, guard.checker);
+    if (filename !== undefined) return filename;
+  }
+  return isNumberCheck(condition, guard.isSubject) || isValidation(condition, guard.name, guard.checker);
+}
+
+// When `condition` is false, the value is safe.
+function rejects(node: Expression, guard: Guard): boolean {
+  const condition = stripParentheses(node);
+  if (ts.isBinaryExpression(condition)) {
+    const operator = condition.operatorToken.kind;
+    if (operator === ts.SyntaxKind.BarBarToken)
+      return rejects(condition.left, guard) || rejects(condition.right, guard);
+    if (operator === ts.SyntaxKind.AmpersandAmpersandToken)
+      return rejects(condition.left, guard) && rejects(condition.right, guard);
+    return pinningComparison(condition, guard.isSubject) === 'unequal';
+  }
+  if (ts.isPrefixUnaryExpression(condition) && condition.operator === ts.SyntaxKind.ExclamationToken)
+    return confirms(condition.operand, guard);
+  return Boolean(guard.filename) && containsSeparator(condition, guard.isSubject);
+}
+
+function exits(statement: Statement): boolean {
+  if (
+    ts.isReturnStatement(statement) ||
+    ts.isThrowStatement(statement) ||
+    ts.isBreakStatement(statement) ||
+    ts.isContinueStatement(statement)
+  )
+    return true;
+  if (!ts.isBlock(statement)) return false;
+  const lastStatement = statement.statements.at(-1);
+  return lastStatement !== undefined && exits(lastStatement);
+}
+
+function precedingGuard(statements: readonly Statement[], child: Node, rejected: ConditionTest) {
+  return statements
+    .slice(
+      0,
+      statements.findIndex((statement) => statement === child),
+    )
+    .some(
+      (statement: Statement) =>
+        ts.isIfStatement(statement) &&
+        !statement.elseStatement &&
+        exits(statement.thenStatement) &&
+        rejected(statement.expression),
+    );
+}
+
+// `case 'a': case 'b': use(value)` in `switch (value)`: every clause that can reach this one is a
+// literal case.
+function literalCase(clause: CaseClause, guard: Guard) {
+  const switchStatement = clause.parent.parent;
+  if (!guard.isSubject(switchStatement.expression)) return false;
+  const clauses = clause.parent.clauses;
+  for (let index = clauses.indexOf(clause); index >= 0; index--) {
+    const current = clauses[index];
+    if (!ts.isCaseClause(current) || !isLiteral(current.expression)) return false;
+    const previous = clauses[index - 1];
+    const previousLast = previous?.statements.at(-1);
+    if (!previous || (previousLast && exits(previousLast))) return true;
+  }
+  return true;
+}
+
+function guardedBy(child: Node, parent: Node, accepted: ConditionTest, rejected: ConditionTest): boolean {
+  if (ts.isIfStatement(parent)) {
+    if (parent.thenStatement === child) return accepted(parent.expression);
+    if (parent.elseStatement === child) return rejected(parent.expression);
+  }
+  if (ts.isConditionalExpression(parent)) {
+    if (parent.whenTrue === child) return accepted(parent.condition);
+    if (parent.whenFalse === child) return rejected(parent.condition);
+  }
+  if (ts.isBinaryExpression(parent) && parent.right === child) {
+    if (parent.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) return accepted(parent.left);
+    if (parent.operatorToken.kind === ts.SyntaxKind.BarBarToken) return rejected(parent.left);
+  }
+  return ts.isBlock(parent) && precedingGuard(parent.statements, child, rejected);
+}
+
+function isReassigned(scope: Node, symbol: SymbolAdapter, checker: CheckerAdapter, properties = false): boolean {
+  function isSubject(node: Expression) {
+    let value = stripParentheses(node);
+    while (properties && (ts.isPropertyAccessExpression(value) || ts.isElementAccessExpression(value))) {
+      value = stripParentheses(value.expression);
+    }
+    return ts.isIdentifier(value) && checker.getSymbolAtLocation(value) === symbol;
+  }
+  return !!(function visit(node: Node): boolean | undefined {
+    if (ts.isIdentifier(node) && node.text === symbol.name && ts.isAssignmentTarget(node)) {
+      const assigned = ts.isShorthandPropertyAssignment(node.parent)
+        ? checker.getShorthandAssignmentValueSymbol(node.parent)
+        : checker.getSymbolAtLocation(node);
+      if (assigned === symbol) return true;
+    }
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
+      isSubject(node.left)
+    )
+      return true;
+    if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      (node.operator === ts.SyntaxKind.PlusPlusToken || node.operator === ts.SyntaxKind.MinusMinusToken) &&
+      isSubject(node.operand)
+    )
+      return true;
+    return ts.forEachChild(node, visit);
+  })(scope);
+}
+
+const assignmentIndexes = new WeakMap<CheckerAdapter, WeakMap<Node, Map<Node, BinaryExpression[]>>>();
+
+// The `=` and `+=` writes to `declaration` inside `scope`, in source order. The writes of a scope
+// are indexed once per checker, so resolving each `let` of a long function or module does not walk
+// the whole scope again.
+function assignmentsTo(declaration: Declaration, scope: Node, checker: CheckerAdapter): BinaryExpression[] {
+  let byScope = assignmentIndexes.get(checker);
+  if (!byScope) assignmentIndexes.set(checker, (byScope = new WeakMap()));
+  let byDeclaration = byScope.get(scope);
+  if (!byDeclaration) {
+    byDeclaration = new Map();
+    const writes = byDeclaration;
+    (function visit(node: Node): void {
+      if (
+        ts.isBinaryExpression(node) &&
+        (node.operatorToken.kind === ts.SyntaxKind.EqualsToken ||
+          node.operatorToken.kind === ts.SyntaxKind.PlusEqualsToken) &&
+        ts.isIdentifier(node.left)
+      ) {
+        const written = checker.getSymbolAtLocation(node.left)?.valueDeclaration;
+        if (written && !writes.has(written)) writes.set(written, []);
+        if (written) writes.get(written)?.push(node);
+      }
+      ts.forEachChild(node, visit);
+    })(scope);
+    byScope.set(scope, byDeclaration);
+  }
+  return byDeclaration.get(declaration) ?? [];
+}
+
+// A parameter, a `const`, or a name destructured from either.
+function isStableDeclaration(declaration: Node) {
+  let current: Node = declaration;
+  while (ts.isBindingElement(current)) current = current.parent.parent;
+  if (ts.isParameter(current)) return true;
+  return ts.isVariableDeclaration(current) && !!(current.parent.flags & ts.NodeFlags.Const);
+}
+
+// The use of `identifier` runs only after a guard pinned its value, and the value is not rewritten
+// in the function.
+function isGuardedUse(identifier: Identifier, use: Node, checker: CheckerAdapter, filename?: boolean): boolean {
+  const symbol = checker.getSymbolAtLocation(identifier);
+  const declaration = symbol?.valueDeclaration;
+  if (!declaration || !isStableDeclaration(declaration)) return false;
+  const fn = ts.findAncestor(use, ts.isFunctionLike);
+  const body = fn && 'body' in fn ? fn.body : undefined;
+  if (!fn || !body) return false;
+  const guard: Guard = { name: identifier.text, checker, isSubject: createSubject(symbol, checker), filename };
+  // The guard is looked for first: the rewrite check walks the whole function, and most uses have
+  // no guard.
+  for (let child = use, parent = use.parent; parent && child !== fn; child = parent, parent = parent.parent) {
+    if (
+      (ts.isCaseClause(parent) && literalCase(parent, guard)) ||
+      guardedBy(
+        child,
+        parent,
+        (node) => confirms(node, guard),
+        (node) => rejects(node, guard),
+      )
+    )
+      return !isReassigned(body, symbol, checker);
+  }
+  return false;
+}
+
+function impliesEvidence(node: Expression, truth: boolean, evidence: EvidenceTest): boolean {
+  const condition = stripParentheses(node);
+  if (ts.isPrefixUnaryExpression(condition) && condition.operator === ts.SyntaxKind.ExclamationToken)
+    return impliesEvidence(condition.operand, !truth, evidence);
+  if (ts.isBinaryExpression(condition)) {
+    const operator = condition.operatorToken.kind;
+    if (operator === ts.SyntaxKind.AmpersandAmpersandToken || operator === ts.SyntaxKind.BarBarToken) {
+      const left = impliesEvidence(condition.left, truth, evidence);
+      const right = impliesEvidence(condition.right, truth, evidence);
+      return truth === (operator === ts.SyntaxKind.AmpersandAmpersandToken) ? left || right : left && right;
+    }
+  }
+  return evidence(condition, truth);
+}
+
+// Only credit conditions whose truth follows from reaching the use in this function invocation.
+function isGuardedByCondition(use: Node, evidence: EvidenceTest): boolean {
+  const accepted = (node: Expression) => impliesEvidence(node, true, evidence);
+  const rejected = (node: Expression) => impliesEvidence(node, false, evidence);
+  for (
+    let child = use, parent = use.parent;
+    parent && !ts.isFunctionLike(child);
+    child = parent, parent = parent.parent
+  ) {
+    if (guardedBy(child, parent, accepted, rejected)) return true;
+  }
+  return false;
+}
+
+export { isGuardedUse, isGuardedByCondition, isReassigned, assignmentsTo };

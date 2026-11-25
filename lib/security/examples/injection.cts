@@ -1,5 +1,5 @@
 // Rule id -> [code, note]: a fix example of at most six lines that parses as JavaScript.
-import type { RuleExamples } from '../types/rule-example.cjs';
+import type { RuleExamples } from '../types/rule-example.js';
 
 const examples: RuleExamples = {
   'code-injection': [
