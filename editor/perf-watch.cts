@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import type { Finding } from '../lib/shared/types.cjs';
+import type { Finding } from '../lib/shared/types.js';
 
 interface PerfWatchOptions {
   script: string;

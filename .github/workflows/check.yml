@@ -45,6 +45,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: node --require ./test/manual-session.cjs --test --test-concurrency=2 test/performance/*.test.cjs
+      - run: node --import ./test/manual-session.js --test --test-concurrency=2 test/performance/*.test.js
         env:
           PERF_CHECK_TEST_NATIVE: '1'

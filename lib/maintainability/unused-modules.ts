@@ -1,0 +1,317 @@
+import path from 'node:path';
+import type { Finding, FixChange } from '../shared/types.js';
+import type {
+  DeclarationUsage,
+  ExportedName,
+  ModuleImport,
+  ModuleReexport,
+  ModuleUsage,
+  UnresolvedImport,
+} from './types/module-usage.js';
+
+const everything = Symbol('every export');
+
+// A name wanted from a module: one export, or every export.
+type WantedName = string | typeof everything;
+type PendingMark = [file: string, name: WantedName];
+
+interface UsageIndex {
+  markImport(item: ModuleImport): void;
+  markEverything(file: string): void;
+  isUsed(file: string, name: string): boolean;
+}
+
+interface WorkspaceResolver {
+  resolveSpecifier(specifier: string): string | undefined;
+  incompleteDirectories: Set<string>;
+}
+
+interface OperatorScripts {
+  commands: ReadonlySet<string>;
+  mentions: ReadonlySet<string>;
+}
+
+interface UnusedModulesInput {
+  files: readonly string[];
+  usages: readonly ModuleUsage[];
+  declarations?: readonly DeclarationUsage[];
+  isEntryPoint(file: string): boolean;
+  isToolingFile(file: string): boolean;
+  workspacePackages: ReadonlyMap<string, string>;
+  isPrivateApplication?(file: string): boolean;
+  operatorScripts?: OperatorScripts;
+  siblingUsages?: readonly ModuleImport[];
+}
+
+interface ImportBatch {
+  imports: readonly ModuleImport[];
+  unresolved: readonly UnresolvedImport[];
+}
+
+interface MakePrivateFix {
+  changes: FixChange[];
+  requiresReview: boolean;
+  note: string;
+}
+
+function createUsageIndex(files: readonly string[], usages: readonly ModuleUsage[]): UsageIndex {
+  const reexportsByFile = new Map(files.map((file, index) => [file, usages[index].reexports]));
+  const used = new Map<string, Set<WantedName>>();
+  const pending: PendingMark[] = [];
+
+  function mark(file: string, name: WantedName): void {
+    pending.push([file, name]);
+    for (let next = pending.pop(); next; next = pending.pop()) {
+      const [target, wanted] = next;
+      const names = used.get(target) ?? new Set<WantedName>();
+      used.set(target, names);
+      if (names.has(everything) || names.has(wanted)) continue;
+      names.add(wanted);
+      for (const reexport of reexportsByFile.get(target) ?? []) {
+        queueReexportDependencies(wanted, reexport, pending);
+      }
+    }
+  }
+  return {
+    markImport({ to, names }: ModuleImport): void {
+      if (names === 'all') mark(to, everything);
+      else for (const name of names) mark(to, name);
+    },
+    markEverything: (file: string) => mark(file, everything),
+    isUsed(file: string, name: string): boolean {
+      const names = used.get(file);
+      return names !== undefined && (names.has(everything) || names.has(name));
+    },
+  };
+}
+
+function queueReexportDependencies(wanted: WantedName, reexport: ModuleReexport, pending: PendingMark[]): void {
+  if (wanted === everything) {
+    if (reexport.pairs) for (const pair of reexport.pairs) pending.push([reexport.to, pair.local]);
+    else pending.push([reexport.to, everything]);
+  } else if (reexport.pairs) {
+    for (const pair of reexport.pairs) if (pair.exported === wanted) pending.push([reexport.to, pair.local]);
+  } else if (reexport.namespace === wanted) pending.push([reexport.to, everything]);
+  else if (reexport.star && wanted !== 'default') pending.push([reexport.to, wanted]);
+}
+
+const sourceSuffixes = [
+  '',
+  '.ts',
+  '.tsx',
+  '.mts',
+  '.cts',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.cjs',
+  '/index.ts',
+  '/index.tsx',
+  '/index.js',
+];
+
+// Finds the project file a workspace package name points at when TypeScript could not (dependencies
+// not installed). Packages that are named but not found are collected, because usage inside them is
+// then incomplete.
+function createWorkspaceResolver(
+  fileSet: ReadonlySet<string>,
+  workspacePackages: ReadonlyMap<string, string>,
+): WorkspaceResolver {
+  const incompleteDirectories = new Set<string>();
+  function resolveSpecifier(specifier: string): string | undefined {
+    for (const [name, directory] of workspacePackages) {
+      if (specifier !== name && !specifier.startsWith(name + '/')) continue;
+      const subpath = specifier.slice(name.length + 1).replace(/\.[cm]?js$/, '');
+      const bases = subpath
+        ? [`${directory}/${subpath}`, `${directory}/src/${subpath}`]
+        : [`${directory}/src/index`, `${directory}/index`];
+      for (const base of bases) {
+        const found = sourceSuffixes.map((suffix) => base + suffix).find((candidate) => fileSet.has(candidate));
+        if (found) return found;
+      }
+      incompleteDirectories.add(directory);
+      return;
+    }
+  }
+  return { resolveSpecifier, incompleteDirectories };
+}
+
+// Cross-file rules: an export nothing imports, and a source file nothing imports that is not an
+// entry point.
+function checkUnusedModules({
+  files,
+  usages,
+  declarations = [],
+  isEntryPoint,
+  isToolingFile,
+  workspacePackages,
+  isPrivateApplication,
+  operatorScripts,
+  siblingUsages = [],
+}: UnusedModulesInput): Finding[] {
+  const index = createUsageIndex(files, usages);
+  const workspace = createWorkspaceResolver(new Set(files), workspacePackages);
+  const referenced = new Set<string>();
+  function markImports({ imports, unresolved }: ImportBatch): void {
+    for (const item of imports) {
+      referenced.add(item.to);
+      index.markImport(item);
+    }
+    for (const { specifier, names } of unresolved) {
+      const to = workspace.resolveSpecifier(specifier);
+      if (!to) continue;
+      referenced.add(to);
+      index.markImport({ to, names });
+    }
+  }
+  files.forEach((file, position) => {
+    if (
+      operatorScripts?.commands.has(file) ||
+      (usages[position].reportsCliFailure && operatorScripts?.mentions.has(file))
+    )
+      referenced.add(file);
+    if (isEntryPoint(file) || usages[position].executable) index.markEverything(file);
+    markImports(usages[position]);
+    for (const reexport of usages[position].reexports) referenced.add(reexport.to);
+  });
+  // Other workspace members import these files by package name, so what they import is used.
+  markImports({ imports: siblingUsages, unresolved: [] });
+  // A declaration file's re-exports are consumed by whoever reads the declarations, so they use the
+  // whole module.
+  for (const usage of declarations) {
+    markImports(usage);
+    for (const { to } of usage.reexports) markImports({ imports: [{ to, names: 'all' }], unresolved: [] });
+  }
+  // A barrel is a consumer even if no local file imports the name from that barrel.
+  const exposed = createUsageIndex(files, usages);
+  const uncertainNames = new Set<WantedName>();
+  const missingRuntimeFiles = new Set<WantedName>();
+  for (const usage of [...usages, ...declarations]) {
+    for (const specifier of usage.uncertainRuntimeImports ?? []) {
+      const to = workspace.resolveSpecifier(specifier);
+      if (to) exposed.markEverything(to);
+      else if (specifier.startsWith('.')) {
+        // A missing build output such as dist/main.js might be this project's src/main.ts.
+        // A relative literal can also refer to a directory's index. Keep both names public.
+        const basename = path.posix.basename(specifier.replace(/\.[cm]?[jt]sx?$/, ''));
+        missingRuntimeFiles.add(basename);
+        missingRuntimeFiles.add(basename + '/index');
+      } else missingRuntimeFiles.add(everything);
+    }
+    for (const item of usage.reexports) {
+      exposed.markImport({ to: item.to, names: item.pairs ? item.pairs.map(({ local }) => local) : 'all' });
+    }
+    markPotentialTypeConsumers(usage, workspace, exposed, uncertainNames);
+  }
+
+  const dynamicSites = files.flatMap((file, position) =>
+    isToolingFile(file) ? [] : usages[position].dynamicUnresolved.map((site) => ({ file, site })),
+  );
+  const anywhereSite = dynamicSites.find(({ site }) => !site.directory);
+
+  function contextFor(file: string): string | undefined {
+    const reaching =
+      anywhereSite ?? dynamicSites.find(({ site }) => site.directory === '.' || file.startsWith(site.directory + '/'));
+    if (reaching) {
+      return `A non-literal import or require (${reaching.file}:${reaching.site.line}) can load files here, so this may be loaded dynamically.`;
+    }
+    for (const directory of workspace.incompleteDirectories) {
+      if (file.startsWith(directory + '/'))
+        return 'Other packages import this package by a name or path that could not be resolved, so usage may be missing.';
+    }
+  }
+
+  const findings: Finding[] = [];
+  files.forEach((file, position) => {
+    if (isEntryPoint(file) || usages[position].executable || usages[position].exportEquals) return;
+    const contextualReason = contextFor(file);
+    const context = contextualReason ? { contextualReason } : {};
+    const runtimeName = file.replace(/\.[cm]?[jt]sx?$/, '');
+    const unknownRuntimeConsumer =
+      missingRuntimeFiles.has(everything) ||
+      missingRuntimeFiles.has(path.posix.basename(runtimeName)) ||
+      missingRuntimeFiles.has(runtimeName.split('/').slice(-2).join('/'));
+    if (!referenced.has(file)) {
+      findings.push({
+        file,
+        line: 1,
+        column: 1,
+        ruleId: 'unreferenced-file',
+        message:
+          'No scanned file imports this module. Check deployment commands, framework discovery and manual scripts before removing it. For a tool entry point, check its package.json or nest-cli.json configuration.',
+        ...context,
+      });
+      return;
+    }
+    const reported = new Set<string>();
+    const exportsByName = new Map(usages[position].exports.map((exported) => [exported.name, exported]));
+    // A type named in the signature of a used export is needed by whoever calls that export.
+    function exposedByUsedExport(exported: ExportedName, visited = new Set<string>()): boolean {
+      return (exported.exposedBy ?? []).some((owner) => {
+        if (visited.has(owner)) return false;
+        visited.add(owner);
+        if (index.isUsed(file, owner)) return true;
+        const ownerExport = exportsByName.get(owner);
+        return ownerExport !== undefined && exposedByUsedExport(ownerExport, visited);
+      });
+    }
+    for (const exported of usages[position].exports) {
+      if (reported.has(exported.name) || index.isUsed(file, exported.name)) continue;
+      const fix: MakePrivateFix | undefined =
+        exported.makePrivate &&
+        !contextualReason &&
+        !(exported.runtime && unknownRuntimeConsumer) &&
+        isPrivateApplication?.(file) &&
+        !exposed.isUsed(file, exported.name) &&
+        !uncertainNames.has(everything) &&
+        !uncertainNames.has(exported.name)
+          ? {
+              changes: [exported.makePrivate],
+              requiresReview: true,
+              note: exported.forwardsImportedType
+                ? 'Removes the re-export and the type-only import that only it used. Check external TypeScript consumers before removing it.'
+                : 'This declaration has local callers. Check external TypeScript consumers, runtime module lookups and test mocks before removing its export.',
+            }
+          : undefined;
+      // A signature type stays reported only where the compiler can prove that making it private is
+      // safe.
+      if (!fix && exposedByUsedExport(exported)) continue;
+      reported.add(exported.name);
+      // Only the keyword is dead when the module uses the declaration, so that case is quieter than
+      // dead code.
+      const keywordOnly = exported.usedInModule && !fix && !contextualReason;
+      findings.push({
+        file,
+        line: exported.line,
+        column: exported.column,
+        ruleId: 'unused-export',
+        message: exported.usedInModule
+          ? `No scanned file imports the export \`${exported.name}\`, but this module uses it. Remove only the \`export\` keyword, and keep it if external callers or public types need the name.`
+          : `No scanned file imports the export \`${exported.name}\`. Check external callers and public types before making it private. Keep the declaration if the module uses it or its initialization has side effects.`,
+        exportName: exported.name,
+        ...(fix && (exported.needsCompiler ? { suggestedRecipe: 'verified-private-types' } : { fix })),
+        ...context,
+        ...(keywordOnly && {
+          contextualReason: 'This module uses the declaration, so only its export keyword is unused.',
+        }),
+      });
+    }
+  });
+  return findings;
+}
+
+function markPotentialTypeConsumers(
+  usage: DeclarationUsage,
+  workspace: WorkspaceResolver,
+  exposed: UsageIndex,
+  uncertainNames: Set<WantedName>,
+): void {
+  for (const item of usage.uncertainTypeImports ?? []) {
+    const to = workspace.resolveSpecifier(item.specifier);
+    if (to) exposed.markImport({ to, names: item.names });
+    else if (item.names === 'all') uncertainNames.add(everything);
+    else for (const name of item.names) uncertainNames.add(name);
+  }
+}
+
+export { checkUnusedModules };

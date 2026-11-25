@@ -7,7 +7,7 @@ import {
   registerFakeQuickFixes as registerQuickFixes,
 } from '../../test/types/fake-vscode.cjs';
 import { createDismissals } from '../dismissals.cjs';
-import type { Finding, FindingFix } from '../../lib/shared/types.cjs';
+import type { Finding, FindingFix } from '../../lib/shared/types.js';
 import type { Memento } from '../types/dismissal.cjs';
 import type {
   FakeCodeActionProvider,

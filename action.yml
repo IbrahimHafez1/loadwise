@@ -46,9 +46,9 @@ runs:
         LOADWISE_UPLOAD_SARIF: ${{ inputs.upload-sarif }}
         LOADWISE_ANNOTATIONS: ${{ inputs.annotations }}
       run: |
-        runtime=$(node "$LOADWISE_ACTION_PATH/scripts/stage-action.cjs")
+        runtime=$(node "$LOADWISE_ACTION_PATH/scripts/stage-action.js")
         npm --prefix "$runtime" ci --omit=dev --include=optional --no-audit --no-fund
-        node "$runtime/bin/github-action.cjs"
+        node "$runtime/bin/github-action.js"
 
     - name: Upload SARIF
       if: ${{ always() && steps.loadwise.outputs.sarif-file != '' }}

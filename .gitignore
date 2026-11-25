@@ -1,16 +1,19 @@
 node_modules/
 # Stub type packages the recall bench needs: type-resolved rules only fire on declarations under node_modules.
 !bench/recall/cases/*/node_modules/
-# Compiled CommonJS artifacts emitted from *.cts by `npm run build`
-bin/*.cjs
-lib/**/*.cjs
+# Compiled ESM and CommonJS artifacts emitted from *.ts / *.cts by `npm run build`
+bin/*.js
+lib/**/*.js
+lib/security/examples/*.cjs
 !lib/performance/vendor/**
 editor/**/*.cjs
-plugin/**/*.cjs
-polyglot/**/*.cjs
-scripts/**/*.cjs
-bench/**/*.cjs
-test/**/*.cjs
+plugin/**/*.js
+polyglot/**/*.js
+scripts/**/*.js
+bench/**/*.js
+test/**/*.js
+test/types/fake-vscode.cjs
+!bench/recall/cases/**/*.js
 .tsbuildinfo
 *.tgz
 *.vsix

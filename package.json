@@ -1,6 +1,7 @@
 {
   "name": "@loadwise/cli",
   "version": "0.4.1-preview.16",
+  "type": "module",
   "description": "Find backend performance, maintainability and security issues, review suggested fixes, and check changed code locally or in CI.",
   "license": "UNLICENSED",
   "author": "Ibrahim Hafez",
@@ -35,7 +36,7 @@
     "vscode"
   ],
   "bin": {
-    "loadwise": "./bin/loadwise.cjs"
+    "loadwise": "./bin/loadwise.js"
   },
   "files": [
     "bin/",
@@ -67,18 +68,18 @@
     "lint": "oxlint --deny-warnings .",
     "check": "npm run format:check && npm run lint && npm run build && npm test",
     "typecheck": "tsc -p tsconfig.typecheck.json",
-    "test": "npm run build && node --require ./test/manual-session.cjs --test --test-concurrency=8 test/performance/*.test.cjs test/maintainability/*.test.cjs test/security/*.test.cjs test/shared/*.test.cjs test/plugin/*.test.cjs editor/test/*.test.cjs",
-    "selfscan:baseline": "node bin/loadwise.cjs check . --config scripts/self-scan/loadwise.config.json --write-baseline scripts/self-scan/loadwise-baseline.json",
-    "bench:corpus": "node scripts/score-corpus.cjs",
-    "bench:scorecard": "node scripts/score-corpus.cjs --scorecard",
-    "bench:parity": "node scripts/engine-parity.cjs",
-    "bench:patterns": "node bench/patterns.cjs",
-    "bench:scan": "node bench/scanner.cjs",
-    "bench:security": "node bench/security.cjs",
-    "bench:traces": "node bench/traces.cjs",
-    "bench:recall": "node bench/recall/runner.cjs",
+    "test": "npm run build && node --import ./test/manual-session.js --test --test-concurrency=8 test/performance/*.test.js test/maintainability/*.test.js test/security/*.test.js test/shared/*.test.js test/plugin/*.test.js editor/test/*.test.cjs",
+    "selfscan:baseline": "node bin/loadwise.js check . --config scripts/self-scan/loadwise.config.json --write-baseline scripts/self-scan/loadwise-baseline.json",
+    "bench:corpus": "node scripts/score-corpus.js",
+    "bench:scorecard": "node scripts/score-corpus.js --scorecard",
+    "bench:parity": "node scripts/engine-parity.js",
+    "bench:patterns": "node bench/patterns.js",
+    "bench:scan": "node bench/scanner.js",
+    "bench:security": "node bench/security.js",
+    "bench:traces": "node bench/traces.js",
+    "bench:recall": "node bench/recall/runner.js",
     "build": "tsc -p tsconfig.json",
-    "clean": "node -e \"const fs=require('fs'),p=require('path');const walk=d=>{if(!fs.existsSync(d))return;for(const e of fs.readdirSync(d,{withFileTypes:true})){const f=p.join(d,e.name);if(e.isDirectory()&&e.name!=='node_modules'&&!f.includes('vendor'))walk(f);else if(e.name.endsWith('.cjs')&&fs.existsSync(f.slice(0,-4)+'.cts'))fs.unlinkSync(f);}};['bin','lib','editor','plugin','polyglot','scripts','bench','test'].forEach(walk);fs.rmSync('.tsbuildinfo',{force:true});\"",
+    "clean": "node -e \"import('node:fs').then(fs=>import('node:path').then(p=>{const walk=d=>{if(!fs.existsSync(d))return;for(const e of fs.readdirSync(d,{withFileTypes:true})){const f=p.join(d,e.name);if(e.isDirectory()&&e.name!=='node_modules'&&!f.includes('vendor'))walk(f);else if((e.name.endsWith('.js')&&fs.existsSync(f.slice(0,-3)+'.ts'))||(e.name.endsWith('.cjs')&&fs.existsSync(f.slice(0,-4)+'.cts')))fs.unlinkSync(f);}};['bin','lib','editor','plugin','polyglot','scripts','bench','test'].forEach(walk);fs.rmSync('.tsbuildinfo',{force:true});}))\"",
     "prepack": "npm run build",
     "prepare": "node -e \"try{require('child_process').execSync('git rev-parse --git-dir',{stdio:'ignore'});require('child_process').execSync('git config core.hooksPath hooks')}catch{}\"",
     "lint:fix": "oxlint --fix ."

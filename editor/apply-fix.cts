@@ -1,4 +1,4 @@
-import type { FindingFix, FixChange } from '../lib/shared/types.cjs';
+import type { FindingFix, FixChange } from '../lib/shared/types.js';
 // Applies a site fix to file text. A fix stores the exact original lines, so it is applied only
 // where those lines still exist; an edit made since the scan moves or removes them and the fix then
 // refuses instead of guessing.

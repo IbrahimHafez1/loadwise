@@ -5,7 +5,7 @@ import { exampleFor as maintainabilityExample } from './maintainability-examples
 import { exampleFor as securityExample } from './security-examples.cjs';
 import { getFindingComparison, inlineComparison } from './finding-comparison.cjs';
 import { isChangeApplied, locateChange } from './apply-fix.cjs';
-import type { Finding, FindingFix, FixChange } from '../lib/shared/types.cjs';
+import type { Finding, FindingFix, FixChange } from '../lib/shared/types.js';
 import type { Comparison, CodeComparison } from './types/comparison.cjs';
 import type { DismissalEntry, Dismissals } from './types/dismissal.cjs';
 import type { FixExample } from './types/fix-example.cjs';
