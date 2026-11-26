@@ -104,7 +104,7 @@ def build(output):
         root = Path(temp)
         stage = root / "extension"
         stage.mkdir()
-        stage_checker(PACKAGE_ROOT, stage, "@loadwise/cli", "loadwise")
+        stage_checker(PACKAGE_ROOT, stage, "loadwise", "loadwise")
         for source in [*EDITOR.glob("*.cjs"), EDITOR / "package.json", EDITOR / "README.md"]:
             # Shared editor modules can import the checker's library relative to their packaged location.
             bundled = Path("tools/loadwise/editor") / source.name

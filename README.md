@@ -10,11 +10,24 @@ Each finding has a stable `#id` for review. Where a checker can generate an edit
 
 ## Install
 
-Use Node.js 22 or later. For this private preview, use the npm archive provided by the package owner. If you have the checkout, run `npm pack /path/to/loadwise` from your application directory to create the archive there. Install the filename that npm prints. For version 0.4.1-preview.16, run:
+Use Node.js 22 or later. Run directly with `npx` or install as a devDependency:
 
 ```sh
-npm install --save-dev ./loadwise-cli-0.4.1-preview.16.tgz
+npx loadwise check
+
+# or install in your project:
+npm install --save-dev loadwise
 npx loadwise --version
+```
+
+By default `loadwise check` reports actionable findings across Performance, Maintainability, and Security; see the [corpus rule scorecard](bench/corpus/scorecard.md) for measured precision and recall across real-world open-source backends.
+
+**Autofix example:** `npx loadwise fix --yes` rewrites eligible issues in place and verifies TypeScript projects with a post-edit typecheck:
+
+```diff
+- const names = visible.map((order) => customers.find((c) => c.id === order.customerId)?.name ?? 'Unknown');
++ const customersById = new Map(customers.map((c) => [c.id, c] as const).reverse());
++ const names = visible.map((order) => customersById.get(order.customerId)?.name ?? 'Unknown');
 ```
 
 **With an AI coding agent**, say **“Run Loadwise”** in your project chat. The agent can run the installed CLI directly. It should check the findings against the code, explain what it would fix or leave alone and why, and let you choose before making edits. [Active-agent workflow and optional MCP setup](#using-loadwise-with-an-active-coding-agent)
@@ -26,7 +39,7 @@ npx loadwise --version
 From the directory where you installed Loadwise, copy the bundled example to a disposable file and scan it. The copy command refuses to overwrite an existing file.
 
 ```sh
-node -e "require('node:fs').copyFileSync('node_modules/@loadwise/cli/examples/slow.ts', 'loadwise-demo.ts', require('node:fs').constants.COPYFILE_EXCL)"
+node -e "require('node:fs').copyFileSync('node_modules/loadwise/examples/slow.ts', 'loadwise-demo.ts', require('node:fs').constants.COPYFILE_EXCL)"
 npx loadwise perf loadwise-demo.ts
 npx loadwise explain array-repeated-membership
 ```
@@ -133,7 +146,7 @@ One optional file, `loadwise.config.json`, sets the defaults for every checker. 
 
 ```json
 {
-  "$schema": "./node_modules/@loadwise/cli/schema/loadwise.config.schema.json",
+  "$schema": "./node_modules/loadwise/schema/loadwise.config.schema.json",
   "checkers": ["perf", "maint"],
   "ignore": ["generated/**", "scripts/**"],
   "rules": {
@@ -253,7 +266,7 @@ Run `npx loadwise check` to see findings or `npx loadwise fix --yes` to scan and
 /plugin install loadwise@loadwise
 ```
 
-After every `Edit`, `Write` or `MultiEdit` on a `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts` or `.cts` file, a hook runs the project's locally installed `@loadwise/cli` on that file (`perf` and `sec` on the file, `maint` on the uncommitted changes, keeping that file's findings) with a 20 second limit. Findings go back to Claude with their ids and `--fix --only <id>` commands for the corresponding checker; a clean file prints nothing. The hook never downloads anything: without a local install, outside a project, on other file types, on a timeout or on any error it exits silently. The plugin also adds a `/loadwise [args]` command for read-only checks and a `/loadwise fix [checker names]` workflow for agent-reviewed remediation.
+After every `Edit`, `Write` or `MultiEdit` on a `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts` or `.cts` file, a hook runs the project's locally installed `loadwise` on that file (`perf` and `sec` on the file, `maint` on the uncommitted changes, keeping that file's findings) with a 20 second limit. Findings go back to Claude with their ids and `--fix --only <id>` commands for the corresponding checker; a clean file prints nothing. The hook never downloads anything: without a local install, outside a project, on other file types, on a timeout or on any error it exits silently. The plugin also adds a `/loadwise [args]` command for read-only checks and a `/loadwise fix [checker names]` workflow for agent-reviewed remediation.
 
 To turn the hook off, run `/plugin disable loadwise` (or `/plugin uninstall loadwise`).
 
@@ -325,8 +338,8 @@ The second sample is `examples/repeated-db.otlp.json` with span timings added. A
 Try the two included implementations of the same order lookup. The first reports three findings. The second preserves the result order, the first matching customer and the fallback for a missing customer.
 
 ```sh
-npx loadwise perf node_modules/@loadwise/cli/examples/slow.ts
-npx loadwise perf node_modules/@loadwise/cli/examples/indexed.ts
+npx loadwise perf node_modules/loadwise/examples/slow.ts
+npx loadwise perf node_modules/loadwise/examples/indexed.ts
 ```
 
 Use the same one-shot commands in CI. Exit **0** means no displayed finding met the fail threshold, **1** means at least one did and **2** means the check could not complete or skipped a file. Add `--json` for structured output.
@@ -634,7 +647,7 @@ Performance and maintainability scans retry files when the bundled parser reject
 
 Supply a local **OTLP/JSON trace export** with `resourceSpans → scopeSpans → spans`. An OpenTelemetry Collector with a file export can produce this format. The CLI accepts one export object per invocation. For a collector output containing multiple JSON lines, pass the relevant export object for the request. Spans split across separate invocations count independently.
 
-Try `npx loadwise perf traces node_modules/@loadwise/cli/examples/repeated-db.otlp.json`. The example reports five similar MongoDB operations under one parent. The trace rules use current and legacy database attributes and deduplicate span IDs.
+Try `npx loadwise perf traces node_modules/loadwise/examples/repeated-db.otlp.json`. The example reports five similar MongoDB operations under one parent. The trace rules use current and legacy database attributes and deduplicate span IDs.
 
 | Rule                                                        | Evidence and interpretation                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -648,7 +661,7 @@ Matching keys in two reads are a reason to consider **request-local** reuse when
 
 ## Executed query plans
 
-Feed the CLI a JSON file from PostgreSQL `EXPLAIN (ANALYZE, FORMAT JSON)` or MongoDB `explain("executionStats")`. For example, run `npx loadwise perf plan node_modules/@loadwise/cli/examples/postgres-plan.json`. The checker reads the file locally. PostgreSQL's `ANALYZE` option executes the statement when you collect the plan. [PostgreSQL EXPLAIN](https://www.postgresql.org/docs/current/using-explain.html) · [MongoDB explain results](https://www.mongodb.com/docs/manual/reference/explain-results/)
+Feed the CLI a JSON file from PostgreSQL `EXPLAIN (ANALYZE, FORMAT JSON)` or MongoDB `explain("executionStats")`. For example, run `npx loadwise perf plan node_modules/loadwise/examples/postgres-plan.json`. The checker reads the file locally. PostgreSQL's `ANALYZE` option executes the statement when you collect the plan. [PostgreSQL EXPLAIN](https://www.postgresql.org/docs/current/using-explain.html) · [MongoDB explain results](https://www.mongodb.com/docs/manual/reference/explain-results/)
 
 | Observed work                                                                                                  | Threshold and review                                                                                                                                                                                                                                  |
 | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1268,8 +1281,8 @@ Use Node.js 22.12+ for the development tools and run `npm ci --include=optional`
 
 Run `npm run format` to format files, `npm run lint` for correctness checks, or `npm run check` to verify formatting, lint and tests together.
 
-From this checkout, run `node bin/loadwise.cjs check` to scan Loadwise itself. The root `jsconfig.json` selects implementation files for performance and security checks so the deliberately slow examples and benchmark workloads keep their intended behavior.
+From this checkout, run `node bin/loadwise.js check` to scan Loadwise itself. The root `jsconfig.json` selects implementation files for performance and security checks so the deliberately slow examples and benchmark workloads keep their intended behavior.
 
 ## License
 
-Copyright © 2026 Ibrahim Hafez. All rights reserved. See LICENSE.
+Licensed under the [Apache License 2.0](LICENSE). Copyright © 2026 Ibrahim Hafez.

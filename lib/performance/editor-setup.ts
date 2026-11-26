@@ -29,7 +29,7 @@ const watchTask = {
   label: 'Loadwise: Watch',
   type: 'process',
   command: 'node',
-  args: ['${workspaceFolder}/node_modules/@loadwise/cli/bin/loadwise.js', 'perf', 'editor', 'watch'],
+  args: ['${workspaceFolder}/node_modules/loadwise/bin/loadwise.js', 'perf', 'editor', 'watch'],
   options: { cwd: '${workspaceFolder}' },
   isBackground: true,
   runOptions: { runOn: 'folderOpen', instanceLimit: 1 },

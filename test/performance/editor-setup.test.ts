@@ -37,12 +37,7 @@ test('setup creates one background process task whose matcher captures paths, se
   const task = parseTasks(original).tasks[0];
   assert.equal(task.type, 'process');
   assert.equal(task.command, 'node');
-  assert.deepEqual(task.args, [
-    '${workspaceFolder}/node_modules/@loadwise/cli/bin/loadwise.js',
-    'perf',
-    'editor',
-    'watch',
-  ]);
+  assert.deepEqual(task.args, ['${workspaceFolder}/node_modules/loadwise/bin/loadwise.js', 'perf', 'editor', 'watch']);
   assert.equal(task.runOptions.runOn, 'folderOpen');
   assert.equal(task.runOptions.instanceLimit, 1);
   assert.equal(task.isBackground, true);

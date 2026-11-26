@@ -162,10 +162,10 @@ test('the installed npm entry receives a filename with spaces as one argument', 
   const root = makeProject();
   const relativeFile = path.join('src', 'order details.ts');
   fs.writeFileSync(path.join(root, relativeFile), 'export const total = 1;');
-  const entryDirectory = path.join(root, 'node_modules', '@loadwise', 'cli', 'bin');
+  const entryDirectory = path.join(root, 'node_modules', 'loadwise', 'bin');
   fs.mkdirSync(entryDirectory, { recursive: true });
   fs.writeFileSync(
-    path.join(entryDirectory, 'loadwise.cjs'),
+    path.join(entryDirectory, 'loadwise.js'),
     `
 const [, , command, file, format] = process.argv;
 const findings = command === 'perf' && file === ${JSON.stringify(relativeFile)} && format === '--json'

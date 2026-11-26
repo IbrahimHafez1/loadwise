@@ -1,10 +1,10 @@
 ---
 description: Check a project or fix its Loadwise findings in this session
 argument-hint: "[directory] [--only perf,maint] [--staged] | fix [--yes|--all|--handoff] [performance maintainability security]"
-allowed-tools: Bash(npx loadwise:*), Bash(npx --package @loadwise/cli loadwise:*), Bash(node_modules/.bin/loadwise:*)
+allowed-tools: Bash(npx loadwise:*), Bash(node_modules/.bin/loadwise:*)
 ---
 
-Use the project's Loadwise launcher for every command. Prefer `node_modules/.bin/loadwise` when present, otherwise use `npx --package @loadwise/cli loadwise`. Interpret the user's arguments (`$ARGUMENTS`) as follows.
+Use the project's Loadwise launcher for every command. Prefer `node_modules/.bin/loadwise` when present, otherwise use `npx loadwise`. Interpret the user's arguments (`$ARGUMENTS`) as follows.
 
 For the default check, pass the supplied directory and scan flags to `loadwise check --json`. Summarize the findings by checker, id, rule and file:line. Keep checks and handoff-only requests read-only.
 

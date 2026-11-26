@@ -17,7 +17,7 @@ test('an active editor task picks up same-version package replacements', { timeo
   const root = fs.mkdtempSync(path.join(base, 'editor-package-update-'));
   const registrations = signalDirectory(root);
   const dependencies = path.join(root, 'node_modules');
-  const backend = path.join(dependencies, '@loadwise', 'cli');
+  const backend = path.join(dependencies, 'loadwise');
   const cli = path.join(backend, 'bin', 'loadwise.cjs');
   const watchModule = JSON.stringify(require.resolve('../../lib/performance/editor-watch.js'));
   function backendEntry(message: string) {
@@ -29,7 +29,7 @@ test('an active editor task picks up same-version package replacements', { timeo
   const source = path.join(root, 'sample.ts');
   const manifest = path.join(backend, 'package.json');
   fs.writeFileSync(source, 'const ready = true;');
-  fs.writeFileSync(manifest, '{"name":"@loadwise/cli","version":"1.0.0"}');
+  fs.writeFileSync(manifest, '{"name":"loadwise","version":"1.0.0"}');
   fs.writeFileSync(cli, backendEntry('old rules'));
   const child = spawn(process.execPath, [cli, 'editor', 'watch'], {
     cwd: root,
@@ -82,7 +82,7 @@ test('an active editor task picks up same-version package replacements', { timeo
     notifyEditor(root);
     if (fs.existsSync(registrations)) fs.rmdirSync(registrations);
     for (const file of [source, cli, manifest]) fs.rmSync(file, { force: true });
-    for (const directory of [path.dirname(cli), backend, path.dirname(backend), dependencies, root]) {
+    for (const directory of [path.dirname(cli), backend, dependencies, root]) {
       if (fs.existsSync(directory)) fs.rmdirSync(directory);
     }
   });

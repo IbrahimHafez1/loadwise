@@ -17,3 +17,4 @@ test/types/fake-vscode.cjs
 .tsbuildinfo
 *.tgz
 *.vsix
+.claude/

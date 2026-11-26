@@ -12,7 +12,7 @@ function superviseEditor(root: string, explicitConfig: string | undefined): void
   // Keep the installed path, including a package-manager symlink, so a replacement resolves to the
   // new checkout.
   const script = path.resolve(process.argv[1]);
-  const installed = path.join(root, 'node_modules', '@loadwise', 'cli', 'bin', 'loadwise.js');
+  const installed = path.join(root, 'node_modules', 'loadwise', 'bin', 'loadwise.js');
   const cli = fs.existsSync(installed) && fs.realpathSync(installed) === fs.realpathSync(script) ? installed : script;
   const markers = new Set([cli, path.join(path.dirname(path.dirname(cli)), 'package.json')]);
   let worker: ChildProcess | undefined,

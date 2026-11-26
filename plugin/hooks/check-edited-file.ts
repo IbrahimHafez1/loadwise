@@ -46,7 +46,7 @@ function findLocalBinary(startDirectory: string, stopRoot: string): LocalBinary 
   for (;;) {
     const rel = path.relative(boundary, directory);
     if (rel === '..' || rel.startsWith('..' + path.sep) || path.isAbsolute(rel)) return null;
-    const entry = path.join(directory, 'node_modules', '@loadwise', 'cli', 'bin', 'loadwise.cjs');
+    const entry = path.join(directory, 'node_modules', 'loadwise', 'bin', 'loadwise.js');
     if (fs.existsSync(entry)) return { projectRoot: directory, binary: entry };
     const candidate = path.join(directory, 'node_modules', '.bin', 'loadwise');
     if (fs.existsSync(candidate)) return { projectRoot: directory, binary: candidate };
@@ -58,7 +58,7 @@ function findLocalBinary(startDirectory: string, stopRoot: string): LocalBinary 
 }
 
 function launcherFor(binary: string, args: string[]): Launcher {
-  if (binary.endsWith('.cjs')) return { command: process.execPath, args: [binary, ...args] };
+  if (binary.endsWith('.js') || binary.endsWith('.cjs')) return { command: process.execPath, args: [binary, ...args] };
   const firstLine = fs.readFileSync(binary, 'utf8').split('\n', 1)[0];
   if (firstLine.startsWith('#!') && firstLine.includes('node')) {
     return { command: process.execPath, args: [binary, ...args] };

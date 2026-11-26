@@ -1,9 +1,9 @@
 {
-  "name": "@loadwise/cli",
+  "name": "loadwise",
   "version": "0.4.1-preview.16",
   "type": "module",
   "description": "Find backend performance, maintainability and security issues, review suggested fixes, and check changed code locally or in CI.",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "author": "Ibrahim Hafez",
   "repository": {
     "type": "git",
