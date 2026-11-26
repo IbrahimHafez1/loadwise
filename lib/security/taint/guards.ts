@@ -4,7 +4,7 @@
 // project syntax, so it applies the same with or without types.
 import { ts } from '../../performance/compiler.js';
 import { isValidation } from '../pg-identifier-guards.js';
-import { filenameValidation, containsSeparator } from './filename-guard.js';
+import { filenameValidation, containsSeparator, lacksSeparator } from './filename-guard.js';
 import type {
   BinaryExpression,
   CaseClause,
@@ -110,7 +110,10 @@ function confirms(node: Expression, guard: Guard): boolean {
       return confirms(condition.left, guard) || confirms(condition.right, guard);
     if (operator === ts.SyntaxKind.BarBarToken)
       return confirms(condition.left, guard) && confirms(condition.right, guard);
-    return pinningComparison(condition, guard.isSubject) === 'equal';
+    return (
+      pinningComparison(condition, guard.isSubject) === 'equal' ||
+      (Boolean(guard.filename) && lacksSeparator(condition, guard.isSubject))
+    );
   }
   if (ts.isPrefixUnaryExpression(condition) && condition.operator === ts.SyntaxKind.ExclamationToken)
     return rejects(condition.operand, guard);
@@ -130,7 +133,10 @@ function rejects(node: Expression, guard: Guard): boolean {
       return rejects(condition.left, guard) || rejects(condition.right, guard);
     if (operator === ts.SyntaxKind.AmpersandAmpersandToken)
       return rejects(condition.left, guard) && rejects(condition.right, guard);
-    return pinningComparison(condition, guard.isSubject) === 'unequal';
+    return (
+      pinningComparison(condition, guard.isSubject) === 'unequal' ||
+      (Boolean(guard.filename) && containsSeparator(condition, guard.isSubject))
+    );
   }
   if (ts.isPrefixUnaryExpression(condition) && condition.operator === ts.SyntaxKind.ExclamationToken)
     return confirms(condition.operand, guard);

@@ -52,6 +52,44 @@ function isSensitiveCookie(nameArgument: Expression, valueArgument: Expression) 
   return sensitiveNamePattern.test(name) || sensitiveNamePattern.test(nameOf(valueArgument));
 }
 
+function isNonPositiveLiteral(expression: Expression | undefined): boolean {
+  const node = unwrap(expression);
+  if (!node) return false;
+  if (ts.isNumericLiteral(node)) return Number(node.text) <= 0;
+  return (
+    ts.isPrefixUnaryExpression(node) &&
+    node.operator === ts.SyntaxKind.MinusToken &&
+    ts.isNumericLiteral(unwrap(node.operand))
+  );
+}
+
+function isEpochDate(expression: Expression | undefined): boolean {
+  const node = unwrap(expression);
+  if (!node || !ts.isNewExpression(node) || !ts.isIdentifier(node.expression) || node.expression.text !== 'Date') {
+    return false;
+  }
+  const first = node.arguments?.[0] && unwrap(node.arguments[0]);
+  return Boolean(first && ts.isNumericLiteral(first) && Number(first.text) === 0);
+}
+
+// Clearing a cookie on logout (`res.cookie('sid', '', { maxAge: 0 })` or `expires: new Date(0)`)
+// deletes the cookie rather than setting a session.
+function isClearingCookie(valueArgument: Expression, options: ObjectLiteralExpression | undefined): boolean {
+  const value = unwrap(valueArgument);
+  if (
+    (ts.isStringLiteralLike(value) && value.text === '') ||
+    value.kind === ts.SyntaxKind.NullKeyword ||
+    (ts.isIdentifier(value) && value.text === 'undefined')
+  ) {
+    return true;
+  }
+  if (!options) return false;
+  const maxAge = findProperty(options, 'maxAge');
+  if (maxAge && isNonPositiveLiteral(maxAge.value)) return true;
+  const expires = findProperty(options, 'expires');
+  return Boolean(expires && isEpochDate(expires.value));
+}
+
 // What a cookie options literal leaves out. `httpOnlyDefault` is true where the library already
 // sets it.
 function assess(
@@ -112,6 +150,7 @@ function checkCookieCall(call: CallExpression, context: SecurityRuleContext) {
     options = objectLiteralOf(optionsArgument, context.checker);
     if (!options || !isFullyLiteral(options)) return;
   }
+  if (isClearingCookie(valueArgument, options)) return;
   const scriptReadable = scriptReadableNamePattern.test(nameOf(nameArgument));
   const callee = unwrap(call.expression);
   report(

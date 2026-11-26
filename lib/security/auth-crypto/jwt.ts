@@ -457,6 +457,30 @@ function setsExpiryClaim(payload: ObjectLiteralExpression, checker: CheckerAdapt
   });
 }
 
+// `payload.exp = ...` set on the payload identifier earlier in the same function before signing.
+function assignsExpiryBeforeCall(call: CallExpression, payloadArgument: Expression, checker: CheckerAdapter): boolean {
+  const target = ts.skipOuterExpressions(payloadArgument);
+  if (!ts.isIdentifier(target)) return false;
+  const scope = enclosingFunction(call) ?? call.getSourceFile();
+  const callStart = call.getStart();
+  return referencesOf(target, scope, checker).some((reference) => {
+    if (reference.getStart() >= callStart) return false;
+    const access = reference.parent;
+    if (!ts.isPropertyAccessExpression(access) || access.expression !== reference) return false;
+    if (!expiryClaims.includes(access.name.text)) return false;
+    const assignment = access.parent;
+    if (
+      !ts.isBinaryExpression(assignment) ||
+      assignment.left !== access ||
+      assignment.operatorToken.kind !== ts.SyntaxKind.EqualsToken
+    ) {
+      return false;
+    }
+    const assigned = ts.skipOuterExpressions(assignment.right);
+    return !(ts.isIdentifier(assigned) && assigned.text === 'undefined');
+  });
+}
+
 function checkJwtSign(call: CallExpression, context: SecurityRuleContext) {
   if (!call.arguments.length || !fileMentions(context.sourceFile, signLibraries)) return;
   const info = libraryInfo(call, context);
@@ -468,6 +492,7 @@ function checkJwtSign(call: CallExpression, context: SecurityRuleContext) {
   if (options.opaque || (options.literal && findProperty(options.literal, 'expiresIn'))) return;
   const moduleExpiry = nestService ? injectedModuleExpiry(call, context) : false;
   if (moduleExpiry === true) return;
+  if (assignsExpiryBeforeCall(call, call.arguments[0], context.checker)) return;
   const payload = resolveConstant(call.arguments[0], context.checker);
   if (ts.isStringLiteralLike(payload) || ts.isTemplateExpression(payload)) return;
   if (ts.isObjectLiteralExpression(payload) && setsExpiryClaim(payload, context.checker)) return;
@@ -479,7 +504,7 @@ function checkJwtSign(call: CallExpression, context: SecurityRuleContext) {
       'The token payload is not an object literal, so an `exp` claim may be set elsewhere.',
     );
   if (!findProperty(payload, 'exp')) {
-    const hasCustomTimestamp = Boolean(findProperty(payload, 'expiresAt') || findProperty(payload, 'createdAt'));
+    const hasCustomTimestamp = Boolean(findProperty(payload, 'createdAt'));
     const reason = hasCustomTimestamp
       ? 'The payload carries an application-level timestamp (`expiresAt` or `createdAt`); confirm the verifier enforces expiry.'
       : moduleExpiry === undefined

@@ -403,7 +403,7 @@ function blockingSourceContext(node: Node, checker: CheckerAdapter, source: Sour
     return 'Synchronous call in a build or tool configuration file, which runs when the tool starts rather than on a request path.';
   if (blockingToolingDirectoryPattern.test(rootRelativePath(file)))
     return 'Synchronous call in container, boot, codemod, tooling or test-support code rather than a request path.';
-  if (runtime === 'cli-tooling' || (isToolingSource(source) && !findRepeatOwner(node, checker))) {
+  if ((runtime === 'cli-tooling' || isToolingSource(source)) && !findRepeatOwner(node, checker)) {
     return 'Synchronous call in operator or CLI tooling (scripts, deployment, migrations or commands). Prioritize if the server also imports this module.';
   }
 }

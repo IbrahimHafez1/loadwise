@@ -114,19 +114,47 @@ function isComparedInConstantTime(top: Node, context: SecurityRuleContext) {
   });
 }
 
-// `const sha1 = createHash('sha1')...` read only as `sha1.slice(0, 5)` for the range lookup is
-// never stored.
+function isRangePrefixCall(call: CallExpression): boolean {
+  if (!ts.isPropertyAccessExpression(call.expression)) return false;
+  const method = call.expression.name.text;
+  if (method !== 'slice' && method !== 'substring') return false;
+  const [start, end] = call.arguments;
+  return (
+    start !== undefined &&
+    end !== undefined &&
+    ts.isNumericLiteral(ts.skipOuterExpressions(start)) &&
+    ts.isNumericLiteral(ts.skipOuterExpressions(end)) &&
+    start.getText() === '0' &&
+    end.getText() === String(rangePrefixLength)
+  );
+}
+
+// `createHash('sha1')...digest('hex').slice(0, 5)` or `const sha1 = ...; sha1.slice(0, 5)` for the
+// HIBP k-anonymity range lookup is never stored.
 function isBreachRangePrefix(top: Node, context: SecurityRuleContext) {
-  const declaration = top.parent;
+  if (ts.isCallExpression(top) && isRangePrefixCall(top)) return true;
+  let current = top;
+  while (
+    current.parent &&
+    (ts.isParenthesizedExpression(current.parent) ||
+      ts.isAsExpression(current.parent) ||
+      ts.isAwaitExpression(current.parent))
+  ) {
+    current = current.parent;
+  }
+  const declaration = current.parent;
   if (!declaration || !ts.isVariableDeclaration(declaration) || !ts.isIdentifier(declaration.name)) return false;
   const scope = enclosingFunction(declaration) ?? context.sourceFile;
   return referencesOf(declaration.name, scope, context.checker).some((reference) => {
     const access = reference.parent;
     const call = access?.parent;
-    if (!ts.isPropertyAccessExpression(access) || !ts.isCallExpression(call) || call.expression !== access)
-      return false;
-    const [start, end] = call.arguments.map((argument: Expression) => argument.getText());
-    return /^(?:slice|substring)$/.test(access.name.text) && start === '0' && end === String(rangePrefixLength);
+    return (
+      ts.isPropertyAccessExpression(access) &&
+      !!call &&
+      ts.isCallExpression(call) &&
+      call.expression === access &&
+      isRangePrefixCall(call)
+    );
   });
 }
 
@@ -236,6 +264,7 @@ function checkLocalWeakHash(call: CallExpression, context: SecurityRuleContext) 
     isBcryptInput(call, context) ||
     isComparedInConstantTime(call, context) ||
     isBreachRangePrefix(call, context) ||
+    isKeyDerivationOrDigestAuth(call, context) ||
     isTokenDerivationFunction(call)
   )
     return;

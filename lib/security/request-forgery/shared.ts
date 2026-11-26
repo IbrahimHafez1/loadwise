@@ -173,7 +173,12 @@ function isContainedPath(sink: Node, expression: Expression, context: SecurityRu
   const { checker, taint } = context;
   const target = stableIdentifier(expression, sink, checker);
   const resolved = target && strip(constantDeclaration(target, checker)?.initializer);
-  if (!pathCall(resolved, 'resolve', context) || resolved.arguments.length < 2) return false;
+  if (
+    (!pathCall(resolved, 'resolve', context) && !pathCall(resolved, 'join', context)) ||
+    resolved.arguments.length < 2
+  ) {
+    return false;
+  }
   const root = strip(resolved.arguments[0]);
   if (
     !((ts.isStringLiteralLike(root) && root.text) || stableIdentifier(root, sink, checker)) ||

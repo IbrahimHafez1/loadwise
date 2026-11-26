@@ -242,7 +242,7 @@ function resolvesWithoutRejection(call: CallExpression, checker: CheckerAdapter)
 }
 
 function check(call: CallExpression, context: PerformanceRuleContext): void {
-  if (isTestSource(call.getSourceFile().fileName) || !runsInAsyncOrHandler(call)) return;
+  if (isTestSource(call.getSourceFile().fileName)) return;
   const name = calleeName(call, skipParentheses);
   if (name === 'forEach' && isStandardArrayCall(call, context.checker)) {
     const callback = asyncCallback(call);
@@ -255,6 +255,7 @@ function check(call: CallExpression, context: PerformanceRuleContext): void {
     );
     return;
   }
+  if (!runsInAsyncOrHandler(call)) return;
   if (!isStatement(call) || (name !== undefined && context.fireAndForgetNames.has(name))) return;
   if (
     resolvesWithoutRejection(call, context.checker) ||

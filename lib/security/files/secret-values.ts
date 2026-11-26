@@ -68,9 +68,15 @@ function isPlaceholderValue(value: string, key = '') {
   const trimmed = value.trim();
   if (trimmed.length < minimumSecretLength) return true;
   if (placeholderPattern.test(trimmed) || literalWords.test(trimmed)) return true;
-  // References and file paths point at a secret stored elsewhere; op:// and vault:// are
-  // secret-manager references.
-  if (/^(?:\$|\/|\.\/|file:|op:\/\/|vault:\/\/)/i.test(trimmed)) return true;
+  // References and file paths point at a secret stored elsewhere; op://, vault://, aws-sm://,
+  // gcp-sm://, azure-kv://, kms:// and AWS secret/KMS ARNs are secret-manager references.
+  if (
+    /^(?:\$|\/|\.\/|file:|(?:op|vault|aws-sm|gcp-sm|sm|azure-kv|kms):\/\/|arn:aws:(?:secretsmanager|kms):)/i.test(
+      trimmed,
+    )
+  ) {
+    return true;
+  }
   return key !== '' && stripKey(trimmed) === stripKey(key);
 }
 

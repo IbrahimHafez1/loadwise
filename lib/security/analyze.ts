@@ -1,7 +1,7 @@
 // Runs every registered security check over one source file: one full syntax walk, dispatched by
 // node kind.
 import { ts } from '../performance/compiler.js';
-import { typeFromPackage } from '../performance/package-types.js';
+import { createPackageTypeChecker } from '../performance/package-types.js';
 import { reviewedReason, reviewMarkers, repeatedReviewContext } from '../performance/review-context.js';
 import { movedRules } from './rule-ids.js';
 import { libraryCall } from './bindings.js';
@@ -25,7 +25,6 @@ import type {
   RulePolicy,
   SecurityRuleContext,
   TaintApi,
-  TypeAdapter,
 } from '../shared/types.js';
 import type { SecurityCheck, SecurityCheckModule } from './types/security-check.js';
 
@@ -85,7 +84,6 @@ function createAnalyzer(modules: readonly SecurityCheckModule[]) {
     const fileContext = createFileContext(sourceFile);
     let taint: TaintApi | undefined;
     const libraryCalls = new WeakMap<CallExpression | NewExpression, LibraryCall | undefined>();
-    const nodeTypes = new WeakMap<Node, TypeAdapter>();
     const compilerOptions = policy ? program.getCompilerOptions() : undefined;
     const context: SecurityRuleContext = {
       program,
@@ -94,14 +92,7 @@ function createAnalyzer(modules: readonly SecurityCheckModule[]) {
       policy,
       fileContext,
       strictNullChecks: compilerOptions ? Boolean(compilerOptions.strictNullChecks ?? compilerOptions.strict) : false,
-      isPackageType(node: Node, packages: readonly string[], typeNames?: readonly string[]) {
-        let type = nodeTypes.get(node);
-        if (type === undefined) {
-          type = checker.getTypeAtLocation(node);
-          nodeTypes.set(node, type);
-        }
-        return typeFromPackage(type, packages, typeNames);
-      },
+      isPackageType: createPackageTypeChecker(checker),
       // Many checks ask about the same call, and the type tier behind the answer is the costly part
       // of a scan.
       libraryCall(call: CallExpression | NewExpression) {

@@ -304,8 +304,17 @@ function raceElement(call: CallExpression): Node {
   return element;
 }
 
+function hasTimerDeadline(expression: Expression, checker?: CheckerAdapter): boolean {
+  if (timerDeadline.test(expression.getText())) return true;
+  if (!checker) return false;
+  const unwrapped = skipParentheses(expression);
+  if (!ts.isIdentifier(unwrapped)) return false;
+  const initializer = constInitializer(unwrapped, checker);
+  return Boolean(initializer && timerDeadline.test(initializer.getText()));
+}
+
 // `Promise.race([fetch(url), delay])` stops waiting on its own deadline.
-function isRacedAgainstTimer(call: CallExpression): boolean {
+function isRacedAgainstTimer(call: CallExpression, checker?: CheckerAdapter): boolean {
   const element = raceElement(call);
   const list = element.parent;
   const race = list.parent;
@@ -317,7 +326,7 @@ function isRacedAgainstTimer(call: CallExpression): boolean {
     return false;
   const { expression, name } = race.expression;
   if (!ts.isIdentifier(expression) || expression.text !== 'Promise' || name.text !== 'race') return false;
-  return list.elements.some((sibling) => sibling !== element && timerDeadline.test(sibling.getText()));
+  return list.elements.some((sibling) => sibling !== element && hasTimerDeadline(sibling, checker));
 }
 
 function firstUrlText(call: CallExpression): string | undefined {
@@ -385,7 +394,7 @@ function check(node: CallExpression, context: PerformanceRuleContext): void {
     if (!isGlobalFetch(target.receiver, context) || isRequestObject(node.arguments[0], context)) return;
     if (isRootRelativeUrl(node.arguments[0], context.checker)) return;
     if (hasEnclosingAbortTimeout(node)) return;
-    evidence.raced = isRacedAgainstTimer(node);
+    evidence.raced = isRacedAgainstTimer(node, context.checker);
   } else if (!isDefaultAxios(target.receiver, context) || sourceFile.text.includes('defaults.timeout')) {
     return;
   }

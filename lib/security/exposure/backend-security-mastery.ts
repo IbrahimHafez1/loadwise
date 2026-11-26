@@ -3,6 +3,7 @@
 // hardcoded-secret in auth-crypto/secrets.cjs.
 import { ts } from '../../performance/compiler.js';
 import { declaredInPackage } from '../../performance/schema/ts-helpers.js';
+import { importsModule } from '../../performance/request-heavy-work.js';
 import type { CallExpression, Expression, Identifier, SourceFile } from 'typescript';
 import type { CheckerAdapter, ProgramAdapter, SecurityRuleContext } from '../../shared/types.js';
 
@@ -39,28 +40,6 @@ function programHandlesSecurityHeaders(program: ProgramAdapter) {
     headerHandlingByProgram.set(program, handled);
   }
   return headerHandlingByProgram.get(program);
-}
-
-const moduleImportPatterns = new Map<string, RegExp>();
-const moduleImportCache = new WeakMap<SourceFile, Map<string, boolean>>();
-
-function importsModule(sourceFile: SourceFile, moduleName: string): boolean {
-  let byModule = moduleImportCache.get(sourceFile);
-  if (byModule) {
-    const cached = byModule.get(moduleName);
-    if (cached !== undefined) return cached;
-  } else {
-    byModule = new Map();
-    moduleImportCache.set(sourceFile, byModule);
-  }
-  let pattern = moduleImportPatterns.get(moduleName);
-  if (!pattern) {
-    pattern = new RegExp(`['"]${moduleName}(?:/[^'"]*)?['"]`);
-    moduleImportPatterns.set(moduleName, pattern);
-  }
-  const imported = pattern.test(sourceFile.text);
-  byModule.set(moduleName, imported);
-  return imported;
 }
 
 function initializerCall(identifier: Identifier, checker: CheckerAdapter) {

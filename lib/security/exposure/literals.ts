@@ -8,6 +8,7 @@ import type {
   ObjectLiteralExpression,
   PropertyAssignment,
   ShorthandPropertyAssignment,
+  Statement,
 } from 'typescript';
 import type { CheckerAdapter } from '../../shared/types.js';
 
@@ -130,11 +131,38 @@ function* enclosingBranches(node: Node): Generator<EnclosingBranch> {
   }
 }
 
-// True when `node` only runs outside production: inside the right branch of an environment check.
+function alwaysExits(statement: Statement): boolean {
+  if (ts.isReturnStatement(statement) || ts.isThrowStatement(statement)) return true;
+  if (!ts.isBlock(statement)) return false;
+  const last = statement.statements.at(-1);
+  return last !== undefined && alwaysExits(last);
+}
+
+// Conditions of earlier `if (cond) return/throw;` guards in enclosing blocks, innermost first.
+function* precedingExitGuards(node: Node): Generator<Expression> {
+  for (let child = node, parent = node.parent; parent; child = parent, parent = parent.parent) {
+    if (ts.isFunctionLike(parent)) return;
+    if (!ts.isBlock(parent)) continue;
+    for (const statement of parent.statements) {
+      if (statement === child) break;
+      if (ts.isIfStatement(statement) && !statement.elseStatement && alwaysExits(statement.thenStatement)) {
+        yield statement.expression;
+      }
+    }
+  }
+}
+
+// True when `node` only runs outside production: inside the right branch of an environment check,
+// or after an early-exit production guard.
 function underNonProductionGuard(node: Node) {
-  for (const { condition, branch } of enclosingBranches(node))
-    if (matchesAny(branch === 'true' ? nonProductionWhenTrue : nonProductionWhenFalse, condition.getText()))
+  for (const { condition, branch } of enclosingBranches(node)) {
+    if (matchesAny(branch === 'true' ? nonProductionWhenTrue : nonProductionWhenFalse, condition.getText())) {
       return true;
+    }
+  }
+  for (const condition of precedingExitGuards(node)) {
+    if (matchesAny(nonProductionWhenFalse, condition.getText())) return true;
+  }
   return false;
 }
 
@@ -149,5 +177,6 @@ export {
   chainRootName,
   methodName,
   enclosingBranches,
+  precedingExitGuards,
   underNonProductionGuard,
 };

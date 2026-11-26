@@ -98,19 +98,12 @@ function isFixedText(value: Expression, call: CallExpression, context: SecurityR
   return isFixedPart(value, call, context) || unresolvedParts(value, call, context, depth + 1)?.length === 0;
 }
 
-// `ids.map(() => '?').join(', ')` or `ids.map((_, i) => '$' + (i + 1))`: one placeholder per value,
-// built by a callback that never reads the element.
-function isPlaceholderList(node: Expression, call: CallExpression, context: SecurityRuleContext) {
-  let list = ts.skipOuterExpressions(node);
-  if (ts.isCallExpression(list) && methodName(list) === 'join') {
-    const [separator] = list.arguments;
-    if (separator && !isFixedPart(separator, call, context)) return false;
-    const joined = receiverOf(list);
-    if (!joined) return false;
-    list = ts.skipOuterExpressions(joined);
-  }
-  if (!ts.isCallExpression(list) || methodName(list) !== 'map' || list.arguments.length !== 1) return false;
-  const callback = ts.skipOuterExpressions(list.arguments[0]);
+function isFixedPlaceholderCallback(
+  callbackNode: Expression,
+  call: CallExpression,
+  context: SecurityRuleContext,
+): boolean {
+  const callback = ts.skipOuterExpressions(callbackNode);
   if (!(ts.isArrowFunction(callback) || ts.isFunctionExpression(callback)) || ts.isBlock(callback.body)) return false;
   const [element] = callback.parameters;
   if (element && !(ts.isIdentifier(element.name) && !isNameUsedIn(element.name, callback.body))) return false;
@@ -120,6 +113,34 @@ function isPlaceholderList(node: Expression, call: CallExpression, context: Secu
   const isIndex = (part: Expression) =>
     !!index && ts.isIdentifier(part) && context.checker.getSymbolAtLocation(part)?.valueDeclaration === index;
   return unresolvedParts(callback.body, call, context, maxVariableDepth - 1)?.every(isIndex) ?? false;
+}
+
+// `ids.map(() => '?').join(', ')`, `Array(n).fill('?').join(', ')`,
+// `Array.from({ length: n }, () => '?').join(', ')`, or `ids.map((_, i) => '$' + (i + 1))`:
+// one placeholder per value, built without reading dynamic element values.
+function isPlaceholderList(node: Expression, call: CallExpression, context: SecurityRuleContext) {
+  let list = ts.skipOuterExpressions(node);
+  if (ts.isCallExpression(list) && methodName(list) === 'join') {
+    const [separator] = list.arguments;
+    if (separator && !isFixedPart(separator, call, context)) return false;
+    const joined = receiverOf(list);
+    if (!joined) return false;
+    list = ts.skipOuterExpressions(joined);
+  }
+  if (!ts.isCallExpression(list)) return false;
+  const method = methodName(list);
+  if (method === 'fill' && list.arguments.length >= 1) {
+    return isFixedPart(list.arguments[0], call, context);
+  }
+  if (method === 'from' && list.arguments.length === 2) {
+    const receiver = receiverOf(list);
+    const root = receiver && ts.skipOuterExpressions(receiver);
+    if (root && ts.isIdentifier(root) && root.text === 'Array') {
+      return isFixedPlaceholderCallback(list.arguments[1], call, context);
+    }
+  }
+  if (method !== 'map' || list.arguments.length !== 1) return false;
+  return isFixedPlaceholderCallback(list.arguments[0], call, context);
 }
 
 // Any identifier with the same text counts as a use, shadowed or not, so the answer errs towards

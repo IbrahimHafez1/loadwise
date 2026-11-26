@@ -162,4 +162,4 @@ function check(call: CallExpression, context: PerformanceRuleContext): void {
   );
 }
 
-export { check };
+export { check, importsModule };

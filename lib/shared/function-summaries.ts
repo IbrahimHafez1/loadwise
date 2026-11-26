@@ -47,7 +47,7 @@ import { runsWithBody, signatureDeclaration, summarize } from '../performance/se
 import { blockingBinding } from '../performance/node-fs.js';
 import { asyncReplacements, isBcryptCall } from '../performance/password-hashing.js';
 import { describeCall, isDefaultAxios, isGlobalFetch } from '../performance/http-timeouts.js';
-import { typeFromPackage } from '../performance/package-types.js';
+import { createPackageTypeChecker } from '../performance/package-types.js';
 import { libraryCall } from '../security/bindings.js';
 import { isContainedPath, isAllowedHost, isRelativeRedirect, strip } from '../security/request-forgery/shared.js';
 import { isGuardedByCondition, isGuardedUse } from '../security/taint/guards.js';
@@ -62,7 +62,6 @@ import type {
   SecurityRuleContext,
   SymbolAdapter,
   TaintApi,
-  TypeAdapter,
 } from './types.js';
 import type {
   BlockingFact,
@@ -185,19 +184,11 @@ function createSummaries(program: ProgramAdapter): FunctionSummaries {
   const localFacts = new WeakMap<FunctionWithBody, OwnFacts>();
   const validations = new WeakMap<FunctionWithBody, Validation[]>();
   const requestReturns = new WeakMap<FunctionWithBody, RequestData | undefined>();
-  const nodeTypes = new WeakMap<Node, TypeAdapter>();
   const libraryCalls = new WeakMap<CallExpression, LibraryCall | undefined>();
   const context: SummaryContext = {
     program,
     checker,
-    isPackageType(node: Node, packages: readonly string[], typeNames?: readonly string[]) {
-      let type = nodeTypes.get(node);
-      if (type === undefined) {
-        type = checker.getTypeAtLocation(node);
-        nodeTypes.set(node, type);
-      }
-      return typeFromPackage(type, packages, typeNames);
-    },
+    isPackageType: createPackageTypeChecker(checker),
     libraryCall(call: CallExpression) {
       if (!libraryCalls.has(call)) libraryCalls.set(call, libraryCall(call, context));
       return libraryCalls.get(call);

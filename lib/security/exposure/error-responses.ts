@@ -47,20 +47,28 @@ function isCatchVariable(declaration: Node): declaration is CatchVariable {
   return ts.isVariableDeclaration(declaration) && ts.isCatchClause(declaration.parent);
 }
 
+function isPrimitiveTypeNode(typeNode: TypeNode | undefined): boolean {
+  if (!typeNode) return false;
+  return (
+    typeNode.kind === ts.SyntaxKind.StringKeyword ||
+    typeNode.kind === ts.SyntaxKind.NumberKeyword ||
+    typeNode.kind === ts.SyntaxKind.BooleanKeyword
+  );
+}
+
 // `(err, req, res, next)`: the Express error-handler shape. Any four-parameter function is not one.
 function isErrorHandlerParameter(declaration: Node) {
   if (!ts.isParameter(declaration) || !ts.isIdentifier(declaration.name)) return false;
+  if (isPrimitiveTypeNode(declaration.type)) return false;
   const { parameters } = declaration.parent;
-  return (
-    parameters.length === expressErrorHandlerParameterCount &&
-    parameters[0] === declaration &&
-    parameters
-      .slice(1)
-      .some(
-        (parameter: ParameterDeclaration) =>
-          ts.isIdentifier(parameter.name) && expressHandlerParameterName.test(parameter.name.text),
-      )
-  );
+  if (parameters.length !== expressErrorHandlerParameterCount || parameters[0] !== declaration) return false;
+  const matchedExpressNames = parameters
+    .slice(1)
+    .filter(
+      (parameter: ParameterDeclaration) =>
+        ts.isIdentifier(parameter.name) && expressHandlerParameterName.test(parameter.name.text),
+    ).length;
+  return matchedExpressNames >= 2;
 }
 
 // The type is `Error` or extends it; a plain object with `message` and `stack` fields is not an
@@ -161,8 +169,15 @@ function checkBody(body: Expression, context: SecurityRuleContext) {
     if (!underNonProductionGuard(error)) context.report(error, ruleId, stackMessage, wholeErrorReason);
 }
 
+const errorhandlerMiddlewareMessage =
+  "The `errorhandler` middleware sends full error stack traces to clients and is registered outside a development-only guard. Wrap it in a `NODE_ENV === 'development'` check or remove it in production.";
+
 function checkCall(call: CallExpression, context: SecurityRuleContext) {
   const callee = unwrap(call.expression);
+  if (ts.isIdentifier(callee) && importedFrom(callee, context.checker)?.module === 'errorhandler') {
+    if (!underNonProductionGuard(call)) context.report(call, ruleId, errorhandlerMiddlewareMessage);
+    return;
+  }
   if (!ts.isPropertyAccessExpression(callee)) return;
   const name = callee.name.text;
   const receiver = unwrap(callee.expression);

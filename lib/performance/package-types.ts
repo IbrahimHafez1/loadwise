@@ -1,6 +1,6 @@
 import { ts } from './compiler.js';
 import { modelFallbackInPackages } from './models/index.js';
-import type { PropertyAccessExpression, SourceFile } from 'typescript';
+import type { Node, PropertyAccessExpression, SourceFile } from 'typescript';
 import type { CheckerAdapter, TypeAdapter } from '../shared/types.js';
 
 const NODE_MODULES_MARKER = '/node_modules/';
@@ -47,4 +47,16 @@ function receiverFromModel(access: PropertyAccessExpression, checker: CheckerAda
   return modelFallbackInPackages(access, checker, packages);
 }
 
-export { typeFromPackage, receiverFromModel };
+function createPackageTypeChecker(checker: CheckerAdapter) {
+  const nodeTypes = new WeakMap<Node, TypeAdapter>();
+  return (node: Node, packages: readonly string[], typeNames?: readonly string[]): boolean => {
+    let type = nodeTypes.get(node);
+    if (type === undefined) {
+      type = checker.getTypeAtLocation(node);
+      nodeTypes.set(node, type);
+    }
+    return typeFromPackage(type, packages, typeNames);
+  };
+}
+
+export { createPackageTypeChecker, typeFromPackage, receiverFromModel };

@@ -52,10 +52,14 @@ function createJsonParseContext({
   }
 
   // The file name an expression ends in when its last path part is a literal, such as
-  // `path.join(dir, "package.json")`.
+  // `path.join(dir, "package.json")` or `${dir}/package.json`.
   function literalFileName(node: Node, depth = 0): string | undefined {
     const value = ts.skipOuterExpressions(node);
     if (ts.isStringLiteralLike(value)) return value.text.split(/[/\\]/).pop();
+    if (ts.isTemplateExpression(value)) {
+      const tail = value.templateSpans.at(-1)?.literal.text ?? '';
+      if (/[/\\]/.test(tail)) return tail.split(/[/\\]/).pop();
+    }
     const builderName = ts.isCallExpression(value) ? calleeName(value) : undefined;
     if (
       ts.isCallExpression(value) &&
@@ -70,12 +74,25 @@ function createJsonParseContext({
     }
   }
 
+  function isImportMetaDirname(node: Node): boolean {
+    return (
+      ts.isPropertyAccessExpression(node) &&
+      node.name.text === 'dirname' &&
+      ts.isMetaProperty(node.expression) &&
+      node.expression.keywordToken === ts.SyntaxKind.ImportKeyword
+    );
+  }
+
   function anchorsAtBundledFolder(node: Node, depth = 0): boolean {
     const value = ts.skipOuterExpressions(node);
+    if (isImportMetaDirname(value)) return true;
     if (ts.isIdentifier(value)) {
-      if (value.text === '__dirname' || value.text === 'import.meta.dirname') return true;
+      if (value.text === '__dirname') return true;
       const initializer = depth < MAX_ALIAS_DEPTH ? localInitializer(value) : undefined;
       return !!initializer && anchorsAtBundledFolder(initializer, depth + 1);
+    }
+    if (ts.isTemplateExpression(value) && value.head.text === '' && value.templateSpans.length > 0) {
+      return anchorsAtBundledFolder(value.templateSpans[0].expression, depth);
     }
     if (!ts.isCallExpression(value)) return false;
     const name = calleeName(value);

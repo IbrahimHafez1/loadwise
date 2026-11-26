@@ -7,7 +7,7 @@ import type { SubjectTest } from '../types/condition-guards.js';
 // literal.
 const PATH_SEPARATOR = '/';
 const BLOCKED_SEPARATORS = new Set(['/', '\\', '..']);
-const safeClass = /\[-?(?:[a-z]-[a-z]|[A-Z]-[A-Z]|\d-\d|\\[dw.]|[A-Za-z0-9_.])+-?\]/g;
+const safeClass = /\[-?(?:[a-z]-[a-z]|[A-Z]-[A-Z]|\d-\d|\\[dw.-]|[A-Za-z0-9_.])+-?\]/g;
 const extension = /\\\.(?:[A-Za-z0-9]+|\([A-Za-z0-9]+(?:\|[A-Za-z0-9]+)+\))$/;
 
 function isFilenamePattern(expression: Expression) {
@@ -71,23 +71,67 @@ function filenameValidation(condition: Expression, isSubject: SubjectTest, check
   );
 }
 
-// `value.includes('/')` or `/[/\\]/.test(value)`: a name holding a separator is turned away.
+const separatorRegexPattern = /^\/(?:\[[^\]]*[/\\][^\]]*\]|\\\.\.)\/[gi]*$/;
+const foundIndexComparisons = new Set(['!== -1', '!= -1', '>= 0', '> -1']);
+const missingIndexComparisons = new Set(['=== -1', '== -1', '< 0']);
+
+function isSeparatorStringCall(
+  expression: Expression,
+  methodName: string,
+  expectedMethod: string,
+  args: readonly Expression[],
+  isSubject: SubjectTest,
+): boolean {
+  if (methodName !== expectedMethod || args.length !== 1) return false;
+  const [separator] = args;
+  return (
+    ts.isStringLiteralLike(separator) &&
+    (separator.text === PATH_SEPARATOR || BLOCKED_SEPARATORS.has(separator.text)) &&
+    isSubject(expression)
+  );
+}
+
+function matchesIndexOfSeparator(
+  condition: Expression,
+  comparisons: ReadonlySet<string>,
+  isSubject: SubjectTest,
+): boolean {
+  if (!ts.isBinaryExpression(condition)) return false;
+  const left = ts.skipOuterExpressions(condition.left);
+  const comparison = `${condition.operatorToken.getText()} ${ts.skipOuterExpressions(condition.right).getText()}`;
+  if (!ts.isCallExpression(left) || !ts.isPropertyAccessExpression(left.expression) || !comparisons.has(comparison)) {
+    return false;
+  }
+  return isSeparatorStringCall(
+    left.expression.expression,
+    left.expression.name.text,
+    'indexOf',
+    left.arguments,
+    isSubject,
+  );
+}
+
+// `value.indexOf('/') === -1`: confirms the filename carries no path separator.
+function lacksSeparator(condition: Expression, isSubject: SubjectTest): boolean {
+  return matchesIndexOfSeparator(condition, missingIndexComparisons, isSubject);
+}
+
+// `value.includes('/')`, `value.indexOf('/') !== -1`, `value.match(/[/\\]/)` or `/[/\\]/.test(value)`:
+// a name holding a separator is turned away.
 function containsSeparator(condition: Expression, isSubject: SubjectTest) {
+  if (matchesIndexOfSeparator(condition, foundIndexComparisons, isSubject)) return true;
   if (!ts.isCallExpression(condition) || !ts.isPropertyAccessExpression(condition.expression)) return false;
   const { expression, name } = condition.expression;
-  if (name.text === 'includes' && condition.arguments.length === 1) {
-    const [separator] = condition.arguments;
-    return (
-      ts.isStringLiteralLike(separator) &&
-      (separator.text === PATH_SEPARATOR || BLOCKED_SEPARATORS.has(separator.text)) &&
-      isSubject(expression)
-    );
-  }
+  if (isSeparatorStringCall(expression, name.text, 'includes', condition.arguments, isSubject)) return true;
   if (name.text === 'test' && condition.arguments.length === 1 && isSubject(condition.arguments[0])) {
     const pattern = ts.skipOuterExpressions(expression);
-    return ts.isRegularExpressionLiteral(pattern) && /^\/(?:\[[^\]]*[/\\][^\]]*\]|\\\.\.)\/[gi]*$/.test(pattern.text);
+    return ts.isRegularExpressionLiteral(pattern) && separatorRegexPattern.test(pattern.text);
+  }
+  if (name.text === 'match' && condition.arguments.length === 1 && isSubject(expression)) {
+    const pattern = ts.skipOuterExpressions(condition.arguments[0]);
+    return ts.isRegularExpressionLiteral(pattern) && separatorRegexPattern.test(pattern.text);
   }
   return false;
 }
 
-export { filenameValidation, containsSeparator };
+export { filenameValidation, containsSeparator, lacksSeparator };

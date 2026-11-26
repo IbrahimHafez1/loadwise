@@ -8,6 +8,7 @@ import {
   isTrue,
   methodName,
   enclosingBranches,
+  precedingExitGuards,
   underNonProductionGuard,
 } from './literals.js';
 import { checkOriginOption, checkTestCall } from './cors-origin-regex.js';
@@ -28,6 +29,7 @@ const headerSetters = new Set(['setHeader', 'header', 'set', 'append']);
 const membershipMethods = new Set(['includes', 'has', 'test', 'some']);
 // `allowed.indexOf(origin) > -1` and its equivalents.
 const foundIndexTests = new Set(['> -1', '!== -1', '!= -1', '>= 0']);
+const missingIndexTests = new Set(['=== -1', '== -1', '< 0']);
 
 // `(origin, callback) => callback(null, true)`, or one that echoes the origin back, with no
 // condition in between.
@@ -99,10 +101,39 @@ function checkManualHeaders(call: CallExpression, context: SecurityRuleContext) 
   if (scope && allowsCredentials(scope)) context.report(call, ruleId, message);
 }
 
-// The echoed origin sits in the true branch of a membership test on that same origin.
+// A negated membership test in an early-exit guard (`!allowed.includes(origin)`,
+// `allowed.indexOf(origin) === -1`).
+function rejectsNonMember(condition: Expression, originText: string): boolean {
+  const node = unwrap(condition);
+  if (ts.isPrefixUnaryExpression(node) && node.operator === ts.SyntaxKind.ExclamationToken) {
+    return testsMembership(node.operand, originText);
+  }
+  if (ts.isBinaryExpression(node)) {
+    const operator = node.operatorToken.kind;
+    if (operator === ts.SyntaxKind.BarBarToken) {
+      return rejectsNonMember(node.left, originText) || rejectsNonMember(node.right, originText);
+    }
+    if (operator === ts.SyntaxKind.AmpersandAmpersandToken) {
+      return rejectsNonMember(node.left, originText) && rejectsNonMember(node.right, originText);
+    }
+    const left = unwrap(node.left);
+    const comparison = `${node.operatorToken.getText()} ${node.right.getText()}`;
+    return ts.isCallExpression(left) && methodName(left) === 'indexOf' && missingIndexTests.has(comparison)
+      ? passesOrigin(left, originText)
+      : false;
+  }
+  return false;
+}
+
+// The echoed origin sits in the true branch of a membership test, or after an early-exit guard
+// that rejects non-members.
 function isAllowlistedOrigin(call: CallExpression, originText: string) {
-  for (const { condition, branch } of enclosingBranches(call))
+  for (const { condition, branch } of enclosingBranches(call)) {
     if (branch === 'true' && testsMembership(condition, originText)) return true;
+  }
+  for (const condition of precedingExitGuards(call)) {
+    if (rejectsNonMember(condition, originText)) return true;
+  }
   return false;
 }
 
