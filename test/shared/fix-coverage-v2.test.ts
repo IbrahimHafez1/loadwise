@@ -77,7 +77,14 @@ test('security request-forgery fixers: upload-client-filename, open-redirect, pa
     'res.redirect(target);\n',
     'res.redirect',
   );
-  assert.ok(redirect?.requiresReview && redirect.after.includes("target.startsWith('/')"));
+  assert.ok(
+    redirect?.requiresReview &&
+      redirect.after.includes("typeof target === 'string' && target.startsWith('/') && !target.startsWith('//')"),
+  );
+  assert.equal(
+    runBuilder(requestForgery['open-redirect'], 'open-redirect', 'res.redirect(getTarget());\n', 'res.redirect'),
+    undefined,
+  );
   assert.equal(
     runBuilder(requestForgery['open-redirect'], 'open-redirect', "res.redirect('/home');\n", 'res.redirect'),
     undefined,
@@ -90,6 +97,13 @@ test('security request-forgery fixers: upload-client-filename, open-redirect, pa
     'fs.readFileSync',
   );
   assert.ok(traversal?.requiresReview && traversal.after.includes('path.basename(name)'));
+  const uploadWithReqPath = runBuilder(
+    requestForgery['upload-client-filename'],
+    'upload-client-filename',
+    'const n = req.path + file.originalname;\n',
+    'originalname',
+  );
+  assert.ok(uploadWithReqPath?.after.includes("import path from 'node:path';"));
   assert.equal(
     runBuilder(requestForgery['path-traversal'], 'path-traversal', 'fs.readFileSync(name);\n', 'fs.readFileSync'),
     undefined,
@@ -98,7 +112,7 @@ test('security request-forgery fixers: upload-client-filename, open-redirect, pa
 
 test('security injection fixers: regex-from-input, pg, mysql, prisma + no-op', () => {
   const rx = runBuilder(injection['regex-from-input'], 'regex-from-input', 'const re = new RegExp(q);\n', 'new RegExp');
-  assert.ok(rx?.after.includes('.replace('));
+  assert.ok(rx?.after.includes('String(q).replace('));
   assert.equal(
     runBuilder(injection['regex-from-input'], 'regex-from-input', "const re = new RegExp('abc');\n", 'new RegExp'),
     undefined,
@@ -111,6 +125,24 @@ test('security injection fixers: regex-from-input, pg, mysql, prisma + no-op', (
     'conn.query',
   );
   assert.ok(mysql?.requiresReview && mysql.after.includes('?') && mysql.after.includes('[id]'));
+
+  const mysqlQuoted = runBuilder(
+    injection['mysql-dynamic-query-text'],
+    'mysql-dynamic-query-text',
+    "conn.query(`SELECT * FROM u WHERE id = '${id}'`);\n",
+    'conn.query',
+  );
+  assert.ok(mysqlQuoted?.requiresReview && mysqlQuoted.after.includes('"SELECT * FROM u WHERE id = ?", [id]'));
+
+  assert.equal(
+    runBuilder(
+      injection['mysql-dynamic-query-text'],
+      'mysql-dynamic-query-text',
+      "conn.query(`SELECT * FROM u WHERE id = '${id}`);\n",
+      'conn.query',
+    ),
+    undefined,
+  );
 
   const prisma = runBuilder(
     injection['prisma-raw-unsafe-dynamic'],

@@ -163,3 +163,69 @@ test('fix-typecheck: refuses a mock fixer introducing TS2304 while applying vali
   assert.equal(fs.readFileSync(badFile, 'utf8'), 'export const value: number = 1;\n');
   assert.equal(fs.readFileSync(goodFile, 'utf8'), 'export const ok: number = 2;\n');
 });
+
+test('fix-imports: preserves shebang and directive prologues and merges single-change matching imports', (context) => {
+  const shebangResult = applyImportEdits("#!/usr/bin/env node\nconsole.log('hi');\n", [
+    { moduleSpecifier: 'node:fs', named: ['readFileSync'] },
+  ]);
+  assert.equal(shebangResult, "#!/usr/bin/env node\nimport { readFileSync } from 'node:fs';\nconsole.log('hi');\n");
+
+  const directiveResult = applyImportEdits("'use server';\nexport async function run() {}\n", [
+    { moduleSpecifier: 'node:path', defaultName: 'path' },
+  ]);
+  assert.equal(directiveResult, "'use server';\nimport path from 'node:path';\nexport async function run() {}\n");
+
+  const root = tempProject(context, {
+    'single.ts': "import { a } from 'node:fs';\nexport const v = a;\n",
+  });
+  const file = path.join(root, 'single.ts');
+  const result = applyBulkFixes(
+    [
+      {
+        id: 's1',
+        ruleId: 'r1',
+        checker: 'perf',
+        file: 'single.ts',
+        line: 1,
+        message: 'add b',
+        fix: { changes: [{ file, line: 1, before: '', after: "import { b } from 'node:fs';" }] },
+      },
+    ],
+    root,
+    { verifyTypes: false },
+  );
+  assert.equal(result.applied.length, 1);
+  assert.equal(fs.readFileSync(file, 'utf8'), "import { a, b } from 'node:fs';\nexport const v = a;\n");
+});
+
+test('fix-typecheck: resolves per-package tsconfig.json in monorepos without a root tsconfig', (context) => {
+  const root = tempProject(context, {
+    'packages/api/tsconfig.json': JSON.stringify({
+      compilerOptions: { target: 'ES2022', module: 'NodeNext', strict: true },
+    }),
+    'packages/api/src/handler.ts': 'export const count: number = 1;\n',
+  });
+  const file = path.join(root, 'packages/api/src/handler.ts');
+  const result = applyBulkFixes(
+    [
+      {
+        id: 'mono1',
+        ruleId: 'r-bad',
+        checker: 'perf',
+        file: 'packages/api/src/handler.ts',
+        line: 1,
+        message: 'bad',
+        fix: {
+          changes: [
+            { file, line: 1, before: 'export const count: number = 1;', after: 'export const count: number = nope;' },
+          ],
+        },
+      },
+    ],
+    root,
+    { verifyTypes: true },
+  );
+  assert.equal(result.applied.length, 0);
+  assert.equal(result.refused.length, 1);
+  assert.match(result.refused[0].reason, /TS2304/);
+});

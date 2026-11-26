@@ -39,9 +39,17 @@ function regexFromInputFix({ node, sourceFile }: SiteFixInput): FixResult | unde
   if (ts.isStringLiteralLike(patternArg) || ts.isRegularExpressionLiteral(patternArg)) return;
   const exprText = patternArg.getText(sourceFile);
   return {
-    edits: [replaceNode(patternArg, `(${exprText}).replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\$&')`)],
+    edits: [replaceNode(patternArg, `String(${exprText}).replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\$&')`)],
     note: 'Escapes RegExp metacharacters in the dynamic pattern.',
   };
+}
+
+function countSingleQuotes(text: string): number {
+  let count = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === "'" && text[i - 1] !== '\\') count++;
+  }
+  return count;
 }
 
 function parameterizeTemplate(
@@ -53,10 +61,19 @@ function parameterizeTemplate(
   const params: string[] = [];
   for (let index = 0; index < template.templateSpans.length; index++) {
     const span = template.templateSpans[index];
-    sql += placeholderFor(index + 1) + span.literal.text;
+    let nextLiteral = span.literal.text;
+    const inSingleQuotes = countSingleQuotes(sql) % 2 === 1;
+    if (inSingleQuotes) {
+      if (!sql.endsWith("'") || !nextLiteral.startsWith("'")) return;
+      sql = sql.slice(0, -1);
+      nextLiteral = nextLiteral.slice(1);
+    } else if (nextLiteral.startsWith("'")) {
+      return;
+    }
+    sql += placeholderFor(index + 1) + nextLiteral;
     params.push(span.expression.getText(sourceFile));
   }
-  if (!params.length) return;
+  if (!params.length || countSingleQuotes(sql) % 2 === 1) return;
   return { sql: JSON.stringify(sql), params };
 }
 

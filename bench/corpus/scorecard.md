@@ -2,12 +2,12 @@
 
 ## perf
 
-135 rules: 17 measured, 30 thin, 88 unmeasured
+141 rules: 17 measured, 30 thin, 94 unmeasured
 
 | Rule                                | Impact   |  TP |  FP | Missed | Precision | Recall | Fix | Status     |
 | ----------------------------------- | -------- | --: | --: | -----: | --------: | -----: | --- | ---------- |
 | angular-default-change-detection    | low      |   0 |   0 |      0 |         - |      - | yes | unmeasured |
-| angular-subscribe-without-cleanup   | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
+| angular-subscribe-without-cleanup   | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | api-enum-value-removed              | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | api-removed-field                   | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | api-removed-operation               | critical |   0 |   0 |      0 |         - |      - | no  | unmeasured |
@@ -23,15 +23,17 @@
 | db-unindexed-foreign-key            | high     |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | db-unused-index                     | low      |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | discarded-error-result              | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
-| dom-listener-without-cleanup        | low      |   0 |   0 |      0 |         - |      - | no  | unmeasured |
+| dom-listener-without-cleanup        | low      |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | drizzle-last-insert-id              | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | drizzle-query-in-loop               | high     |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | drizzle-unfiltered-write            | critical |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | drizzle-write-preflight             | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
-| express-missing-compression         | low      |   0 |   0 |      0 |         - |      - | no  | unmeasured |
+| express-missing-compression         | low      |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | external-call-in-transaction        | high     |   0 |   0 |      0 |         - |      - | yes | unmeasured |
+| graphql-n-plus-one-resolver         | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | guard-query-per-request             | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | heavy-media-in-request-handler      | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
+| json-stringify-in-loop              | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | known-reads-awaited-serially        | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | list-count-per-request              | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | migration-breaking-drop             | critical |   0 |   0 |      0 |         - |      - | yes | unmeasured |
@@ -51,7 +53,9 @@
 | migration-volatile-default          | high     |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | mongo-collection-scan-observed      | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | mongoose-aggregate-uncast-id        | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
-| mongoose-hydrate-for-to-object      | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
+| mongoose-hydrate-for-to-object      | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
+| mongoose-missing-lean               | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
+| node-event-listener-leak            | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | notification-send-in-loop           | high     |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | password-hash-pure-js               | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | payment-missing-idempotency-key     | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
@@ -72,6 +76,7 @@
 | prisma-transaction-client-escape    | critical |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | promise-combinator-serial-await     | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | queue-add-in-loop                   | high     |   0 |   0 |      0 |         - |      - | yes | unmeasured |
+| react-context-value-recreated       | low      |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | react-index-as-key                  | low      |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | react-inline-object-in-jsx-prop     | low      |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | react-missing-cleanup               | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
@@ -90,6 +95,7 @@
 | typeorm-transaction-in-loop         | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | typeorm-unused-count                | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | typeorm-wide-projection             | low      |   0 |   0 |      0 |         - |      - | yes | unmeasured |
+| unbounded-promise-all               | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | upload-without-size-limit           | high     |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | vue-v-for-missing-key               | low      |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | vue-watch-missing-cleanup           | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
@@ -111,7 +117,7 @@
 | json-roundtrip-clone                | low      |   1 |   1 |      0 |       50% |   100% | yes | thin       |
 | node-sync-compression-in-async      | medium   |   1 |   1 |      0 |       50% |   100% | yes | thin       |
 | orm-deep-offset                     | high     |   1 |   1 |      0 |       50% |   100% | no  | thin       |
-| react-fetch-in-effect-no-abort      | low      |   2 |   2 |      0 |       50% |   100% | no  | thin       |
+| react-fetch-in-effect-no-abort      | low      |   2 |   2 |      0 |       50% |   100% | yes | thin       |
 | session-memory-store                | high     |   1 |   1 |      0 |       50% |   100% | no  | thin       |
 | unbounded-list-query                | high     |   4 |   3 |      0 |       57% |   100% | yes | thin       |
 | list-query-overfetch                | medium   |   5 |   3 |      0 |       63% |   100% | yes | thin       |
@@ -125,7 +131,7 @@
 | floating-promise                    | high     |   9 |   4 |      2 |       91% |    91% | yes | measured   |
 | filter-for-existence                | low      |  10 |   0 |      0 |      100% |   100% | yes | measured   |
 | find-then-create-race               | high     |   2 |   0 |      0 |      100% |   100% | no  | thin       |
-| frontend-barrel-heavy-import        | low      |   3 |   0 |      0 |      100% |   100% | no  | thin       |
+| frontend-barrel-heavy-import        | low      |   3 |   0 |      0 |      100% |   100% | yes | thin       |
 | http-call-without-timeout           | high     |   9 |   9 |      0 |      100% |   100% | yes | measured   |
 | index-missing-filter                | high     |  10 |   0 |      0 |      100% |   100% | yes | measured   |
 | index-missing-foreign-key           | high     |  10 |   0 |      0 |      100% |   100% | yes | measured   |
@@ -158,7 +164,7 @@
 | large-class                       | low    |   9 |   1 |      0 |       90% |   100% | no  | measured   |
 | large-module                      | low    |   9 |   1 |      0 |       90% |   100% | yes | measured   |
 | long-parameter-list               | low    |   9 |   1 |      0 |       90% |   100% | yes | measured   |
-| unused-export                     | low    |   9 |   1 |      0 |       90% |   100% | no  | measured   |
+| unused-export                     | low    |   9 |   1 |      0 |       90% |   100% | yes | measured   |
 | duplicate-implementation          | medium |  13 |   1 |      0 |       93% |   100% | yes | measured   |
 | deep-control-flow                 | low    |  10 |   0 |      0 |      100% |   100% | yes | measured   |
 | dependency-cycle                  | high   |   8 |   0 |      0 |      100% |   100% | yes | thin       |
@@ -166,7 +172,7 @@
 
 ## sec
 
-64 rules: 10 measured, 29 thin, 25 unmeasured
+70 rules: 10 measured, 29 thin, 31 unmeasured
 
 | Rule                              | Impact   |  TP |  FP | Missed | Precision | Recall | Fix | Status     |
 | --------------------------------- | -------- | --: | --: | -----: | --------: | -----: | --- | ---------- |
@@ -174,32 +180,38 @@
 | bcrypt-low-cost                   | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | command-injection                 | critical |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | dependency-known-vulnerability    | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
-| dockerfile-add-remote-url         | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
+| dockerfile-add-remote-url         | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | dom-xss-sink                      | high     |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | drizzle-scope-unverified          | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | drizzle-sql-raw-dynamic           | critical |   0 |   0 |      0 |         - |      - | no  | unmeasured |
+| express-cookie-auth-missing-csrf  | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | express-missing-helmet            | low      |   0 |   0 |      0 |         - |      - | yes | unmeasured |
+| graphql-batching-unbounded        | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | graphql-introspection-enabled     | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | graphql-query-depth-unbounded     | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
-| insecure-cipher                   | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
+| insecure-cipher                   | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | jwt-none-algorithm                | critical |   0 |   0 |      0 |         - |      - | yes | unmeasured |
+| jwt-weak-secret-literal           | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | mass-assignment                   | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
-| mysql-dynamic-query-text          | critical |   0 |   0 |      0 |         - |      - | no  | unmeasured |
+| mysql-dynamic-query-text          | critical |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | password-hash-in-response         | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | pg-dynamic-query-text             | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | prisma-scope-unverified           | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
-| react-dangerously-set-inner-html  | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
+| react-dangerously-set-inner-html  | high     |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | reflected-xss-response            | low      |   0 |   0 |      0 |         - |      - | no  | unmeasured |
-| regex-from-input                  | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
+| regex-from-input                  | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
+| server-action-missing-auth        | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
+| ssrf-redirect-bypass              | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | template-injection                | critical |   0 |   0 |      0 |         - |      - | no  | unmeasured |
-| upload-client-filename            | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
+| upload-client-filename            | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
+| vm-sandbox-escape                 | critical |   0 |   0 |      0 |         - |      - | no  | unmeasured |
 | vue-v-html-unsanitized            | high     |   0 |   0 |      0 |         - |      - | no  | unmeasured |
-| xml-external-entities             | medium   |   0 |   0 |      0 |         - |      - | no  | unmeasured |
+| xml-external-entities             | medium   |   0 |   0 |      0 |         - |      - | yes | unmeasured |
 | compose-hardcoded-secret          | high     |   0 |  14 |      0 |        0% |      - | no  | measured   |
-| cors-credentials-any-origin       | high     |   0 |   3 |      0 |        0% |      - | no  | thin       |
+| cors-credentials-any-origin       | high     |   0 |   3 |      0 |        0% |      - | yes | thin       |
 | error-stack-in-response           | medium   |   0 |   2 |      1 |        0% |     0% | yes | thin       |
-| path-traversal                    | high     |   0 |   8 |      0 |        0% |      - | no  | thin       |
-| secret-in-log                     | high     |   1 |   6 |      0 |       17% |   100% | no  | thin       |
+| path-traversal                    | high     |   0 |   8 |      0 |        0% |      - | yes | thin       |
+| secret-in-log                     | high     |   1 |   6 |      0 |       17% |   100% | yes | thin       |
 | hardcoded-secret                  | critical |   2 |   8 |      1 |       25% |    67% | no  | measured   |
 | jwt-sign-without-expiry           | medium   |   1 |   6 |      0 |       25% |   100% | yes | thin       |
 | committed-secret                  | critical |   4 |  16 |      0 |       29% |   100% | no  | measured   |
@@ -214,8 +226,8 @@
 | auth-route-without-rate-limit     | medium   |   5 |   3 |      0 |       63% |   100% | no  | thin       |
 | cookie-missing-security-flags     | high     |   2 |   3 |      0 |       67% |   100% | yes | thin       |
 | secret-in-url-query               | medium   |   7 |   3 |      0 |       70% |   100% | no  | measured   |
-| dockerfile-runs-as-root           | medium   |   7 |   6 |      0 |       88% |   100% | no  | measured   |
-| open-redirect                     | medium   |   9 |  13 |      0 |       90% |   100% | no  | measured   |
+| dockerfile-runs-as-root           | medium   |   7 |   6 |      0 |       88% |   100% | yes | measured   |
+| open-redirect                     | medium   |   9 |  13 |      0 |       90% |   100% | yes | measured   |
 | secret-compared-non-constant-time | medium   |  14 |   1 |      0 |       93% |   100% | yes | measured   |
 | code-injection                    | critical |   3 |   0 |      0 |      100% |   100% | no  | thin       |
 | cors-origin-regex-unanchored      | medium   |   1 |   0 |      0 |      100% |   100% | yes | thin       |
@@ -227,10 +239,10 @@
 | nosql-operator-injection          | high     |  10 |   0 |      0 |      100% |   100% | yes | measured   |
 | plaintext-password-storage        | critical |   3 |   0 |      0 |      100% |   100% | no  | thin       |
 | sequelize-dynamic-query-text      | critical |   2 |   2 |      0 |      100% |   100% | no  | thin       |
-| storage-object-public-acl         | high     |   1 |   0 |      0 |      100% |   100% | no  | thin       |
+| storage-object-public-acl         | high     |   1 |   0 |      0 |      100% |   100% | yes | thin       |
 | zip-slip-extraction               | high     |   1 |   0 |      0 |      100% |   100% | no  | thin       |
-| jwt-decode-for-auth               | high     |   0 |   1 |      0 |         - |      - | no  | thin       |
+| jwt-decode-for-auth               | high     |   0 |   1 |      0 |         - |      - | yes | thin       |
 | knex-raw-dynamic-text             | critical |   0 |   3 |      1 |         - |     0% | no  | thin       |
-| prisma-raw-unsafe-dynamic         | critical |   0 |   1 |      0 |         - |      - | no  | thin       |
+| prisma-raw-unsafe-dynamic         | critical |   0 |   1 |      0 |         - |      - | yes | thin       |
 | prototype-pollution               | high     |   0 |   1 |      0 |         - |      - | no  | thin       |
 | typeorm-dynamic-query-text        | critical |   0 |   1 |      0 |         - |      - | no  | thin       |

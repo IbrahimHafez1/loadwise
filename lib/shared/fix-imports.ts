@@ -57,9 +57,36 @@ function mergeEditIntoParsed(target: ParsedImportLine, edit: ImportEdit): void {
   if (edit.named?.length) target.named.push(...edit.named);
 }
 
+function newImportInsertion(
+  text: string,
+  source: ts.SourceFile,
+  existingImports: readonly ts.ImportDeclaration[],
+  lines: readonly string[],
+): { start: number; text: string } {
+  const joined = lines.join('\n');
+  if (existingImports.length) {
+    const last = existingImports[existingImports.length - 1];
+    return { start: last.getEnd(), text: `\n${joined}` };
+  }
+  let lastDirective: ts.ExpressionStatement | undefined;
+  for (const stmt of source.statements) {
+    if (!ts.isExpressionStatement(stmt) || !ts.isStringLiteralLike(stmt.expression)) break;
+    lastDirective = stmt;
+  }
+  if (lastDirective) {
+    return { start: lastDirective.getEnd(), text: `\n${joined}` };
+  }
+  const shebang = /^#![^\n]*\r?\n/.exec(text);
+  if (shebang) {
+    return { start: shebang[0].length, text: `${joined}\n` };
+  }
+  return { start: 0, text: `${joined}\n` };
+}
+
 /**
  * Merges structured `ImportEdit`s into existing import declarations in `text` (or inserts a single
- * import per module specifier at the top of the import block) without creating duplicate imports.
+ * import per module specifier after any leading shebang, directive prologues, or existing imports)
+ * without creating duplicate imports.
  */
 export function applyImportEdits(text: string, edits: readonly ImportEdit[], fileName = 'file.ts'): string {
   if (!edits.length) return text;
@@ -91,18 +118,18 @@ export function applyImportEdits(text: string, edits: readonly ImportEdit[], fil
     mergedNew.set(key, current);
   }
 
-  let result = text;
-  const replacements = [...matchedReplacements.entries()].map(([decl, parsed]) => ({
+  const textEdits = [...matchedReplacements.entries()].map(([decl, parsed]) => ({
     start: decl.getStart(source),
     end: decl.getEnd(),
     text: formatImport(parsed),
   }));
-  for (const rep of replacements.sort((a, b) => b.start - a.start)) {
-    result = result.slice(0, rep.start) + rep.text + result.slice(rep.end);
-  }
   if (mergedNew.size) {
-    const newBlock = [...mergedNew.values()].map(formatImport).join('\n') + '\n';
-    result = newBlock + result;
+    const insertion = newImportInsertion(text, source, existingImports, [...mergedNew.values()].map(formatImport));
+    textEdits.push({ start: insertion.start, end: insertion.start, text: insertion.text });
+  }
+  let result = text;
+  for (const rep of textEdits.sort((a, b) => b.start - a.start)) {
+    result = result.slice(0, rep.start) + rep.text + result.slice(rep.end);
   }
   return result;
 }
@@ -151,16 +178,33 @@ export function coalesceImportChanges(
 
   const coalesced: FixChange[] = [...passthrough];
   for (const [file, group] of byFile) {
-    if (group.length === 1) {
-      coalesced.push(group[0]);
-      continue;
-    }
     const existingText = readText(file) ?? '';
     const edits = group.flatMap((change) => parsePureImportBlock(change.after) ?? []);
+    if (group.length === 1) {
+      const source = ts.createSourceFile(file, existingText, ts.ScriptTarget.Latest, true);
+      const specifiers = new Set(edits.map((edit) => edit.moduleSpecifier));
+      const hasMatchingImport = source.statements.some(
+        (stmt) =>
+          ts.isImportDeclaration(stmt) &&
+          ts.isStringLiteral(stmt.moduleSpecifier) &&
+          specifiers.has(stmt.moduleSpecifier.text),
+      );
+      const hasLeadingHeader =
+        existingText.startsWith('#!') ||
+        Boolean(
+          source.statements[0] &&
+          ts.isExpressionStatement(source.statements[0]) &&
+          ts.isStringLiteralLike(source.statements[0].expression),
+        );
+      if (!hasMatchingImport && !hasLeadingHeader) {
+        coalesced.push(group[0]);
+        continue;
+      }
+    }
     const updated = applyImportEdits(existingText, edits, file);
     if (updated === existingText) continue;
-    const existingLines = existingText.split('\n');
-    const updatedLines = updated.split('\n');
+    const existingLines = existingText.replaceAll('\r\n', '\n').split('\n');
+    const updatedLines = updated.replaceAll('\r\n', '\n').split('\n');
     // Compute minimal line-1 prefix/suffix diff for applyFix.
     let suffix = 0;
     while (

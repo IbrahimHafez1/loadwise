@@ -7,7 +7,6 @@ import { promisify } from 'node:util';
 import { syntaxError, compatibilityMatch, retryCompatibility } from '../shared/polyglot-compatibility.js';
 import type { Finding } from '../shared/types.js';
 import type { AstGrepMatch } from './types/ast-grep-match.js';
-import * as postinstall from '@ast-grep/cli/postinstall.js';
 
 interface PolyglotFinding extends Finding {
   file: string;
@@ -47,18 +46,15 @@ function finding(file: string, match: AstGrepMatch): PolyglotFinding {
   return { file, line: row + 1, column: column + 1, ruleId: match.ruleId, message: match.message };
 }
 
-function nativeBinary(): string {
-  let binary: string | undefined;
+export async function resolveAstGrepBinary(): Promise<string | undefined> {
   try {
-    binary = postinstall.resolveBinaryPath();
+    const postinstall = await import('@ast-grep/cli/postinstall.js');
+    return postinstall.resolveBinaryPath() || undefined;
   } catch (error) {
-    if (!(error instanceof Error && 'code' in error && error.code === 'MODULE_NOT_FOUND')) throw error;
+    const code = error instanceof Error && 'code' in error ? error.code : undefined;
+    if (code === 'MODULE_NOT_FOUND' || code === 'ERR_MODULE_NOT_FOUND') return undefined;
+    throw error;
   }
-  if (!binary)
-    throw new Error(
-      'Polyglot checks require the optional @ast-grep/cli native package for this platform. Install with npm install --include=optional.',
-    );
-  return binary;
 }
 
 async function resolveInputs(paths: readonly string[]): Promise<{ inputs: Set<string>; explicitFiles: Set<string> }> {
@@ -85,10 +81,62 @@ async function resolveInputs(paths: readonly string[]): Promise<{ inputs: Set<st
   return { inputs, explicitFiles };
 }
 
+async function finalizePolyglotFindings(
+  binary: string,
+  configPath: string,
+  findings: PolyglotFinding[],
+  evidence: ReadonlyMap<string, AstGrepMatch[]>,
+): Promise<PolyglotFinding[]> {
+  const retriedFiles = new Set<string>();
+  const recoveredFindings: PolyglotFinding[] = [];
+  for (const [file, matches] of evidence) {
+    const error = matches.find(syntaxError);
+    if (!error) continue;
+    const retry = await retryCompatibility(
+      binary,
+      configPath,
+      (language) => retryRules(configPath, language),
+      path.resolve(file),
+      matches,
+    );
+    if (!retry) {
+      const { line, column, message } = finding(file, error);
+      throw new Error(`${file}:${line}:${column}: ${message}`);
+    }
+    retriedFiles.add(file);
+    for (const match of retry) recoveredFindings.push(finding(file, match));
+  }
+  const completeFindings = retriedFiles.size
+    ? findings.filter((match) => !retriedFiles.has(match.file)).concat(recoveredFindings)
+    : findings;
+  completeFindings.sort(
+    (left, right) =>
+      left.file.localeCompare(right.file) ||
+      left.line - right.line ||
+      left.column - right.column ||
+      left.ruleId.localeCompare(right.ruleId),
+  );
+  // Explicit files can overlap with a directory passed on the same command line.
+  return completeFindings.filter((entry, index) => {
+    const previous = completeFindings[index - 1];
+    return (
+      !previous ||
+      previous.file !== entry.file ||
+      previous.line !== entry.line ||
+      previous.column !== entry.column ||
+      previous.ruleId !== entry.ruleId
+    );
+  });
+}
+
 async function scanPolyglot(configPath: string, paths: readonly string[]): Promise<PolyglotScan> {
   if (!paths.length) throw new Error('Pass at least one source file or directory to polyglot.');
   const { inputs, explicitFiles } = await resolveInputs(paths);
-  const binary = nativeBinary();
+  const binary = await resolveAstGrepBinary();
+  if (!binary) {
+    process.stderr.write('Note: @ast-grep/cli is not installed; skipping polyglot checks.\n');
+    return { scannedFiles: 0, skippedFiles: 0, findings: [] };
+  }
   const child = spawn(
     binary,
     [
@@ -147,46 +195,7 @@ async function scanPolyglot(configPath: string, paths: readonly string[]): Promi
     if (child.exitCode === null && child.signalCode === null) child.kill();
     throw error;
   }
-  const retriedFiles = new Set<string>();
-  const recoveredFindings: PolyglotFinding[] = [];
-  for (const [file, matches] of evidence) {
-    const error = matches.find(syntaxError);
-    if (!error) continue;
-    const retry = await retryCompatibility(
-      binary,
-      configPath,
-      (language) => retryRules(configPath, language),
-      path.resolve(file),
-      matches,
-    );
-    if (!retry) {
-      const { line, column, message } = finding(file, error);
-      throw new Error(`${file}:${line}:${column}: ${message}`);
-    }
-    retriedFiles.add(file);
-    for (const match of retry) recoveredFindings.push(finding(file, match));
-  }
-  const completeFindings = retriedFiles.size
-    ? findings.filter((match) => !retriedFiles.has(match.file)).concat(recoveredFindings)
-    : findings;
-  completeFindings.sort(
-    (left, right) =>
-      left.file.localeCompare(right.file) ||
-      left.line - right.line ||
-      left.column - right.column ||
-      left.ruleId.localeCompare(right.ruleId),
-  );
-  // Explicit files can overlap with a directory passed on the same command line.
-  const unique = completeFindings.filter((finding, index) => {
-    const previous = completeFindings[index - 1];
-    return (
-      !previous ||
-      previous.file !== finding.file ||
-      previous.line !== finding.line ||
-      previous.column !== finding.column ||
-      previous.ruleId !== finding.ruleId
-    );
-  });
+  const unique = await finalizePolyglotFindings(binary, configPath, findings, evidence);
   return { scannedFiles: scanned.size, skippedFiles: 0, findings: unique };
 }
 

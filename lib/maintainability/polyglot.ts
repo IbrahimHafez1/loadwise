@@ -5,10 +5,10 @@ import { createInterface } from 'node:readline';
 import { byLanguage, nonJsLanguages, rulesFor } from '../../polyglot/maintainability/rules.js';
 import { createDuplicateIndex } from './polyglot-duplicates.js';
 import { syntaxError, compatibilityMatch, retryCompatibility } from '../shared/polyglot-compatibility.js';
+import { resolveAstGrepBinary } from '../performance/polyglot.js';
 import type { AstGrepMatch } from '../performance/types/ast-grep-match.js';
 import type { LocatedFinding } from './types/module-graph.js';
 import type { DuplicateIndex, PolyglotAnalysis, SpannedMatch, UnparsableFile } from './types/polyglot-scan.js';
-import * as postinstall from '@ast-grep/cli/postinstall.js';
 
 // What one language's scan needs besides its files.
 interface LanguageScan {
@@ -48,20 +48,6 @@ const config = path.resolve(import.meta.dirname, '../../polyglot/maintainability
 // prefix.
 const maxCommandUnits = 28000;
 const maxFilesPerBatch = 400;
-
-function parserPath(): string {
-  let binary: string | undefined;
-  try {
-    binary = postinstall.resolveBinaryPath();
-  } catch (error) {
-    if (!(error instanceof Error && 'code' in error && error.code === 'MODULE_NOT_FOUND')) throw error;
-  }
-  if (!binary)
-    throw new Error(
-      'Non-JavaScript checks require the optional @ast-grep/cli binary for this platform. Install with npm install --include=optional.',
-    );
-  return binary;
-}
 
 async function recordFileMatches(
   binary: string,
@@ -172,7 +158,11 @@ async function analyzePolyglot({ root, files, includeDuplicates = true }: Polygl
   const unparsable: UnparsableFile[] = [];
   const languageCounts: Record<string, number> = {};
   if (!groups.size) return { findings, languageCounts, unparsable };
-  const binary = parserPath();
+  const binary = await resolveAstGrepBinary();
+  if (!binary) {
+    process.stderr.write('Note: @ast-grep/cli is not installed; skipping non-JavaScript maintainability checks.\n');
+    return { findings, languageCounts, unparsable };
+  }
   const duplicates = createDuplicateIndex();
   for (const [language, inputs] of groups) {
     const rules = rulesFor(language, { includeDuplicates });

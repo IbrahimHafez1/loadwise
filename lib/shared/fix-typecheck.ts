@@ -73,6 +73,17 @@ function createVirtualProgram(
   return ts.createProgram([...rootNames], parsed.options, host, oldProgram);
 }
 
+function firstNewError(beforeProgram: ts.Program, afterProgram: ts.Program, file: string): string | undefined {
+  const beforeCounts = diagnosticCounts(beforeProgram, file);
+  const afterCounts = diagnosticCounts(afterProgram, file);
+  for (const [key, count] of afterCounts) {
+    if (count > (beforeCounts.get(key) ?? 0)) {
+      return `${file}: the fix would introduce a type error (${key}), so the file was not changed`;
+    }
+  }
+  return undefined;
+}
+
 /**
  * Layer-2 semantic type-check gate for TypeScript projects. Compares gated semantic diagnostics
  * (`TS2304`, `TS2322`, `TS2339`, `TS2345`, `TS2554`, `TS1308`) on modified files before vs. after
@@ -86,22 +97,24 @@ export function introducedTypeErrors(
   const refusals = new Map<string, string>();
   const tsFiles = [...updates.keys()].filter((file) => TS_FILE_PATTERN.test(file));
   if (!tsFiles.length) return refusals;
-  const tsconfigPath = findTsConfig(directory);
-  if (!tsconfigPath) return refusals;
 
-  const beforeProgram = createVirtualProgram(tsconfigPath, originals);
-  if (!beforeProgram) return refusals;
-  const afterProgram = createVirtualProgram(tsconfigPath, updates, beforeProgram);
-  if (!afterProgram) return refusals;
-
+  const byTsConfig = new Map<string, string[]>();
   for (const file of tsFiles) {
-    const beforeCounts = diagnosticCounts(beforeProgram, file);
-    const afterCounts = diagnosticCounts(afterProgram, file);
-    for (const [key, count] of afterCounts) {
-      if (count > (beforeCounts.get(key) ?? 0)) {
-        refusals.set(file, `${file}: the fix would introduce a type error (${key}), so the file was not changed`);
-        break;
-      }
+    const tsconfigPath = findTsConfig(path.dirname(file)) ?? findTsConfig(directory);
+    if (!tsconfigPath) continue;
+    const list = byTsConfig.get(tsconfigPath) ?? [];
+    list.push(file);
+    byTsConfig.set(tsconfigPath, list);
+  }
+
+  for (const [tsconfigPath, groupFiles] of byTsConfig) {
+    const beforeProgram = createVirtualProgram(tsconfigPath, originals);
+    if (!beforeProgram) continue;
+    const afterProgram = createVirtualProgram(tsconfigPath, updates, beforeProgram);
+    if (!afterProgram) continue;
+    for (const file of groupFiles) {
+      const refusal = firstNewError(beforeProgram, afterProgram, file);
+      if (refusal) refusals.set(file, refusal);
     }
   }
   return refusals;

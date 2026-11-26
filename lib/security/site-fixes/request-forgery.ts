@@ -1,11 +1,32 @@
 // Rule id -> build({ finding, node, sourceFile, text, load }) => { edits, note } | undefined; see
 // lib/performance/site-fix.js.
 import { ts, ancestor, calleeCall, replaceNode, requireReview } from '../../performance/site-fixes/helpers.js';
+import type { SourceFile } from 'typescript';
 import type { FixResult, SiteFixBuilder, SiteFixInput, TextEdit } from '../../shared/types.js';
 
+function hasPathBinding(sourceFile: SourceFile): boolean {
+  for (const stmt of sourceFile.statements) {
+    if (ts.isImportDeclaration(stmt) && stmt.importClause) {
+      if (stmt.importClause.name?.text === 'path') return true;
+      const bindings = stmt.importClause.namedBindings;
+      if (bindings && ts.isNamespaceImport(bindings) && bindings.name.text === 'path') return true;
+      if (bindings && ts.isNamedImports(bindings) && bindings.elements.some((el) => el.name.text === 'path')) {
+        return true;
+      }
+    } else if (ts.isVariableStatement(stmt)) {
+      if (stmt.declarationList.declarations.some((decl) => ts.isIdentifier(decl.name) && decl.name.text === 'path')) {
+        return true;
+      }
+    } else if ((ts.isFunctionDeclaration(stmt) || ts.isClassDeclaration(stmt)) && stmt.name?.text === 'path') {
+      return true;
+    }
+  }
+  return false;
+}
+
 function pathImportEdit(input: SiteFixInput): TextEdit | undefined {
-  const { sourceFile, text } = input;
-  if (!sourceFile || text === undefined || /\bpath\b/.test(text)) return;
+  const { sourceFile } = input;
+  if (!sourceFile || hasPathBinding(sourceFile)) return;
   const imports = sourceFile.statements.filter(ts.isImportDeclaration);
   if (imports.length) {
     const last = imports[imports.length - 1];
@@ -35,9 +56,18 @@ function openRedirectFix({ node, sourceFile }: SiteFixInput): FixResult | undefi
   const target =
     call.arguments.length >= 2 && ts.isNumericLiteral(call.arguments[0]) ? call.arguments[1] : call.arguments[0];
   if (!target || ts.isStringLiteralLike(target)) return;
+  const inner = ts.skipOuterExpressions(target);
+  if (!ts.isIdentifier(inner) && !ts.isPropertyAccessExpression(inner) && !ts.isElementAccessExpression(inner)) {
+    return;
+  }
   const expr = target.getText(sourceFile);
   return {
-    edits: [replaceNode(target, `(${expr}.startsWith('/') && !${expr}.startsWith('//') ? ${expr} : '/')`)],
+    edits: [
+      replaceNode(
+        target,
+        `(typeof ${expr} === 'string' && ${expr}.startsWith('/') && !${expr}.startsWith('//') ? ${expr} : '/')`,
+      ),
+    ],
     note: 'Restricts the redirect to a relative path starting with `/` (not `//`), falling back to `/`.',
   };
 }
