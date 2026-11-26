@@ -60,6 +60,7 @@ test('resilience: preserves CRLF and UTF-8 BOM during autofix and import coalesc
   assert.ok(updated.includes("import { a, b } from 'node:fs';"));
   assert.ok(updated.includes('export const x = a ?? 1;'));
   assert.ok(updated.includes('\r\n'));
+  assert.ok(updated.startsWith('\uFEFF'));
 });
 
 test('resilience: keeps shebang and Next.js directives ahead of inserted imports', (context) => {

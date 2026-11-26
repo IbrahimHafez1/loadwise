@@ -104,6 +104,20 @@ test('security request-forgery fixers: upload-client-filename, open-redirect, pa
     'originalname',
   );
   assert.ok(uploadWithReqPath?.after.includes("import path from 'node:path';"));
+  const uploadAfterShebang = runBuilder(
+    requestForgery['upload-client-filename'],
+    'upload-client-filename',
+    '#!/usr/bin/env node\nconst n = file.originalname;\n',
+    'originalname',
+  );
+  assert.ok(uploadAfterShebang?.after.startsWith("#!/usr/bin/env node\nimport path from 'node:path';\n"));
+  const uploadAfterDirective = runBuilder(
+    requestForgery['upload-client-filename'],
+    'upload-client-filename',
+    "'use server';\nconst n = file.originalname;\n",
+    'originalname',
+  );
+  assert.ok(uploadAfterDirective?.after.startsWith("'use server';\nimport path from 'node:path';\n"));
   assert.equal(
     runBuilder(requestForgery['path-traversal'], 'path-traversal', 'fs.readFileSync(name);\n', 'fs.readFileSync'),
     undefined,

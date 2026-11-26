@@ -1,7 +1,7 @@
 // Rule id -> build({ finding, node, sourceFile, text, load }) => { edits, note } | undefined; see
 // lib/performance/site-fix.js.
 import { ts, ancestor, calleeCall, replaceNode, requireReview } from '../../performance/site-fixes/helpers.js';
-import type { SourceFile } from 'typescript';
+import type { SourceFile, Statement } from 'typescript';
 import type { FixResult, SiteFixBuilder, SiteFixInput, TextEdit } from '../../shared/types.js';
 
 function hasPathBinding(sourceFile: SourceFile): boolean {
@@ -31,6 +31,18 @@ function pathImportEdit(input: SiteFixInput): TextEdit | undefined {
   if (imports.length) {
     const last = imports[imports.length - 1];
     return { start: last.end, end: last.end, text: "\nimport path from 'node:path';" };
+  }
+  let lastDirective: Statement | undefined;
+  for (const stmt of sourceFile.statements) {
+    if (!ts.isExpressionStatement(stmt) || !ts.isStringLiteralLike(stmt.expression)) break;
+    lastDirective = stmt;
+  }
+  if (lastDirective) {
+    return { start: lastDirective.end, end: lastDirective.end, text: "\nimport path from 'node:path';" };
+  }
+  const shebang = /^#![^\n]*\r?\n/.exec(sourceFile.text);
+  if (shebang) {
+    return { start: shebang[0].length, end: shebang[0].length, text: "import path from 'node:path';\n" };
   }
   return { start: 0, end: 0, text: "import path from 'node:path';\n" };
 }
