@@ -251,6 +251,13 @@ test('node-event-listener-leak flags uncleaned listeners in handlers, loops, and
     }, []);
   }`;
   assert.equal(findingsFor(inHook, 'node-event-listener-leak').length, 1);
+
+  const underscoreRoute = `declare const app: { get: (p: string, fn: (req: unknown, res: { write: (s: string) => void }) => void) => void };
+  declare const eventBus: { on: (ev: string, fn: () => void) => void };
+  app.get('/events', (_req, res) => {
+    eventBus.on('update', () => res.write('ok'));
+  });`;
+  assert.equal(findingsFor(underscoreRoute, 'node-event-listener-leak').length, 1);
 });
 
 test('node-event-listener-leak stays quiet for req/res listeners, cleanup, or { once: true }', () => {
@@ -258,6 +265,11 @@ test('node-event-listener-leak stays quiet for req/res listeners, cleanup, or { 
     req.on('data', () => {});
   }`;
   assert.equal(findingsFor(reqScoped, 'node-event-listener-leak').length, 0);
+
+  const underscoreReqScoped = `export function handler(_req: { on: (ev: string, fn: () => void) => void }, _res: unknown) {
+    _req.on('close', () => {});
+  }`;
+  assert.equal(findingsFor(underscoreReqScoped, 'node-event-listener-leak').length, 0);
 
   const withCleanup = `declare function useEffect(fn: () => () => void, deps: unknown[]): void;
   declare const window: {

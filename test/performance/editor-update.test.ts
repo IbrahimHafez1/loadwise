@@ -18,7 +18,7 @@ test('an active editor task picks up same-version package replacements', { timeo
   const registrations = signalDirectory(root);
   const dependencies = path.join(root, 'node_modules');
   const backend = path.join(dependencies, 'loadwise');
-  const cli = path.join(backend, 'bin', 'loadwise.cjs');
+  const cli = path.join(backend, 'bin', 'loadwise.js');
   const watchModule = JSON.stringify(require.resolve('../../lib/performance/editor-watch.js'));
   function backendEntry(message: string) {
     return `const { watchEditor } = require(${watchModule});

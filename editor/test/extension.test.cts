@@ -190,7 +190,7 @@ function startExtension(performanceCliSource: string) {
   const maintainabilityCli = path.join(root, 'maintainability-cli.cjs');
   fs.writeFileSync(performanceCli, performanceCliSource);
   fs.writeFileSync(maintainabilityCli, emptyCli);
-  // Stands in for bin/loadwise.cjs: the first argument picks the checker.
+  // Stands in for bin/loadwise.js: the first argument picks the checker.
   const cli = path.join(root, 'cli.cjs');
   fs.writeFileSync(cli, "require(process.argv[2] === 'maint' ? './maintainability-cli.cjs' : './perf-cli.cjs');");
   const editor = fakeVscode(root, { cli });

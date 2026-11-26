@@ -79,7 +79,7 @@
           "type": "string",
           "default": "",
           "scope": "machine",
-          "description": "Optional absolute path to the loadwise CLI script (bin/loadwise.cjs)."
+          "description": "Optional absolute path to the loadwise CLI script (bin/loadwise.js)."
         },
         "loadwise.severity": {
           "type": "string",

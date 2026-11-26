@@ -46,8 +46,13 @@ runs:
         LOADWISE_UPLOAD_SARIF: ${{ inputs.upload-sarif }}
         LOADWISE_ANNOTATIONS: ${{ inputs.annotations }}
       run: |
-        runtime=$(node "$LOADWISE_ACTION_PATH/scripts/stage-action.js")
+        stage_script="$LOADWISE_ACTION_PATH/scripts/stage-action.js"
+        if [ ! -f "$stage_script" ]; then stage_script="$LOADWISE_ACTION_PATH/scripts/stage-action.ts"; fi
+        runtime=$(node "$stage_script")
         npm --prefix "$runtime" ci --omit=dev --include=optional --no-audit --no-fund
+        if [ ! -f "$runtime/bin/github-action.js" ]; then
+          node "$runtime/node_modules/typescript/bin/tsc" -p "$runtime/tsconfig.json" --noCheck
+        fi
         node "$runtime/bin/github-action.js"
 
     - name: Upload SARIF

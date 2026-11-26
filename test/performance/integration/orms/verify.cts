@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const packageRoot = path.resolve(__dirname, '../../../..');
-const checker = path.join(packageRoot, 'bin', 'loadwise.cjs');
+const checker = path.join(packageRoot, 'bin', 'loadwise.js');
 const compiler = require.resolve('typescript/bin/tsc', { paths: [packageRoot] });
 const ruleNames = { loop: 'orm-query-in-loop', count: 'orm-count-materialization' };
 

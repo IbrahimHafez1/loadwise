@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ts } from '../performance/compiler.js';
+import { isTempRoot, safeExists } from './project-root.js';
 import type { SourceFile } from 'typescript';
 import type { ProgramAdapter } from './types.js';
 
@@ -66,9 +67,9 @@ function relativePathInProject(fileName: string): string {
 function findPackageRoot(directory: string): string | undefined {
   if (packageRootCache.has(directory)) return packageRootCache.get(directory);
   let root: string | undefined;
-  if (PROJECT_MARKERS.some((marker) => fs.existsSync(path.join(directory, marker)))) {
+  if (PROJECT_MARKERS.some((marker) => safeExists(path.join(directory, marker)))) {
     root = directory;
-  } else {
+  } else if (!isTempRoot(directory)) {
     const parent = path.dirname(directory);
     if (parent !== directory) root = findPackageRoot(parent);
   }

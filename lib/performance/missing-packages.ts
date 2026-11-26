@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { isTempRoot, safeExists } from '../shared/project-root.js';
 import ts from 'typescript';
 import type { Program, SourceFile } from 'typescript';
 
@@ -60,8 +61,9 @@ function readManifest(directory: string): DependencyManifest | undefined {
 
 function isInstalled(packageName: string, directory: string): boolean {
   for (let current = directory; ; current = path.dirname(current)) {
-    if (fs.existsSync(path.join(current, 'node_modules', packageName, 'package.json'))) return true;
-    if (path.dirname(current) === current) return false;
+    if (safeExists(path.join(current, 'node_modules', packageName, 'package.json'))) return true;
+    const parent = path.dirname(current);
+    if (parent === current || isTempRoot(current)) return false;
   }
 }
 
@@ -75,9 +77,9 @@ function collectUninstalledDependencies(
   uninstalled: Set<string>,
 ): void {
   let packageDirectory = path.resolve(directory);
-  while (!fs.existsSync(path.join(packageDirectory, 'package.json'))) {
+  while (!safeExists(path.join(packageDirectory, 'package.json'))) {
     const parent = path.dirname(packageDirectory);
-    if (parent === packageDirectory) return;
+    if (parent === packageDirectory || isTempRoot(packageDirectory)) return;
     packageDirectory = parent;
   }
   const visited = new Set<string>();

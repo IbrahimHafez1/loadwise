@@ -279,7 +279,7 @@ function monitor(
         continue;
       }
       const script =
-        settings.get<string>('cli', '') || path.join(extensionPath, 'tools', 'loadwise', 'bin', 'loadwise.cjs');
+        settings.get<string>('cli', '') || path.join(extensionPath, 'tools', 'loadwise', 'bin', 'loadwise.js');
       try {
         if (!path.isAbsolute(script)) throw new Error('CLI override must be an absolute path.');
         if (watch && !watchUnavailable && project) {

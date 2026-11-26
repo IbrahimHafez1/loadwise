@@ -4,7 +4,7 @@ import { createRequire, isBuiltin } from 'node:module';
 import ts from 'typescript';
 
 if (!process.argv[2]) {
-  throw new Error('Usage: node scripts/vendor-native.cjs <path-to-typescript-package>');
+  throw new Error('Usage: node scripts/vendor-native.js <path-to-typescript-package>');
 }
 const source = path.resolve(process.argv[2]);
 const destination = path.resolve(import.meta.dirname, '../lib/performance/vendor/typescript');

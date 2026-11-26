@@ -248,7 +248,7 @@ test('PostgreSQL 18', { skip: !enabled && 'set BACKEND_PERF_DOCKER=1', timeout: 
   });
 
   await t.test('the bin dispatches db to the same command', () => {
-    const child = spawnSync(process.execPath, [path.join(repositoryRoot, 'bin', 'loadwise.cjs'), 'db', '--json'], {
+    const child = spawnSync(process.execPath, [path.join(repositoryRoot, 'bin', 'loadwise.js'), 'db', '--json'], {
       cwd: fixtureProject,
       env: { ...process.env, DATABASE_URL: url },
       encoding: 'utf8',

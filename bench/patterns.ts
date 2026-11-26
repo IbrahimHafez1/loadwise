@@ -96,7 +96,7 @@ function benchmarkQueries(database: DatabaseSync): void {
   function perCustomer() {
     return read(toCustomerRow, customers, CUSTOMER_PAGE_SIZE).map(({ id }) => ({
       id,
-      orders: read(toOrderRow, single, id).map((order) => order.id),
+      orders: read(toCustomerRow, single, id).map((order) => order.id),
     }));
   }
   function batched() {

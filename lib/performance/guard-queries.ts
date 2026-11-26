@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import type { Dirent } from 'node:fs';
 import path from 'node:path';
 import { ts } from './compiler.js';
+import { findProjectRoot } from './schema/context.js';
 import { noteUnreadable } from '../shared/coverage-notes.js';
 import { prismaModelName } from './prisma.js';
 import type {
@@ -138,13 +139,7 @@ function scanSourceFile(sourceFile: SourceFile): Registrations {
 }
 
 function projectRoot(fileName: string): string {
-  let directory = path.dirname(fileName);
-  while (!fs.existsSync(path.join(directory, 'package.json'))) {
-    const parent = path.dirname(directory);
-    if (parent === directory) return path.dirname(fileName);
-    directory = parent;
-  }
-  return directory;
+  return findProjectRoot(fileName);
 }
 
 function mergeRegistrations(target: Registrations, source: Registrations): void {

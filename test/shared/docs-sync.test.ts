@@ -75,7 +75,7 @@ test('every rule id has exactly one README anchor', () => {
   );
 });
 
-test('npm pack does not ship raw .ts source files', () => {
+test('npm pack ships examples/*.ts and no implementation .ts or .cts source files', () => {
   const pack = spawnSync('npm', ['pack', '--dry-run', '--json'], {
     cwd: root,
     encoding: 'utf8',
@@ -85,6 +85,12 @@ test('npm pack does not ship raw .ts source files', () => {
   const parsed: { files?: { path: string }[] }[] = JSON.parse(pack.stdout);
   const packedPaths = (parsed[0]?.files ?? []).map((entry) => entry.path);
   assert.ok(packedPaths.length > 0, 'npm pack reported no files');
-  const tsSources = packedPaths.filter((filePath) => filePath.endsWith('.ts') && !filePath.endsWith('.d.ts'));
-  assert.deepEqual(tsSources, [], `npm pack should not include .ts sources: ${tsSources.join(', ')}`);
+  assert.ok(packedPaths.includes('examples/slow.ts'), 'npm pack should include examples/slow.ts');
+  assert.ok(packedPaths.includes('examples/indexed.ts'), 'npm pack should include examples/indexed.ts');
+  const ctsSources = packedPaths.filter((filePath) => filePath.endsWith('.cts'));
+  assert.deepEqual(ctsSources, [], `npm pack should not include .cts sources: ${ctsSources.join(', ')}`);
+  const implTsSources = packedPaths.filter(
+    (filePath) => filePath.endsWith('.ts') && !filePath.endsWith('.d.ts') && !filePath.startsWith('examples/'),
+  );
+  assert.deepEqual(implTsSources, [], `npm pack should not include .ts sources: ${implTsSources.join(', ')}`);
 });

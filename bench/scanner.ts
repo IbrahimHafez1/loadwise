@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { withProgram } from '../test/performance/helpers.js';
 import { analyzeFile } from '../lib/performance/analyze.js';
+import { ensureLoaded } from '../lib/performance/sql/pg-parser.js';
 const moduleLoadMs = performance.now() - startup;
 
 const routeModuleCount = 40;
@@ -181,6 +182,7 @@ function benchmarkProgram(): void {
   }
 }
 
+await ensureLoaded();
 if (process.argv.includes('--large')) {
   benchmarkLarge(process.argv.slice(2));
 } else if (process.argv.includes('--cli')) {

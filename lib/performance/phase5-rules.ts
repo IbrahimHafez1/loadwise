@@ -51,7 +51,20 @@ const ARRAY_LOOP_METHODS = new Set(['forEach', 'map', 'reduce', 'flatMap', 'filt
 const EVENT_ADD_METHODS = new Set(['on', 'addListener', 'addEventListener']);
 const EVENT_REMOVE_METHODS = new Set(['off', 'removeListener', 'removeEventListener']);
 const LIFECYCLE_HOOKS = new Set(['useEffect', 'useLayoutEffect', 'onMounted', 'onBeforeMount']);
-const REQUEST_SCOPED_EMITTERS = new Set(['req', 'request', 'res', 'response', 'reply', 'socket', 'stream']);
+const REQUEST_SCOPED_EMITTERS = new Set([
+  'req',
+  '_req',
+  'request',
+  '_request',
+  'res',
+  '_res',
+  'response',
+  '_response',
+  'reply',
+  '_reply',
+  'socket',
+  'stream',
+]);
 
 const CONCURRENCY_LIMITER_PACKAGES = new Set([
   'p-limit',

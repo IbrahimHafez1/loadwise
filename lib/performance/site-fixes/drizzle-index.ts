@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ts, indentationAt, lineStart } from './helpers.js';
+import { isTempRoot, safeExists } from '../../shared/project-root.js';
 import type { Expression, ObjectLiteralExpression, PropertyAssignment, SourceFile } from 'typescript';
 import type { Finding, FixResult, LoadedFile } from '../../shared/types.js';
 import type { DeclarationLink } from '../types/declaration-link.js';
@@ -168,8 +169,13 @@ const databaseStatement = /build it with `([^`]+)`/;
 // root-relative path.
 function sqlMigrationsFolder(directory: string): string | undefined {
   let packageRoot = directory;
-  while (!fs.existsSync(path.join(packageRoot, 'package.json')) && path.dirname(packageRoot) !== packageRoot) {
-    packageRoot = path.dirname(packageRoot);
+  for (let candidate = directory; ; candidate = path.dirname(candidate)) {
+    if (safeExists(path.join(candidate, 'package.json'))) {
+      packageRoot = candidate;
+      break;
+    }
+    const parent = path.dirname(candidate);
+    if (parent === candidate || isTempRoot(candidate)) break;
   }
   function search(current: string, depth: number): string | undefined {
     let entries: fs.Dirent[];

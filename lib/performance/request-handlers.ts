@@ -31,8 +31,8 @@ const ROUTE_DECORATORS = new Set([
   'ResolveField',
 ]);
 const HTTP_VERB_EXPORTS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
-const REQUEST_PARAMETER = /^req(?:uest)?$/;
-const RESPONSE_PARAMETER = /^(?:res|response|reply|h)$/;
+const REQUEST_PARAMETER = /^_?req(?:uest)?$/;
+const RESPONSE_PARAMETER = /^(?:_?(?:res|response|reply)|h)$/;
 const RESPONSE_RECEIVER = /^(?:res|response|reply|ctx|c|NextResponse|Response)$/;
 const RESPONSE_METHODS = new Set(['json', 'send', 'jsonp', 'text', 'html']);
 // `exportToExcel(res, rows)`, `buildPdf(rows)`: a file generated from the rows is the response,

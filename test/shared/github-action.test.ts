@@ -43,9 +43,12 @@ function fixture(context: TestContext) {
   const project = path.join(directory, 'example app');
   const invocationLog = path.join(directory, 'invocations');
   const outputFile = path.join(directory, 'step-outputs');
-  const observer = path.join(directory, 'observe.cjs');
+  const observerDir = path.join(directory, '.observer');
+  const observer = path.join(observerDir, 'observe.cjs');
   fs.mkdirSync(path.join(directory, '.git'));
   fs.mkdirSync(project);
+  fs.mkdirSync(observerDir);
+  fs.writeFileSync(path.join(observerDir, 'package.json'), '{"type":"commonjs"}\n');
   fs.writeFileSync(
     observer,
     "if (require('node:path').basename(process.argv[1] ?? '') === 'loadwise.js') {\n" +
@@ -160,4 +163,58 @@ test('a completed clean scan uploads its empty results', (context) => {
     sarif.runs.map(({ results }) => results),
     [[]],
   );
+});
+
+test('the action stages and compiles an unbuilt git checkout without devDependencies', (context) => {
+  const source = tempDirectory(context);
+  const runnerTemp = tempDirectory(context);
+  const copySource = (relative: string) => {
+    const origin = path.join(repository, relative);
+    const destination = path.join(source, relative);
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.cpSync(origin, destination, {
+      recursive: true,
+      filter: (entry) => {
+        const rel = path.relative(repository, entry).split(path.sep).join('/');
+        if (rel.startsWith('lib/performance/vendor/')) return true;
+        if (
+          rel.startsWith('editor/dist/') ||
+          rel.startsWith('editor/test/') ||
+          rel === 'editor/dist' ||
+          rel === 'editor/test'
+        ) {
+          return false;
+        }
+        return !entry.endsWith('.js') && !entry.endsWith('.cjs');
+      },
+    });
+  };
+  for (const entry of [
+    'package.json',
+    'package-lock.json',
+    'tsconfig.json',
+    'PERFORMANCE.md',
+    'LICENSE',
+    'bin',
+    'lib',
+    'editor',
+    'plugin',
+    'polyglot',
+    'schema',
+    'examples',
+    'scripts/stage-action.ts',
+  ]) {
+    copySource(entry);
+  }
+  const runtime = runNode(path.join(source, 'scripts/stage-action.ts'), [], {
+    env: { ...process.env, RUNNER_TEMP: runnerTemp },
+  }).stdout.trim();
+  assert.equal(path.dirname(runtime), runnerTemp);
+  assert.ok(!fs.existsSync(path.join(runtime, 'bin/github-action.js')));
+  assert.ok(fs.existsSync(path.join(runtime, 'tsconfig.json')));
+  fs.symlinkSync(path.join(repository, 'node_modules'), path.join(runtime, 'node_modules'), 'junction');
+  const tsc = path.join(repository, 'node_modules/typescript/bin/tsc');
+  runNode(tsc, ['-p', path.join(runtime, 'tsconfig.json'), '--noCheck']);
+  assert.ok(fs.existsSync(path.join(runtime, 'bin/github-action.js')));
+  assert.ok(fs.existsSync(path.join(runtime, 'lib/shared/check.js')));
 });

@@ -897,17 +897,17 @@ Use Node.js 22.13+ for the full development workflow, including the in-memory SQ
 
 ### Source conventions
 
-The code is TypeScript (`.cts`) compiled in place to CommonJS (`.cjs`, not committed) by `npm run build`; `npm test` builds first and `npm run typecheck` checks without emitting. Import with the `.cjs` extension (`import { x } from './module.cjs'`). The compiler runs in `strict` mode.
+The CLI and checkers are TypeScript (`.ts`) compiled in place to ES modules (`.js`, not committed) by `npm run build`, while shared VS Code modules under `editor/` are `.cts` compiled to CommonJS (`.cjs`); `npm test` builds first and `npm run typecheck` checks without emitting. Import with the runtime extension (`.js` or `.cjs`). The compiler runs in `strict` mode.
 
 - Write ES `import`/`export`, with imports at the top of the file. `require()` is limited to the files listed under `overrides` in `.oxlintrc.json`, where load order or startup cost forbids a top-level import (the compiler must be chosen before the rules load, and `maint --staged` must not load TypeScript). Lazy loads in an async function use `await import()`. Do not add files to that list.
 - No `any` and no `as` assertions (`as const` is fine) in new code. Narrow with type guards, give a function a precise type, or use overloads. A deliberate exception needs a lint-disable comment that says why.
-- Types shared by two or more files live in the `types/` folder of their area (`lib/performance/types/`, `lib/security/types/`, `lib/maintainability/types/`, `lib/shared/types/`, `test/types/`), one topic per file. Cross-pillar types are in `lib/shared/types.cts`. A type used by one file stays in that file.
+- Types shared by two or more files live in the `types/` folder of their area (`lib/performance/types/`, `lib/security/types/`, `lib/maintainability/types/`, `lib/shared/types/`, `test/types/`), one topic per file. Cross-pillar types are in `lib/shared/types.ts`. A type used by one file stays in that file.
 - Comments wrap at 100 columns, and Prettier formats everything. `.vscode/settings.json` formats on save, and the pre-commit hook in `hooks/` formats and lints staged files (`npm install` enables it).
 
 ```sh
 npm ci
 npm test
-node bin/loadwise.cjs perf -p examples
+node bin/loadwise.js perf -p examples
 npm run bench:patterns
 npm run bench:scan
 npm run bench:scan -- --large
@@ -1281,7 +1281,7 @@ Use Node.js 22.12+ for the development tools and run `npm ci --include=optional`
 
 Run `npm run format` to format files, `npm run lint` for correctness checks, or `npm run check` to verify formatting, lint and tests together.
 
-From this checkout, run `node bin/loadwise.js check` to scan Loadwise itself. The root `jsconfig.json` selects implementation files for performance and security checks so the deliberately slow examples and benchmark workloads keep their intended behavior.
+From this checkout, run `node bin/loadwise.js check --config scripts/self-scan/loadwise.config.json` to scan Loadwise itself; that config excludes vendored files, tests, examples, and benchmark workloads so they keep their intended behavior.
 
 ## License
 

@@ -58,7 +58,10 @@
     "PERFORMANCE.md",
     "LICENSE",
     "!**/*.cts",
-    "!**/*.ts"
+    "!bin/**/*.ts",
+    "!lib/**/*.ts",
+    "!plugin/**/*.ts",
+    "!polyglot/**/*.ts"
   ],
   "engines": {
     "node": ">=22"

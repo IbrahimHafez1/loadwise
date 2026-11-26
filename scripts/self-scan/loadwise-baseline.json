@@ -549,50 +549,8 @@
         },
         {
           "ruleId": "unbounded-promise-all",
-          "file": "../../lib/maintainability/analyze-source.ts",
-          "fingerprint": "c5a3c5c99df0",
-          "count": 1
-        },
-        {
-          "ruleId": "unbounded-promise-all",
-          "file": "../../lib/maintainability/scan.ts",
-          "fingerprint": "3d20b08faef6",
-          "count": 1
-        },
-        {
-          "ruleId": "unbounded-promise-all",
-          "file": "../../lib/maintainability/scan.ts",
-          "fingerprint": "ad287291fa91",
-          "count": 1
-        },
-        {
-          "ruleId": "unbounded-promise-all",
-          "file": "../../lib/performance/projects.ts",
-          "fingerprint": "c88da12b5489",
-          "count": 1
-        },
-        {
-          "ruleId": "unbounded-promise-all",
-          "file": "../../lib/performance/site-fix.ts",
-          "fingerprint": "c6d6a4333a2d",
-          "count": 1
-        },
-        {
-          "ruleId": "unbounded-promise-all",
           "file": "../../lib/security/deps/osv.ts",
           "fingerprint": "4997b1fa834c",
-          "count": 1
-        },
-        {
-          "ruleId": "unbounded-promise-all",
-          "file": "../../lib/shared/pillars.ts",
-          "fingerprint": "65f42eed25b8",
-          "count": 1
-        },
-        {
-          "ruleId": "unbounded-promise-all",
-          "file": "../../lib/shared/pillars.ts",
-          "fingerprint": "8ee68d735756",
           "count": 1
         }
       ]

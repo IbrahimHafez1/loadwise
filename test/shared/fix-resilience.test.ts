@@ -167,3 +167,23 @@ test('resilience: unparseable sibling file does not crash check or fix on valid 
   assert.ok(fixRes.status === 0 || fixRes.status === 1 || fixRes.status === 2, `unexpected exit ${fixRes.status}`);
   assert.equal(fs.readFileSync(path.join(root, 'broken.ts'), 'utf8'), 'export const broken = (;\n');
 });
+
+test('resilience: temp project without package.json stops upward root walks at os.tmpdir()', (context) => {
+  const root = tempProject(context, {
+    'tsconfig.json': JSON.stringify({
+      compilerOptions: { target: 'ES2022', module: 'NodeNext', strict: true, noEmit: true },
+    }),
+    'src/handler.ts': [
+      'export function handle(items: string[], request: { body: { allowed: string[] } }) {',
+      '  const allowed = request.body.allowed;',
+      '  return items.filter((x) => allowed.includes(x));',
+      '}',
+    ].join('\n'),
+  });
+  const checkRes = runCli(root, ['check', '--only', 'perf', '--json']);
+  assert.notEqual(checkRes.status, 2, checkRes.stderr);
+  const report = JSON.parse(checkRes.stdout);
+  assert.equal(report.performance.findings.length, 1);
+  const fixRes = runCli(root, ['fix', '--yes', '--dry-run', '--json']);
+  assert.notEqual(fixRes.status, 2, fixRes.stderr);
+});

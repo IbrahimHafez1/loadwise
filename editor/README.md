@@ -34,7 +34,7 @@ Install the universal VSIX through **Extensions: Install from VSIX…**. The bun
 
 The extension scans on opening a supported workspace and refreshes whenever files change, whether saved in the editor or changed by git, another editor or a code generator. Source files, `schema.prisma`, SQL migrations, `package.json`, `tsconfig*.json`, `jsconfig*.json`, `maintainability.config.json`, `backend-perf.policy.json` and `loadwise.config.json` are watched, and rapid changes are grouped. The performance checker runs in its incremental watch mode, so only changed files are re-analyzed; it restarts when a config file changes, and full rescans take over if it stops. The maintainability checker scans the folder. The performance checker uses its root `tsconfig.json` or `jsconfig.json` and also runs its polyglot source rules if it finds Python, Go, Java, C# or Rust. In a monorepo, open individual packages as workspace folders or set `loadwise.project` to the intended config. CLI traces and database plans are separate inputs.
 
-Each folder uses the checkers' default rules and its existing policy files. You can turn off diagnostics for a folder with `loadwise.enabled`. Developers using their own build can point the user setting `loadwise.cli` at the absolute path of its `bin/loadwise.cjs`.
+Each folder uses the checkers' default rules and its existing policy files. You can turn off diagnostics for a folder with `loadwise.enabled`. Developers using their own build can point the user setting `loadwise.cli` at the absolute path of its `bin/loadwise.js`.
 
 ## Build the extension
 

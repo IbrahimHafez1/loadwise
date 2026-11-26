@@ -304,7 +304,7 @@
       "ruleId": "reduce-copy-accumulator",
       "project": "perf-reduce-copy-accumulator",
       "file": "index.js",
-      "line": 6,
+      "line": 8,
       "source": "Generic reduce-spread fix pattern (no single commit)"
     },
     {
@@ -565,7 +565,7 @@
       "ruleId": "node-event-listener-leak",
       "project": "perf-phase5-node-event-listener-leak",
       "file": "index.ts",
-      "line": 5,
+      "line": 7,
       "source": "Phase 5 performance recall case"
     },
     {
