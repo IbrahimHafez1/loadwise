@@ -9,7 +9,14 @@ import {
   isServerAction,
 } from '../../performance/request-handlers.js';
 import { importedFrom } from '../bindings.js';
-import type { Decorator, Expression, Node, ParameterDeclaration, SignatureDeclaration } from 'typescript';
+import type {
+  CallExpression,
+  Decorator,
+  Expression,
+  Node,
+  ParameterDeclaration,
+  SignatureDeclaration,
+} from 'typescript';
 import type { CheckerAdapter, ParameterSource, TaintContainer, TaintField } from '../../shared/types.js';
 
 // A container field is either another container, or a tainted value: whole (an object of client
@@ -130,6 +137,43 @@ const fastifyRequest: TaintContainer = {
   },
   calls: expressRequest.calls,
 };
+const svelteKitEvent: TaintContainer = {
+  fields: {
+    request: webRequest,
+    params: whole,
+    url: { fields: { searchParams, pathname: scalar, search: scalar } },
+    cookies: { calls: { get: scalar, getAll: whole } },
+  },
+};
+const h3Event: TaintContainer = {
+  fields: {
+    node: { fields: { req: { fields: { url: scalar, headers: whole } } } },
+    context: { fields: { params: whole } },
+  },
+};
+const elysiaContext: TaintContainer = {
+  fields: {
+    body: whole,
+    query: whole,
+    params: whole,
+    headers: whole,
+    cookie: whole,
+    request: webRequest,
+    path: scalar,
+  },
+};
+const hapiRequest: TaintContainer = {
+  fields: {
+    payload: whole,
+    query: whole,
+    params: whole,
+    headers: whole,
+    state: whole,
+    path: scalar,
+    url: { fields: { searchParams, pathname: scalar } },
+  },
+};
+
 const typedRequests: Record<string, Record<string, TaintContainer>> = {
   express: { Request: expressRequest },
   fastify: { FastifyRequest: fastifyRequest },
@@ -138,6 +182,10 @@ const typedRequests: Record<string, Record<string, TaintContainer>> = {
   'koa-router': { RouterContext: koaContext },
   hono: { Context: honoContext },
   'next/server': { NextRequest: webRequest },
+  '@sveltejs/kit': { RequestEvent: svelteKitEvent },
+  h3: { H3Event: h3Event },
+  elysia: { Context: elysiaContext },
+  '@hapi/hapi': { Request: hapiRequest },
 };
 const routeHandlerNames = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
 
@@ -233,6 +281,51 @@ function registeredHandlerRequest(fn: Node): TaintContainer | undefined {
   if (isPagesApiHandler(fn)) return expressRequest;
 }
 
+const h3WholeCalls = new Set(['readBody', 'getQuery', 'getRouterParams', 'getHeaders', 'readFormData']);
+const h3ScalarCalls = new Set(['getRouterParam', 'getHeader', 'getCookie', 'readRawBody']);
+const socketReceiverPattern = /(?:^|\.)(?:ws|wss|socket|io)$/i;
+
+function h3SourceCall(
+  call: CallExpression,
+  checker: CheckerAdapter,
+): { taint: 'whole' | 'scalar'; label: string } | undefined {
+  const callee = ts.skipOuterExpressions(call.expression);
+  if (!ts.isIdentifier(callee)) return;
+  const binding = importedFrom(callee, checker);
+  if (binding?.module !== 'h3' && binding?.module !== 'nitropack') return;
+  const exported = binding.exported ?? callee.text;
+  if (h3WholeCalls.has(exported)) return { taint: 'whole', label: call.getText() };
+  if (h3ScalarCalls.has(exported)) return { taint: 'scalar', label: call.getText() };
+}
+
+function isGraphqlResolverArgs(parameter: ParameterDeclaration, fn: SignatureDeclaration, index: number): boolean {
+  if (index !== 1 || fn.parameters.length < 2 || fn.parameters.length > 4) return false;
+  const first = fn.parameters[0]?.name;
+  const second = parameter.name;
+  const firstText = ts.isIdentifier(first) ? first.text : undefined;
+  const secondText = ts.isIdentifier(second) ? second.text : undefined;
+  return Boolean(
+    firstText &&
+    /^(?:_?parent|_?root|_?source|_)$/.test(firstText) &&
+    (secondText === 'args' || ts.isObjectBindingPattern(second)),
+  );
+}
+
+function socketSource(
+  parameter: ParameterDeclaration,
+  fn: SignatureDeclaration,
+  index: number,
+): ParameterSource | undefined {
+  const call = fn.parent;
+  if (!ts.isCallExpression(call) || call.arguments[1] !== fn || !ts.isPropertyAccessExpression(call.expression)) return;
+  if (call.expression.name.text !== 'on' || !socketReceiverPattern.test(call.expression.expression.getText())) return;
+  const [event] = call.arguments;
+  if (!event || !ts.isStringLiteralLike(event)) return;
+  const label = parameter.name.getText();
+  if (event.text === 'connection') return index === 1 ? { container: expressRequest, label } : undefined;
+  return index === 0 ? { taint: 'whole', label } : undefined;
+}
+
 function shapeSource(parameter: ParameterDeclaration, fn: SignatureDeclaration): ParameterSource | undefined {
   const index = fn.parameters.indexOf(parameter);
   const name = ts.isIdentifier(parameter.name) ? parameter.name.text : undefined;
@@ -243,6 +336,9 @@ function shapeSource(parameter: ParameterDeclaration, fn: SignatureDeclaration):
   const exported = exportedName(fn);
   if (index === 1 && exported && isNextRouteFile(fn) && routeHandlerNames.has(exported))
     return { container: nextRouteContext, label: parameter.name.getText() };
+  const socket = socketSource(parameter, fn, index);
+  if (socket) return socket;
+  if (isGraphqlResolverArgs(parameter, fn, index)) return { taint: 'whole', label: parameter.name.getText() };
   if (index !== 0) return;
   const label = parameter.name.getText();
   const registered = registeredHandlerRequest(fn);
@@ -268,4 +364,4 @@ function parameterSource(parameter: ParameterDeclaration, checker: CheckerAdapte
   return typedSource(parameter, checker) ?? shapeSource(parameter, fn);
 }
 
-export { parameterSource };
+export { parameterSource, h3SourceCall };

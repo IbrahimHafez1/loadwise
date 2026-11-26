@@ -1,4 +1,3 @@
-// @ts-check
 // `agent init`: writes instructions that tell an AI coding agent how to run Loadwise and act on its findings.
 // Agents can read AGENTS.md directly or through the import in CLAUDE.md.
 import fs from 'node:fs';
@@ -48,7 +47,7 @@ function reviewInstructions(editPermission: string): string {
     '- Keep the original scoped JSON scan, the relevant history and the final rescan in local scratch space. For a file, id, staged, or workspace request, filter the reports and history to the authorized selection. Record an outcomes.json object with an outcomes array. Each entry needs checker, id, status (fixed, verified, intentional, false-positive or deferred), and evidence from the code or tests. Include findings that disappeared and ones left open. Before finishing, run `loadwise agent verify --outcomes outcomes.json before.json history.json after.json` with the applicable reports. Resolve missing entries and report skipped coverage. In detected agent sessions and initialized projects add `--save` to remember your decisions across sessions, unless the user requested no persistence. The verifier checks accounting; validate behavior separately with code and tests.',
     '- For standalone JSON scans, pass the originating checker to `agent verify` with `--checker perf|maint|sec`. Migration and database scans use `perf`. Combined reports and history keep their own checker scope.',
     '- Report each finding by id, rule, file:line and action, with verification results.',
-    '- If the project installed the Loadwise pre-commit hook, it runs `loadwise check --staged`. Review findings against the staged changes. Use `--no-verify` only with the user’s approval.',
+    '- If the project installed the Loadwise pre-commit hook, it runs `loadwise check --staged`. Review findings against the staged changes. Use `--no-verify` only with the userâ€™s approval.',
   ].join('\n');
 }
 
@@ -153,7 +152,7 @@ function runAgentCommand(args: string[]): number | Promise<number> {
     else
       console.log(
         reviewInstructions(
-          '- Follow the project’s configured edit permissions. Otherwise, an explicit fix request authorizes edits in scope. Ask before editing incidental findings.',
+          '- Follow the projectâ€™s configured edit permissions. Otherwise, an explicit fix request authorizes edits in scope. Ask before editing incidental findings.',
         ),
       );
     return 0;

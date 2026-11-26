@@ -1,4 +1,3 @@
-// @ts-check
 // Caches whole checker reports keyed by everything that can change them, so rescanning an unchanged project replays
 // the stored output. Analysis crosses files, so a per-file cache would be unsafe; any input change misses.
 import crypto from 'node:crypto';

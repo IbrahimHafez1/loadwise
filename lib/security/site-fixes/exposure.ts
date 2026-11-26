@@ -56,6 +56,52 @@ function graphqlFix({ node }: SiteFixInput): FixResult | undefined {
   return { edits: [replaceNode(value, nonProductionCheck)] };
 }
 
+function corsCredentialsOriginFix({ node }: SiteFixInput): FixResult | undefined {
+  if (!node) return;
+  const property = ancestor(node, ts.isPropertyAssignment);
+  if (!property) return;
+  const literal = unwrap(property.initializer);
+  if (!literal || (!isTrue(literal) && !(ts.isStringLiteralLike(literal) && literal.text === '*'))) return;
+  return {
+    edits: [replaceNode(literal, "(process.env.ALLOWED_ORIGINS?.split(',') ?? [])")],
+    note: 'Replaces wildcard/reflecting origin with an explicit `ALLOWED_ORIGINS` env allowlist.',
+  };
+}
+
+function storagePublicAclFix({ node }: SiteFixInput): FixResult | undefined {
+  if (!node) return;
+  const literal = ts.isStringLiteralLike(node) ? node : ancestor(node, ts.isStringLiteralLike);
+  if (!literal || !/^public-read(?:-write)?$/i.test(literal.text)) return;
+  return {
+    edits: [replaceNode(literal, "'private'")],
+    note: "Sets ACL to `'private'` so uploaded objects are not publicly readable.",
+  };
+}
+
+function secretInLogFix({ node }: SiteFixInput): FixResult | undefined {
+  if (!node) return;
+  const call = ts.findAncestor(node, ts.isCallExpression);
+  if (!call || call.arguments.length < 1) return;
+  const arg = call.arguments.find((candidate) => candidate.pos <= node.pos && node.end <= candidate.end);
+  if (!arg || ts.isStringLiteralLike(arg)) return;
+  return {
+    edits: [replaceNode(arg, "'[REDACTED]'")],
+    note: "Replaces the logged secret argument with `'[REDACTED]'`.",
+  };
+}
+
+function xmlExternalEntitiesFix({ node }: SiteFixInput): FixResult | undefined {
+  if (!node) return;
+  const property = ancestor(node, ts.isPropertyAssignment);
+  if (!property) return;
+  const value = unwrap(property.initializer);
+  if (!value || !isTrue(value)) return;
+  return {
+    edits: [replaceNode(value, 'false')],
+    note: 'Disables XML external entity expansion.',
+  };
+}
+
 const builders: Record<string, SiteFixBuilder> = {
   'cookie-missing-security-flags': requireReview(
     'httpOnly hides the cookie from browser scripts, so client code that reads it stops working.',
@@ -65,6 +111,16 @@ const builders: Record<string, SiteFixBuilder> = {
     'Anchoring the pattern changes which origins the server accepts.',
     corsOriginRegexFix,
   ),
+  'cors-credentials-any-origin': requireReview(
+    'Restricts CORS origins to `process.env.ALLOWED_ORIGINS`; configure that env var before deploying.',
+    corsCredentialsOriginFix,
+  ),
+  'storage-object-public-acl': requireReview(
+    'Restricts object ACL to private; use signed URLs if public downloads are needed.',
+    storagePublicAclFix,
+  ),
+  'secret-in-log': secretInLogFix,
+  'xml-external-entities': xmlExternalEntitiesFix,
   'graphql-introspection-enabled': requireReview(
     'Introspection is switched off in production, which breaks tooling that queries the schema there.',
     graphqlFix,

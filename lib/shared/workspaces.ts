@@ -1,4 +1,3 @@
-// @ts-check
 // Finds the packages of a monorepo and the TypeScript config each one analyses with. Supports npm/yarn
 // `workspaces` (array or { packages }), pnpm-workspace.yaml and lerna.json, with the globs of lib/shared/glob.cjs.
 import fs from 'node:fs';

@@ -1,7 +1,14 @@
 // Rule id -> build({ finding, node, sourceFile, text, load }) => { edits, note } | undefined; see
 // lib/performance/site-fix.cjs.
 import { calleeName } from '../../performance/call-syntax.js';
-import { ts, addProperty, ancestor, calleeCall, replaceNode } from '../../performance/site-fixes/helpers.js';
+import {
+  ts,
+  addProperty,
+  ancestor,
+  calleeCall,
+  replaceNode,
+  requireReview,
+} from '../../performance/site-fixes/helpers.js';
 import { nameText } from '../exposure/literals.js';
 import type { CallExpression, Node, PropertyAssignment, SourceFile } from 'typescript';
 import type { FixResult, SiteFixBuilder, SiteFixInput, TextEdit } from '../../shared/types.js';
@@ -184,11 +191,27 @@ function insecureRandomFix({ node, sourceFile, text }: SiteFixInput): FixResult 
   };
 }
 
+function insecureCipherFix({ node }: SiteFixInput): FixResult | undefined {
+  if (!node) return;
+  const call = calleeCall(node);
+  if (!call || !call.arguments.length) return;
+  const alg = ts.skipOuterExpressions(call.arguments[0]);
+  if (!ts.isStringLiteralLike(alg)) return;
+  return {
+    edits: [replaceNode(alg, "'aes-256-gcm'")],
+    note: 'Upgrades cipher algorithm to `aes-256-gcm`; ensure a 32-byte key, 12-byte IV, and authTag handling are used.',
+  };
+}
+
 const builders: Record<string, SiteFixBuilder> = {
   'tls-verification-disabled': tlsVerificationFix,
   'bcrypt-low-cost': bcryptCostFix,
   'insecure-random-for-secret': insecureRandomFix,
   'jwt-verify-without-algorithms': jwtVerifyFix,
+  'insecure-cipher': requireReview(
+    'Switching to `aes-256-gcm` requires a 32-byte key, 12-byte IV, and `getAuthTag()`/`setAuthTag()`.',
+    insecureCipherFix,
+  ),
 };
 
 export default builders;

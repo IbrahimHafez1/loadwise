@@ -1,5 +1,6 @@
 // Credentials written into source: known token shapes, signing keys and named secret values.
 import { ts } from '../../performance/compiler.js';
+import { classifyExecutionContext } from '../../shared/execution-context.js';
 import {
   fileMentions,
   libraryInfo,
@@ -173,8 +174,16 @@ function isRepeatedCharacters(value: string) {
 function checkKnownCredential(literal: StringLiteralLike | TemplateLiteralLikeNode, context: SecurityRuleContext) {
   const text = literal.text ?? ('rawText' in literal ? literal.rawText : undefined);
   if (!text || text.length < shortestKnownCredential || !credentialMarker.test(text)) return;
-  if (hasStrongPlaceholder(text) || !credentialShapes.some((shape) => shape.test(text))) return;
-  context.report(literal, 'hardcoded-secret', message);
+  if (publicKeyShape.test(text) || hasStrongPlaceholder(text) || !credentialShapes.some((shape) => shape.test(text)))
+    return;
+  const isFixture =
+    !context.fileContext.isTestSource && classifyExecutionContext(context.sourceFile).runtime === 'test-fixture';
+  context.report(
+    literal,
+    'hardcoded-secret',
+    message,
+    isFixture ? 'Credential-shaped literal in a test or fixture source.' : undefined,
+  );
 }
 
 function environmentName(expression: Expression) {
@@ -286,7 +295,7 @@ function keyLiteral(expression: Expression, checker: CheckerAdapter): StringLite
 function reportSigningKey(keyExpression: Expression, context: SecurityRuleContext) {
   const literal = keyLiteral(keyExpression, context.checker);
   if (!literal || literal.text.length < shortestSigningKey || hasStrongPlaceholder(literal.text)) return;
-  if (isEnvironmentVariableName(literal.text)) return;
+  if (isEnvironmentVariableName(literal.text) || publicKeyShape.test(literal.text)) return;
   context.report(literal, 'hardcoded-secret', message);
 }
 

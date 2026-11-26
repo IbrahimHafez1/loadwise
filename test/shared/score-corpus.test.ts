@@ -6,9 +6,14 @@ import {
   classifyStatus,
   countDeltas,
   findBelowFloor,
+  findBelowMinPrecision,
   findRegressions,
   labelStates,
+  main,
   normalizeFile,
+  overallPrecision,
+  parseArgs,
+  parseMinPrecision,
   scoreUnits,
 } from '../../scripts/score-corpus.js';
 
@@ -129,4 +134,38 @@ test('findBelowFloor honours the exceptions list', () => {
   const rules = { 'perf/floating-promise': floorStats(0, MINIMUM_LABELS_FOR_FLOOR) };
   const exceptions = [{ rule: 'perf/floating-promise', reason: 'known' }];
   assert.deepEqual(findBelowFloor(rules, exceptions), []);
+});
+
+test('parseArgs and parseMinPrecision validate --min-precision in [0, 1]', async () => {
+  assert.equal(parseMinPrecision(undefined), undefined);
+  assert.equal(parseMinPrecision('0'), 0);
+  assert.equal(parseMinPrecision('1'), 1);
+  assert.equal(parseMinPrecision('0.85'), 0.85);
+  assert.equal(parseArgs(['--min-precision', '0.9'])['min-precision'], '0.9');
+
+  for (const invalid of ['', 'abc', '-0.1', '1.1', 'NaN', 'Infinity', true]) {
+    assert.throws(() => parseMinPrecision(invalid), /--min-precision must be a finite number in \[0, 1\]/);
+  }
+  assert.equal(await main(['--min-precision', '1.5']), 1);
+});
+
+test('findBelowMinPrecision flags rules and overall precision below the threshold', () => {
+  const rules = {
+    'perf/a': floorStats(9, 1),
+    'perf/b': floorStats(3, 1),
+    'perf/unmeasured': {
+      tp: 0,
+      fp: 0,
+      missed: 2,
+      unlabelled: 0,
+      findings: 0,
+      contextual: 0,
+      precision: null,
+      recall: 0,
+    },
+  };
+  assert.equal(overallPrecision(rules), 0.8571);
+  assert.deepEqual(findBelowMinPrecision(rules, 0.75), []);
+  assert.deepEqual(findBelowMinPrecision(rules, 0.8), ['perf/b']);
+  assert.deepEqual(findBelowMinPrecision(rules, 0.88), ['perf/b', 'overall']);
 });

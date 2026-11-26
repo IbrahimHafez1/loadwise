@@ -1,4 +1,3 @@
-// @ts-check
 // Folder names that hold generated output, vendored dependencies or coverage, but only where a build puts them: at
 // the scanned root or beside a project manifest. Elsewhere, such as `src/build/`, the name is the project's own source.
 import fs from 'node:fs';

@@ -48,3 +48,41 @@ constraints:
     any:
       - kind: string_literal
       - kind: raw_string_literal
+
+---
+id: rust-clone-in-loop
+language: Rust
+severity: warning
+message: Calling .clone() inside a loop allocates on every iteration. Borrow or move outside the loop when possible.
+rule:
+  all:
+    - pattern: $EXPR.clone()
+    - inside:
+        any:
+          - kind: for_expression
+          - kind: while_expression
+          - kind: loop_expression
+        field: body
+        stopBy:
+          any:
+            - kind: closure_expression
+            - kind: function_item
+
+---
+id: rust-format-in-loop
+language: Rust
+severity: warning
+message: Calling format!() inside a loop allocates a new String on every iteration. Reuse a buffer with write!() instead.
+rule:
+  all:
+    - pattern: format!($$$ARGS)
+    - inside:
+        any:
+          - kind: for_expression
+          - kind: while_expression
+          - kind: loop_expression
+        field: body
+        stopBy:
+          any:
+            - kind: closure_expression
+            - kind: function_item

@@ -1,4 +1,3 @@
-// @ts-check
 // `loadwise check`: runs the selected pillars in parallel, then prints their reports and merges their exit codes.
 import fs from 'node:fs';
 import path from 'node:path';

@@ -1,70 +1,24 @@
-// @ts-check
-import fs from 'node:fs';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
 import { parseArgs } from 'node:util';
-import * as ts from 'typescript';
-import { applyFix } from '../../editor/apply-fix.cjs';
 import { scanForFixes } from './check.js';
 import { pillars } from './pillars.js';
 import { realTarget } from './real-target.js';
-import { introducedSyntaxError, refusalReason } from './fix-safety.js';
-import { errorCode, errorMessage } from './error-code.js';
-import type { Declaration, Node } from 'typescript';
 import type { Finding, FixChange } from './types.js';
-import type { FileUpdate, FixableFinding, UpdateHunk } from './types/fix-run.js';
-import { formatUpdates, ruleWhy, withoutWhyComment } from './fix-presentation.js';
+import type { FileUpdate, FixableFinding } from './types/fix-run.js';
+import { ruleWhy, withoutWhyComment } from './fix-presentation.js';
 import { labelledLines } from './fix-terminal.js';
 import { groupByReason } from './reason-groups.js';
 import { formatHandoff, fixInstructions } from './fix-handoff.js';
 import { attachRecipeFixes } from './fix-recipes.js';
 import { recordBulk } from './fix-history.js';
 import { writeReviewHandoff } from './review-delivery.js';
-
-/** A file's new text staged next to the temporary file that will replace it. */
-interface StagedUpdate extends FileUpdate {
-  temporary: string;
-}
-
-/** A finding left out of the run, and why. */
-interface RefusedFinding {
-  finding: Finding;
-  reason: string;
-}
-
-interface StagedFixes {
-  updates: FileUpdate[];
-  refusals: Map<string, string>;
-  hunksByFile: Map<string, UpdateHunk[]>;
-}
-
-interface Split {
-  kept: FixableFinding[];
-  refused: RefusedFinding[];
-}
-
-/** The rows `[first, last]` a change rewrites in one file. */
-interface ChangeRange {
-  file: string;
-  first: number;
-  last: number;
-  key: string;
-  change: FixChange;
-}
-
-interface ClaimedRange extends ChangeRange {
-  finding: FixableFinding;
-}
+import { hunkRange, writeFixes } from './fix-convergence.js';
 
 interface BulkFixOptions {
   includeReview?: boolean;
   format?: boolean;
-}
-
-interface WrittenFixes {
-  applied: FixableFinding[];
-  refused: RefusedFinding[];
-  changedFiles: number;
+  verifyTypes?: boolean;
+  dryRun?: boolean;
 }
 
 function hasFix(finding: Finding): finding is FixableFinding {
@@ -74,11 +28,14 @@ function hasFix(finding: Finding): finding is FixableFinding {
 const usage = `Usage: loadwise fix (--yes | --all | --handoff) [checkers...]
   --yes    Apply automatic fixes.
   --all    Apply every generated fix, including edits marked for individual review.
+  --dry-run      Preview converged unified diffs without writing files.
+  --rule <id>    Limit fixes to the named rule ID (repeatable).
   --handoff  Print a read-only Markdown brief for manual findings.
   --review   With --yes or --all, save this run and print a handoff for any coding agent.
   --json   With --yes or --all, print the applied hunks, manual findings and pending review findings as JSON.
   --recipe <name|file.cjs>  With --all, use verified-private-types or a trusted local fix recipe.
   --only   Select checkers by name. Spaces or commas separate multiple names.
+  --no-verify-types  Skip Layer-2 semantic type-check verification on modified TS files.
   --no-comments  Do not add the "// Loadwise <rule-id>: <why>" comment above each fixed statement.
   --no-format    Do not format the changed lines with the project's Prettier.
   Checkers: performance (perf), maintainability (maint), security (sec).
@@ -95,6 +52,8 @@ function fixOptions(args: string[]) {
     options: {
       yes: { type: 'boolean' },
       all: { type: 'boolean' },
+      'dry-run': { type: 'boolean' },
+      rule: { type: 'string', multiple: true },
       handoff: { type: 'boolean' },
       review: { type: 'boolean' },
       json: { type: 'boolean' },
@@ -103,6 +62,7 @@ function fixOptions(args: string[]) {
       comments: { type: 'boolean' },
       'no-comments': { type: 'boolean' },
       'no-format': { type: 'boolean' },
+      'no-verify-types': { type: 'boolean' },
     },
   });
   if (values.handoff && (values.yes || values.all || values.recipe !== undefined))
@@ -125,353 +85,29 @@ function fixOptions(args: string[]) {
       selected.add(checker.name);
     }
   }
+  const rules = (values.rule ?? [])
+    .flatMap((entry) => entry.split(','))
+    .map((entry) => entry.trim())
+    .filter(Boolean);
   return {
     includeReview: Boolean(values.all),
+    dryRun: Boolean(values['dry-run']),
+    rules: rules.length ? new Set(rules) : undefined,
     handoff: Boolean(values.handoff),
     requestReview: Boolean(values.review),
     json: Boolean(values.json),
     recipe: values.recipe,
     comments: !values['no-comments'],
     format: !values['no-format'],
+    verifyTypes: !values['no-verify-types'],
     selected: selected.size ? [...selected] : undefined,
   };
-}
-
-function currentText(filename: string): string | undefined {
-  try {
-    return fs.readFileSync(filename, 'utf8');
-  } catch (error) {
-    if (errorCode(error) === 'ENOENT') return undefined;
-    throw error;
-  }
-}
-
-// A change's identity: findings that propose the same change share it.
-const changeKey = (file: string, change: FixChange): string =>
-  JSON.stringify([file, change.line, change.before, change.after, Boolean(change.create)]);
-
-function collectChanges(findings: readonly FixableFinding[], directory: string): FixChange[] {
-  const root = fs.realpathSync.native(directory);
-  const changes = new Map<string, FixChange>();
-  for (const finding of findings) {
-    for (const change of finding.fix.changes) {
-      const file = realTarget(path.resolve(directory, change.file));
-      const relative = path.relative(root, file);
-      if (!relative || relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) {
-        throw new Error(`Fix #${finding.id} targets a file outside the current project: ${change.file}`);
-      }
-      // Multiple checkers can propose the exact same import or helper.
-      changes.set(changeKey(file, change), { ...change, file });
-    }
-  }
-  return [...changes.values()];
-}
-
-// Disjoint line edits can still introduce two helpers with the same name in one scope.
-function validateSource(file: string, text: string): void {
-  if (!/\.[cm]?[jt]sx?$/i.test(file)) return;
-  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
-  ts.bindSourceFile(source, {});
-  const [diagnostic] = source.bindDiagnostics ?? [];
-  if (diagnostic)
-    throw new Error(`${file}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, ' ')} No fixes applied.`);
-  const hasBody = (declaration: Declaration): boolean =>
-    (ts.isFunctionDeclaration(declaration) ||
-      ts.isMethodDeclaration(declaration) ||
-      ts.isConstructorDeclaration(declaration)) &&
-    Boolean(declaration.body);
-  function duplicateImplementation(node: Node): string | undefined {
-    if (
-      (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node) || ts.isConstructorDeclaration(node)) &&
-      node.body &&
-      (node.symbol?.declarations?.filter((declaration) => declaration.kind === node.kind && hasBody(declaration))
-        .length ?? 0) > 1
-    ) {
-      return node.name?.getText(source) ?? 'constructor';
-    }
-    return ts.forEachChild(node, duplicateImplementation);
-  }
-  const duplicate = duplicateImplementation(source);
-  if (duplicate) throw new Error(`${file}: duplicate implementation of ${duplicate}. No fixes applied.`);
-}
-
-function writeUpdates(updates: readonly FileUpdate[]): void {
-  const staged: StagedUpdate[] = [];
-  const written: StagedUpdate[] = [];
-  try {
-    for (const update of updates) {
-      const { file, before } = update;
-      if (currentText(file) !== before || realTarget(file) !== file)
-        throw new Error('File changed while applying fixes: ' + file);
-      if (before === undefined) fs.mkdirSync(path.dirname(file), { recursive: true });
-      else fs.accessSync(file, fs.constants.W_OK);
-      const temporary = path.join(path.dirname(file), '.loadwise-' + randomUUID() + '.tmp');
-      const descriptor = fs.openSync(temporary, 'wx');
-      staged.push({ ...update, temporary });
-      try {
-        fs.writeFileSync(descriptor, update.after);
-        if (before !== undefined) fs.fchmodSync(descriptor, fs.statSync(file).mode);
-      } finally {
-        fs.closeSync(descriptor);
-      }
-    }
-    commitStagedUpdates(staged, written);
-  } catch (error) {
-    const unrestored: string[] = [];
-    for (const { file, before, after, temporary } of written.reverse()) {
-      try {
-        if (realTarget(file) !== file || currentText(file) !== after) unrestored.push(file);
-        else if (before === undefined) fs.unlinkSync(file);
-        else {
-          fs.writeFileSync(temporary, before, { flag: 'wx', mode: fs.statSync(file).mode });
-          renameWithRetry(temporary, file);
-        }
-      } catch {
-        unrestored.push(file);
-      }
-    }
-    const detail = unrestored.length ? ' Review files that could not be restored: ' + unrestored.join(', ') : '';
-    throw new Error(errorMessage(error) + detail);
-  } finally {
-    for (const { temporary } of staged) {
-      try {
-        fs.rmSync(temporary, { force: true });
-      } catch (error) {
-        console.error(`Could not remove ${temporary}: ${errorMessage(error)}`);
-      }
-    }
-  }
-}
-
-const TRANSIENT_RENAME_ERRORS = new Set(['EPERM', 'EACCES', 'EBUSY']);
-const RENAME_RETRY_DELAYS_MS = [10, 20, 40, 80];
-
-function renameWithRetry(from: string, to: string): void {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      fs.renameSync(from, to);
-      return;
-    } catch (error) {
-      const code = errorCode(error);
-      if (code && TRANSIENT_RENAME_ERRORS.has(code) && attempt < RENAME_RETRY_DELAYS_MS.length) {
-        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, RENAME_RETRY_DELAYS_MS[attempt]);
-        continue;
-      }
-      throw error;
-    }
-  }
-}
-
-function commitStagedUpdates(staged: readonly StagedUpdate[], written: StagedUpdate[]): void {
-  for (const update of staged) {
-    const { file, before, temporary } = update;
-    if (currentText(file) !== before || realTarget(file) !== file)
-      throw new Error('File changed while applying fixes: ' + file);
-    if (before === undefined) fs.copyFileSync(temporary, file, fs.constants.COPYFILE_EXCL);
-    else renameWithRetry(temporary, file);
-    written.push(update);
-  }
-}
-
-// Applies the findings' changes in memory. A file whose new text has a syntax error the original
-// lacked is left out of `updates` and named in `refusals`; nothing is written here.
-function stageFixes(findings: readonly FixableFinding[], directory: string): StagedFixes {
-  const changes = collectChanges(findings, directory);
-  const originals = new Map<string, string | undefined>();
-  const updates: FileUpdate[] = [];
-  const refusals = new Map<string, string>();
-  const hunksByFile = new Map<string, UpdateHunk[]>();
-  function capture(change: FixChange): void {
-    const hunks = hunksByFile.get(change.file) ?? [];
-    hunksByFile.set(change.file, hunks);
-    hunks.push({
-      key: changeKey(change.file, change),
-      row: change.line - 1,
-      removed: change.create ? 0 : change.before.split('\n').length,
-      added: change.after.split('\n').length,
-    });
-  }
-  const result = changes.length
-    ? applyFix(
-        { changes },
-        {
-          readFile(file: string): string | undefined {
-            const text = currentText(file);
-            originals.set(file, text);
-            return text;
-          },
-          writeFile(file: string, after: string): void {
-            const syntaxError = introducedSyntaxError(file, originals.get(file), after);
-            if (syntaxError) {
-              refusals.set(file, refusalReason(file, syntaxError));
-              return;
-            }
-            validateSource(file, after);
-            updates.push({ file, before: originals.get(file), after });
-          },
-        },
-        { exactLocation: true, capture },
-      )
-    : undefined;
-  if (result?.error)
-    throw new Error(result.error + '. No fixes applied. Run loadwise check to choose individual fixes.');
-  return { updates, refusals, hunksByFile };
-}
-
-// Findings with a change in a refused file are not applied at all: a fix is all of its changes or
-// none.
-function splitRefused(
-  findings: readonly FixableFinding[],
-  directory: string,
-  refusals: ReadonlyMap<string, string>,
-): Split {
-  const kept: FixableFinding[] = [];
-  const refused: RefusedFinding[] = [];
-  for (const finding of findings) {
-    const files = finding.fix.changes.map((change: FixChange) => realTarget(path.resolve(directory, change.file)));
-    const blocked = files.find((file: string) => refusals.has(file));
-    const reason = blocked === undefined ? undefined : refusals.get(blocked);
-    if (reason !== undefined) refused.push({ finding, reason });
-    else kept.push(finding);
-  }
-  return { kept, refused };
-}
-
-// A new file must come whole from one fix. When two fixes in a run create the same path (two
-// duplicate groups extracting a helper of the same name), the first one keeps it and the later ones
-// wait for the next run, which sees the file and picks another name. A later fix proposing the
-// identical file is the same change and stays.
-function splitCreateConflicts(findings: readonly FixableFinding[], directory: string): Split {
-  const owners = new Map<string, { finding: FixableFinding; key: string }>();
-  for (const finding of findings) {
-    for (const change of finding.fix.changes) {
-      if (!change.create) continue;
-      const file = realTarget(path.resolve(directory, change.file));
-      if (!owners.has(file)) owners.set(file, { finding, key: changeKey(file, change) });
-    }
-  }
-  const kept: FixableFinding[] = [];
-  const refused: RefusedFinding[] = [];
-  for (const finding of findings) {
-    let conflict: { change: FixChange; owner: FixableFinding } | undefined;
-    for (const change of finding.fix.changes) {
-      const file = realTarget(path.resolve(directory, change.file));
-      const owner = owners.get(file);
-      if (owner && owner.finding !== finding && changeKey(file, change) !== owner.key) {
-        conflict = { change, owner: owner.finding };
-        break;
-      }
-    }
-    if (!conflict) kept.push(finding);
-    else {
-      refused.push({
-        finding,
-        reason: `#${conflict.owner.id} creates ${conflict.change.file} in this run; run the fix again after it`,
-      });
-    }
-  }
-  return { kept, refused };
-}
-
-// Two fixes rewriting overlapping lines cannot both apply, such as removals of adjacent index lines
-// that each take the line above. The first one keeps its lines and the later ones wait for the next
-// run, which rescans the new text, so one collision does not stop every other fix. Fixes sharing an
-// identical change do not conflict.
-function splitOverlapConflicts(findings: readonly FixableFinding[], directory: string): Split {
-  const claimed = new Map<string, ClaimedRange[]>();
-  const kept: FixableFinding[] = [];
-  const refused: RefusedFinding[] = [];
-  for (const finding of findings) {
-    const ranges = finding.fix.changes
-      .filter((change: FixChange) => !change.create)
-      .map((change: FixChange): ChangeRange => {
-        const file = realTarget(path.resolve(directory, change.file));
-        const [first, last] = hunkRange(change);
-        return { file, first, last, key: changeKey(file, change), change };
-      });
-    const overlap = (range: ChangeRange): ClaimedRange | undefined =>
-      claimed
-        .get(range.file)
-        ?.find((owner) => owner.key !== range.key && owner.first <= range.last && range.first <= owner.last);
-    let conflict: { range: ChangeRange; owner: ClaimedRange } | undefined;
-    for (const range of ranges) {
-      const owner = overlap(range);
-      if (owner) {
-        conflict = { range, owner };
-        break;
-      }
-    }
-    if (conflict) {
-      refused.push({
-        finding,
-        reason: `#${conflict.owner.finding.id} changes ${conflict.range.change.file}:${conflict.range.first} in this run; run the fix again after it`,
-      });
-      continue;
-    }
-    kept.push(finding);
-    for (const range of ranges) {
-      const owned = claimed.get(range.file) ?? [];
-      claimed.set(range.file, owned);
-      owned.push({ ...range, finding });
-    }
-  }
-  return { kept, refused };
-}
-
-function writeFixes(findings: readonly FixableFinding[], directory: string, format: boolean): WrittenFixes {
-  const conflicts = splitCreateConflicts(findings, directory);
-  const overlaps = splitOverlapConflicts(conflicts.kept, directory);
-  let remaining = overlaps.kept;
-  const refused: RefusedFinding[] = [...conflicts.refused, ...overlaps.refused];
-  for (;;) {
-    const { updates, refusals, hunksByFile } = stageFixes(remaining, directory);
-    if (!refusals.size) {
-      if (format) showFormattedChanges(remaining, directory, updates, hunksByFile);
-      writeUpdates(updates);
-      return { applied: remaining, refused, changedFiles: updates.length };
-    }
-    const split = splitRefused(remaining, directory, refusals);
-    refused.push(...split.refused);
-    remaining = split.kept;
-  }
-}
-
-// Formats the changed lines before they are written, and shows each applied change as it now reads.
-function showFormattedChanges(
-  findings: readonly FixableFinding[],
-  directory: string,
-  updates: FileUpdate[],
-  hunksByFile: ReadonlyMap<string, UpdateHunk[]>,
-): void {
-  const formatted = formatUpdates(
-    directory,
-    updates.map((update: FileUpdate) => ({ ...update, hunks: hunksByFile.get(update.file) ?? [] })),
-  );
-  // The fixes were checked for syntax before formatting; a file that formatting breaks is written
-  // unformatted.
-  const unformatted = new Set<string>();
-  for (const update of updates) {
-    const text = formatted.texts.get(update.file);
-    if (text === undefined) continue;
-    if (introducedSyntaxError(update.file, update.before, text)) unformatted.add(update.file);
-    else update.after = text;
-  }
-  for (const finding of findings) {
-    for (const change of finding.fix.changes) {
-      const file = realTarget(path.resolve(directory, change.file));
-      if (unformatted.has(file)) continue;
-      const hunk = formatted.hunks.get(changeKey(file, change));
-      if (hunk) Object.assign(change, hunk);
-    }
-  }
 }
 
 function location(finding: Finding): string {
   return `${finding.checker} ${finding.file}:${finding.line} [${finding.ruleId} #${finding.id}]`;
 }
 
-// Applied fixes with why their rule changed the code, said once per rule, and each fix's note on
-// why it changed its site this way. Notes name the site's own code, so they stay per fix.
 function printFixed(applied: readonly FixableFinding[]): void {
   const printNote = (finding: FixableFinding, indentation: string): void => {
     if (!finding.fix.note) return;
@@ -498,14 +134,10 @@ function printFixed(applied: readonly FixableFinding[]): void {
   }
 }
 
-function hunkRange(change: FixChange): [number, number] {
-  return change.create ? [1, Infinity] : [change.line, change.line + change.before.split('\n').length - 1];
-}
-
 function applyBulkFixes(
   findings: Finding[],
   directory: string,
-  { includeReview = false, format = false }: BulkFixOptions = {},
+  { includeReview = false, format = false, verifyTypes = true, dryRun = false }: BulkFixOptions = {},
 ) {
   const reviewedRanges = new Map<string, [number, number][]>();
   const target = (change: FixChange) => {
@@ -534,11 +166,14 @@ function applyBulkFixes(
     else if (finding.fix.requiresReview || finding.fix.changes.some(touchesReviewedLines)) review.push(finding);
     else automatic.push(finding);
   }
-  const written = writeFixes(includeReview ? [...automatic, ...review] : automatic, directory, format);
+  const written = writeFixes(includeReview ? [...automatic, ...review] : automatic, directory, {
+    format,
+    verifyTypes,
+    dryRun,
+  });
   return { automatic, manual, review, ...written };
 }
 
-// The findings with the recipe's fixes attached, when one was asked for.
 async function attachRecipe(scanned: Finding[], recipe: string | undefined): Promise<Finding[]> {
   if (recipe === 'verified-private-types') {
     const { attachVerifiedPrivateTypes } = await import('../maintainability/verified-private-types.js');
@@ -565,25 +200,50 @@ function fixSummary(includeReview: boolean, { applied, changedFiles, manual, rev
     : `${applied} automatic fix(es) in ${changedFiles} file(s), ${manual} manual, ${review} requiring individual review.`;
 }
 
+function printDryRunDiff(updates: readonly FileUpdate[], directory: string): void {
+  for (const { file, before, after } of updates) {
+    const rel = path.relative(directory, file).split(path.sep).join('/');
+    console.log(`--- a/${rel}`);
+    console.log(`+++ b/${rel}`);
+    for (const line of (before ?? '').split('\n')) console.log(`-${line}`);
+    for (const line of after.split('\n')) console.log(`+${line}`);
+  }
+}
+
 async function runFix(args: string[]): Promise<number> {
   if (args.length === 1 && ['--help', '-h'].includes(args[0])) {
     console.log(usage);
     return 0;
   }
-  const { selected, includeReview, recipe, handoff, json, requestReview, comments, format } = fixOptions(args);
-  const scanned = await scanForFixes(selected);
+  const {
+    selected,
+    includeReview,
+    dryRun,
+    rules,
+    recipe,
+    handoff,
+    json,
+    requestReview,
+    comments,
+    format,
+    verifyTypes,
+  } = fixOptions(args);
+  const scannedAll = await scanForFixes(selected);
+  const scanned = rules ? scannedAll.filter((finding) => rules.has(finding.ruleId)) : scannedAll;
   if (handoff) {
     console.log(formatHandoff(scanned, selected));
     return 0;
   }
   const withRecipe = await attachRecipe(scanned, recipe);
   const findings = comments ? withRecipe : withRecipe.map(withoutFixComment);
-  const { applied, manual, review, refused, changedFiles } = applyBulkFixes(findings, process.cwd(), {
+  const { applied, manual, review, refused, changedFiles, updates } = applyBulkFixes(findings, process.cwd(), {
     includeReview,
     format,
+    verifyTypes,
+    dryRun,
   });
   const pendingReview = includeReview ? [] : review;
-  if (changedFiles)
+  if (changedFiles && !dryRun)
     recordBulk(process.cwd(), {
       applied,
       manual,
@@ -591,8 +251,8 @@ async function runFix(args: string[]): Promise<number> {
     });
   const instructions = fixInstructions(findings.length, selected, manual.length);
   const notApplied = refused.map(({ finding, reason }) => ({ id: finding.id, ruleId: finding.ruleId, reason }));
-  const report = { changedFiles, applied, manual, pendingReview, notApplied, instructions };
-  if (requestReview)
+  const report = { changedFiles, dryRun, applied, manual, pendingReview, notApplied, instructions };
+  if (requestReview && !dryRun)
     await writeReviewHandoff(process.cwd(), 'fix', {
       args,
       format: 'json',
@@ -603,6 +263,7 @@ async function runFix(args: string[]): Promise<number> {
     console.log(JSON.stringify(report));
     return 0;
   }
+  if (dryRun && updates.length) printDryRunDiff(updates, process.cwd());
   if (!includeReview) for (const finding of review) console.log('Review individually: ' + location(finding));
   for (const finding of manual) console.log('Manual change: ' + location(finding));
   for (const { finding, reason } of refused) console.log(`Not applied: ${location(finding)}: ${reason}`);

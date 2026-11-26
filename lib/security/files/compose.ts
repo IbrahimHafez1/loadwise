@@ -41,12 +41,16 @@ function runsDatastoreImage(lines: readonly string[], headerIndex: number, heade
   return false;
 }
 
-function contextualReasonFor(value: string, datastoreService: boolean) {
+const localDevComposeFile =
+  /(?:^|\/)(?:e2e|tests?|__tests__|fixtures?|examples?|sandbox|local|dev)\/|[._-](?:dev|development|test|local)\.ya?ml$/i;
+
+function contextualReasonFor(value: string, datastoreService: boolean, file?: string) {
   if (datastoreService) return localServiceReason;
+  if (file && localDevComposeFile.test(file.replaceAll('\\', '/'))) return localCredentialsReason;
   return isDefaultPassword(value) ? localCredentialsReason : undefined;
 }
 
-function checkCompose(text: string): FileFinding[] {
+function checkCompose(text: string, file?: string): FileFinding[] {
   const findings: FileFinding[] = [];
   const lines = text.split(/\r?\n/);
   let environmentIndent: number | undefined;
@@ -63,7 +67,7 @@ function checkCompose(text: string): FileFinding[] {
     if (environmentIndent === undefined || header) return;
     const entry = entryOf(line);
     if (!entry || !isSecretKey(entry.key) || isPlaceholderValue(entry.value, entry.key)) return;
-    const contextualReason = contextualReasonFor(entry.value, datastoreService);
+    const contextualReason = contextualReasonFor(entry.value, datastoreService, file);
     findings.push({
       ruleId: 'compose-hardcoded-secret',
       line: index + 1,

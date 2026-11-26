@@ -468,7 +468,134 @@
       ]
     },
     "performance": {
-      "findings": []
+      "findings": [
+        {
+          "ruleId": "json-stringify-in-loop",
+          "file": "../../lib/performance/cli.ts",
+          "fingerprint": "71c38c33b219",
+          "count": 1
+        },
+        {
+          "ruleId": "json-stringify-in-loop",
+          "file": "../../lib/performance/contracts/openapi.ts",
+          "fingerprint": "42eb211e66a2",
+          "count": 1
+        },
+        {
+          "ruleId": "json-stringify-in-loop",
+          "file": "../../lib/performance/contracts/openapi.ts",
+          "fingerprint": "5356dfcf3f50",
+          "count": 1
+        },
+        {
+          "ruleId": "json-stringify-in-loop",
+          "file": "../../lib/performance/editor-setup.ts",
+          "fingerprint": "bbca17499882",
+          "count": 1
+        },
+        {
+          "ruleId": "json-stringify-in-loop",
+          "file": "../../lib/performance/native.ts",
+          "fingerprint": "e3fa8326c956",
+          "count": 1
+        },
+        {
+          "ruleId": "json-stringify-in-loop",
+          "file": "../../lib/performance/projects.ts",
+          "fingerprint": "f3adbcea32ac",
+          "count": 1
+        },
+        {
+          "ruleId": "json-stringify-in-loop",
+          "file": "../../lib/shared/agent-verify.ts",
+          "fingerprint": "604cd22d43d1",
+          "count": 2
+        },
+        {
+          "ruleId": "json-stringify-in-loop",
+          "file": "../../lib/shared/fix-handoff.ts",
+          "fingerprint": "5c18e0660865",
+          "count": 1
+        },
+        {
+          "ruleId": "json-stringify-in-loop",
+          "file": "../../lib/shared/fix-history.ts",
+          "fingerprint": "5a0dd5e4b0d1",
+          "count": 2
+        },
+        {
+          "ruleId": "json-stringify-in-loop",
+          "file": "../../lib/shared/fix-presentation-comments.ts",
+          "fingerprint": "15fd4978d121",
+          "count": 1
+        },
+        {
+          "ruleId": "json-stringify-in-loop",
+          "file": "../../lib/shared/fix-presentation-comments.ts",
+          "fingerprint": "1b6911cf277f",
+          "count": 1
+        },
+        {
+          "ruleId": "json-stringify-in-loop",
+          "file": "../../lib/shared/fix-presentation-comments.ts",
+          "fingerprint": "50ca3a8f2f4e",
+          "count": 1
+        },
+        {
+          "ruleId": "json-stringify-in-loop",
+          "file": "../../lib/shared/reason-groups.ts",
+          "fingerprint": "89fd7d2c451b",
+          "count": 1
+        },
+        {
+          "ruleId": "unbounded-promise-all",
+          "file": "../../lib/maintainability/analyze-source.ts",
+          "fingerprint": "c5a3c5c99df0",
+          "count": 1
+        },
+        {
+          "ruleId": "unbounded-promise-all",
+          "file": "../../lib/maintainability/scan.ts",
+          "fingerprint": "3d20b08faef6",
+          "count": 1
+        },
+        {
+          "ruleId": "unbounded-promise-all",
+          "file": "../../lib/maintainability/scan.ts",
+          "fingerprint": "ad287291fa91",
+          "count": 1
+        },
+        {
+          "ruleId": "unbounded-promise-all",
+          "file": "../../lib/performance/projects.ts",
+          "fingerprint": "c88da12b5489",
+          "count": 1
+        },
+        {
+          "ruleId": "unbounded-promise-all",
+          "file": "../../lib/performance/site-fix.ts",
+          "fingerprint": "c6d6a4333a2d",
+          "count": 1
+        },
+        {
+          "ruleId": "unbounded-promise-all",
+          "file": "../../lib/security/deps/osv.ts",
+          "fingerprint": "4997b1fa834c",
+          "count": 1
+        },
+        {
+          "ruleId": "unbounded-promise-all",
+          "file": "../../lib/shared/pillars.ts",
+          "fingerprint": "65f42eed25b8",
+          "count": 1
+        },
+        {
+          "ruleId": "unbounded-promise-all",
+          "file": "../../lib/shared/pillars.ts",
+          "fingerprint": "8ee68d735756",
+          "count": 1
+        }
+      ]
     },
     "security": {
       "findings": []

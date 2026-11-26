@@ -166,16 +166,20 @@ function nextStatement(statement: Statement): Statement | undefined {
   return parent.statements[parent.statements.indexOf(statement) + 1];
 }
 
-// `try { ... } catch {} return null;`: the caller receives the function's own "not found" result.
+// `try { ... } catch {} return null;`: the caller receives a typed fallback result.
 function returnsEmptyAfter(tryStatement: TryStatement): boolean {
   const next = nextStatement(tryStatement);
   if (!next || !ts.isReturnStatement(next)) return false;
-  const value = next.expression;
+  const value = next.expression && withoutWrappers(next.expression);
   return (
     !value ||
     value.kind === ts.SyntaxKind.NullKeyword ||
     value.kind === ts.SyntaxKind.FalseKeyword ||
-    (ts.isIdentifier(value) && value.text === 'undefined')
+    (ts.isNumericLiteral(value) && value.text === '0') ||
+    (ts.isStringLiteralLike(value) && value.text === '') ||
+    (ts.isArrayLiteralExpression(value) && value.elements.length === 0) ||
+    (ts.isObjectLiteralExpression(value) && value.properties.length === 0) ||
+    (ts.isIdentifier(value) && (value.text === 'undefined' || /(?:fallback|default)/i.test(value.text)))
   );
 }
 
@@ -268,6 +272,20 @@ function logExplainsFallback(statements: readonly Statement[]): boolean {
   });
 }
 
+function onlySerializesTelemetry(tryBlock: Block): boolean {
+  if (!tryBlock.statements.length) return false;
+  let hasStringify = false;
+  let hasOtherCall = false;
+  walkNodes(tryBlock, (node: Node) => {
+    if (!ts.isCallExpression(node)) return;
+    const names = calleeNames(node);
+    if (names.join('.') === 'JSON.stringify') hasStringify = true;
+    else if (!loggerNames.has(names[0]) && !(names[0] === 'this' && /^_?(?:logger|log)$/i.test(names[1] ?? '')))
+      hasOtherCall = true;
+  });
+  return hasStringify && !hasOtherCall;
+}
+
 function swallowKind(sourceFile: SourceFile, clause: CatchClause): 'empty' | 'logs' | undefined {
   const tryStatement = clause.parent;
   const statements = clause.block.statements;
@@ -278,7 +296,7 @@ function swallowKind(sourceFile: SourceFile, clause: CatchClause): 'empty' | 'lo
   if (tryStatement.tryBlock.statements.length && tryStatement.tryBlock.statements.every(isCleanupCall)) return;
   if (assignsOverDefault(tryStatement) || throwsAfter(tryStatement) || returnsEmptyAfter(tryStatement)) return;
   if (retriesInLoop(tryStatement) || passesToNext(tryStatement)) return;
-  if (onlyAwaitsCache(tryStatement.tryBlock)) return;
+  if (onlyAwaitsCache(tryStatement.tryBlock) || onlySerializesTelemetry(tryStatement.tryBlock)) return;
   if (!statements.length) return 'empty';
   if (statements.every(isLoggingCall) && continuesAfter(tryStatement) && !logExplainsFallback(statements))
     return 'logs';

@@ -1,7 +1,13 @@
 import type { Finding, RulePolicy } from '../types.js';
 
-/** A rule's level in loadwise.config.json: the level alone or an object holding it. */
-export type RuleSetting = string | { level: string };
+export type RuleOptionValue = number | boolean | string;
+export type RuleOptions = Record<string, RuleOptionValue>;
+
+/**
+ * A rule's level in loadwise.config.json: the level alone or an object holding it and optional
+ * per-rule options.
+ */
+export type RuleSetting = string | { level: string; options?: RuleOptions };
 
 export interface ConfigOverride {
   files: string[];
@@ -38,6 +44,8 @@ export interface LoadwiseSettings {
   performance: RulePolicy | undefined;
   maintainability: RulePolicy | undefined;
   checkers: string[] | undefined;
+  /** Returns the effective per-rule options for a rule and optional relative file path, if any. */
+  ruleOptions(ruleId: string, relativeFile?: string): RuleOptions | undefined;
   /** Drops ignored paths and "off" rules and tags the rest with their "warn" or "error" level. */
   apply(findings: Finding[], fileBase: string): Finding[];
   /** "warn" never counts, "error" always counts, and the rest count when isContract allows them. */

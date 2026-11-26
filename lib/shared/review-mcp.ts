@@ -1,4 +1,3 @@
-// @ts-check
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createInterface } from 'node:readline';

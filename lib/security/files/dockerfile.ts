@@ -6,7 +6,16 @@ import type { FileFinding } from '../types/file-finding.js';
 const dockerfileName = /^(?:.+\.)?Dockerfile(?:\..+)?$/i;
 const developmentName = /(?:^|[._-])(?:dev|development|test|ci|local|toolchain)(?:[._-]|$)/i;
 // `dev` is not here: a folder such as dev-gateway can still hold an image that is deployed.
-const developmentFolderWords = new Set(['test', 'tests', 'e2e', 'devcontainer', 'fake', 'fixtures']);
+const developmentFolderWords = new Set([
+  'test',
+  'tests',
+  'e2e',
+  'devcontainer',
+  'fake',
+  'fixtures',
+  'sandbox',
+  'playwright',
+]);
 const developmentReason = 'Development or test image.';
 const nonRootImage = /nonroot|unprivileged|rootless/i;
 const secretFile =

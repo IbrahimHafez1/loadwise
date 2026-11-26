@@ -36,7 +36,7 @@ function findingsFor(file: string, text: string): FileFinding[] {
   return [
     ...checkSecrets(file, text),
     ...(isDockerfile(file) ? checkDockerfile(file, text) : []),
-    ...(isComposeFile(file) ? checkCompose(text) : []),
+    ...(isComposeFile(file) ? checkCompose(text, file) : []),
   ];
 }
 

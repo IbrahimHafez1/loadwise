@@ -1,4 +1,3 @@
-// @ts-check
 // Interprocedural summaries of project functions, shared by the security and performance rules.
 //
 //   const summaries = functionSummaries(program);

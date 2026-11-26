@@ -73,7 +73,7 @@ export interface AnalyzedSource {
 
 export type FindingsReporter = (result: PerformanceScanResult, values: PrintValues) => Finding[];
 
-export type ExitCodeReporter = (result: PerformanceScanResult, values: PrintValues) => number;
+export type ExitCodeReporter = (result: PerformanceScanResult, values: PrintValues) => number | Promise<number>;
 
 export interface PillarOutput {
   code: number;

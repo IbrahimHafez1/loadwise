@@ -1,4 +1,3 @@
-// @ts-check
 import type { Node } from 'typescript';
 import { findLineIndex } from '../performance/sql/locations.js';
 import { innermostNodeAt } from './fix-hunks.js';

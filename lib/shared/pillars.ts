@@ -1,4 +1,3 @@
-// @ts-check
 // The checkers `loadwise check` can run, in report order. Each runs as a child process of the loadwise CLI, so it keeps
 // its own process-wide state and output. A new checker registers by adding one entry here.
 import path from 'node:path';

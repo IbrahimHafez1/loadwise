@@ -1,4 +1,3 @@
-// @ts-check
 // One glob dialect for every loadwise pattern (config ignore and overrides, workspace package lists): `*` matches
 // within a folder, `**` any depth, `?` one character and `{a,b}` alternatives.
 function globSource(rawPattern: string) {

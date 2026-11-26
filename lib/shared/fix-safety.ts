@@ -1,5 +1,4 @@
 import * as ts from 'typescript';
-// @ts-check
 // Safety net for every generated fix: the new text of a JavaScript or TypeScript file must not parse worse than the
 // original did. A builder bug that leaves a stray token then refuses that file instead of breaking the project.
 

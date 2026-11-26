@@ -3,7 +3,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { analyzeSources, performanceAnalyzers } from '../../lib/performance/projects.js';
-import { attachSiteFixes } from '../../lib/performance/site-fix.js';
+import { attachSiteFixes, loadBuilders } from '../../lib/performance/site-fix.js';
+
+await loadBuilders();
 import type { TestContext } from 'node:test';
 import type { Finding, FindingFix } from '../../lib/shared/types.js';
 import type { SourceAnalyzer } from '../../lib/performance/types/source-analyzer.js';

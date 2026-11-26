@@ -199,11 +199,15 @@ function isContainedPath(sink: Node, expression: Expression, context: SecurityRu
     if (!truth || !found || !sameValue(found.receiver, target, checker)) return false;
     const prefix = strip(found.call.arguments[0]);
     if (prefix && ts.isStringLiteralLike(prefix)) return isRootWithSeparator(prefix.text, root);
+    const resolvedLeft = prefix !== undefined && ts.isBinaryExpression(prefix) ? strip(prefix.left) : undefined;
     return (
       prefix !== undefined &&
       ts.isBinaryExpression(prefix) &&
       prefix.operatorToken.kind === ts.SyntaxKind.PlusToken &&
-      sameValue(prefix.left, root, checker) &&
+      (sameValue(prefix.left, root, checker) ||
+        (pathCall(resolvedLeft, 'resolve', context) &&
+          resolvedLeft.arguments.length === 1 &&
+          sameValue(resolvedLeft.arguments[0], root, checker))) &&
       isPathSeparator(prefix.right, checker)
     );
   };

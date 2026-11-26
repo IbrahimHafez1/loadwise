@@ -1,4 +1,3 @@
-// @ts-check
 import * as performance from '../performance/rule-ids.js';
 import * as maintainability from '../maintainability/rule-ids.js';
 import * as security from '../security/rule-ids.js';

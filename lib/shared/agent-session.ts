@@ -1,4 +1,3 @@
-// @ts-check
 // Use markers supplied to agent commands. IDE names, credentials and CI also occur in ordinary terminals.
 function isAgentSession(env: NodeJS.ProcessEnv = process.env) {
   if (env.LOADWISE_AGENT !== undefined) return env.LOADWISE_AGENT === '1';

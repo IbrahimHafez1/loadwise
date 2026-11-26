@@ -1,4 +1,3 @@
-// @ts-check
 import { requireNative } from './native-runtime.js';
 import { isSourceInput } from './source-inputs.js';
 import type { CompilerOptions, Node, SourceFile } from 'typescript';

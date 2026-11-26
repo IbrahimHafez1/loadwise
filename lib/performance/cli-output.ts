@@ -15,7 +15,7 @@ import { keepChangedFindings, collectProjectChangedLines, fileKey } from './chan
 import { attachExample } from './finding-text.js';
 import { printChangedFindings, printFullReport } from './source-text.js';
 import { createTestWriteClassifier } from './review-context.js';
-import { attachSiteFixes } from './site-fix.js';
+import { attachSiteFixes, loadBuilders } from './site-fix.js';
 import type { PerformanceScanResult, PillarOutput, PrintLine, PrintValues } from './cli-types.js';
 
 // Ids hash paths relative to the project root, so they match whichever folder the check runs from.
@@ -64,11 +64,11 @@ function isContractFinding({ ruleId }: Pick<Finding, 'ruleId'>): boolean {
   return contractRules.performance.has(ruleId);
 }
 
-export function printResult(
+export async function printResult(
   result: PerformanceScanResult,
   values: PrintValues,
   print: PrintLine = console.log,
-): number {
+): Promise<number> {
   // Ids are assigned before filtering, so collision suffixes do not depend on which findings are
   // shown.
   const idRoot = findingRoot(values.project);
@@ -102,7 +102,10 @@ export function printResult(
   if (contractOnly) {
     result.contractFindingCount = result.findings.filter(isContractFinding).length;
   }
-  attachSiteFixes(result.findings);
+  if (result.findings.length) {
+    await loadBuilders();
+    attachSiteFixes(result.findings);
+  }
   for (const finding of result.findings) {
     finding.fixable = Boolean(finding.fix);
     attachExample(finding);

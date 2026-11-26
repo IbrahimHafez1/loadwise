@@ -1,4 +1,3 @@
-// @ts-check
 import { requireNative } from './native-runtime.js';
 import type * as TypeScript from 'typescript';
 import type {

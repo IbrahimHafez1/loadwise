@@ -1,6 +1,7 @@
 import { ts, isDefaultLibrary } from './compiler.js';
 import { isStandardArrayCall, standardInterface } from './repeated.js';
 import { clientHookContext, clientSourcePattern, isTestSource } from './review-context.js';
+import { classifyExecutionContext } from '../shared/execution-context.js';
 import {
   constantListLimit,
   constantTableLimit,
@@ -328,6 +329,9 @@ function boundedReduceReason(call: CallExpression, input: Expression, checker: C
   if (enumeratesGenericObject(input, checker)) return genericObjectReason;
   if (reducesFiniteValues(call, checker)) return enumListReason;
   if (enumeratesSchemaProperties(input, checker)) return schemaPropertiesReason;
+  const runtime = classifyExecutionContext(call.getSourceFile()).runtime;
+  if (runtime === 'test-fixture') return testSourceReason;
+  if (runtime === 'cli-tooling') return 'Runs in CLI or developer tooling rather than a server request path.';
   if (clientSourcePattern.test(call.getSourceFile().fileName)) return uiReduceReason;
   return clientHookContext(call, call.getSourceFile());
 }

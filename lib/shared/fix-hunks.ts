@@ -3,7 +3,6 @@ import type { Node, SourceFile } from 'typescript';
 import type { FixChange, LoadedFile, TextEdit } from './types.js';
 import type { CommentableEdit } from './types/fix-hunks.js';
 import type * as Typescript from 'typescript';
-// @ts-check
 
 /** Edits that touch consecutive lines of one file, rendered as one hunk. */
 interface HunkGroup {

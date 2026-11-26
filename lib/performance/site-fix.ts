@@ -12,52 +12,6 @@ import {
   withWhyComment,
   withoutComment,
 } from '../shared/fix-presentation.js';
-import syncCalls from './site-fixes/sync-calls.js';
-import typeorm from './site-fixes/typeorm.js';
-import collections from './site-fixes/collections.js';
-import queryLoops from './site-fixes/query-loops.js';
-import batchLoops from './site-fixes/batch-loops.js';
-import errorHandling from './site-fixes/error-handling.js';
-import streams from './site-fixes/streams.js';
-import smallRewrites from './site-fixes/small-rewrites.js';
-import queryShapes from './site-fixes/query-shapes.js';
-import listQueries from './site-fixes/list-queries.js';
-import indexes from './site-fixes/indexes.js';
-import writes from './site-fixes/writes.js';
-import serviceLoops from './site-fixes/service-loops.js';
-import httpTimeouts from './site-fixes/http-timeouts.js';
-import literalAwaits from './site-fixes/literal-awaits.js';
-import typeormUpdates from './site-fixes/typeorm-updates.js';
-import queueLoops from './site-fixes/queue-loops.js';
-import lastInsertId from './site-fixes/last-insert-id.js';
-import workbookDecodes from './site-fixes/workbook-decodes.js';
-import uploadLimits from './site-fixes/upload-limits.js';
-import frontendFixes from './site-fixes/frontend-fixes.js';
-import backendMasteryFixes from './site-fixes/backend-mastery-fixes.js';
-import prismaAggregates from './site-fixes/prisma-aggregates.js';
-import transactionIo from './site-fixes/transaction-io.js';
-import pureJsHashing from './site-fixes/pure-js-hashing.js';
-import pageCounts from './site-fixes/page-counts.js';
-import redisKeys from './site-fixes/redis-keys.js';
-import promiseCatch from './site-fixes/promise-catch.js';
-import deletePreflight from './site-fixes/delete-preflight.js';
-import guardQueries from './site-fixes/guard-queries.js';
-import integrity from './site-fixes/integrity.js';
-import awaitBeforeEarlyExit from './site-fixes/await-before-early-exit.js';
-import migrations from './site-fixes/migrations.js';
-import database from './site-fixes/database.js';
-import transactionEscape from './site-fixes/transaction-escape.js';
-import jsonParse from './site-fixes/json-parse.js';
-import injection from '../security/site-fixes/injection.js';
-import requestForgery from '../security/site-fixes/request-forgery.js';
-import authCrypto from '../security/site-fixes/auth-crypto.js';
-import secretComparison from '../security/site-fixes/secret-comparison.js';
-import exposure from '../security/site-fixes/exposure.js';
-import errorResponses from '../security/site-fixes/error-responses.js';
-import jwtFixes from '../security/site-fixes/jwt.js';
-import templateAutoescape from '../security/site-fixes/template-autoescape.js';
-import frontendSecurityFixes from '../security/site-fixes/frontend-security-fixes.js';
-import backendSecurityFixes from '../security/site-fixes/backend-security-fixes.js';
 import type { Node } from 'typescript';
 import type {
   FileTarget,
@@ -108,64 +62,81 @@ const hunkJoinDistance = 3;
 // fix.
 const maxCreatedFileLines = 40;
 
-const builderRegistries: readonly Record<string, SiteFixBuilder>[] = [
-  syncCalls,
-  typeorm,
-  collections,
-  queryLoops,
-  batchLoops,
-  errorHandling,
-  streams,
-  smallRewrites,
-  queryShapes,
-  listQueries,
-  indexes,
-  writes,
-  serviceLoops,
-  httpTimeouts,
-  literalAwaits,
-  typeormUpdates,
-  queueLoops,
-  lastInsertId,
-  workbookDecodes,
-  uploadLimits,
-  frontendFixes,
-  backendMasteryFixes,
-  prismaAggregates,
-  transactionIo,
-  pureJsHashing,
-  pageCounts,
-  redisKeys,
-  promiseCatch,
-  deletePreflight,
-  guardQueries,
-  integrity,
-  awaitBeforeEarlyExit,
-  migrations,
-  database,
-  transactionEscape,
-  jsonParse,
-  injection,
-  requestForgery,
-  authCrypto,
-  secretComparison,
-  exposure,
-  errorResponses,
-  jwtFixes,
-  templateAutoescape,
-  frontendSecurityFixes,
-  backendSecurityFixes,
+type BuilderRegistryModule = { default: Record<string, SiteFixBuilder> };
+
+const builderModuleLoaders: readonly (() => Promise<BuilderRegistryModule>)[] = [
+  () => import('./site-fixes/sync-calls.js'),
+  () => import('./site-fixes/typeorm.js'),
+  () => import('./site-fixes/collections.js'),
+  () => import('./site-fixes/query-loops.js'),
+  () => import('./site-fixes/batch-loops.js'),
+  () => import('./site-fixes/error-handling.js'),
+  () => import('./site-fixes/streams.js'),
+  () => import('./site-fixes/small-rewrites.js'),
+  () => import('./site-fixes/query-shapes.js'),
+  () => import('./site-fixes/list-queries.js'),
+  () => import('./site-fixes/indexes.js'),
+  () => import('./site-fixes/writes.js'),
+  () => import('./site-fixes/service-loops.js'),
+  () => import('./site-fixes/http-timeouts.js'),
+  () => import('./site-fixes/literal-awaits.js'),
+  () => import('./site-fixes/typeorm-updates.js'),
+  () => import('./site-fixes/queue-loops.js'),
+  () => import('./site-fixes/last-insert-id.js'),
+  () => import('./site-fixes/workbook-decodes.js'),
+  () => import('./site-fixes/upload-limits.js'),
+  () => import('./site-fixes/frontend-fixes.js'),
+  () => import('./site-fixes/backend-mastery-fixes.js'),
+  () => import('./site-fixes/prisma-aggregates.js'),
+  () => import('./site-fixes/transaction-io.js'),
+  () => import('./site-fixes/pure-js-hashing.js'),
+  () => import('./site-fixes/page-counts.js'),
+  () => import('./site-fixes/redis-keys.js'),
+  () => import('./site-fixes/promise-catch.js'),
+  () => import('./site-fixes/delete-preflight.js'),
+  () => import('./site-fixes/guard-queries.js'),
+  () => import('./site-fixes/integrity.js'),
+  () => import('./site-fixes/await-before-early-exit.js'),
+  () => import('./site-fixes/migrations.js'),
+  () => import('./site-fixes/database.js'),
+  () => import('./site-fixes/transaction-escape.js'),
+  () => import('./site-fixes/json-parse.js'),
+  () => import('../security/site-fixes/injection.js'),
+  () => import('../security/site-fixes/request-forgery.js'),
+  () => import('../security/site-fixes/auth-crypto.js'),
+  () => import('../security/site-fixes/secret-comparison.js'),
+  () => import('../security/site-fixes/exposure.js'),
+  () => import('../security/site-fixes/error-responses.js'),
+  () => import('../security/site-fixes/jwt.js'),
+  () => import('../security/site-fixes/template-autoescape.js'),
+  () => import('../security/site-fixes/frontend-security-fixes.js'),
+  () => import('../security/site-fixes/backend-security-fixes.js'),
+  () => import('../security/site-fixes/files.js'),
 ];
 
 let builders: Map<string, SiteFixBuilder> | undefined;
-function buildersByRule(): Map<string, SiteFixBuilder> {
+let buildersPromise: Promise<Map<string, SiteFixBuilder>> | undefined;
+
+/**
+ * Lazily imports all performance and security site-fix registries on first fix generation or
+ * application so clean scans pay zero module-load cost.
+ */
+async function loadBuilders(): Promise<Map<string, SiteFixBuilder>> {
   if (builders) return builders;
-  const registered = new Map<string, SiteFixBuilder>();
-  builders = registered;
-  for (const registry of builderRegistries) {
-    for (const [ruleId, build] of Object.entries(registry)) registered.set(ruleId, build);
-  }
-  return registered;
+  buildersPromise ??= Promise.all(builderModuleLoaders.map((load) => load())).then((modules) => {
+    const registered = new Map<string, SiteFixBuilder>();
+    for (const mod of modules) {
+      for (const [ruleId, build] of Object.entries(mod.default)) registered.set(ruleId, build);
+    }
+    builders = registered;
+    return registered;
+  });
+  return buildersPromise;
+}
+
+function buildersByRule(): Map<string, SiteFixBuilder> {
+  if (!builders) throw new Error('Site-fix builders are not loaded; await loadBuilders() first.');
+  return builders;
 }
 
 const scriptKinds: Record<string, number> = {
@@ -339,3 +310,4 @@ function attachSiteFixes(findings: Finding[], options?: FixOptions): void {
 }
 
 export { attachSiteFixes, buildFix, createFileCache };
+export { loadBuilders };

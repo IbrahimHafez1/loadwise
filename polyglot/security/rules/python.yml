@@ -1,0 +1,48 @@
+id: python-insecure-deserialization
+language: Python
+severity: warning
+message: Deserializing untrusted data with pickle or marshal can execute arbitrary code. Use json or a safe schema-validated format instead.
+rule:
+  any:
+    - pattern: pickle.loads($$$ARGS)
+    - pattern: pickle.load($$$ARGS)
+    - pattern: cPickle.loads($$$ARGS)
+    - pattern: cPickle.load($$$ARGS)
+    - pattern: marshal.loads($$$ARGS)
+    - pattern: marshal.load($$$ARGS)
+
+---
+id: python-unsafe-yaml-load
+language: Python
+severity: warning
+message: yaml.load without SafeLoader can construct arbitrary Python objects. Use yaml.safe_load or pass Loader=yaml.SafeLoader.
+rule:
+  any:
+    - pattern: yaml.unsafe_load($$$ARGS)
+    - all:
+        - pattern: yaml.load($$$ARGS)
+        - not:
+            has:
+              stopBy: end
+              kind: keyword_argument
+              regex: 'SafeLoader'
+
+---
+id: python-subprocess-shell-true
+language: Python
+severity: warning
+message: Running subprocess with shell=True or os.system passes input through a shell and risks command injection. Pass an argument list with shell=False.
+rule:
+  any:
+    - pattern: os.system($$$ARGS)
+    - all:
+        - any:
+            - pattern: subprocess.run($$$ARGS)
+            - pattern: subprocess.Popen($$$ARGS)
+            - pattern: subprocess.call($$$ARGS)
+            - pattern: subprocess.check_call($$$ARGS)
+            - pattern: subprocess.check_output($$$ARGS)
+        - has:
+            stopBy: end
+            kind: keyword_argument
+            regex: '^shell\s*=\s*True$'

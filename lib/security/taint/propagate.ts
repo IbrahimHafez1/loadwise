@@ -53,7 +53,8 @@ const globalFunctions = new Set(['String', 'decodeURI', 'decodeURIComponent', 'e
 const namespaceFunctions: Record<string, Record<string, PropagationSource>> = {
   JSON: { parse: 'first', stringify: 'first' },
   Buffer: { from: 'first' },
-  Promise: { resolve: 'keep' },
+  Promise: { resolve: 'keep', all: 'first', allSettled: 'first', race: 'first' },
+  Array: { from: 'first' },
   Object: { assign: 'keep-any', fromEntries: 'first', entries: 'first', keys: 'first', values: 'first' },
   path: { join: 'any', resolve: 'any', normalize: 'first' },
   url: { parse: 'first' },
@@ -61,7 +62,7 @@ const namespaceFunctions: Record<string, Record<string, PropagationSource>> = {
   qs: { parse: 'first' },
   lodash: { get: 'first', pick: 'first', omit: 'keep', clone: 'keep', cloneDeep: 'keep' },
 };
-const globalNamespaces = new Set(['JSON', 'Buffer', 'Object', 'Promise']);
+const globalNamespaces = new Set(['JSON', 'Buffer', 'Object', 'Promise', 'Array']);
 
 function isGlobal(identifier: Identifier, checker: CheckerAdapter) {
   const declaration = checker.getSymbolAtLocation(identifier)?.declarations?.[0];

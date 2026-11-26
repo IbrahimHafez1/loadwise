@@ -1,4 +1,3 @@
-// @ts-check
 import fs from 'node:fs';
 import type { Stats } from 'node:fs';
 import os from 'node:os';

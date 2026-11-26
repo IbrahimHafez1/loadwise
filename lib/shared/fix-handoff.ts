@@ -1,6 +1,5 @@
 import type { Finding } from './types.js';
 import { isAgentSession } from './agent-session.js';
-// @ts-check
 
 interface FindingLocation {
   file?: string;

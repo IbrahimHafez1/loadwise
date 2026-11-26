@@ -1,7 +1,15 @@
 // Rule id -> build({ finding, node, sourceFile, text, load }) => { edits, note } | undefined; see
 // lib/performance/site-fix.cjs.
 import { calleeName } from '../../performance/call-syntax.js';
-import { ts, ancestor, calleeCall, addProperty, addOptionsArgument } from '../../performance/site-fixes/helpers.js';
+import {
+  ts,
+  ancestor,
+  calleeCall,
+  addProperty,
+  addOptionsArgument,
+  replaceNode,
+  requireReview,
+} from '../../performance/site-fixes/helpers.js';
 import { removeListItem } from './list-edits.js';
 import type { CallExpression, ObjectLiteralExpression } from 'typescript';
 import type { FixResult, SiteFixBuilder, SiteFixInput } from '../../shared/types.js';
@@ -66,9 +74,29 @@ function noneFix({ node }: SiteFixInput): FixResult | undefined {
   return edit && { edits: [edit], note: noneNote };
 }
 
+function jwtDecodeForAuthFix({ node, sourceFile }: SiteFixInput): FixResult | undefined {
+  if (!node || !sourceFile) return;
+  const call = calleeCall(node);
+  if (!call || !call.arguments.length) return;
+  const callee = ts.skipOuterExpressions(call.expression);
+  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'decode') return;
+  const tokenArg = call.arguments[0].getText(sourceFile);
+  const receiver = callee.expression.getText(sourceFile);
+  return {
+    edits: [
+      replaceNode(call, `${receiver}.verify(${tokenArg}, process.env.JWT_SECRET ?? '', { algorithms: ['HS256'] })`),
+    ],
+    note: 'Replaces unverified `decode` with `verify` using `process.env.JWT_SECRET` and pinned `algorithms`.',
+  };
+}
+
 const builders: Record<string, SiteFixBuilder> = {
   'jwt-none-algorithm': noneFix,
   'jwt-sign-without-expiry': expiryFix,
+  'jwt-decode-for-auth': requireReview(
+    'Confirm the signing key env var and `algorithms` list match your token issuer.',
+    jwtDecodeForAuthFix,
+  ),
 };
 
 export default builders;

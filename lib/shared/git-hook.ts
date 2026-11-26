@@ -1,4 +1,3 @@
-// @ts-check
 // `agent init --hook block|warn|off`: runs `loadwise check --staged` from the git pre-commit hook, so any tool that
 // commits through git gets findings on the lines it changed. The block is marked so other hooks' text survives.
 import { spawnSync } from 'node:child_process';

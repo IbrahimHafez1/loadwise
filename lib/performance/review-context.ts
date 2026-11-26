@@ -1,6 +1,7 @@
 import { ts } from './compiler.js';
 import fs from 'node:fs';
 import path from 'node:path';
+import { classifyExecutionContext } from '../shared/execution-context.js';
 import { privateProcessEntries } from './node-fs.js';
 import { rootRelativePath } from './node-fs-context.js';
 import { findRepeatOwner, isStandardArrayCall } from './repeated.js';
@@ -301,7 +302,8 @@ function clientHookContext(node: Node, source: SourceFile): string | undefined {
 
 function setupSourceContext(source: SourceFile): string | undefined {
   const file = source.fileName;
-  if (isTestSource(file)) return 'Runs in a test source rather than a request path.';
+  const runtime = classifyExecutionContext(source).runtime;
+  if (isTestSource(file) || runtime === 'test-fixture') return 'Runs in a test source rather than a request path.';
   if (isSeedSource(file)) return 'Runs in seed or demo-data setup rather than a request path.';
   if (isToolingSource(source))
     return 'Runs in operator tooling (scripts, standalone entry points, deployment, migrations or commands) rather than a request path.';
@@ -327,26 +329,34 @@ function perItemQueryContext(ruleId: string, source: SourceFile): string | undef
 
 function lookupSourceContext(node: Node, source: SourceFile): string | undefined {
   const file = source.fileName;
-  if (isTestSource(file)) return 'Lookup in a test source. Review only if the fixture can grow large.';
+  const runtime = classifyExecutionContext(source).runtime;
+  if (isTestSource(file) || runtime === 'test-fixture')
+    return 'Lookup in a test source. Review only if the fixture can grow large.';
   if (clientSourcePattern.test(file))
     return 'Client UI render code rather than a server request path. Review in a front-end context.';
   const hookReason = clientHookContext(node, source);
   if (hookReason) return hookReason;
   if (isSeedSource(file))
     return 'Seed or demo-data setup runs outside request paths. Review if the data set can grow large.';
-  if (isToolingSource(source) || lookupToolingDirectoryPattern.test(rootRelativePath(file)))
+  if (
+    isToolingSource(source) ||
+    runtime === 'cli-tooling' ||
+    lookupToolingDirectoryPattern.test(rootRelativePath(file))
+  )
     return 'Lookup in operator or container tooling that runs once rather than on a request path. Review if the data set can grow large.';
 }
 
 function blockingSourceContext(node: Node, checker: CheckerAdapter, source: SourceFile): string | undefined {
   const file = source.fileName;
-  if (isTestSource(file)) return 'Synchronous call in a test source rather than a request path.';
+  const runtime = classifyExecutionContext(source).runtime;
+  if (isTestSource(file) || runtime === 'test-fixture')
+    return 'Synchronous call in a test source rather than a request path.';
   if (isSeedSource(file)) return 'Synchronous call in seed or demo-data setup rather than a request path.';
   if (buildConfigPattern.test(file))
     return 'Synchronous call in a build or tool configuration file, which runs when the tool starts rather than on a request path.';
   if (blockingToolingDirectoryPattern.test(rootRelativePath(file)))
     return 'Synchronous call in container, boot, codemod, tooling or test-support code rather than a request path.';
-  if (isToolingSource(source) && !findRepeatOwner(node, checker)) {
+  if ((isToolingSource(source) || runtime === 'cli-tooling') && !findRepeatOwner(node, checker)) {
     return 'One synchronous call in operator tooling (scripts, deployment, migrations or commands). Prioritize if the server also imports this module.';
   }
 }

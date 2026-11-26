@@ -15,6 +15,7 @@ import * as injection from './injection/index.js';
 import * as requestForgery from './request-forgery/index.js';
 import * as authCrypto from './auth-crypto/index.js';
 import * as exposure from './exposure/index.js';
+import * as phase5Rules from './phase5-rules.js';
 import type { CallExpression, NewExpression, Node, SourceFile } from 'typescript';
 import type {
   Finding,
@@ -37,6 +38,7 @@ const registeredModules: readonly SecurityCheckModule[] = [
   requestForgery,
   authCrypto,
   exposure,
+  phase5Rules,
 ];
 // The moved rules keep the review reasons they had as performance rules (seed, benchmark and
 // tooling sources).

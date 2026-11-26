@@ -1,6 +1,7 @@
 // Rule id -> build({ finding, node, sourceFile, text, load }) => { edits, note } | undefined; see
 // lib/performance/site-fix.cjs.
-import { requireReview, ts, ancestor, calleeCall } from '../../performance/site-fixes/helpers.js';
+import { requireReview, ts, ancestor, calleeCall, replaceNode } from '../../performance/site-fixes/helpers.js';
+import type { PropertyAssignment } from 'typescript';
 import type { FixResult, SiteFixBuilder, SiteFixInput } from '../../shared/types.js';
 
 // Receivers that are the current window, so its own origin is the right recipient.
@@ -42,6 +43,24 @@ function postMessageOriginFix({ node }: SiteFixInput): FixResult | undefined {
   };
 }
 
+function dangerouslySetInnerHtmlFix({ node, sourceFile, text }: SiteFixInput): FixResult | undefined {
+  if (!node || !sourceFile || text === undefined || !/\bDOMPurify\b/.test(text)) return;
+  const attr = ancestor(node, ts.isJsxAttribute);
+  if (!attr || attr.name.getText(sourceFile) !== 'dangerouslySetInnerHTML') return;
+  const init = attr.initializer;
+  if (!init || !ts.isJsxExpression(init) || !init.expression || !ts.isObjectLiteralExpression(init.expression)) return;
+  const htmlProp = init.expression.properties.find(
+    (prop): prop is PropertyAssignment => ts.isPropertyAssignment(prop) && prop.name.getText(sourceFile) === '__html',
+  );
+  if (!htmlProp) return;
+  const inner = htmlProp.initializer.getText(sourceFile);
+  if (inner.includes('DOMPurify.sanitize')) return;
+  return {
+    edits: [replaceNode(htmlProp.initializer, `DOMPurify.sanitize(${inner})`)],
+    note: 'Sanitizes HTML with `DOMPurify.sanitize(...)`.',
+  };
+}
+
 const builders: Record<string, SiteFixBuilder> = {
   'dom-xss-sink': requireReview(
     'Switching `innerHTML` to `textContent` renders HTML tags as plain text; use `DOMPurify.sanitize()` if markup is intended.',
@@ -50,6 +69,10 @@ const builders: Record<string, SiteFixBuilder> = {
   'postmessage-missing-origin-check': requireReview(
     'Check that the message listener in this window expects messages from its own origin only.',
     postMessageOriginFix,
+  ),
+  'react-dangerously-set-inner-html': requireReview(
+    'Confirm `DOMPurify.sanitize` preserves the expected HTML tags and attributes.',
+    dangerouslySetInnerHtmlFix,
   ),
 };
 

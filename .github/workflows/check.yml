@@ -35,7 +35,10 @@ jobs:
     name: performance tests on the native engine
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Known failures are being triaged; this job reports them without blocking merges.
+    # 14/1574 tests fail on the native engine (1516 pass, 44 skipped) due to tsgo type/symbol
+    # parity gaps vs. TS6 (collections-bounded-reducer, list-counts [2], memory-growth,
+    # mongoose-patterns [2], offset-pagination, precision-signals, request-heavy-work,
+    # review-loops, stream-errors, typeorm-updates [2], unbounded-request-limit).
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4

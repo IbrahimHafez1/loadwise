@@ -1,4 +1,3 @@
-// @ts-check
 const quotedEscapes: Readonly<Record<string, number>> = {
   a: 7,
   b: 8,

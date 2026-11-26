@@ -115,3 +115,45 @@ rule:
 constraints:
   PAT:
     kind: string
+
+---
+id: python-n-plus-one-orm-loop
+language: Python
+severity: warning
+message: Database or ORM query executed inside a loop can cause N+1 query overhead. Batch or prefetch before the loop.
+rule:
+  all:
+    - any:
+        - pattern: session.query($$$ARGS)
+        - pattern: session.execute($$$ARGS)
+        - pattern: session.scalars($$$ARGS)
+        - pattern: cursor.execute($$$ARGS)
+        - pattern: $MODEL.objects.get($$$ARGS)
+        - pattern: $MODEL.objects.filter($$$ARGS)
+        - pattern: $MODEL.objects.all()
+    - inside:
+        any:
+          - kind: for_statement
+          - kind: while_statement
+        field: body
+        stopBy:
+          any:
+            - kind: function_definition
+            - kind: lambda
+            - kind: class_definition
+
+---
+id: python-unbounded-comprehension
+language: Python
+severity: warning
+message: Materializing a list comprehension inside an aggregation allocates the full list in memory. Use a generator expression instead.
+rule:
+  any:
+    - pattern: sum($COMP)
+    - pattern: any($COMP)
+    - pattern: all($COMP)
+    - pattern: min($COMP)
+    - pattern: max($COMP)
+constraints:
+  COMP:
+    kind: list_comprehension

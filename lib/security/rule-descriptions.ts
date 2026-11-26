@@ -70,6 +70,18 @@ const descriptionByRule = {
   'express-missing-helmet':
     'The Express or NestJS server starts without helmet security headers middleware (contextual: a proxy may set them).',
   'zip-slip-extraction': 'An archive entry controls an extraction path without a recognized containment check.',
+  'server-action-missing-auth':
+    'An exported Next.js Server Action performs work without verifying authentication or session state.',
+  'ssrf-redirect-bypass':
+    'An outbound HTTP request with a dynamic URL does not disable redirects, allowing SSRF allowlist bypasses.',
+  'vm-sandbox-escape':
+    'Node `vm` or `vm2` executes dynamic code or an untrusted context, risking sandbox escape and host RCE.',
+  'jwt-weak-secret-literal':
+    'JWT signing or verification uses a short (< 32 chars) or weak literal secret susceptible to brute-force forgery.',
+  'graphql-batching-unbounded':
+    'GraphQL query batching is enabled without a batch size, query depth, or cost/complexity limit.',
+  'express-cookie-auth-missing-csrf':
+    'Cookie-based session or auth is paired with state-changing routes without CSRF protection or `sameSite: "strict"`.',
 };
 
 export { descriptionByRule };

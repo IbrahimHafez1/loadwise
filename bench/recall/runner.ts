@@ -1,6 +1,6 @@
 // Runs Loadwise against the recall benchmark in bench/recall/ (public pre-fix advisories +
 // deliberately vulnerable app) and verifies that every expected rule fires at its target line.
-// Usage: node bench/recall/runner.cjs [--case <id>] [--json]
+// Usage: node bench/recall/runner.js [--case <id>] [--json]
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -31,7 +31,7 @@ interface CaseResult extends RecallCase {
 
 const RECALL_DIR = import.meta.dirname;
 const MANIFEST_PATH = path.join(RECALL_DIR, 'manifest.json');
-const CLI_PATH = path.resolve(RECALL_DIR, '..', '..', 'bin', 'loadwise.cjs');
+const CLI_PATH = path.resolve(RECALL_DIR, '..', '..', 'bin', 'loadwise.js');
 const PILLAR_KEYS: Record<Pillar, string> = { perf: 'performance', sec: 'security', maint: 'maintainability' };
 
 function parseArgs(argv: readonly string[]): RecallOptions {

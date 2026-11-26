@@ -230,6 +230,18 @@
           "vue-watch-missing-cleanup",
           "weak-password-hash",
           "webhook-missing-idempotency-check",
+          "unbounded-promise-all",
+          "mongoose-missing-lean",
+          "graphql-n-plus-one-resolver",
+          "react-context-value-recreated",
+          "node-event-listener-leak",
+          "json-stringify-in-loop",
+          "server-action-missing-auth",
+          "ssrf-redirect-bypass",
+          "vm-sandbox-escape",
+          "jwt-weak-secret-literal",
+          "graphql-batching-unbounded",
+          "express-cookie-auth-missing-csrf",
           "whole-payload-in-memory",
           "xml-external-entities",
           "zip-slip-extraction",
@@ -252,6 +264,21 @@
             "properties": {
               "level": {
                 "enum": ["off", "warn", "error"]
+              },
+              "options": {
+                "type": "object",
+                "properties": {
+                  "maxDepth": { "type": "integer", "minimum": 1 },
+                  "maxComplexity": { "type": "integer", "minimum": 1 },
+                  "maxParams": { "type": "integer", "minimum": 1 },
+                  "maxLines": { "type": "integer", "minimum": 1 },
+                  "maxMethods": { "type": "integer", "minimum": 1 },
+                  "minCost": { "type": "integer", "minimum": 1 },
+                  "maxBatchSize": { "type": "integer", "minimum": 1 },
+                  "maxOffset": { "type": "integer", "minimum": 1 },
+                  "maxBytes": { "type": "integer", "minimum": 1 }
+                },
+                "additionalProperties": false
               }
             },
             "required": ["level"],
@@ -481,6 +508,18 @@
                 "vue-watch-missing-cleanup",
                 "weak-password-hash",
                 "webhook-missing-idempotency-check",
+                "unbounded-promise-all",
+                "mongoose-missing-lean",
+                "graphql-n-plus-one-resolver",
+                "react-context-value-recreated",
+                "node-event-listener-leak",
+                "json-stringify-in-loop",
+                "server-action-missing-auth",
+                "ssrf-redirect-bypass",
+                "vm-sandbox-escape",
+                "jwt-weak-secret-literal",
+                "graphql-batching-unbounded",
+                "express-cookie-auth-missing-csrf",
                 "whole-payload-in-memory",
                 "xml-external-entities",
                 "zip-slip-extraction",
@@ -503,6 +542,21 @@
                   "properties": {
                     "level": {
                       "enum": ["off", "warn", "error"]
+                    },
+                    "options": {
+                      "type": "object",
+                      "properties": {
+                        "maxDepth": { "type": "integer", "minimum": 1 },
+                        "maxComplexity": { "type": "integer", "minimum": 1 },
+                        "maxParams": { "type": "integer", "minimum": 1 },
+                        "maxLines": { "type": "integer", "minimum": 1 },
+                        "maxMethods": { "type": "integer", "minimum": 1 },
+                        "minCost": { "type": "integer", "minimum": 1 },
+                        "maxBatchSize": { "type": "integer", "minimum": 1 },
+                        "maxOffset": { "type": "integer", "minimum": 1 },
+                        "maxBytes": { "type": "integer", "minimum": 1 }
+                      },
+                      "additionalProperties": false
                     }
                   },
                   "required": ["level"],

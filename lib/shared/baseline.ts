@@ -1,4 +1,3 @@
-// @ts-check
 // Baselines let a team adopt loadwise on existing code: --write-baseline records today's findings, --baseline hides
 // them so only new ones are reported. One file holds a section per pillar, so `loadwise check` and the single-pillar
 // commands share it. (The migrations baseline is a different, per-file hash format and stays in perf/migrations.)

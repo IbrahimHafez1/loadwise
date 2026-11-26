@@ -74,3 +74,17 @@ test('every rule id has exactly one README anchor', () => {
     [],
   );
 });
+
+test('npm pack does not ship raw .ts source files', () => {
+  const pack = spawnSync('npm', ['pack', '--dry-run', '--json'], {
+    cwd: root,
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  });
+  assert.equal(pack.status, 0, pack.stderr || 'npm pack --dry-run --json failed');
+  const parsed: { files?: { path: string }[] }[] = JSON.parse(pack.stdout);
+  const packedPaths = (parsed[0]?.files ?? []).map((entry) => entry.path);
+  assert.ok(packedPaths.length > 0, 'npm pack reported no files');
+  const tsSources = packedPaths.filter((filePath) => filePath.endsWith('.ts') && !filePath.endsWith('.d.ts'));
+  assert.deepEqual(tsSources, [], `npm pack should not include .ts sources: ${tsSources.join(', ')}`);
+});

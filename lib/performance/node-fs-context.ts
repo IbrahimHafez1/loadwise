@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ts } from './compiler.js';
 import { runsOnlyInSchemaTooling } from './schema-tooling.js';
+import { classifyExecutionContext } from '../shared/execution-context.js';
 import type {
   CallExpression,
   Expression,
@@ -437,7 +438,13 @@ function contextualReason(
   moduleName: string,
   owner: FunctionWithBody | undefined,
 ): string | undefined {
-  return pathContext(call, context.isRepeated) ?? (owner ? ownerContext(call, context, moduleName, owner) : undefined);
+  const pathReason = pathContext(call, context.isRepeated);
+  if (pathReason) return pathReason;
+  const runtime = classifyExecutionContext(call.getSourceFile(), context.program).runtime;
+  if (runtime === 'test-fixture') return 'Synchronous call in a test or fixture source rather than a request path.';
+  if (runtime === 'cli-tooling' && !context.isRepeated(call))
+    return 'Synchronous call in CLI or dev tooling rather than a request path.';
+  return owner ? ownerContext(call, context, moduleName, owner) : undefined;
 }
 
 export { contextualReason, privateProcessEntries, requiredModule, rootRelativePath };

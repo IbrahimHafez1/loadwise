@@ -1,4 +1,3 @@
-// @ts-check
 import type { OwnedRange, Owner, RowRegion, RowSegment, StyleRegion } from './types/fix-presentation.js';
 import type { FormattedHunk, UpdateHunk } from './types/fix-run.js';
 

@@ -1,5 +1,4 @@
 import type { Finding } from './types.js';
-// @ts-check
 // How hot the code behind a finding is: code that serves a request matters more than a scheduled job, which matters
 // more than a script, seed or migration, and tests matter least. The rank only orders and labels findings; it never
 // feeds the finding id, so baselines and SARIF fingerprints are unaffected.

@@ -20,11 +20,17 @@ const fileOptions = new Set([
   'require',
   'input',
   'entry',
+  'testDir',
 ]);
 
 function stringsOf(expression: Node): string[] {
   if (ts.isStringLiteralLike(expression)) return [expression.text];
   if (ts.isArrayLiteralExpression(expression)) return expression.elements.flatMap(stringsOf);
+  if (ts.isObjectLiteralExpression(expression)) {
+    return expression.properties.flatMap((property) =>
+      ts.isPropertyAssignment(property) ? stringsOf(ts.skipOuterExpressions(property.initializer)) : [],
+    );
+  }
   return [];
 }
 

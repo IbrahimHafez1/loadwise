@@ -57,6 +57,7 @@ import { checkPromiseReturnEscapesCatch } from './promise-return-escapes-catch.j
 import { checkReturnInFinally } from './return-in-finally.js';
 import { checkReturnNewline } from './return-newline.js';
 import { checkFrontendFile } from './frontend-perf.js';
+import { collectPhase5PerfFindings } from './phase5-rules.js';
 import { checkLastInsertId } from './last-insert-id.js';
 import { checkWorkbookDecodes } from './workbook-decodes.js';
 import { hotPathOf } from '../shared/hot-path-graph.js';
@@ -227,6 +228,7 @@ function analyzeFile(
   if (pendingBlockingCalls?.length) flushBlockingCalls(pendingBlockingCalls, context);
   checkWorkbookDecodes(sourceFile, context);
   checkFrontendFile(sourceFile, context);
+  collectPhase5PerfFindings(sourceFile, context);
   return findings.sort(
     (left, right) =>
       (left.line ?? 0) - (right.line ?? 0) ||

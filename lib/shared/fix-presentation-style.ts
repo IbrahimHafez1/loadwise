@@ -1,4 +1,3 @@
-// @ts-check
 import type { Node, SourceFile, StringLiteral } from 'typescript';
 import { findLineIndex } from '../performance/sql/locations.js';
 import { scriptFile } from './fix-presentation-prettier.js';

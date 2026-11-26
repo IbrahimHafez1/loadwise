@@ -6,7 +6,8 @@ import type { SubjectTest } from '../types/condition-guards.js';
 // Each accepted range stays within ASCII digits or one case of letters. A hyphen at the edge is
 // literal.
 const PATH_SEPARATOR = '/';
-const safeClass = /\[-?(?:[a-z]-[a-z]|[A-Z]-[A-Z]|\d-\d|\\[dw]|[A-Za-z0-9_])+-?\]/g;
+const BLOCKED_SEPARATORS = new Set(['/', '\\', '..']);
+const safeClass = /\[-?(?:[a-z]-[a-z]|[A-Z]-[A-Z]|\d-\d|\\[dw.]|[A-Za-z0-9_.])+-?\]/g;
 const extension = /\\\.(?:[A-Za-z0-9]+|\([A-Za-z0-9]+(?:\|[A-Za-z0-9]+)+\))$/;
 
 function isFilenamePattern(expression: Expression) {
@@ -18,7 +19,7 @@ function isFilenamePattern(expression: Expression) {
   const stem = anchored[1]
     .replace(extension, '')
     .replaceAll(safeClass, 'x')
-    .replaceAll(/\\[dw]|\{\d+(?:,\d*)?\}/g, 'x');
+    .replaceAll(/\\[dw.]|\{\d+(?:,\d*)?\}/g, 'x');
   return /^[A-Za-z0-9_()+*?-]+$/.test(stem);
 }
 
@@ -70,18 +71,23 @@ function filenameValidation(condition: Expression, isSubject: SubjectTest, check
   );
 }
 
-// `value.includes('/')`: a name holding a separator is turned away, so the rest stays in one
-// directory.
+// `value.includes('/')` or `/[/\\]/.test(value)`: a name holding a separator is turned away.
 function containsSeparator(condition: Expression, isSubject: SubjectTest) {
   if (!ts.isCallExpression(condition) || !ts.isPropertyAccessExpression(condition.expression)) return false;
-  const [separator] = condition.arguments;
-  return (
-    condition.expression.name.text === 'includes' &&
-    condition.arguments.length === 1 &&
-    ts.isStringLiteralLike(separator) &&
-    separator.text === PATH_SEPARATOR &&
-    isSubject(condition.expression.expression)
-  );
+  const { expression, name } = condition.expression;
+  if (name.text === 'includes' && condition.arguments.length === 1) {
+    const [separator] = condition.arguments;
+    return (
+      ts.isStringLiteralLike(separator) &&
+      (separator.text === PATH_SEPARATOR || BLOCKED_SEPARATORS.has(separator.text)) &&
+      isSubject(expression)
+    );
+  }
+  if (name.text === 'test' && condition.arguments.length === 1 && isSubject(condition.arguments[0])) {
+    const pattern = ts.skipOuterExpressions(expression);
+    return ts.isRegularExpressionLiteral(pattern) && /^\/(?:\[[^\]]*[/\\][^\]]*\]|\\\.\.)\/[gi]*$/.test(pattern.text);
+  }
+  return false;
 }
 
 export { filenameValidation, containsSeparator };

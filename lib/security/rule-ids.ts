@@ -19,6 +19,15 @@ const movedRuleInfo: Record<string, RuleInfo> = {
   'drizzle-scope-unverified': { group: 'moved', needs: 'types' },
 };
 
+const phase5Rules: Record<string, { needs: string }> = {
+  'server-action-missing-auth': { needs: 'syntax' },
+  'ssrf-redirect-bypass': { needs: 'syntax' },
+  'vm-sandbox-escape': { needs: 'syntax' },
+  'jwt-weak-secret-literal': { needs: 'syntax' },
+  'graphql-batching-unbounded': { needs: 'syntax' },
+  'express-cookie-auth-missing-csrf': { needs: 'syntax' },
+};
+
 const groups: Record<string, Record<string, { needs: string }>> = {
   injection: injectionRules,
   'request-forgery': requestForgeryRules,
@@ -26,6 +35,7 @@ const groups: Record<string, Record<string, { needs: string }>> = {
   exposure: exposureRules,
   deps: depsRules,
   files: filesRules,
+  phase5: phase5Rules,
 };
 
 const ruleInfo: Record<string, RuleInfo> = { ...movedRuleInfo };
@@ -101,6 +111,12 @@ const impactByRule: Readonly<Record<string, ImpactLevel>> = {
   'dockerfile-runs-as-root': 'medium',
   'dockerfile-secret-in-build': 'high',
   'dockerfile-unpinned-base-image': 'low',
+  'server-action-missing-auth': 'high',
+  'ssrf-redirect-bypass': 'high',
+  'vm-sandbox-escape': 'critical',
+  'jwt-weak-secret-literal': 'high',
+  'graphql-batching-unbounded': 'medium',
+  'express-cookie-auth-missing-csrf': 'high',
 };
 
 const securityRules = Object.keys(ruleInfo);

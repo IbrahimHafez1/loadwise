@@ -6,7 +6,7 @@ import test from 'node:test';
 
 // Test builders are registered on a loaded builder module before the core reads the builder list.
 import testBuilders from '../../lib/performance/site-fixes/database.js';
-import { buildFix, createFileCache } from '../../lib/performance/site-fix.js';
+import { buildFix, createFileCache, loadBuilders } from '../../lib/performance/site-fix.js';
 import { applyFix } from '../../editor/apply-fix.cjs';
 import type { TestContext } from 'node:test';
 import type { Finding, SiteFixBuilder, SiteFixInput } from '../../lib/shared/types.js';
@@ -26,6 +26,8 @@ registeredBuilders['test-create-file'] = (input) => {
   assert.ok(typeof newFile === 'string' && typeof newText === 'string');
   return { targets: [{ file: newFile, create: true, text: newText }] };
 };
+
+await loadBuilders();
 
 function tempDir(context: TestContext) {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();

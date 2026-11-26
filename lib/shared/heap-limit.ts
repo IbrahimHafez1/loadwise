@@ -1,4 +1,3 @@
-// @ts-check
 // Node's default old-space limit is about 4 GB, which a 25,000-file monorepo scan exceeds (it peaked at 8.6 GB).
 // The checkers get a larger limit derived from the machine unless the user already chose one.
 import os from 'node:os';

@@ -35,6 +35,7 @@ import type * as Cli from '../performance/cli.js';
 const usage = `Usage:
   loadwise sec [-p tsconfig.json | -p monorepo-root [--workspace name|path ...] | file.ts file.js ...] [--engine auto|native|js] [--policy policy.json] [--loadwise-config loadwise.config.json] [--json | --format text|json|sarif|github] [--min-impact low|medium|high|critical] [--baseline [file] | --write-baseline [file]] [--include-contextual] [--ignore rule-id] [--fail-on all|contract] [--fix [--yes | --only id,...] [--no-comments] [--no-format]]
   loadwise sec deps [--online] [directory] [--format text|json] [--json] [--include-contextual] [--ignore rule-id]
+  loadwise sec polyglot <file-or-directory> ... [--loadwise-config loadwise.config.json] [--json | --format text|json|sarif|github] [--min-impact low|medium|high|critical]
   loadwise sec [-p tsconfig.json] (--staged | --changed-since git-ref) [--json] [--include-contextual] [--ignore rule-id]
 
 With no arguments, check tsconfig.json or jsconfig.json in the current directory. File checks can run without either.
@@ -327,8 +328,39 @@ function runFixMode(
   });
 }
 
+async function runPolyglot(args: readonly string[]): Promise<number> {
+  const { values, positionals } = parseArgs({
+    args,
+    allowPositionals: true,
+    options: {
+      help: { type: 'boolean', short: 'h' },
+      json: { type: 'boolean' },
+      format: { type: 'string' },
+      'min-impact': { type: 'string' },
+      'loadwise-config': { type: 'string' },
+    },
+  });
+  if (values.help) {
+    console.log(usage);
+    return 0;
+  }
+  resolveFormat(values);
+  parseMinImpact(values['min-impact']);
+  if (!positionals.length) throw new Error('Pass at least one file or directory to polyglot.');
+  const result = await (await import('./polyglot.js')).checkSecurityPolyglot(positionals);
+  const settings = loadSettings({ directory: process.cwd(), explicit: values['loadwise-config'] });
+  const printable: SourceReportResult = { scannedFiles: result.scannedFiles, findings: result.findings };
+  const code = await report.printResult(
+    printable,
+    { ...values, ignore: [], settings, projectDirectory: process.cwd() },
+    pillar,
+  );
+  return exitCodeWithSkips(printable, code);
+}
+
 async function main(args: readonly string[], dependencyScanOptions?: VulnerabilityLookupOptions) {
   if (args[0] === 'deps') return mainCli(args.slice(1), dependencyScanOptions);
+  if (args[0] === 'polyglot') return runPolyglot(args.slice(1));
   const { args: sourceArgs, ...baselineFlags } = extractBaselineFlags(args);
   const { values, positionals } = parseSecurityArgs(sourceArgs);
   const baselineOptions = baselineForScan(
@@ -352,7 +384,7 @@ async function main(args: readonly string[], dependencyScanOptions?: Vulnerabili
   if (values.fix)
     return exitCodeWithSkips(result, await runFixMode({ result, project, directory }, values, positionals, format));
   const fixCommand = report.fixAllCommand('sec', project, positionals, values);
-  const code = report.printResult(
+  const code = await report.printResult(
     result,
     { ...values, project, projectDirectory: directory, baselineOptions, fixCommand, changedLines: scope?.changedLines },
     pillar,

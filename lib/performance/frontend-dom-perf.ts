@@ -252,9 +252,11 @@ function unthrottledHandlerReason(call: CallExpression, checker: CheckerAdapter)
 
 function checkUnthrottledListener(call: CallExpression, eventName: string, context: PerformanceRuleContext): void {
   if (!HIGH_FREQ_EVENTS.has(eventName)) return;
-  if (BLOCKING_TOUCH_EVENTS.has(eventName) && isPassive(call)) return;
+  const passive = isPassive(call);
+  if (BLOCKING_TOUCH_EVENTS.has(eventName) && passive) return;
   const reason = unthrottledHandlerReason(call, context.checker);
   if (reason === undefined) return;
+  if (passive && reason === CHEAP_HANDLER_REASON) return;
   const advice = BLOCKING_TOUCH_EVENTS.has(eventName)
     ? 'Pass `{ passive: true }` so the browser can scroll immediately without waiting for JS, and throttle heavy work with `requestAnimationFrame`.'
     : `Throttle or debounce the \`${eventName}\` handler (or schedule DOM work inside \`requestAnimationFrame\`) to avoid jank.`;

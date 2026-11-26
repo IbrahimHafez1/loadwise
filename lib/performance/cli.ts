@@ -90,7 +90,7 @@ async function runPolyglot(args: readonly string[]): Promise<number> {
   // The polyglot scan reports skippedFiles as a count, which printing never reads but the JSON
   // output keeps.
   const printable: Omit<PolyglotScan, 'skippedFiles'> = result;
-  const code = printResult(printable, { ...values, ignore: [], settings });
+  const code = await printResult(printable, { ...values, ignore: [], settings });
   notifyEditor(positionals.length === 1 ? positionals[0] : process.cwd());
   return code;
 }

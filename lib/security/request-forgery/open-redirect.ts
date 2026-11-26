@@ -14,6 +14,8 @@ import {
   isProjectValidated,
   isHostHeader,
 } from './shared.js';
+import { isGuardedByCondition } from '../taint/guards.js';
+import { isUrlConstructor } from '../taint/url-parts.js';
 import type {
   CallExpression,
   Expression,
@@ -271,14 +273,62 @@ function contextualReasonFor(node: Node, target: Expression, trace: Trace, conte
   if (requestPathLabel.test(trace.label)) return requestPathReason;
 }
 
+const allowlistMethods = new Set(['includes', 'has']);
+const originFields = new Set(['origin', 'hostname', 'host']);
+
+function isOriginOrAllowlistGuarded(node: Node, target: Expression, checker: CheckerAdapter): boolean {
+  const targetSymbols = identifierSymbols(target, checker);
+  if (!targetSymbols.size) return false;
+  return isGuardedByCondition(node, (condition, truth) => {
+    if (!truth) return false;
+    if (ts.isCallExpression(condition) && ts.isPropertyAccessExpression(condition.expression)) {
+      const method = condition.expression.name.text;
+      const arg = condition.arguments[0] && strip(condition.arguments[0]);
+      if (
+        allowlistMethods.has(method) &&
+        arg &&
+        [...identifierSymbols(arg, checker)].some((s) => targetSymbols.has(s))
+      ) {
+        return true;
+      }
+    }
+    if (ts.isBinaryExpression(condition) && condition.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken) {
+      const sides = [strip(condition.left), strip(condition.right)];
+      return sides.some((side) => {
+        if (!ts.isPropertyAccessExpression(side) || !originFields.has(side.name.text)) return false;
+        const receiver = strip(side.expression);
+        if (ts.isIdentifier(receiver)) {
+          const decl = checker.getSymbolAtLocation(receiver)?.valueDeclaration;
+          const init = decl && ts.isVariableDeclaration(decl) && decl.initializer ? strip(decl.initializer) : undefined;
+          if (init && ts.isNewExpression(init) && isUrlConstructor(strip(init.expression), checker)) {
+            const urlArg = init.arguments?.[0];
+            return Boolean(urlArg && [...identifierSymbols(urlArg, checker)].some((s) => targetSymbols.has(s)));
+          }
+        }
+        if (ts.isNewExpression(receiver) && isUrlConstructor(strip(receiver.expression), checker)) {
+          const urlArg = receiver.arguments?.[0];
+          return Boolean(urlArg && [...identifierSymbols(urlArg, checker)].some((s) => targetSymbols.has(s)));
+        }
+        return [...identifierSymbols(receiver, checker)].some((s) => targetSymbols.has(s));
+      });
+    }
+    return false;
+  });
+}
+
 function reportTarget(node: Node, target: Expression, context: SecurityRuleContext) {
-  if (isFixedPathHelperCall(target, context)) return;
+  if (startsWithFixedPath(target, context) || isFixedPathHelperCall(target, context)) return;
   const control = context.taint.urlControl(target);
   if (!control || (control.part === 'path' && !control.rawPathname)) return;
   const { trace } = control;
   // The victim's browser sends its own Host header, so a host taken from it cannot point elsewhere.
   if (isHostHeader(trace)) return;
-  if (isRelativeRedirect(node, target, context) || isProjectValidated(node, target, validatedKinds, context)) return;
+  if (
+    isRelativeRedirect(node, target, context) ||
+    isProjectValidated(node, target, validatedKinds, context) ||
+    isOriginOrAllowlistGuarded(node, target, context.checker)
+  )
+    return;
   const reason =
     hopReason(trace) ??
     (refererLabel.test(trace.label) ? refererReason : undefined) ??

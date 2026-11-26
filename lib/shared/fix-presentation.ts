@@ -1,4 +1,3 @@
-// @ts-check
 // How an applied fix reads in the project: a one-line comment above the fixed statement says why it changed, and the
 // project's own Prettier reformats only the changed lines. Prettier's API is asynchronous while the fix paths are
 // not, so formatting runs once per fix run in a child process started from this file.

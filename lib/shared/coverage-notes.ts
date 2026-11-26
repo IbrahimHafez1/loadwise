@@ -1,4 +1,3 @@
-// @ts-check
 const ABSENT_PATH_CODES = ['ENOENT', 'ENOTDIR'];
 const reportedNotes = new Set<string>();
 

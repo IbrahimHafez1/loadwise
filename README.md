@@ -1,20 +1,4 @@
-| `react-index-as-key` | low |
-| `react-fetch-in-effect-no-abort` | low |
-| `react-inline-object-in-jsx-prop` | low |
-| `angular-default-change-detection` | low |
-| `vue-v-for-missing-key` | low |
-| `dom-listener-without-cleanup` | low |
-| `dom-unthrottled-scroll-resize` | low |
-| `frontend-barrel-heavy-import` | low |
-| `sql-select-star-in-query` | low |
-| `react-missing-cleanup` | medium |
-| `angular-subscribe-without-cleanup` | medium |
-| `vue-watch-missing-cleanup` | medium |
-| `dom-layout-thrashing` | medium |
-| `webhook-missing-idempotency-check` | medium |
-| `sequential-http-in-loop` | high |
-| `check-then-update-race` | high |
-| `payment-missing-idempotency-key` | high |# Loadwise
+# Loadwise
 
 Loadwise checks a backend project before it ships. One CLI runs three checkers:
 
@@ -83,7 +67,7 @@ npx loadwise fix --yes maintainability            # automatic maintainability ed
 
 Manual findings have no generated edit. With `--all`, inspect the resulting diff and run the project's tests, especially for schema changes and edits that alter application behavior.
 
-Each applied fix in a JavaScript or TypeScript file gets a `// Loadwise <rule-id>: <why>` comment above the fixed statement, and the changed lines are formatted with the project's own Prettier, honouring its config and `.prettierignore`; the rest of the file stays byte-identical. Without Prettier in the project the edits are written as generated, with a note. `--no-comments` and `--no-format` turn these off; the per-checker `--fix` takes the same flags.
+Each applied fix in a JavaScript or TypeScript file gets a `// Loadwise <rule-id>: <why>` comment above the fixed statement, and the changed lines are formatted with the project's own Prettier, honouring its config and `.prettierignore`; the rest of the file stays byte-identical. Without Prettier in the project the edits are written as generated, with a note. `--no-comments` and `--no-format` turn these off; the per-checker `--fix` takes the same flags. `loadwise fix` also supports `--dry-run` (preview unified diffs without writing), repeatable `--rule <rule-id>` filtering, and `--no-verify-types` (skip Layer-2 semantic type checking on TypeScript projects).
 
 ### Project-specific fixes
 
@@ -415,6 +399,12 @@ Run in the directory containing `tsconfig.json` or `jsconfig.json`, pass `-p pat
 | <a id="check-then-update-race"></a>`check-then-update-race`                                                                                                                                                                                                                    | A Mongoose or Sequelize document's numeric field is read, changed in JavaScript and saved without a transaction, losing concurrent updates.                                                                                                                                                                                                                                                     |
 | <a id="payment-missing-idempotency-key"></a>`payment-missing-idempotency-key`                                                                                                                                                                                                  | A Stripe call that moves money has no idempotency key, so a retry can charge or pay out twice.                                                                                                                                                                                                                                                                                                  |
 | <a id="webhook-missing-idempotency-check"></a>`webhook-missing-idempotency-check`                                                                                                                                                                                              | A webhook route inserts rows without first checking whether the event was already processed.                                                                                                                                                                                                                                                                                                    |
+| <a id="unbounded-promise-all"></a>`unbounded-promise-all`                                                                                                                                                                                                                      | `Promise.all` runs over an unbounded collection without a concurrency limit (`p-limit`, `pMap`, `PromisePool`, or chunking).                                                                                                                                                                                                                                                                    |
+| <a id="mongoose-missing-lean"></a>`mongoose-missing-lean`                                                                                                                                                                                                                      | A Mongoose `.find()`, `.findOne()`, or `.findById()` read query is returned or JSON-serialized without `.lean()`.                                                                                                                                                                                                                                                                               |
+| <a id="graphql-n-plus-one-resolver"></a>`graphql-n-plus-one-resolver`                                                                                                                                                                                                          | A GraphQL field resolver executes a database or HTTP query per parent item without `DataLoader` `.load()` batching.                                                                                                                                                                                                                                                                             |
+| <a id="react-context-value-recreated"></a>`react-context-value-recreated`                                                                                                                                                                                                      | An inline object or array literal in `<*.Provider value={...}>` creates a new reference on every render without `useMemo`.                                                                                                                                                                                                                                                                      |
+| <a id="node-event-listener-leak"></a>`node-event-listener-leak`                                                                                                                                                                                                                | `.on()`, `.addListener()`, or `.addEventListener()` is registered in a request handler, loop, or lifecycle hook without cleanup.                                                                                                                                                                                                                                                                |
+| <a id="json-stringify-in-loop"></a>`json-stringify-in-loop`                                                                                                                                                                                                                    | `JSON.stringify()` is called inside a `for`, `while`, `do`, `.forEach`, `.map`, or `.reduce` loop.                                                                                                                                                                                                                                                                                              |
 
 Source diagnostics include a one-based line and column. Repeat `--ignore RULE` to omit specific JS/TS rules from a run. Keep your project's own type check in CI.
 
@@ -629,6 +619,16 @@ Performance and maintainability scans retry files when the bundled parser reject
 | <a id="java-fixed-regex-in-loop"></a>`java-fixed-regex-in-loop`             | `Pattern.compile("pattern")`                                                                                               |
 | <a id="csharp-fixed-regex-in-loop"></a>`csharp-fixed-regex-in-loop`         | `new Regex("pattern")`                                                                                                     |
 | <a id="rust-fixed-regex-in-loop"></a>`rust-fixed-regex-in-loop`             | `Regex::new("pattern")`                                                                                                    |
+| <a id="python-n-plus-one-orm-loop"></a>`python-n-plus-one-orm-loop`         | An ORM query executes inside a Python `for` loop instead of eager loading or batching.                                     |
+| <a id="python-unbounded-comprehension"></a>`python-unbounded-comprehension` | A Python list comprehension materializes an unbounded collection in memory.                                                |
+| <a id="go-sql-query-in-loop"></a>`go-sql-query-in-loop`                     | A Go `sql.DB` or ORM query executes inside a `for` loop instead of batching.                                               |
+| <a id="go-string-concat-in-loop"></a>`go-string-concat-in-loop`             | Repeated `+=` string concatenation inside a Go `for` loop instead of `strings.Builder`.                                    |
+| <a id="java-string-concat-in-loop"></a>`java-string-concat-in-loop`         | Repeated `+=` string concatenation inside a Java loop instead of `StringBuilder`.                                          |
+| <a id="java-jdbc-query-in-loop"></a>`java-jdbc-query-in-loop`               | A JDBC query executes inside a Java loop instead of batching.                                                              |
+| <a id="csharp-async-void"></a>`csharp-async-void`                           | An `async void` method cannot be awaited and can crash the process on unhandled exceptions.                                |
+| <a id="csharp-string-concat-in-loop"></a>`csharp-string-concat-in-loop`     | Repeated `+=` string concatenation inside a C# loop instead of `StringBuilder`.                                            |
+| <a id="rust-clone-in-loop"></a>`rust-clone-in-loop`                         | Calling `.clone()` inside a Rust loop adds avoidable heap allocations.                                                     |
+| <a id="rust-format-in-loop"></a>`rust-format-in-loop`                       | Calling `format!` inside a Rust loop allocates a new `String` on every iteration.                                          |
 
 ## Trace checks in other languages and databases
 
@@ -743,6 +743,29 @@ Every finding carries an impact level. `--min-impact <low|medium|high|critical>`
 | `mongoose-hydrate-for-to-object`      | medium   |
 | `express-missing-compression`         | low      |
 | `heavy-media-in-request-handler`      | medium   |
+| `react-index-as-key`                  | low      |
+| `react-fetch-in-effect-no-abort`      | low      |
+| `react-inline-object-in-jsx-prop`     | low      |
+| `angular-default-change-detection`    | low      |
+| `vue-v-for-missing-key`               | low      |
+| `dom-listener-without-cleanup`        | low      |
+| `dom-unthrottled-scroll-resize`       | low      |
+| `frontend-barrel-heavy-import`        | low      |
+| `sql-select-star-in-query`            | low      |
+| `react-missing-cleanup`               | medium   |
+| `angular-subscribe-without-cleanup`   | medium   |
+| `vue-watch-missing-cleanup`           | medium   |
+| `dom-layout-thrashing`                | medium   |
+| `webhook-missing-idempotency-check`   | medium   |
+| `unbounded-promise-all`               | high     |
+| `mongoose-missing-lean`               | medium   |
+| `graphql-n-plus-one-resolver`         | high     |
+| `react-context-value-recreated`       | low      |
+| `node-event-listener-leak`            | high     |
+| `json-stringify-in-loop`              | medium   |
+| `sequential-http-in-loop`             | high     |
+| `check-then-update-race`              | high     |
+| `payment-missing-idempotency-key`     | high     |
 | `async-route-unhandled-rejection`     | high     |
 | `async-callback-unhandled-rejection`  | high     |
 | `stream-pipe-unhandled-error`         | high     |
@@ -825,6 +848,16 @@ Every finding carries an impact level. `--min-impact <low|medium|high|critical>`
 | `python-sync-requests-in-async`       | high     |
 | `python-blocking-sleep-in-async`      | high     |
 | `python-fixed-regex-in-loop`          | low      |
+| `python-n-plus-one-orm-loop`          | high     |
+| `python-unbounded-comprehension`      | medium   |
+| `go-sql-query-in-loop`                | high     |
+| `go-string-concat-in-loop`            | medium   |
+| `java-string-concat-in-loop`          | medium   |
+| `java-jdbc-query-in-loop`             | high     |
+| `csharp-async-void`                   | high     |
+| `csharp-string-concat-in-loop`        | medium   |
+| `rust-clone-in-loop`                  | low      |
+| `rust-format-in-loop`                 | low      |
 | `redis-incr-then-expire`              | medium   |
 | `redis-repeated-read`                 | medium   |
 | `reduce-copy-accumulator`             | medium   |
@@ -1041,6 +1074,7 @@ npx loadwise sec -p tsconfig.json --json
 npx loadwise sec src/orders.ts        # explicit files
 npx loadwise sec --staged             # only findings on staged lines
 npx loadwise sec deps --online        # known-vulnerable packages in the lockfile
+npx loadwise sec polyglot src/        # ast-grep rules for Python, Go, Java, C#, Rust
 ```
 
 It accepts the source-check flags of `loadwise perf`, including `--format`, `--min-impact`, `--baseline`, `--write-baseline`, `--loadwise-config`, `--workspace`, `--policy`, `--json`, `--include-contextual`, `--ignore`, `--fail-on`, `--fix` with `--yes` or `--only` and `--no-comments` or `--no-format`, `--staged` and `--changed-since`. It uses the TypeScript 6 compiler: `--engine auto` (the default) and `--engine js` both run the JS engine, because the native engine finds less. `--engine native` (alias `--native`) runs the TypeScript 7 native compiler and prints a stderr note that cross-file taint through JavaScript constructor functions and rate-limit detection are reduced. Rules that need a package's types stay silent until the package is installed; rules that recognise a library by its import work without `node_modules`. Test, fixture, mock, example and story files are contextual: they are counted, and `--include-contextual` shows them with the reason `Test or example source.`. `--fail-on contract` enforces no security rule by default. `--fix --yes` leaves changes to ValidationPipe whitelisting for individual review because enabling it can strip undecorated DTO properties.
@@ -1112,6 +1146,12 @@ It accepts the source-check flags of `loadwise perf`, including `--format`, `--m
 | <a id="dockerfile-runs-as-root"></a>`dockerfile-runs-as-root`                     | The final stage has no `USER` instruction, or its last `USER` is root. Builder stages are not checked.                                                                                                                                                                                                                                                                       |
 | <a id="dockerfile-secret-in-build"></a>`dockerfile-secret-in-build`               | An `ARG` or `ENV` with a secret-looking name has a literal default, or `COPY`/`ADD` puts an env file or private key into the image.                                                                                                                                                                                                                                          |
 | <a id="dockerfile-unpinned-base-image"></a>`dockerfile-unpinned-base-image`       | A `FROM` image has no tag or uses `:latest`. A version tag is fine; a digest is best.                                                                                                                                                                                                                                                                                        |
+| <a id="server-action-missing-auth"></a>`server-action-missing-auth`               | An exported Next.js Server Action performs work without verifying authentication or session state.                                                                                                                                                                                                                                                                           |
+| <a id="ssrf-redirect-bypass"></a>`ssrf-redirect-bypass`                           | An outbound HTTP request with a dynamic URL does not disable redirects (`redirect: 'error'` / `'manual'` or `maxRedirects: 0`), allowing SSRF allowlist bypasses.                                                                                                                                                                                                            |
+| <a id="vm-sandbox-escape"></a>`vm-sandbox-escape`                                 | Node `vm` or `vm2` executes dynamic code or an untrusted context, risking sandbox escape and host RCE.                                                                                                                                                                                                                                                                       |
+| <a id="jwt-weak-secret-literal"></a>`jwt-weak-secret-literal`                     | JWT signing or verification uses a short (< 32 chars) or weak literal secret susceptible to brute-force forgery.                                                                                                                                                                                                                                                             |
+| <a id="graphql-batching-unbounded"></a>`graphql-batching-unbounded`               | GraphQL query batching is enabled without a batch size, query depth, or cost/complexity limit.                                                                                                                                                                                                                                                                               |
+| <a id="express-cookie-auth-missing-csrf"></a>`express-cookie-auth-missing-csrf`   | Cookie-based session or auth is paired with state-changing routes without CSRF protection or `sameSite: "strict"`.                                                                                                                                                                                                                                                           |
 
 The SQL rules report text assembled from a runtime value. When a part of that text traces to request data the finding is default and names the source; when no part does, it is contextual, because the value is usually an internal schema or table name. Every injection rule other than the SQL rules reports only values traced to request data.
 
@@ -1201,6 +1241,12 @@ The network is opt-in: `loadwise sec --online` and `loadwise check --online` add
 | `dockerfile-runs-as-root`           | medium                                      |
 | `dockerfile-secret-in-build`        | high                                        |
 | `dockerfile-unpinned-base-image`    | low                                         |
+| `server-action-missing-auth`        | high                                        |
+| `ssrf-redirect-bypass`              | high                                        |
+| `vm-sandbox-escape`                 | critical                                    |
+| `jwt-weak-secret-literal`           | high                                        |
+| `graphql-batching-unbounded`        | medium                                      |
+| `express-cookie-auth-missing-csrf`  | high                                        |
 
 ## Project-defined row scopes
 

@@ -1,4 +1,3 @@
-// @ts-check
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import type { Node, SourceFile } from 'typescript';

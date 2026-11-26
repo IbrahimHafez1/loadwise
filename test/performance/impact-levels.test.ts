@@ -35,6 +35,16 @@ const unignorableRules = [
   'python-sync-requests-in-async',
   'python-blocking-sleep-in-async',
   'python-fixed-regex-in-loop',
+  'python-n-plus-one-orm-loop',
+  'python-unbounded-comprehension',
+  'go-sql-query-in-loop',
+  'go-string-concat-in-loop',
+  'java-string-concat-in-loop',
+  'java-jdbc-query-in-loop',
+  'csharp-async-void',
+  'csharp-string-concat-in-loop',
+  'rust-clone-in-loop',
+  'rust-format-in-loop',
 ];
 
 test('every performance rule id has a valid impact level', () => {

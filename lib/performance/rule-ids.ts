@@ -103,6 +103,12 @@ const sourceRules = [
   'check-then-update-race',
   'payment-missing-idempotency-key',
   'webhook-missing-idempotency-check',
+  'unbounded-promise-all',
+  'mongoose-missing-lean',
+  'graphql-n-plus-one-resolver',
+  'react-context-value-recreated',
+  'node-event-listener-leak',
+  'json-stringify-in-loop',
 ];
 
 const indexRules = [
@@ -312,6 +318,22 @@ const impactByRule: Readonly<Record<string, ImpactLevel>> = {
   'migration-unparsed': 'low',
   'db-unused-index': 'low',
   'db-duplicate-index': 'low',
+  'unbounded-promise-all': 'high',
+  'mongoose-missing-lean': 'medium',
+  'graphql-n-plus-one-resolver': 'high',
+  'react-context-value-recreated': 'low',
+  'node-event-listener-leak': 'high',
+  'json-stringify-in-loop': 'medium',
+  'python-n-plus-one-orm-loop': 'high',
+  'python-unbounded-comprehension': 'medium',
+  'go-sql-query-in-loop': 'high',
+  'go-string-concat-in-loop': 'medium',
+  'java-string-concat-in-loop': 'medium',
+  'java-jdbc-query-in-loop': 'high',
+  'csharp-async-void': 'high',
+  'csharp-string-concat-in-loop': 'medium',
+  'rust-clone-in-loop': 'low',
+  'rust-format-in-loop': 'low',
 };
 
 // One-line summaries of every rule above, used where a rule needs a fixed name (SARIF
@@ -510,6 +532,28 @@ const descriptionByRule = {
     'A Stripe call that moves money has no idempotency key, so a retry can charge or pay out twice.',
   'webhook-missing-idempotency-check':
     'A webhook route inserts rows without first checking whether the event was already processed.',
+  'unbounded-promise-all':
+    'Promise.all runs over an unbounded collection without a concurrency limit, risking memory spikes or downstream saturation.',
+  'mongoose-missing-lean':
+    'A Mongoose read query is returned or serialized without .lean(), paying full Document hydration overhead.',
+  'graphql-n-plus-one-resolver':
+    'A GraphQL field resolver executes a database or HTTP query per parent item without DataLoader batching.',
+  'react-context-value-recreated':
+    'An inline object or array literal in Context.Provider value creates a new reference on every render.',
+  'node-event-listener-leak':
+    'An event listener is registered inside a repeated or per-request context without matching cleanup.',
+  'json-stringify-in-loop': 'JSON.stringify runs inside a loop instead of serializing once or streaming.',
+  'python-n-plus-one-orm-loop':
+    'An ORM query executes inside a Python loop instead of using eager loading or batching.',
+  'python-unbounded-comprehension': 'A Python list comprehension materializes an unbounded collection in memory.',
+  'go-sql-query-in-loop': 'A Go database query executes inside a loop instead of batching.',
+  'go-string-concat-in-loop': 'String concatenation in a Go loop allocates repeatedly; use strings.Builder.',
+  'java-string-concat-in-loop': 'String concatenation in a Java loop allocates repeatedly; use StringBuilder.',
+  'java-jdbc-query-in-loop': 'A JDBC query executes inside a Java loop instead of batching.',
+  'csharp-async-void': 'An async void method cannot be awaited and can crash the process on unhandled exceptions.',
+  'csharp-string-concat-in-loop': 'String concatenation in a C# loop allocates repeatedly; use StringBuilder.',
+  'rust-clone-in-loop': 'Cloning values inside a Rust loop adds avoidable heap allocations.',
+  'rust-format-in-loop': 'Calling format! inside a Rust loop allocates a new String on every iteration.',
 };
 
 export {

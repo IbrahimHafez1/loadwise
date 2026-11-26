@@ -73,14 +73,14 @@ test('a bulk fix touching a refused file and another file applies to neither', (
   assert.equal(read('other.ts'), original);
 });
 
-test('performance --fix --only refuses a broken fix and applies a valid one', (context) => {
+test('performance --fix --only refuses a broken fix and applies a valid one', async (context) => {
   const { directory, read } = project(context, { 'broken.ts': original, 'fine.ts': original });
   const previous = process.cwd();
   process.chdir(directory);
   const findings = [finding('bad', 'broken.ts', brokenAfter), finding('good', 'fine.ts', validAfter)];
   try {
     assert.equal(
-      performance.applyChosenFixes(findings, ['bad', 'good'], { json: true, format: false, project: directory }),
+      await performance.applyChosenFixes(findings, ['bad', 'good'], { json: true, format: false, project: directory }),
       2,
     );
   } finally {

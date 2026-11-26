@@ -1,4 +1,3 @@
-// @ts-check
 import fs from 'node:fs';
 import { parseArgs } from 'node:util';
 import { pillars } from './pillars.js';

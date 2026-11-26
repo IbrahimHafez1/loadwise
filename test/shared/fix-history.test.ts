@@ -269,7 +269,7 @@ test(
   },
 );
 
-test('history stores the actual shifted and merged lines and correctly identifies duplicate maintainability edits', (context) => {
+test('history stores the actual shifted and merged lines and correctly identifies duplicate maintainability edits', async (context) => {
   const { root, history } = fixture(context);
   const directory = enableHistory(root);
   const file = path.join(root, 'edit.ts');
@@ -284,7 +284,10 @@ test('history stores the actual shifted and merged lines and correctly identifie
       changes: [{ file, line: 1, before: "import { old } from 'lib';", after: "import { old, added } from 'lib';" }],
     },
   };
-  assert.equal(performance.applyChosenFixes([finding], ['merge'], { json: true, project: root, checker: 'sec' }), 0);
+  assert.equal(
+    await performance.applyChosenFixes([finding], ['merge'], { json: true, project: root, checker: 'sec' }),
+    0,
+  );
   const [change] = history('security').runs[0].applied[0].fix.changes;
   assert.deepEqual(change, { file, line: 2, before: existing, after: merged });
   const shared = { changes: [{ file, line: 3, before: 'const value = 1;', after: '// extracted\nconst value = 1;' }] };

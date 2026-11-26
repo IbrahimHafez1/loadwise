@@ -1,7 +1,7 @@
 // Scores loadwise against the hand-labelled corpus in bench/corpus and fails on regressions.
 // Usage: node scripts/score-corpus.js [--from <dir>] [--loadwise <dir>] [--corpus <dir>] [--repos
 // a,b]
-//        [--concurrency n] [--write-scores] [--json] [--scorecard]
+//        [--concurrency n] [--min-precision <0..1>] [--write-scores] [--json] [--scorecard]
 // Scans run in parallel, up to 4 at once by default; lower --concurrency when memory is short.
 // --scorecard needs no scan: it reads the label files and bench/corpus/scores.json and writes
 // scorecard.md.
@@ -41,7 +41,7 @@ const PRETTIER_BIN = path.join(
 );
 const PILLARS: Record<string, string> = { perf: 'performance', maint: 'maintainability', sec: 'security' };
 const CORPUS_PATH_MARKER = 'loadwise-corpus/';
-const FLAG_NAMES_WITH_VALUE = new Set(['from', 'loadwise', 'corpus', 'repos', 'concurrency']);
+const FLAG_NAMES_WITH_VALUE = new Set(['from', 'loadwise', 'corpus', 'repos', 'concurrency', 'min-precision']);
 const RULE_COLUMN_WIDTH = 52;
 const NUMBER_COLUMN_WIDTH = 6;
 
@@ -55,6 +55,7 @@ interface ScoreOptions {
   corpus?: string;
   repos?: string;
   concurrency?: string;
+  'min-precision'?: string;
   scorecard?: boolean;
   json?: boolean;
   'write-scores'?: boolean;
@@ -560,9 +561,50 @@ function readFloorExceptions(): { rule: string }[] {
   return fs.existsSync(FLOOR_EXCEPTIONS_PATH) ? readJson<{ rule: string }[]>(FLOOR_EXCEPTIONS_PATH) : [];
 }
 
+function parseMinPrecision(raw: string | boolean | undefined): number | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== 'string' || !raw.trim()) {
+    throw new Error('--min-precision must be a finite number in [0, 1].');
+  }
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    throw new Error('--min-precision must be a finite number in [0, 1].');
+  }
+  return value;
+}
+
+function overallPrecision(rules: StatsByRule): number | null {
+  let tp = 0;
+  let fp = 0;
+  for (const stats of Object.values(rules)) {
+    tp += stats.tp;
+    fp += stats.fp;
+  }
+  return ratio(tp, tp + fp);
+}
+
+function findBelowMinPrecision(rules: StatsByRule, minPrecision: number): string[] {
+  const below = Object.keys(rules)
+    .sort()
+    .filter((key) => {
+      const { precision } = rules[key];
+      return precision !== null && precision < minPrecision;
+    });
+  const overall = overallPrecision(rules);
+  if (overall !== null && overall < minPrecision) below.push('overall');
+  return below;
+}
+
 async function main(argv: readonly string[]): Promise<number> {
   const options = parseArgs(argv);
   if (options.scorecard) return await writeScorecard();
+  let minPrecision: number | undefined;
+  try {
+    minPrecision = parseMinPrecision(options['min-precision']);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    return 1;
+  }
   const manifest = readJson<{ repos: CorpusRepo[] }>(MANIFEST_PATH);
   const wanted = options.repos ? new Set(options.repos.split(',')) : null;
   const repos = manifest.repos.filter((repo) => !wanted || wanted.has(repo.name));
@@ -586,10 +628,17 @@ async function main(argv: readonly string[]): Promise<number> {
   const regressions = findRegressions(current, baseline, { compareMetrics });
   const deltas = countDeltas(current, baseline);
   const belowFloor = findBelowFloor(current.rules, readFloorExceptions());
-  const exitCode = regressions.length > 0 || belowFloor.length > 0 ? 1 : 0;
+  const belowMinPrecision = minPrecision === undefined ? [] : findBelowMinPrecision(current.rules, minPrecision);
+  const exitCode = regressions.length > 0 || belowFloor.length > 0 || belowMinPrecision.length > 0 ? 1 : 0;
 
   if (options.json) {
-    console.log(JSON.stringify({ scanned, skipped, rules: current.rules, deltas, regressions, belowFloor }, null, 2));
+    console.log(
+      JSON.stringify(
+        { scanned, skipped, rules: current.rules, deltas, regressions, belowFloor, belowMinPrecision },
+        null,
+        2,
+      ),
+    );
     return exitCode;
   }
   console.log(formatRuleTable(current.rules));
@@ -600,6 +649,11 @@ async function main(argv: readonly string[]): Promise<number> {
   for (const regression of regressions) console.log(`REGRESSION ${regression}`);
   if (belowFloor.length > 0) console.log(`Below precision floor (${PRECISION_FLOOR}):`);
   for (const key of belowFloor) console.log(`  ${key} precision ${current.rules[key].precision}`);
+  if (belowMinPrecision.length > 0) console.log(`Below --min-precision (${minPrecision}):`);
+  for (const key of belowMinPrecision) {
+    const value = key === 'overall' ? overallPrecision(current.rules) : current.rules[key].precision;
+    console.log(`  ${key} precision ${value}`);
+  }
   return exitCode;
 }
 
@@ -617,6 +671,11 @@ export {
   classifyStatus,
   buildScorecard,
   findBelowFloor,
+  parseArgs,
+  parseMinPrecision,
+  overallPrecision,
+  findBelowMinPrecision,
+  main,
   PRECISION_FLOOR,
   MINIMUM_LABELS_FOR_FLOOR,
 };

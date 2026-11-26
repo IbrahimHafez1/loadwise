@@ -4,7 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import type { TestContext } from 'node:test';
-import { buildFix, createFileCache } from '../../lib/performance/site-fix.js';
+import { buildFix, createFileCache, loadBuilders } from '../../lib/performance/site-fix.js';
+
+await loadBuilders();
 import type { Finding, FindingFix } from '../../lib/shared/types.js';
 import type { FileMap } from '../types/project-files.js';
 import { fixNoteOf } from '../types/fix-note.js';

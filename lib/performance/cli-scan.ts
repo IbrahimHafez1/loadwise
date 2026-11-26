@@ -120,7 +120,7 @@ export async function checkCode(
   if (values.fix && report === printResult) {
     return exitCodeWithSkips(result, await applySourceFixes(result, values, onlyIds, project, positionals));
   }
-  const code = reportSourceResult({ ...scanned, values, project, baselineOptions, positionals, scope, report });
+  const code = await reportSourceResult({ ...scanned, values, project, baselineOptions, positionals, scope, report });
   if (report === printResult) notifyEditor(values.project ?? process.cwd());
   return code;
 }
@@ -143,7 +143,7 @@ async function watchSource(values: ScanValues, policySource: PolicySource): Prom
     policySource,
     onResult(result) {
       appendPrismaSchemaFindings(result, [values.project ?? '.']);
-      printResult(result, values);
+      void printResult(result, values);
     },
     onError(error) {
       console.error(typeof error === 'object' && error !== null && 'message' in error ? error.message : error);
@@ -244,7 +244,7 @@ async function checkWithSecurity({
   } else if (!scope) {
     noteOffline(values.projectDirectory);
   }
-  function reportPillar(jsonKey: 'performance' | 'security', pillar: SourceReportPillar): PillarOutput {
+  async function reportPillar(jsonKey: 'performance' | 'security', pillar: SourceReportPillar): Promise<PillarOutput> {
     const isSecurity = jsonKey === 'security';
     if (isSecurity && dependencyError) {
       console.error(errorMessage(dependencyError));
@@ -272,15 +272,16 @@ async function checkWithSecurity({
     const code = exitCodeWithSkips(
       reportResult,
       jsonKey === 'performance'
-        ? printResult(reportResult, pillarValues, print)
-        : sourceReport.printResult(reportResult, pillarValues, pillar, print),
+        ? await printResult(reportResult, pillarValues, print)
+        : await sourceReport.printResult(reportResult, pillarValues, pillar, print),
     );
     return { code, stdout: lines.map((line) => line + '\n').join('') };
   }
-  const reports = {
-    performance: reportPillar('performance', performancePillar),
-    security: reportPillar('security', security.pillar),
-  };
+  const [performance, securityOutput] = await Promise.all([
+    reportPillar('performance', performancePillar),
+    reportPillar('security', security.pillar),
+  ]);
+  const reports = { performance, security: securityOutput };
   console.log(JSON.stringify(reports));
   notifyEditor(values.project ?? process.cwd());
   return Math.max(reports.performance.code, reports.security.code);

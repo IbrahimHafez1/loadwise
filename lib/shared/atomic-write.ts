@@ -1,4 +1,3 @@
-// @ts-check
 // Writes user files (AGENTS.md, CLAUDE.md, the pre-commit hook, baselines) so a crash or a full disk leaves either
 // the old text or the new text, never half of it.
 import { randomUUID } from 'node:crypto';

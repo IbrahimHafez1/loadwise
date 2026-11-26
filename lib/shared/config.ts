@@ -1,4 +1,3 @@
-// @ts-check
 // loadwise.config.json: one file for the checker selection, ignored paths, per-rule levels and each pillar's policy.
 // Every checker calls loadSettings once and filters its findings through the result, so a new pillar gets the
 // whole configuration by making that one call.
@@ -9,13 +8,43 @@ import { createGlobMatcher } from './glob.js';
 import { errorCode } from './error-code.js';
 import { isRecord } from './is-record.js';
 import type { Finding } from './types.js';
-import type { ConfigOverride, LoadedConfig, LoadwiseConfig, LoadwiseSettings, RuleSetting } from './types/settings.js';
+import type {
+  ConfigOverride,
+  LoadedConfig,
+  LoadwiseConfig,
+  LoadwiseSettings,
+  RuleOptions,
+  RuleSetting,
+} from './types/settings.js';
 import { rejectDuplicateKeys } from '../performance/query-policy.js';
 
 const configFileName = 'loadwise.config.json';
 const topLevelKeys = ['$schema', 'checkers', 'ignore', 'rules', 'overrides', 'performance', 'maintainability'];
 const overrideKeys = ['files', 'rules'];
 const levels = ['off', 'warn', 'error'];
+
+type RuleOptionType = 'integer' | 'number' | 'boolean' | 'string';
+
+interface RuleOptionSpec {
+  type: RuleOptionType;
+  min?: number;
+  max?: number;
+}
+
+type RuleOptionsSchema = Record<string, RuleOptionSpec>;
+
+const ruleOptionSchemas: Record<string, RuleOptionsSchema> = {
+  'deep-control-flow': { maxDepth: { type: 'integer', min: 1 } },
+  'high-branch-complexity': { maxComplexity: { type: 'integer', min: 1 } },
+  'long-parameter-list': { maxParams: { type: 'integer', min: 1 } },
+  'large-module': { maxLines: { type: 'integer', min: 1 } },
+  'large-class': { maxMethods: { type: 'integer', min: 1 }, maxLines: { type: 'integer', min: 1 } },
+  'bcrypt-low-cost': { minCost: { type: 'integer', min: 1 } },
+  'graphql-query-depth-unbounded': { maxDepth: { type: 'integer', min: 1 } },
+  'graphql-batching-unbounded': { maxBatchSize: { type: 'integer', min: 1 } },
+  'orm-deep-offset': { maxOffset: { type: 'integer', min: 1 } },
+  'upload-without-size-limit': { maxBytes: { type: 'integer', min: 1 } },
+};
 
 function readConfigFile(filename: string): unknown {
   try {
@@ -45,6 +74,50 @@ function isLevel(value: unknown): boolean {
   return levels.some((level) => level === value);
 }
 
+function matchesOptionType(value: unknown, type: RuleOptionType): boolean {
+  if (type === 'integer') return typeof value === 'number' && Number.isInteger(value);
+  if (type === 'number') return typeof value === 'number' && Number.isFinite(value);
+  return typeof value === type;
+}
+
+function checkRuleOptions(ruleId: string, options: unknown, label: string, problems: string[]): void {
+  if (!isRecord(options)) {
+    problems.push(`${label}.${ruleId}.options must be an object.`);
+    return;
+  }
+  const schema = Object.hasOwn(ruleOptionSchemas, ruleId) ? ruleOptionSchemas[ruleId] : undefined;
+  if (!schema) {
+    const keys = Object.keys(options);
+    if (!keys.length) {
+      problems.push(`rule "${ruleId}" in ${label} does not accept options.`);
+      return;
+    }
+    for (const option of keys) {
+      problems.push(`unknown option "${option}" for rule "${ruleId}" in ${label}.`);
+    }
+    return;
+  }
+  for (const [option, value] of Object.entries(options)) {
+    const spec = Object.hasOwn(schema, option) ? schema[option] : undefined;
+    if (!spec) {
+      problems.push(`unknown option "${option}" for rule "${ruleId}" in ${label}.`);
+      continue;
+    }
+    if (!matchesOptionType(value, spec.type)) {
+      problems.push(`option "${option}" for rule "${ruleId}" in ${label} must be a ${spec.type}.`);
+      continue;
+    }
+    if (typeof value === 'number') {
+      if (spec.min !== undefined && value < spec.min) {
+        problems.push(`option "${option}" for rule "${ruleId}" in ${label} must be >= ${spec.min}.`);
+      }
+      if (spec.max !== undefined && value > spec.max) {
+        problems.push(`option "${option}" for rule "${ruleId}" in ${label} must be <= ${spec.max}.`);
+      }
+    }
+  }
+}
+
 function checkRuleLevels(rules: unknown, label: string, knownRules: ReadonlySet<string>, problems: string[]): void {
   if (!isRecord(rules)) {
     problems.push(`${label} must be an object of rule ids.`);
@@ -55,8 +128,11 @@ function checkRuleLevels(rules: unknown, label: string, knownRules: ReadonlySet<
     const level = isRecord(setting) ? setting.level : setting;
     if (!isLevel(level)) problems.push(`${label}.${ruleId} needs a level of ${levels.join(', ')}.`);
     if (!isRecord(setting)) continue;
-    for (const option of Object.keys(setting).filter((key) => key !== 'level')) {
+    for (const option of Object.keys(setting).filter((key) => key !== 'level' && key !== 'options')) {
       problems.push(`unknown option "${option}" for rule "${ruleId}" in ${label}.`);
+    }
+    if (Object.hasOwn(setting, 'options')) {
+      checkRuleOptions(ruleId, setting.options, label, problems);
     }
   }
 }
@@ -130,6 +206,10 @@ function levelOf(setting: RuleSetting | undefined): string | undefined {
   return typeof setting === 'object' ? setting.level : setting;
 }
 
+function optionsOf(setting: RuleSetting | undefined): RuleOptions | undefined {
+  return typeof setting === 'object' ? setting.options : undefined;
+}
+
 // What a checker needs from the config: its policy section, plus the filters that apply to its
 // findings.
 function createSettings(loaded: LoadedConfig | undefined, cliIgnore: readonly string[]): LoadwiseSettings {
@@ -151,6 +231,19 @@ function createSettings(loaded: LoadedConfig | undefined, cliIgnore: readonly st
     return level;
   }
 
+  function ruleOptions(ruleId: string, relativeFile = ''): RuleOptions | undefined {
+    let merged: RuleOptions | undefined;
+    const baseOptions = optionsOf(config.rules?.[ruleId]);
+    if (baseOptions) merged = { ...baseOptions };
+    if (!relativeFile) return merged;
+    for (const override of overrides) {
+      if (!override.matches(relativeFile) || !Object.hasOwn(override.rules, ruleId)) continue;
+      const overrideOptions = optionsOf(override.rules[ruleId]);
+      if (overrideOptions) merged = { ...merged, ...overrideOptions };
+    }
+    return merged;
+  }
+
   function isIgnoredIn(fileBase: string, file: string): boolean {
     const relativeFile = path
       .relative(loaded?.directory ?? fileBase, path.resolve(fileBase, file))
@@ -167,6 +260,7 @@ function createSettings(loaded: LoadedConfig | undefined, cliIgnore: readonly st
     performance: config.performance,
     maintainability: config.maintainability,
     checkers: config.checkers,
+    ruleOptions,
     // Drops ignored paths and "off" rules and tags the rest with their "warn" or "error" level.
     // fileBase is the folder the findings' file paths are relative to.
     apply(findings: Finding[], fileBase: string): Finding[] {

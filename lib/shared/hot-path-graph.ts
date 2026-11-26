@@ -1,4 +1,3 @@
-// @ts-check
 // Finds the hot-path rank of a finding from its path and the call graph around it. Loaded on first use because it
 // binds the compiler syntax, which the CLI must select before anything touches it.
 import { ts } from '../performance/compiler.js';

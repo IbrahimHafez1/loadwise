@@ -1,4 +1,3 @@
-// @ts-check
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import { maxReportBytes, savePendingReview } from './pending-review.js';

@@ -9,7 +9,7 @@ import type { checkerHistory } from '../shared/fix-history.js';
 import { createWriteTracker, withoutWhyComment } from '../shared/fix-presentation.js';
 import type { Finding, FindingFix, FixChange } from '../shared/types.js';
 import { checkerHistory as checkerHistoryFixHistory } from '../shared/fix-history.js';
-import { attachSiteFixes } from './site-fix.js';
+import { attachSiteFixes, loadBuilders } from './site-fix.js';
 
 type WriteTracker = ReturnType<typeof createWriteTracker>;
 type FixHistory = ReturnType<typeof checkerHistory>;
@@ -122,17 +122,23 @@ function chosenFixFailure(
   return error;
 }
 
+async function attachLoadedSiteFixes(findings: Finding[]): Promise<void> {
+  if (!findings.length) return;
+  await loadBuilders();
+  attachSiteFixes(findings);
+}
+
 // `--fix --only`: applies exactly the named fixes without asking and reports each id that could not
 // be applied.
-function applyChosenFixes(
+async function applyChosenFixes(
   findings: Finding[],
   ids: readonly string[],
   { json = false, checker = 'perf', project = process.cwd(), comments, format }: ChosenFixOptions = {},
-): number {
+): Promise<number> {
   const history = checkerHistoryFixHistory(project, process.cwd(), checker);
   const findingsById = new Map(findings.map((finding): [string | undefined, Finding] => [finding.id, finding]));
   const chosen = ids.map((id) => findingsById.get(id)).filter((finding): finding is Finding => finding !== undefined);
-  attachSiteFixes(chosen);
+  await attachLoadedSiteFixes(chosen);
   withoutComments(chosen, comments);
   const tracker = createWriteTracker();
   const applied: string[] = [];
@@ -193,6 +199,7 @@ async function applyFixes(
   findings: Finding[],
   { all = false, project = process.cwd(), checker = 'perf', withheld = [], comments, format }: AllFixOptions = {},
 ): Promise<number> {
+  if (findings.length || withheld.length) await loadBuilders();
   attachSiteFixes(findings);
   withoutComments(findings, comments);
   const tracker = createWriteTracker();

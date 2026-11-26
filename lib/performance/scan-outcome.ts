@@ -11,7 +11,7 @@ interface SourceResultInput {
   positionals: readonly string[];
   scope: ChangedScope | undefined;
   // A caller of checkCode may ask for the findings instead of an exit code.
-  report: (result: ScanResult, values: SourceScanValues) => number | Finding[];
+  report: (result: ScanResult, values: SourceScanValues) => number | Finding[] | Promise<number | Finding[]>;
 }
 
 function noteEmptyIgnoredScan(result: ScanResult, values: SourceScanValues, scope: ChangedScope | undefined): void {
@@ -46,7 +46,7 @@ function reportSourceResult({
   positionals,
   scope,
   report,
-}: SourceResultInput): number | Finding[] {
+}: SourceResultInput): number | Finding[] | Promise<number | Finding[]> {
   const reportValues = {
     ...values,
     project,

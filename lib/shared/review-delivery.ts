@@ -1,4 +1,3 @@
-// @ts-check
 import path from 'node:path';
 import type { ReviewEvent, ReviewHandoffReceipt } from './types/review-event.js';
 import { prepareReviewRequest } from './review-request.js';

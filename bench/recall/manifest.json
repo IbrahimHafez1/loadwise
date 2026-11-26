@@ -540,6 +540,96 @@
       "file": "server.ts",
       "line": 113,
       "source": "Backend mastery recall case"
+    },
+    {
+      "id": "perf-phase5-unbounded-promise-all",
+      "pillar": "perf",
+      "ruleId": "unbounded-promise-all",
+      "project": "perf-phase5-unbounded-promise-all",
+      "file": "index.ts",
+      "line": 5,
+      "source": "Phase 5 performance recall case"
+    },
+    {
+      "id": "perf-phase5-graphql-n-plus-one-resolver",
+      "pillar": "perf",
+      "ruleId": "graphql-n-plus-one-resolver",
+      "project": "perf-phase5-graphql-n-plus-one-resolver",
+      "file": "index.ts",
+      "line": 8,
+      "source": "Phase 5 performance recall case"
+    },
+    {
+      "id": "perf-phase5-node-event-listener-leak",
+      "pillar": "perf",
+      "ruleId": "node-event-listener-leak",
+      "project": "perf-phase5-node-event-listener-leak",
+      "file": "index.ts",
+      "line": 5,
+      "source": "Phase 5 performance recall case"
+    },
+    {
+      "id": "perf-phase5-mongoose-missing-lean",
+      "pillar": "perf",
+      "ruleId": "mongoose-missing-lean",
+      "project": "perf-phase5-mongoose-missing-lean",
+      "file": "index.ts",
+      "line": 6,
+      "source": "Phase 5 performance recall case"
+    },
+    {
+      "id": "sec-phase5-server-action-missing-auth",
+      "pillar": "sec",
+      "ruleId": "server-action-missing-auth",
+      "project": "sec-phase5-server-action-missing-auth",
+      "file": "index.js",
+      "line": 3,
+      "source": "Generic Next.js Server Action missing auth pattern"
+    },
+    {
+      "id": "sec-phase5-ssrf-redirect-bypass",
+      "pillar": "sec",
+      "ruleId": "ssrf-redirect-bypass",
+      "project": "sec-phase5-ssrf-redirect-bypass",
+      "file": "index.js",
+      "line": 2,
+      "source": "Generic SSRF 3xx redirect bypass pattern"
+    },
+    {
+      "id": "sec-phase5-vm-sandbox-escape",
+      "pillar": "sec",
+      "ruleId": "vm-sandbox-escape",
+      "project": "sec-phase5-vm-sandbox-escape",
+      "file": "index.js",
+      "line": 4,
+      "source": "Generic Node vm sandbox escape pattern"
+    },
+    {
+      "id": "sec-phase5-jwt-weak-secret-literal",
+      "pillar": "sec",
+      "ruleId": "jwt-weak-secret-literal",
+      "project": "sec-phase5-jwt-weak-secret-literal",
+      "file": "index.js",
+      "line": 4,
+      "source": "Generic weak JWT secret literal pattern"
+    },
+    {
+      "id": "sec-phase5-graphql-batching-unbounded",
+      "pillar": "sec",
+      "ruleId": "graphql-batching-unbounded",
+      "project": "sec-phase5-graphql-batching-unbounded",
+      "file": "index.js",
+      "line": 3,
+      "source": "Generic unbounded GraphQL batching pattern"
+    },
+    {
+      "id": "sec-phase5-express-cookie-auth-missing-csrf",
+      "pillar": "sec",
+      "ruleId": "express-cookie-auth-missing-csrf",
+      "project": "sec-phase5-express-cookie-auth-missing-csrf",
+      "file": "index.js",
+      "line": 5,
+      "source": "Generic Express cookie auth without CSRF pattern"
     }
   ]
 }

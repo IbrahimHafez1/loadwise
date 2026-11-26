@@ -1,4 +1,3 @@
-// @ts-check
 import fs from 'node:fs';
 import type { CompilerOptions } from 'typescript';
 import path from 'node:path';

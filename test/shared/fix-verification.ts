@@ -10,7 +10,12 @@ import path from 'node:path';
 import ts from 'typescript';
 import { applyFix } from '../../editor/apply-fix.cjs';
 import { analyzeSources, performanceAnalyzers } from '../../lib/performance/projects.js';
-import { attachSiteFixes as attachPerformanceFixes } from '../../lib/performance/site-fix.js';
+import {
+  attachSiteFixes as attachPerformanceFixes,
+  loadBuilders as loadPerformanceBuilders,
+} from '../../lib/performance/site-fix.js';
+
+await loadPerformanceBuilders();
 import { attachSiteFixes as attachMaintainabilityFixes } from '../../lib/maintainability/site-fix.js';
 import { scan as scanMaintainability } from '../../lib/maintainability/scan.js';
 import { applyFix as applyMaintainabilityFix } from '../../lib/maintainability/apply-fix.js';

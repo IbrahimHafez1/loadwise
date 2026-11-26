@@ -1,5 +1,4 @@
 import * as readline from 'node:readline/promises';
-// @ts-check
 // A line of a diff: its marker and the line's text.
 type DiffRow = [marker: string, line: string];
 

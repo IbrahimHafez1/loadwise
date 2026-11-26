@@ -1,4 +1,3 @@
-// @ts-check
 import { constants } from 'node:fs';
 import type { Stats } from 'node:fs';
 import fs from 'node:fs/promises';

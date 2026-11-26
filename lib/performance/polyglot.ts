@@ -29,9 +29,9 @@ const extensions = new Set(['.py', '.go', '.java', '.cs', '.rs']);
 const excludedDirectories =
   '!**/{node_modules,dist,build,coverage,.next,.nuxt,.venv,venv,__pycache__,.cache,.turbo,target,vendor,.worktrees}';
 
-async function retryRules(language: string) {
+async function retryRules(configPath: string, language: string) {
   const name = language.toLowerCase();
-  const rule = await fs.promises.readFile(path.join(path.dirname(config), 'rules', name + '.yml'), 'utf8');
+  const rule = await fs.promises.readFile(path.join(path.dirname(configPath), 'rules', name + '.yml'), 'utf8');
   const error = {
     id: 'polyglot-parse-error-' + name,
     language,
@@ -85,7 +85,7 @@ async function resolveInputs(paths: readonly string[]): Promise<{ inputs: Set<st
   return { inputs, explicitFiles };
 }
 
-async function checkPolyglot(paths: readonly string[]): Promise<PolyglotScan> {
+async function scanPolyglot(configPath: string, paths: readonly string[]): Promise<PolyglotScan> {
   if (!paths.length) throw new Error('Pass at least one source file or directory to polyglot.');
   const { inputs, explicitFiles } = await resolveInputs(paths);
   const binary = nativeBinary();
@@ -94,7 +94,7 @@ async function checkPolyglot(paths: readonly string[]): Promise<PolyglotScan> {
     [
       'scan',
       '--config',
-      config,
+      configPath,
       '--custom-languages',
       'ignore',
       '--json=stream',
@@ -152,7 +152,13 @@ async function checkPolyglot(paths: readonly string[]): Promise<PolyglotScan> {
   for (const [file, matches] of evidence) {
     const error = matches.find(syntaxError);
     if (!error) continue;
-    const retry = await retryCompatibility(binary, config, retryRules, path.resolve(file), matches);
+    const retry = await retryCompatibility(
+      binary,
+      configPath,
+      (language) => retryRules(configPath, language),
+      path.resolve(file),
+      matches,
+    );
     if (!retry) {
       const { line, column, message } = finding(file, error);
       throw new Error(`${file}:${line}:${column}: ${message}`);
@@ -184,5 +190,10 @@ async function checkPolyglot(paths: readonly string[]): Promise<PolyglotScan> {
   return { scannedFiles: scanned.size, skippedFiles: 0, findings: unique };
 }
 
-export { checkPolyglot };
+/** Run ast-grep polyglot performance checks on the given files or directories. */
+async function checkPolyglot(paths: readonly string[]): Promise<PolyglotScan> {
+  return scanPolyglot(config, paths);
+}
+
+export { checkPolyglot, scanPolyglot };
 export type { PolyglotFinding, PolyglotScan };

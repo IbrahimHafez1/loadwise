@@ -16,11 +16,24 @@ function selectNativeSyntax(nativeSyntax: typeof TypeScript): void {
   ts = nativeSyntax;
 }
 
+/**
+ * Temporarily swaps the live `ts` binding for `fn`. `fn` MUST be synchronous; passing an async
+ * function would reset `ts` before the first `await` resumes.
+ */
 function withSyntax<Result>(chosenSyntax: typeof TypeScript, fn: () => Result): Result {
   const previous = ts;
   ts = chosenSyntax;
   try {
-    return fn();
+    const result = fn();
+    if (
+      result !== null &&
+      (typeof result === 'object' || typeof result === 'function') &&
+      'then' in result &&
+      typeof result.then === 'function'
+    ) {
+      throw new TypeError('withSyntax() callback must be synchronous and must not return a Promise/thenable.');
+    }
+    return result;
   } finally {
     ts = previous;
   }

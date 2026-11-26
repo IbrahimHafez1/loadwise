@@ -4,7 +4,7 @@
 import { stripExpression as strip } from '../bindings.js';
 import path from 'node:path';
 import { ts } from '../../performance/compiler.js';
-import { parameterSource } from './sources.js';
+import { parameterSource, h3SourceCall } from './sources.js';
 import { archiveParameter, archiveLoopEntry } from './archive-sources.js';
 import { propagation } from './propagate.js';
 import { isNumericCall, isPrunedType, isGuarded, stringIsSafe, isRegexEscape } from './sanitizers.js';
@@ -65,8 +65,8 @@ const sanitizedKinds = new Map<string, string[]>([
   ['url', ['url']],
   ['path', ['path', 'id']],
 ]);
-// Caller-direction hops tracked; a third is not followed.
-const maxHops = 2;
+// Caller-direction hops tracked; a fourth is not followed.
+const maxHops = 3;
 const maxLabelLength = 60;
 const maxStepTextLength = 80;
 
@@ -459,6 +459,8 @@ function createTaint(program: ProgramAdapter): TaintApi {
       )
         return partOf(receiver);
     }
+    const h3 = h3SourceCall(call, checker);
+    if (h3) return { ...source(h3.taint, h3.label, call, state.hops), steps: [step(call)] };
     const validated = schemaCall(call, checker);
     if (validated) return resolveValidated(call, validated, state);
     if (isSanitizingCall(call, state.sinkKind)) return;

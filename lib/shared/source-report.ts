@@ -1,4 +1,3 @@
-// @ts-check
 // The report of a source checker (perf or sec): finding ids, contextual selection, changed-line filtering, site
 // fixes and examples, then text or JSON output and the exit code. `pillar` is { command, contractRules }: the
 // loadwise subcommand printed in fix commands and the rule ids that `--fail-on contract` enforces.
@@ -17,7 +16,7 @@ import { assignFindingIds as assignFindingIdsFindingIds } from '../performance/f
 import { keepChangedFindings } from '../performance/changed-lines.js';
 import { attachExample, printFindings, findingLabel } from '../performance/finding-text.js';
 import { createTestWriteClassifier } from '../performance/review-context.js';
-import { attachSiteFixes } from '../performance/site-fix.js';
+import { attachSiteFixes, loadBuilders } from '../performance/site-fix.js';
 
 type LinePrinter = (line: string) => void;
 
@@ -51,12 +50,12 @@ function selectFindings(result: SourceReportResult, values: SourceReportValues):
 }
 
 // `print` receives each output line; the shared perf and sec run collects them per pillar.
-function printResult(
+async function printResult(
   result: SourceReportResult,
   values: SourceReportValues,
   pillar: SourceReportPillar,
   print: LinePrinter = console.log,
-): number {
+): Promise<number> {
   // Ids are assigned before filtering, so collision suffixes do not depend on which findings are
   // shown.
   const idRoot = findingRoot(values.project);
@@ -91,7 +90,10 @@ function printResult(
   if (contractOnly) {
     result.contractFindingCount = result.findings.filter(isContract).length;
   }
-  attachSiteFixes(result.findings);
+  if (result.findings.length) {
+    await loadBuilders();
+    attachSiteFixes(result.findings);
+  }
   for (const finding of result.findings) {
     finding.fixable = Boolean(finding.fix);
     attachExample(finding);

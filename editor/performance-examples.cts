@@ -139,6 +139,30 @@ const examples: Record<string, ExampleEntry> = {
     'await db.update(orders).set(changes).where(and(scope, eq(orders.id, orderId)));',
     'Use the intended filter for this operation. Confirm explicitly if a whole-table mutation is intentional.',
   ],
+  'unbounded-promise-all': [
+    "import pLimit from 'p-limit';\nconst limit = pLimit(10);\nawait Promise.all(items.map((item) => limit(() => processItem(item))));",
+    'Cap concurrency with p-limit, p-map, PromisePool, or chunked batches.',
+  ],
+  'mongoose-missing-lean': [
+    'const users = await UserModel.find({ active: true }).lean();',
+    'Add .lean() on read-only queries when Document methods (.save, .markModified) are not needed.',
+  ],
+  'graphql-n-plus-one-resolver': [
+    'const resolvers = {\n  Order: {\n    items: (order, _args, ctx) => ctx.itemsLoader.load(order.id),\n  },\n};',
+    'Batch per-parent field queries through a request-scoped DataLoader.',
+  ],
+  'react-context-value-recreated': [
+    'const value = useMemo(() => ({ user, logout }), [user, logout]);\nreturn <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;',
+    'Memoize Context.Provider values so consumers do not re-render on every parent render.',
+  ],
+  'node-event-listener-leak': [
+    "useEffect(() => {\n  window.addEventListener('resize', onResize);\n  return () => window.removeEventListener('resize', onResize);\n}, []);",
+    'Remove listeners on cleanup, or use .once() / { once: true } / AbortSignal.',
+  ],
+  'json-stringify-in-loop': [
+    'const serialized = JSON.stringify(items);\nlogger.info(serialized);',
+    'Serialize once outside the loop or stream NDJSON instead of stringifying per iteration.',
+  ],
 };
 
 const polyglot: Record<string, ExampleEntry> = {

@@ -15,6 +15,8 @@ import { analyzeFunctions } from '../../lib/maintainability/functions.js';
 import { checkSwallowedErrors } from '../../lib/maintainability/swallowed-errors.js';
 import { scanWithFixes, withSecurity } from '../performance/site-fix-helpers.js';
 import * as performanceFix from '../../lib/performance/site-fix.js';
+
+await performanceFix.loadBuilders();
 import controlFlow from '../../lib/maintainability/site-fixes/control-flow.js';
 
 function temporaryProject(context: TestContext, files: FileMap) {

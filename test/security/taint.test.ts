@@ -123,7 +123,7 @@ test('a spread request body is whole and an unknown sink kind is rejected', () =
   assert.throws(() => tracedWithKind(expressRoute('sink(req.body);'), unknownKind), /Unknown sink kind: xpath/);
 });
 
-test('callers are followed for two hops and a third hop stays silent', () => {
+test('callers are followed for three hops and a fourth hop stays silent', () => {
   const chain = (functions: string[], entry: string) =>
     expressRoute(`${entry}(req.query.q);`, ['function inner(text: string) { sink(text); }', ...functions].join('\n'));
   assert.equal(traced(chain([], 'inner'))?.hops, 1);
@@ -132,7 +132,16 @@ test('callers are followed for two hops and a third hop stays silent', () => {
     ['function middle(value: string) { inner(value); }', 'function outer(value: string) { middle(value); }'],
     'outer',
   );
-  assert.equal(traced(threeHops), undefined);
+  assert.equal(traced(threeHops)?.hops, 3);
+  const fourHops = chain(
+    [
+      'function mid1(value: string) { inner(value); }',
+      'function mid2(value: string) { mid1(value); }',
+      'function outer(value: string) { mid2(value); }',
+    ],
+    'outer',
+  );
+  assert.equal(traced(fourHops), undefined);
 });
 
 test('the trace keeps a request field read after crossing a call boundary', () => {

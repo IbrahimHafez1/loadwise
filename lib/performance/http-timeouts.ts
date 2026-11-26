@@ -1,5 +1,6 @@
 import { ts } from './compiler.js';
 import { rootRelativePath } from './node-fs-context.js';
+import { classifyExecutionContext, hasUseClientDirective } from '../shared/execution-context.js';
 import type {
   CallExpression,
   ClassLikeDeclaration,
@@ -105,14 +106,6 @@ function describeCall(call: CallExpression): HttpCallDescription | undefined {
       limitProperty: 'timeout',
     };
   }
-}
-
-function hasUseClientDirective(sourceFile: SourceFile): boolean {
-  for (const statement of sourceFile.statements) {
-    if (!ts.isExpressionStatement(statement) || !ts.isStringLiteral(statement.expression)) return false;
-    if (statement.expression.text === 'use client') return true;
-  }
-  return false;
 }
 
 function importsClientModule(sourceFile: SourceFile): boolean {
@@ -353,16 +346,45 @@ function contextualReason(call: CallExpression, { raced, browserOptions }: Timeo
   }
 }
 
+function hasEnclosingAbortTimeout(call: CallExpression): boolean {
+  const owner = ts.findAncestor(call, ts.isFunctionLike);
+  if (!owner || !('body' in owner) || !owner.body) return false;
+  let hasController = false;
+  let hasTimer = false;
+  (function visit(node: Node): void {
+    if (hasController && hasTimer) return;
+    if (ts.isFunctionLike(node) && node !== owner) return;
+    if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'AbortController') {
+      hasController = true;
+    }
+    if (
+      ts.isCallExpression(node) &&
+      ((ts.isIdentifier(node.expression) && node.expression.text === 'setTimeout') ||
+        (ts.isPropertyAccessExpression(node.expression) &&
+          ts.isIdentifier(node.expression.expression) &&
+          node.expression.expression.text === 'AbortSignal' &&
+          node.expression.name.text === 'timeout'))
+    ) {
+      hasTimer = true;
+    }
+    ts.forEachChild(node, visit);
+  })(owner.body);
+  return hasController && hasTimer;
+}
+
 function check(node: CallExpression, context: PerformanceRuleContext): void {
   const target = describeCall(node);
   if (!target) return;
   const sourceFile = node.getSourceFile();
   if (node.arguments.length === 0 || node.arguments.some(ts.isSpreadElement)) return;
   if (isClientFile(sourceFile, context.checker)) return;
+  const runtime = classifyExecutionContext(sourceFile, context.program).runtime;
+  if (target.library === 'fetch' && runtime === 'browser') return;
   const evidence: TimeoutEvidence = { raced: false, browserOptions: false };
   if (target.library === 'fetch') {
     if (!isGlobalFetch(target.receiver, context) || isRequestObject(node.arguments[0], context)) return;
     if (isRootRelativeUrl(node.arguments[0], context.checker)) return;
+    if (hasEnclosingAbortTimeout(node)) return;
     evidence.raced = isRacedAgainstTimer(node);
   } else if (!isDefaultAxios(target.receiver, context) || sourceFile.text.includes('defaults.timeout')) {
     return;

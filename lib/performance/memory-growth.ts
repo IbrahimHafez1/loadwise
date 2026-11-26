@@ -3,6 +3,7 @@
 import { ts } from './compiler.js';
 import { enclosingRequestHandler, parameterName } from './request-handlers.js';
 import { hasFunctionBody } from './function-kinds.js';
+import { classifyExecutionContext } from '../shared/execution-context.js';
 import type {
   BinaryExpression,
   CallExpression,
@@ -237,12 +238,18 @@ function derivesFromRequest(key: Expression, checker: CheckerAdapter): boolean {
   return nameParts(text).some((part) => REQUEST_KEY_PARTS.has(part));
 }
 
+function collectionKeyIsBounded(write: WriteUse, checker: CheckerAdapter): boolean {
+  const collectionType = checker.getTypeAtLocation(write.receiver);
+  const typeArgs = checker.getTypeArguments(collectionType);
+  return typeArgs.length > 0 && isBoundedType(typeArgs[0]);
+}
+
 // 'bounded' when the key's type admits only a few values; otherwise 'request' or 'other' by where
 // the key comes from.
 function keyVerdict(write: WriteUse, checker: CheckerAdapter): KeyVerdict {
   const key = write.member === 'push' ? undefined : write.key;
   if (!key) return 'request';
-  if (isBoundedType(checker.getTypeAtLocation(key))) return 'bounded';
+  if (isBoundedType(checker.getTypeAtLocation(key)) || collectionKeyIsBounded(write, checker)) return 'bounded';
   return derivesFromRequest(key, checker) ? 'request' : 'other';
 }
 
@@ -322,11 +329,17 @@ function reportGrowth(context: PerformanceRuleContext, write: WriteUse, label: s
   if (reportedCaches.has(write.node)) return;
   reportedCaches.add(write.node);
   const target = write.receiver;
+  const runtime = classifyExecutionContext(write.node.getSourceFile(), context.program).runtime;
+  const reason = contextual
+    ? CONTEXTUAL_KEY_REASON
+    : runtime === 'browser'
+      ? 'Runs in a browser module whose cache lives for the current page/tab session rather than a shared server process.'
+      : undefined;
   context.report(
     write.anchor,
     CACHE_RULE_ID,
     `${label} \`${target.getText()}\` only grows: nothing in this file deletes, clears or size-checks it, so a long-lived process keeps every entry it was given until memory runs out. Bound it with an LRU or TTL (\`lru-cache\`, or evict when \`size\` passes a cap). Ignore if the key space is small and fixed.`,
-    contextual ? CONTEXTUAL_KEY_REASON : undefined,
+    reason,
   );
 }
 

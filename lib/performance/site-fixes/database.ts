@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { detectFramework } from '../migrations/extract-code.js';
 import { readConfigStrings } from '../migrations/discover.js';
-import { requireReview } from './helpers.js';
+import { requireReview, ts, calleeCall } from './helpers.js';
 import type { FileTarget, Finding, FixResult, SiteFixInput } from '../../shared/types.js';
 
 const PG_NAME = String.raw`"(?:[^"]|"")+"`;
@@ -549,10 +549,25 @@ const reviewedMigration = requireReview(
   newMigration,
 );
 
+const MONGOOSE_READ_METHODS = new Set(['find', 'findOne', 'findById']);
+
+function mongooseLeanFix({ node, sourceFile }: SiteFixInput): FixResult | undefined {
+  if (!node || !sourceFile) return;
+  const call = calleeCall(node);
+  if (!call || !ts.isPropertyAccessExpression(call.expression)) return;
+  if (!MONGOOSE_READ_METHODS.has(call.expression.name.text)) return;
+  if (ts.isPropertyAccessExpression(call.parent) && call.parent.name.text === 'lean') return;
+  return {
+    edits: [{ start: call.end, end: call.end, text: '.lean()' }],
+    note: 'Appends `.lean()` so Mongoose skips hydrating full Document instances.',
+  };
+}
+
 export default {
   'db-unindexed-foreign-key': reviewedMigration,
   'db-missing-index': reviewedMigration,
   'db-slow-query-plan': reviewedMigration,
   'db-unused-index': reviewedMigration,
   'db-duplicate-index': reviewedMigration,
+  'mongoose-hydrate-for-to-object': mongooseLeanFix,
 };

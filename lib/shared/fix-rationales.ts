@@ -1,4 +1,3 @@
-// @ts-check
 // Why an auto-fix changed the code, per rule, written about the code as it is after the fix: the comment above the
 // fixed statement and the report's Why line say this, not the rule's problem text, which no longer holds there.
 // A rule without an entry falls back to the first sentence of its description. A fix that removes code names what

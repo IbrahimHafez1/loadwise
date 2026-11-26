@@ -1,4 +1,3 @@
-// @ts-check
 // How much a finding matters, shared by every pillar so one `--min-impact` flag means the same everywhere.
 //
 // Each pillar keeps its own table in its rule-ids.cjs: `impactByRule`, a plain object from rule id to one of
