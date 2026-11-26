@@ -94,8 +94,20 @@ function skipDollarQuoted(text: string, index: number) {
   return close === -1 ? text.length : close + tag[0].length;
 }
 
+function isWordOrDollarCharCode(code: number): boolean {
+  return (
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
+    code === 95 ||
+    code === 36
+  );
+}
+
 function isEscapeStringStart(text: string, index: number) {
-  return /[eE]/.test(text[index]) && text[index + 1] === "'" && !/[\w$]/.test(text[index - 1] ?? '');
+  const character = text[index];
+  if ((character !== 'e' && character !== 'E') || text[index + 1] !== "'") return false;
+  return index === 0 || !isWordOrDollarCharCode(text.charCodeAt(index - 1));
 }
 
 // Returns the index after the lexical unit starting at `index` when it hides semicolons, else -1.
@@ -210,7 +222,7 @@ function describeFailure(failure: unknown): string {
 }
 
 function buildStatement({ range, fileIndex, chunk, node, failure }: StatementParts): PgStatement {
-  const chunkIndex = createPositionIndex(chunk);
+  let chunkIndex: ReturnType<typeof createPositionIndex> | undefined;
   const begin = fileIndex.fromCharOffset(range.start);
   const statement: PgStatement = {
     node,
@@ -221,8 +233,10 @@ function buildStatement({ range, fileIndex, chunk, node, failure }: StatementPar
     column: begin.column,
     text: chunk,
     // Converts a node `location` (UTF-8 byte offset inside this statement) to a file position.
-    locate: (nodeLocation: number): SourcePosition =>
-      fileIndex.fromCharOffset(range.start + chunkIndex.byteToCharOffset(nodeLocation)),
+    locate: (nodeLocation: number): SourcePosition => {
+      chunkIndex ??= createPositionIndex(chunk);
+      return fileIndex.fromCharOffset(range.start + chunkIndex.byteToCharOffset(nodeLocation));
+    },
   };
   if (failure) {
     const position = fileIndex.fromCharOffset(range.start + errorOffsetInChunk(failure, chunk.length));

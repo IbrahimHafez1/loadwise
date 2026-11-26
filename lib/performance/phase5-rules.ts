@@ -597,24 +597,37 @@ function checkJsonStringifyInLoop(call: CallExpression, context: PerformanceRule
 
 // --- Entrypoint ----------------------------------------------------------------------------------
 
+function phase5CliReason(sourceFile: SourceFile, context: PerformanceRuleContext): string | undefined {
+  const execCtx = classifyExecutionContext(sourceFile, context.program);
+  return execCtx.runtime === 'cli-tooling' ? 'CLI or build-tooling context.' : undefined;
+}
+
+function checkPhase5PerfNode(
+  node: Node,
+  sourceFile: SourceFile,
+  context: PerformanceRuleContext,
+  cliReason?: string,
+): void {
+  if (ts.isCallExpression(node)) {
+    checkUnboundedPromiseAll(node, sourceFile, context, cliReason);
+    checkMongooseMissingLean(node, sourceFile, context);
+    checkNodeEventListenerLeak(node, context);
+    checkJsonStringifyInLoop(node, context, cliReason);
+  } else if (ts.isMethodDeclaration(node) || ts.isFunctionExpression(node) || ts.isArrowFunction(node)) {
+    checkGraphqlNPlusOneResolver(node, context);
+  } else if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+    checkReactContextValueRecreated(node, context);
+  }
+}
+
 function collectPhase5PerfFindings(sourceFile: SourceFile, context: PerformanceRuleContext): void {
   if (isTestSource(sourceFile.fileName)) return;
-  const execCtx = classifyExecutionContext(sourceFile, context.program);
-  const cliReason = execCtx.runtime === 'cli-tooling' ? 'CLI or build-tooling context.' : undefined;
+  const cliReason = phase5CliReason(sourceFile, context);
   function visit(node: Node): void {
-    if (ts.isCallExpression(node)) {
-      checkUnboundedPromiseAll(node, sourceFile, context, cliReason);
-      checkMongooseMissingLean(node, sourceFile, context);
-      checkNodeEventListenerLeak(node, context);
-      checkJsonStringifyInLoop(node, context, cliReason);
-    } else if (ts.isMethodDeclaration(node) || ts.isFunctionExpression(node) || ts.isArrowFunction(node)) {
-      checkGraphqlNPlusOneResolver(node, context);
-    } else if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
-      checkReactContextValueRecreated(node, context);
-    }
+    checkPhase5PerfNode(node, sourceFile, context, cliReason);
     ts.forEachChild(node, visit);
   }
   visit(sourceFile);
 }
 
-export { collectPhase5PerfFindings };
+export { checkPhase5PerfNode, collectPhase5PerfFindings, phase5CliReason };

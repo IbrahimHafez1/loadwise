@@ -40,13 +40,20 @@ const uniqueMethodNames = new Set([
   'timingSafeEqual',
 ]);
 
+const moduleNameCache = new Map<string, string>();
+const MAX_MODULE_NAME_CACHE = 2048;
+
 // `node:fs` and `fs` are the same module; `@types/express` declares `express`.
 function moduleName(specifier: string) {
-  return specifier
+  const cached = moduleNameCache.get(specifier);
+  if (cached !== undefined) return cached;
+  const normalized = specifier
     .replace(/^node:/, '')
     .replace(/^@types\/(?:([^_/]+)__)?([^/]+)/, (match: string, scope: string | undefined, name: string) =>
       scope ? `@${scope}/${name}` : name,
     );
+  if (moduleNameCache.size < MAX_MODULE_NAME_CACHE) moduleNameCache.set(specifier, normalized);
+  return normalized;
 }
 
 function stripExpression(node: Expression): Expression;
@@ -100,8 +107,10 @@ function importEqualsBinding(declaration: ImportEqualsDeclaration): ModuleBindin
   return { module: moduleName(reference.expression.text), exported: '*' };
 }
 
-function requiredModuleBinding(declaration: VariableDeclaration): ModuleBinding | undefined {
-  const requiredInitializer = stripExpression(declaration.initializer);
+function requiredModuleBinding(
+  declaration: VariableDeclaration,
+  requiredInitializer = stripExpression(declaration.initializer),
+): ModuleBinding | undefined {
   if (!isRequireCall(requiredInitializer)) return;
   if (!ts.isIdentifier(declaration.name)) return;
   return { module: moduleName(requiredInitializer.arguments[0].text), exported: '*' };
@@ -124,8 +133,10 @@ function bindingOf(declaration: Node | undefined): ModuleBinding | undefined {
   if (ts.isImportSpecifier(declaration) || ts.isImportClause(declaration) || ts.isNamespaceImport(declaration))
     return importBinding(declaration);
   if (ts.isImportEqualsDeclaration(declaration)) return importEqualsBinding(declaration);
-  if (ts.isVariableDeclaration(declaration) && isRequireCall(stripExpression(declaration.initializer)))
-    return requiredModuleBinding(declaration);
+  if (ts.isVariableDeclaration(declaration)) {
+    const initializer = stripExpression(declaration.initializer);
+    if (isRequireCall(initializer)) return requiredModuleBinding(declaration, initializer);
+  }
   if (ts.isBindingElement(declaration) && ts.isObjectBindingPattern(declaration.parent))
     return destructuredRequireBinding(declaration);
 }
@@ -187,19 +198,36 @@ function declaredTypeImport(expression: Expression, checker: CheckerAdapter): Mo
 // under node_modules.
 type AmbientModule = ModuleDeclaration & { name: StringLiteral };
 
-function declaringModule(declaration: Node, checker: CheckerAdapter): string | undefined {
-  if (isDefaultLibrary(checker, declaration.getSourceFile())) return;
+const declaringModuleCache = new WeakMap<CheckerAdapter, WeakMap<Node, string | null>>();
+
+function computeDeclaringModule(declaration: Node, checker: CheckerAdapter): string | undefined {
+  const sourceFile = declaration.getSourceFile();
+  if (isDefaultLibrary(checker, sourceFile)) return;
   const ambient = ts.findAncestor(
     declaration,
     (node: Node): node is AmbientModule => ts.isModuleDeclaration(node) && ts.isStringLiteral(node.name),
   );
   if (ambient) return moduleName(ambient.name.text);
-  const filename = declaration.getSourceFile().fileName.replaceAll('\\', '/');
+  const filename = sourceFile.fileName.replaceAll('\\', '/');
   const marker = '/node_modules/';
   const start = filename.lastIndexOf(marker);
   if (start < 0) return;
   const parts = filename.slice(start + marker.length).split('/');
   return moduleName(parts[0].startsWith('@') ? parts[0] + '/' + parts[1] : parts[0]);
+}
+
+function declaringModule(declaration: Node, checker: CheckerAdapter): string | undefined {
+  let byNode = declaringModuleCache.get(checker);
+  if (byNode) {
+    const cached = byNode.get(declaration);
+    if (cached !== undefined) return cached ?? undefined;
+  } else {
+    byNode = new WeakMap();
+    declaringModuleCache.set(checker, byNode);
+  }
+  const result = computeDeclaringModule(declaration, checker);
+  byNode.set(declaration, result ?? null);
+  return result;
 }
 
 function typeTier(
@@ -290,8 +318,8 @@ function libraryCall(
     const binding = importedFrom(callee, checker);
     if (binding) return { ...binding, method: undefined, tier: 'import' };
   }
-  if (access) {
-    const receiver = stripExpression(access.expression);
+  const receiver = access && stripExpression(access.expression);
+  if (receiver) {
     const direct = ts.isIdentifier(receiver) ? importedFrom(receiver, checker) : undefined;
     if (direct?.exported === '*') return { module: direct.module, exported: method, method: undefined, tier: 'import' };
     if (direct) return { ...direct, method, tier: 'import' };
@@ -306,7 +334,7 @@ function libraryCall(
       (ts.isIdentifier(root) ? importedFrom(root, checker) : declaredTypeImport(root, checker));
     if (rootBinding) return { ...rootBinding, method, tier: 'import' };
   }
-  const typed = typeTier(call, access && stripExpression(access.expression), method, checker);
+  const typed = typeTier(call, receiver, method, checker);
   if (typed) return typed;
   if (method && uniqueMethodNames.has(method)) return { module: undefined, exported: undefined, method, tier: 'name' };
 }

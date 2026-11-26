@@ -90,7 +90,7 @@ function analyzeSource(
   if (generated) usage.dynamicUnresolved = [];
   return {
     generated,
-    duplicates: extractImplementations(source, file),
+    duplicates: extractImplementations(source, file, generated),
     findings: [
       ...analyzeFunctions(source, file),
       ...accessFindings,

@@ -56,6 +56,7 @@ const pathRanks = new WeakMap<SourceFile, HotPath | null>();
 const nodeRanks = new WeakMap<Node, HotPath>();
 const callSitesByFile = new WeakMap<SourceFile, Map<string, CallExpression[]>>();
 const callerIndexes = new WeakMap<ProgramAdapter, Map<string, SourceFile[]>>();
+const callersCache = new WeakMap<ProgramAdapter, WeakMap<SignatureDeclaration, CallExpression[]>>();
 
 function result(rank: string, reason: string): HotPath {
   return { rank, reason };
@@ -202,15 +203,40 @@ function callsDeclaration(
 }
 
 function callersOf(functionNode: SignatureDeclaration, program: ProgramAdapter): CallExpression[] {
+  let byFunction = callersCache.get(program);
+  if (byFunction) {
+    const cached = byFunction.get(functionNode);
+    if (cached) return cached;
+  } else {
+    byFunction = new WeakMap();
+    callersCache.set(program, byFunction);
+  }
   const declaration = declarationOf(functionNode);
-  if (!declaration) return [];
+  if (!declaration) {
+    byFunction.set(functionNode, []);
+    return [];
+  }
   const nameNode = declaration.name;
   const name = nameNode && 'text' in nameNode ? nameNode.text : undefined;
   const files = name === undefined ? undefined : callerIndex(program).get(name);
-  if (!files || files.length > MAX_CALLER_FILES) return [];
+  if (!files || files.length > MAX_CALLER_FILES) {
+    byFunction.set(functionNode, []);
+    return [];
+  }
   const checker = program.getTypeChecker();
-  const calls = files.flatMap((source: SourceFile) => callSites(source).get(name ?? '') ?? []);
-  return calls.slice(0, MAX_CALL_SITES).filter((call: CallExpression) => callsDeclaration(call, declaration, checker));
+  const candidates: CallExpression[] = [];
+  for (const source of files) {
+    const sites = callSites(source).get(name ?? '');
+    if (!sites) continue;
+    for (const site of sites) {
+      candidates.push(site);
+      if (candidates.length >= MAX_CALL_SITES) break;
+    }
+    if (candidates.length >= MAX_CALL_SITES) break;
+  }
+  const resolved = candidates.filter((call: CallExpression) => callsDeclaration(call, declaration, checker));
+  byFunction.set(functionNode, resolved);
+  return resolved;
 }
 
 // Request when a project function is called, within a few hops, from a request handler; otherwise

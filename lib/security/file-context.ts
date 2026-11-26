@@ -76,11 +76,17 @@ function underNonProductionGuard(node: Node) {
 }
 
 function createFileContext(sourceFile: SourceFile) {
-  const testSource =
-    isTestSource(sourceFile.fileName) || classifyExecutionContext(sourceFile).runtime === 'test-fixture';
+  let testSource: boolean | undefined;
+  const resolveTestSource = (): boolean =>
+    (testSource ??=
+      isTestSource(sourceFile.fileName) || classifyExecutionContext(sourceFile).runtime === 'test-fixture');
   return {
-    isTestSource: testSource,
-    testSourceReason: testSource ? testSourceReason : undefined,
+    get isTestSource() {
+      return resolveTestSource();
+    },
+    get testSourceReason() {
+      return resolveTestSource() ? testSourceReason : undefined;
+    },
     underNonProductionGuard,
   };
 }

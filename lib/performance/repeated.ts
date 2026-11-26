@@ -30,11 +30,26 @@ function outerExpression(node: Node): Node {
   return expression;
 }
 
+const standardInterfaceCache = new WeakMap<CheckerAdapter, WeakMap<CallExpression, string | null>>();
+const repeatOwnerCache = new WeakMap<CheckerAdapter, WeakMap<Node, RepeatOwner | null>>();
+
 function standardInterface(call: CallExpression, checker: CheckerAdapter): string | undefined {
+  let byCall = standardInterfaceCache.get(checker);
+  if (byCall) {
+    const cached = byCall.get(call);
+    if (cached !== undefined) return cached ?? undefined;
+  } else {
+    byCall = new WeakMap();
+    standardInterfaceCache.set(checker, byCall);
+  }
   const declaration = checker.getResolvedSignature(call)?.declaration;
-  if (!declaration || !isDefaultLibrary(checker, declaration.getSourceFile())) return;
-  const owner = declaration.parent;
-  if (ts.isInterfaceDeclaration(owner)) return owner.name.text;
+  let result: string | undefined;
+  if (declaration && isDefaultLibrary(checker, declaration.getSourceFile())) {
+    const owner = declaration.parent;
+    if (ts.isInterfaceDeclaration(owner)) result = owner.name.text;
+  }
+  byCall.set(call, result ?? null);
+  return result;
 }
 
 function isStandardArrayCall(call: CallExpression, checker: CheckerAdapter) {
@@ -68,7 +83,7 @@ function boundedLiteralSize(expression: Expression): number | undefined {
 }
 
 // loadwise-reviewed high-branch-complexity -- one ancestor walk where each branch decides continue, stop or report for one kind of repeating ancestor; splitting needs a continue/stop/owner tri-state that hides the single upward scan
-function findRepeatOwner(node: Node, checker: CheckerAdapter): RepeatOwner | undefined {
+function computeRepeatOwner(node: Node, checker: CheckerAdapter): RepeatOwner | undefined {
   let child = node;
   for (let parent = node.parent; parent; child = parent, parent = parent.parent) {
     if (ts.isForOfStatement(parent) || ts.isForInStatement(parent)) {
@@ -98,6 +113,20 @@ function findRepeatOwner(node: Node, checker: CheckerAdapter): RepeatOwner | und
       if (!(ts.getCombinedModifierFlags(parent) & ts.ModifierFlags.Static)) return;
     }
   }
+}
+
+function findRepeatOwner(node: Node, checker: CheckerAdapter): RepeatOwner | undefined {
+  let byNode = repeatOwnerCache.get(checker);
+  if (byNode) {
+    const cached = byNode.get(node);
+    if (cached !== undefined) return cached ?? undefined;
+  } else {
+    byNode = new WeakMap();
+    repeatOwnerCache.set(checker, byNode);
+  }
+  const owner = computeRepeatOwner(node, checker);
+  byNode.set(node, owner ?? null);
+  return owner;
 }
 
 function isRepeated(node: Node, checker: CheckerAdapter): boolean {

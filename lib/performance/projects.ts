@@ -64,6 +64,7 @@ interface SourceScanOptions {
 }
 import { fileURLToPath } from 'node:url';
 const compilerLibDirectory = path.dirname(fileURLToPath(import.meta.resolve('typescript')));
+const bundledLibPattern = /^lib(?:\.[\w.-]+)?\.d\.ts$/;
 const docMode = ts.JSDocParsingMode.ParseForTypeErrors;
 const canonicalFileName = ts.createCompilerHost({}).getCanonicalFileName;
 
@@ -96,7 +97,11 @@ function cacheFileText(
     if (texts.has(filename)) return texts.get(filename);
     if (preRead) {
       const canonical = canonicalFileName(path.resolve(filename));
-      if (preRead.has(canonical)) return preRead.get(canonical);
+      if (preRead.has(canonical)) {
+        const preReadText = preRead.get(canonical);
+        texts.set(filename, preReadText);
+        return preReadText;
+      }
     }
     const text = read(filename);
     if (text !== undefined && cachedCharacters + text.length > maximumCachedCharacters) return text;
@@ -230,8 +235,7 @@ function createHost(
   const loadSource = host.getSourceFile;
   host.getSourceFile = (filename, languageOptions, onError, forceNew) => {
     const isBundledLib =
-      /^lib(?:\.[\w.-]+)?\.d\.ts$/.test(path.basename(filename)) &&
-      path.dirname(path.resolve(filename)) === compilerLibDirectory;
+      bundledLibPattern.test(path.basename(filename)) && path.dirname(path.resolve(filename)) === compilerLibDirectory;
     const isPackageDeclaration =
       filename.endsWith('.d.ts') && (filename.includes('/node_modules/') || filename.includes('\\node_modules\\'));
     if (!forceNew && (isBundledLib || isPackageDeclaration)) {

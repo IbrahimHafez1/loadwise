@@ -154,11 +154,11 @@ function markComponentsWithEagerEdges(adjacency: GraphEdge[][], component: Int32
 
 // tsc inlines const enum members and drops an import that reads nothing else, so such an import
 // cannot close a cycle.
-function inlinedConstEnumImport(edge: ModuleEdge, constEnums: ConstEnumExports): boolean {
+function inlinedConstEnumImport(edge: ModuleEdge, constEnumSets: ReadonlyMap<string, ReadonlySet<string>>): boolean {
   const { constEnumNames } = edge;
-  const exported = constEnumNames && constEnums.get(edge.to);
+  const exported = constEnumNames && constEnumSets.get(edge.to);
   if (!constEnumNames || !exported) return false;
-  return constEnumNames.every((name) => exported.includes(name));
+  return constEnumNames.every((name) => exported.has(name));
 }
 
 function checkGraph({ files, edges, boundaries = [], constEnums = new Map() }: GraphInput): LocatedFinding[] {
@@ -166,21 +166,29 @@ function checkGraph({ files, edges, boundaries = [], constEnums = new Map() }: G
   const ids = new Map(names.map((name, index) => [name, index]));
   const adjacency: GraphEdge[][] = names.map(() => []);
   const reverse: number[][] = names.map(() => []);
+  const constEnumSets = new Map<string, ReadonlySet<string>>();
+  for (const [file, members] of constEnums) {
+    if (members.length) constEnumSets.set(file, new Set(members));
+  }
   const rules: BoundaryRule[] = boundaries.map((rule) => ({
     from: directory(rule.from),
     disallow: rule.disallow.map(directory),
   }));
-  const restrictions = rules.length ? names.map((name) => rules.filter((rule) => within(name, rule.from))) : [];
+  const restrictions: readonly (readonly string[])[] = rules.length
+    ? names.map((name) => [
+        ...new Set(rules.filter((rule) => within(name, rule.from)).flatMap((rule) => rule.disallow)),
+      ])
+    : [];
   const findings: LocatedFinding[] = [];
   for (const edge of edges) {
     const from = ids.get(edge.from),
       to = ids.get(edge.to);
     if (from === undefined || to === undefined) continue;
-    if (edge.kind !== 'deferred' && !inlinedConstEnumImport(edge, constEnums)) {
+    if (edge.kind !== 'deferred' && !inlinedConstEnumImport(edge, constEnumSets)) {
       adjacency[from].push({ from, to, line: edge.line, column: edge.column, nestForwardRef: edge.nestForwardRef });
       reverse[to].push(from);
     }
-    if (restrictions[from]?.some((rule) => rule.disallow.some((folder: string) => within(edge.to, folder)))) {
+    if (restrictions[from]?.some((folder: string) => within(edge.to, folder))) {
       findings.push({
         file: edge.from,
         line: edge.line,

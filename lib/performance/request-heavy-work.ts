@@ -45,8 +45,26 @@ function programUsesCompression(program: ProgramAdapter): boolean {
   return compressionByProgram.get(program) === true;
 }
 
+const moduleImportPatterns = new Map<string, RegExp>();
+const moduleImportCache = new WeakMap<SourceFile, Map<string, boolean>>();
+
 function importsModule(sourceFile: SourceFile, moduleName: string): boolean {
-  return new RegExp(`['"]${moduleName}(?:/[^'"]*)?['"]`).test(sourceFile.text);
+  let byModule = moduleImportCache.get(sourceFile);
+  if (byModule) {
+    const cached = byModule.get(moduleName);
+    if (cached !== undefined) return cached;
+  } else {
+    byModule = new Map();
+    moduleImportCache.set(sourceFile, byModule);
+  }
+  let pattern = moduleImportPatterns.get(moduleName);
+  if (!pattern) {
+    pattern = new RegExp(`['"]${moduleName}(?:/[^'"]*)?['"]`);
+    moduleImportPatterns.set(moduleName, pattern);
+  }
+  const imported = pattern.test(sourceFile.text);
+  byModule.set(moduleName, imported);
+  return imported;
 }
 
 // `const app = express()` when express has no types: the receiver itself must be the app, so

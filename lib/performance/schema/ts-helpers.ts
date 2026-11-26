@@ -8,6 +8,7 @@ import type {
   NamedDeclaration,
   Node,
   PropertyAssignment,
+  SourceFile,
   TypeNode,
 } from 'typescript';
 import type { CheckerAdapter, SymbolAdapter } from '../../shared/types.js';
@@ -18,17 +19,22 @@ import type { FileLocation } from '../types/source-position.js';
 // Following `const a = b` chains further than this means the value is not a plain declaration.
 const maxAliasHops = 4;
 
-function normalizedFileName(node: Node): string {
-  return node.getSourceFile().fileName.replaceAll('\\', '/');
-}
+const packageBySourceFile = new WeakMap<SourceFile, string | null>();
+const NODE_MODULES_MARKER = '/node_modules/';
 
 function packageOf(declaration: Node): string | undefined {
-  const filename = normalizedFileName(declaration);
-  const marker = '/node_modules/';
-  const start = filename.lastIndexOf(marker);
-  if (start < 0) return;
-  const [scope, name] = filename.slice(start + marker.length).split('/');
-  return scope.startsWith('@') ? scope + '/' + name : scope;
+  const sourceFile = declaration.getSourceFile();
+  const cached = packageBySourceFile.get(sourceFile);
+  if (cached !== undefined) return cached ?? undefined;
+  const filename = sourceFile.fileName.replaceAll('\\', '/');
+  const start = filename.lastIndexOf(NODE_MODULES_MARKER);
+  let result: string | null = null;
+  if (start >= 0) {
+    const [scope, name] = filename.slice(start + NODE_MODULES_MARKER.length).split('/');
+    result = scope.startsWith('@') ? scope + '/' + name : scope;
+  }
+  packageBySourceFile.set(sourceFile, result);
+  return result ?? undefined;
 }
 
 function resolvedSymbol(node: Node, checker: CheckerAdapter): SymbolAdapter | undefined {

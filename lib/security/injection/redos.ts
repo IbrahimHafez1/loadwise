@@ -185,7 +185,7 @@ function createParser(source: string, flags: string): () => PatternNode {
 
   function readHex(length: number) {
     const digits = source.slice(position, position + length);
-    if (!new RegExp(`^[0-9a-fA-F]{${length}}$`).test(digits)) throw new Unsupported();
+    if (digits.length !== length || !/^[0-9a-fA-F]+$/.test(digits)) throw new Unsupported();
     position += length;
     return parseInt(digits, 16);
   }

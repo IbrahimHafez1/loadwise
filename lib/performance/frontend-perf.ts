@@ -521,7 +521,7 @@ function checkCall(call: CallExpression, context: PerformanceRuleContext) {
   checkAddEventListener(call, context);
 }
 
-function checkNode(node: Node, context: PerformanceRuleContext) {
+function checkFrontendNode(node: Node, context: PerformanceRuleContext) {
   if (ts.isImportDeclaration(node)) checkHeavyBarrelImport(node, context);
   else if (ts.isCallExpression(node)) checkCall(node, context);
   else if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) checkInlineObjectProps(node, context);
@@ -532,7 +532,7 @@ function checkNode(node: Node, context: PerformanceRuleContext) {
 // Called once per source file; every rule needs `context.checker` and `context.report`.
 function checkFrontendFile(sourceFile: SourceFile, context: PerformanceRuleContext) {
   if (isTestSource(sourceFile.fileName)) return;
-  walkAll(sourceFile, (node: Node) => checkNode(node, context));
+  walkAll(sourceFile, (node: Node) => checkFrontendNode(node, context));
 }
 
-export { checkFrontendFile };
+export { checkFrontendFile, checkFrontendNode };

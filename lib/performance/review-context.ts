@@ -230,13 +230,27 @@ function isToolingSource(source: SourceFile): boolean {
   );
 }
 
+const moduleExportsCache = new WeakMap<SourceFile, boolean>();
+const hookExportsCache = new WeakMap<SourceFile, boolean>();
+
+function isCommonJsExportTarget(node: Node): boolean {
+  let current = node;
+  while (ts.isPropertyAccessExpression(current)) {
+    const parent = current.expression;
+    if (ts.isIdentifier(parent)) {
+      return parent.text === 'exports' || (parent.text === 'module' && current.name.text === 'exports');
+    }
+    current = parent;
+  }
+  return false;
+}
+
 // `module.exports = …`, `module.exports.name = …` or `exports.name = …`.
 function isCommonJsExport(statement: Statement): boolean {
   if (!ts.isExpressionStatement(statement)) return false;
   const assignment = statement.expression;
   if (!ts.isBinaryExpression(assignment) || assignment.operatorToken.kind !== ts.SyntaxKind.EqualsToken) return false;
-  const target = assignment.left.getText();
-  return target === 'module.exports' || target.startsWith('module.exports.') || target.startsWith('exports.');
+  return isCommonJsExportTarget(assignment.left);
 }
 
 // A module that exports code is also imported by other code, so its entry point does not make it
@@ -249,13 +263,18 @@ function hasExportModifier(statement: Statement): boolean {
 }
 
 function exportsFromModule(source: SourceFile): boolean {
-  return source.statements.some(
-    (statement) =>
-      ts.isExportDeclaration(statement) ||
-      ts.isExportAssignment(statement) ||
-      isCommonJsExport(statement) ||
-      hasExportModifier(statement),
-  );
+  let cached = moduleExportsCache.get(source);
+  if (cached === undefined) {
+    cached = source.statements.some(
+      (statement) =>
+        ts.isExportDeclaration(statement) ||
+        ts.isExportAssignment(statement) ||
+        isCommonJsExport(statement) ||
+        hasExportModifier(statement),
+    );
+    moduleExportsCache.set(source, cached);
+  }
+  return cached;
 }
 
 // Browser UI modules: they import a UI framework and export a hook or composable (`useX`), or the
@@ -289,9 +308,14 @@ function hookDeclarationName(statement: Statement): string | undefined {
 }
 
 function exportsHook(source: SourceFile): boolean {
-  return source.statements.some(
-    (statement) => hasExportModifier(statement) && hookNamePattern.test(hookDeclarationName(statement) ?? ''),
-  );
+  let cached = hookExportsCache.get(source);
+  if (cached === undefined) {
+    cached = source.statements.some(
+      (statement) => hasExportModifier(statement) && hookNamePattern.test(hookDeclarationName(statement) ?? ''),
+    );
+    hookExportsCache.set(source, cached);
+  }
+  return cached;
 }
 
 function runsInsideHook(node: Node): boolean {

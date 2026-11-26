@@ -41,8 +41,26 @@ function programHandlesSecurityHeaders(program: ProgramAdapter) {
   return headerHandlingByProgram.get(program);
 }
 
-function importsModule(sourceFile: SourceFile, moduleName: string) {
-  return new RegExp(`['"]${moduleName}(?:/[^'"]*)?['"]`).test(sourceFile.text);
+const moduleImportPatterns = new Map<string, RegExp>();
+const moduleImportCache = new WeakMap<SourceFile, Map<string, boolean>>();
+
+function importsModule(sourceFile: SourceFile, moduleName: string): boolean {
+  let byModule = moduleImportCache.get(sourceFile);
+  if (byModule) {
+    const cached = byModule.get(moduleName);
+    if (cached !== undefined) return cached;
+  } else {
+    byModule = new Map();
+    moduleImportCache.set(sourceFile, byModule);
+  }
+  let pattern = moduleImportPatterns.get(moduleName);
+  if (!pattern) {
+    pattern = new RegExp(`['"]${moduleName}(?:/[^'"]*)?['"]`);
+    moduleImportPatterns.set(moduleName, pattern);
+  }
+  const imported = pattern.test(sourceFile.text);
+  byModule.set(moduleName, imported);
+  return imported;
 }
 
 function initializerCall(identifier: Identifier, checker: CheckerAdapter) {

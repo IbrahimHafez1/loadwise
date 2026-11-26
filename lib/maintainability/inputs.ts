@@ -177,9 +177,10 @@ function createResolver(
       return result;
     };
   }
+  const readJsonFile = memoized((file: string) => ts.sys.readFile(file));
   const host = {
     ...ts.sys,
-    readFile: (file: string) => (path.basename(file) === 'package.json' ? ts.sys.readFile(file) : undefined),
+    readFile: (file: string) => (path.basename(file) === 'package.json' ? readJsonFile(file) : undefined),
     directoryExists: memoized(ts.sys.directoryExists),
     fileExists: memoized(ts.sys.fileExists),
     realpath: ts.sys.realpath ? memoized(ts.sys.realpath) : undefined,
@@ -188,7 +189,7 @@ function createResolver(
   // inputs.
   const configHost = {
     ...host,
-    readFile: (file: string) => (/\.json$/i.test(file) ? ts.sys.readFile(file) : undefined),
+    readFile: (file: string) => (/\.json$/i.test(file) ? readJsonFile(file) : undefined),
     readDirectory: () => [],
   };
   function settings(folder: string): ResolutionSettings {
@@ -198,7 +199,7 @@ function createResolver(
     // A scanned folder inside a package resolves its aliases with the ancestor config that covers
     // it.
     const config =
-      ['tsconfig.json', 'jsconfig.json'].map((name) => path.join(folder, name)).find(ts.sys.fileExists) ??
+      ['tsconfig.json', 'jsconfig.json'].map((name) => path.join(folder, name)).find(host.fileExists) ??
       (isRoot ? coveringConfig(directory) : undefined);
     let context: ResolutionSettings;
     if (config || isRoot) {

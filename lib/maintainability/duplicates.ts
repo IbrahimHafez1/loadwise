@@ -296,8 +296,12 @@ function compareLocations(first: SourceLocation, second: SourceLocation): number
 
 // Reads one parsed file into plain data (safe to send between threads); undefined for files that
 // are never compared.
-function extractImplementations(file: SourceFile, relativePath: string): ExtractedImplementations | undefined {
-  if (standaloneCopyDirectory.test(relativePath) || generatedSource(file, relativePath)) return;
+function extractImplementations(
+  file: SourceFile,
+  relativePath: string,
+  isGenerated?: boolean,
+): ExtractedImplementations | undefined {
+  if (standaloneCopyDirectory.test(relativePath) || (isGenerated ?? generatedSource(file, relativePath))) return;
   const implementations: ExtractedImplementations['implementations'] = [];
   const testSource = testFile.test(relativePath);
   function visit({ node, parent, insideFunction }: VisitFrame, pending: VisitFrame[]): void {

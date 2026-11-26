@@ -62,6 +62,7 @@ import type {
   SecurityRuleContext,
   SymbolAdapter,
   TaintApi,
+  TypeAdapter,
 } from './types.js';
 import type {
   BlockingFact,
@@ -184,12 +185,23 @@ function createSummaries(program: ProgramAdapter): FunctionSummaries {
   const localFacts = new WeakMap<FunctionWithBody, OwnFacts>();
   const validations = new WeakMap<FunctionWithBody, Validation[]>();
   const requestReturns = new WeakMap<FunctionWithBody, RequestData | undefined>();
+  const nodeTypes = new WeakMap<Node, TypeAdapter>();
+  const libraryCalls = new WeakMap<CallExpression, LibraryCall | undefined>();
   const context: SummaryContext = {
     program,
     checker,
-    isPackageType: (node: Node, packages: readonly string[], typeNames?: readonly string[]) =>
-      typeFromPackage(checker.getTypeAtLocation(node), packages, typeNames),
-    libraryCall: (call: CallExpression) => libraryCall(call, context),
+    isPackageType(node: Node, packages: readonly string[], typeNames?: readonly string[]) {
+      let type = nodeTypes.get(node);
+      if (type === undefined) {
+        type = checker.getTypeAtLocation(node);
+        nodeTypes.set(node, type);
+      }
+      return typeFromPackage(type, packages, typeNames);
+    },
+    libraryCall(call: CallExpression) {
+      if (!libraryCalls.has(call)) libraryCalls.set(call, libraryCall(call, context));
+      return libraryCalls.get(call);
+    },
     // isContainedPath asks whether the resolve() root is client data; here a caller's argument is
     // unknown.
     taint: {

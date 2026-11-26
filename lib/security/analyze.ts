@@ -25,6 +25,7 @@ import type {
   RulePolicy,
   SecurityRuleContext,
   TaintApi,
+  TypeAdapter,
 } from '../shared/types.js';
 import type { SecurityCheck, SecurityCheckModule } from './types/security-check.js';
 
@@ -80,21 +81,27 @@ function createAnalyzer(modules: readonly SecurityCheckModule[]) {
     const checker = program.getTypeChecker();
     const findings: LocatedFinding[] = [];
     const reported = new Set<string>();
-    const hasReviewComments = reviewMarkers.some((marker) => sourceFile.text.includes(marker));
+    let hasReviewComments: boolean | undefined;
     const fileContext = createFileContext(sourceFile);
     let taint: TaintApi | undefined;
     const libraryCalls = new WeakMap<CallExpression | NewExpression, LibraryCall | undefined>();
+    const nodeTypes = new WeakMap<Node, TypeAdapter>();
+    const compilerOptions = policy ? program.getCompilerOptions() : undefined;
     const context: SecurityRuleContext = {
       program,
       checker,
       sourceFile,
       policy,
       fileContext,
-      strictNullChecks: policy
-        ? Boolean(program.getCompilerOptions().strictNullChecks ?? program.getCompilerOptions().strict)
-        : false,
-      isPackageType: (node: Node, packages: readonly string[], typeNames?: readonly string[]) =>
-        typeFromPackage(checker.getTypeAtLocation(node), packages, typeNames),
+      strictNullChecks: compilerOptions ? Boolean(compilerOptions.strictNullChecks ?? compilerOptions.strict) : false,
+      isPackageType(node: Node, packages: readonly string[], typeNames?: readonly string[]) {
+        let type = nodeTypes.get(node);
+        if (type === undefined) {
+          type = checker.getTypeAtLocation(node);
+          nodeTypes.set(node, type);
+        }
+        return typeFromPackage(type, packages, typeNames);
+      },
       // Many checks ask about the same call, and the type tier behind the answer is the costly part
       // of a scan.
       libraryCall(call: CallExpression | NewExpression) {
@@ -113,6 +120,7 @@ function createAnalyzer(modules: readonly SecurityCheckModule[]) {
         if (reported.has(key)) return;
         reported.add(key);
         const { line, character } = sourceFile.getLineAndCharacterOfPosition(start);
+        hasReviewComments ??= reviewMarkers.some((marker) => sourceFile.text.includes(marker));
         const reason =
           (hasReviewComments && reviewedReason(sourceFile, line, ruleId)) ||
           contextualReason ||

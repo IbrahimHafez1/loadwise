@@ -46,7 +46,7 @@ import { checkNodeBlockingCall, flushBlockingCalls } from './node-fs.js';
 import { checkPoolCreation } from './pooling.js';
 import { checkCollectionCall, checkCollectionAssignment } from './collections.js';
 import { isRepeated } from './repeated.js';
-import { reviewedReason, reviewMarkers, repeatedReviewContext } from './review-context.js';
+import { isTestSource, reviewedReason, reviewMarkers, repeatedReviewContext } from './review-context.js';
 import { checkIndexUsage } from './index-rules.js';
 import { isLoopRule, loopImpact } from './impact.js';
 import { currentSnapshot } from './schema/context.js';
@@ -56,15 +56,15 @@ import { check as checkFloatingPromise } from './floating-promises.js';
 import { checkPromiseReturnEscapesCatch } from './promise-return-escapes-catch.js';
 import { checkReturnInFinally } from './return-in-finally.js';
 import { checkReturnNewline } from './return-newline.js';
-import { checkFrontendFile } from './frontend-perf.js';
-import { collectPhase5PerfFindings } from './phase5-rules.js';
+import { checkFrontendFile, checkFrontendNode } from './frontend-perf.js';
+import { checkPhase5PerfNode, collectPhase5PerfFindings, phase5CliReason } from './phase5-rules.js';
 import { checkLastInsertId } from './last-insert-id.js';
 import { checkWorkbookDecodes } from './workbook-decodes.js';
 import { isVendoredMinified } from '../shared/execution-context.js';
 import { hotPathOf } from '../shared/hot-path-graph.js';
 import type { CallExpression, Node, SourceFile } from 'typescript';
 import type { PerformancePolicy } from './types/performance-policy.js';
-import type { Finding, PerformanceRuleContext, ProgramAdapter, ReportDetails } from '../shared/types.js';
+import type { Finding, PerformanceRuleContext, ProgramAdapter, ReportDetails, TypeAdapter } from '../shared/types.js';
 
 /** A rule that inspects one call expression and reports through the shared context. */
 type CallRule = (call: CallExpression, context: PerformanceRuleContext) => void;
@@ -145,18 +145,32 @@ function analyzeFile(
   const pendingBlockingCalls: CallExpression[] | undefined = checker.getSymbolsAtLocations ? [] : undefined;
   const checkTransactionLoop = createTransactionLoopCheck(sourceFile, checker);
   const snapshot = currentSnapshot();
+  const compilerOptions = policy ? program.getCompilerOptions() : undefined;
+  const repeatedCache = new WeakMap<Node, boolean>();
+  const nodeTypes = new WeakMap<Node, TypeAdapter>();
   let hasReviewComments: boolean | undefined;
   const context: PerformanceRuleContext = {
     checker,
     program,
-    strictNullChecks: policy
-      ? Boolean(program.getCompilerOptions().strictNullChecks ?? program.getCompilerOptions().strict)
-      : false,
-    verbatimModuleSyntax: policy ? Boolean(program.getCompilerOptions().verbatimModuleSyntax) : false,
+    strictNullChecks: compilerOptions ? Boolean(compilerOptions.strictNullChecks ?? compilerOptions.strict) : false,
+    verbatimModuleSyntax: compilerOptions ? Boolean(compilerOptions.verbatimModuleSyntax) : false,
     fireAndForgetNames: new Set(policy?.fireAndForget),
-    isRepeated: (node: Node) => isRepeated(node, checker),
-    isPackageType: (node: Node, packages: readonly string[], typeNames?: readonly string[]) =>
-      typeFromPackage(checker.getTypeAtLocation(node), packages, typeNames),
+    isRepeated(node: Node) {
+      let repeated = repeatedCache.get(node);
+      if (repeated === undefined) {
+        repeated = isRepeated(node, checker);
+        repeatedCache.set(node, repeated);
+      }
+      return repeated;
+    },
+    isPackageType(node: Node, packages: readonly string[], typeNames?: readonly string[]) {
+      let type = nodeTypes.get(node);
+      if (type === undefined) {
+        type = checker.getTypeAtLocation(node);
+        nodeTypes.set(node, type);
+      }
+      return typeFromPackage(type, packages, typeNames);
+    },
     // details carries optional suggestion and related links, which index rules attach.
     report(node: Node, ruleId: string, message: string, contextualReason?: string, details?: ReportDetails) {
       const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
@@ -215,22 +229,32 @@ function analyzeFile(
       checkCacheAssignment(node, context);
     }
   }
+  const runFullFileRules = !isTestSource(sourceFile.fileName);
   if (forEachSourceCandidate && !checkParallelReads) {
     forEachSourceCandidate(sourceFile, checkNode);
+    if (pendingBlockingCalls?.length) flushBlockingCalls(pendingBlockingCalls, context);
+    checkWorkbookDecodes(sourceFile, context);
+    if (runFullFileRules) {
+      checkFrontendFile(sourceFile, context);
+      collectPhase5PerfFindings(sourceFile, context);
+    }
   } else {
+    const cliReason = runFullFileRules ? phase5CliReason(sourceFile, context) : undefined;
     function visit(node: Node): void {
       if (checkParallelReads && parallelReads && (ts.isBlock(node) || ts.isSourceFile(node))) {
         checkParallelReads(node, context, parallelReads);
       }
       checkNode(node);
+      if (runFullFileRules) {
+        checkFrontendNode(node, context);
+        checkPhase5PerfNode(node, sourceFile, context, cliReason);
+      }
       ts.forEachChild(node, visit);
     }
     visit(sourceFile);
+    if (pendingBlockingCalls?.length) flushBlockingCalls(pendingBlockingCalls, context);
+    checkWorkbookDecodes(sourceFile, context);
   }
-  if (pendingBlockingCalls?.length) flushBlockingCalls(pendingBlockingCalls, context);
-  checkWorkbookDecodes(sourceFile, context);
-  checkFrontendFile(sourceFile, context);
-  collectPhase5PerfFindings(sourceFile, context);
   return findings.sort(
     (left, right) =>
       (left.line ?? 0) - (right.line ?? 0) ||

@@ -31,15 +31,16 @@ function globExpression(pattern: string) {
 // A pattern also matches everything below a folder it names, so "generated" and "generated/**"
 // agree.
 function createGlobMatcher(patterns: readonly string[]) {
-  const expressions = patterns.map((pattern: string) =>
-    globExpression(pattern.replaceAll('\\', '/').replace(/^\.\//, '').replace(/\/$/, '')),
-  );
+  if (!patterns.length) return () => false;
+  const expressions = patterns.map((pattern: string) => {
+    const normalized = pattern.replaceAll('\\', '/').replace(/^\.\//, '').replace(/\/$/, '');
+    return new RegExp(`^(?:${globSource(normalized)})(?:/|$)`);
+  });
   return function matches(relativeFile: string) {
-    const parts = relativeFile.split('/');
-    return parts.some((_: string, index: number) => {
-      const candidate = parts.slice(0, index + 1).join('/');
-      return expressions.some((expression: RegExp) => expression.test(candidate));
-    });
+    for (const expression of expressions) {
+      if (expression.test(relativeFile)) return true;
+    }
+    return false;
   };
 }
 

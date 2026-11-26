@@ -83,7 +83,13 @@ const signatureBatchSize = 1000;
 function adaptProgram(program: NativeProgram, options: CompilerOptions = {}): ProgramAdapter {
   const native = program.getProject().checker;
   const symbols = new WeakMap<NativeSymbol, AdaptedSymbol>();
+  const types = new WeakMap<NativeType, AdaptedType>();
   const defaultLibraries = new WeakMap<SourceFile, boolean>();
+  const nonNullableTypes = new WeakMap<NativeType, AdaptedType>();
+  const awaitedTypes = new WeakMap<NativeType, AdaptedType | null>();
+  const arrayTypeFlags = new WeakMap<NativeType, boolean>();
+  const baseTypesCache = new WeakMap<NativeType, AdaptedType[]>();
+  const typeArgumentsCache = new WeakMap<NativeType, AdaptedType[]>();
   let toolingSources: SourceFile[] | undefined;
 
   function isDefaultLibrary(file: SourceFile): boolean {
@@ -100,24 +106,45 @@ function adaptProgram(program: NativeProgram, options: CompilerOptions = {}): Pr
   function adaptSymbol(symbol: NativeSymbol | undefined): AdaptedSymbol | undefined;
   function adaptSymbol(symbol: NativeSymbol | undefined): AdaptedSymbol | undefined {
     if (!symbol) return;
-    if (!symbols.has(symbol)) {
-      symbols.set(symbol, {
-        name: symbol.name,
-        getName: () => symbol.name,
-        flags: symbol.flags,
-        resolveAlias: () => adaptSymbol(native.getAliasedSymbol(symbol)),
-        get declarations() {
-          return symbol.declarations.map((handle) => handle.resolve());
-        },
-        get valueDeclaration() {
-          return symbol.valueDeclaration?.resolve();
-        },
-      });
-    }
-    return symbols.get(symbol);
+    const existing = symbols.get(symbol);
+    if (existing) return existing;
+    let resolvedDeclarations: Node[] | undefined;
+    let resolvedValueDeclaration: Node | undefined;
+    let valueDeclarationResolved = false;
+    let resolvedAlias: AdaptedSymbol | undefined;
+    const adapted: AdaptedSymbol = {
+      name: symbol.name,
+      getName: () => symbol.name,
+      flags: symbol.flags,
+      resolveAlias: () => (resolvedAlias ??= adaptSymbol(native.getAliasedSymbol(symbol))),
+      get declarations() {
+        resolvedDeclarations ??= symbol.declarations.map((handle) => handle.resolve());
+        return resolvedDeclarations;
+      },
+      get valueDeclaration() {
+        if (!valueDeclarationResolved) {
+          resolvedValueDeclaration = symbol.valueDeclaration?.resolve();
+          valueDeclarationResolved = true;
+        }
+        return resolvedValueDeclaration;
+      },
+    };
+    symbols.set(symbol, adapted);
+    return adapted;
   }
 
   function adaptType(type: NativeType): AdaptedType {
+    const existing = types.get(type);
+    if (existing) return existing;
+    let cachedTarget: AdaptedType | undefined;
+    let targetResolved = false;
+    let cachedAliasSymbol: AdaptedSymbol | undefined;
+    let aliasResolved = false;
+    let cachedTypes: AdaptedType[] | undefined;
+    let cachedSymbol: AdaptedSymbol | undefined;
+    let symbolResolved = false;
+    let cachedProperties: (AdaptedSymbol | undefined)[] | undefined;
+    let cachedCallSignatures: NativeSignature[] | undefined;
     const adapted: Omit<AdaptedType, 'nativeType'> = {
       flags: type.flags,
       value: type.value,
@@ -128,25 +155,41 @@ function adaptProgram(program: NativeProgram, options: CompilerOptions = {}): Pr
       isClassOrInterface: () => type.isClassOrInterface(),
       objectFlags: type.objectFlags,
       get target() {
-        const target = type.getTarget();
-        return target && adaptType(target);
+        if (!targetResolved) {
+          const target = type.getTarget();
+          cachedTarget = target && adaptType(target);
+          targetResolved = true;
+        }
+        return cachedTarget;
       },
       get aliasSymbol() {
-        return adaptSymbol(type.getAliasSymbol());
+        if (!aliasResolved) {
+          cachedAliasSymbol = adaptSymbol(type.getAliasSymbol());
+          aliasResolved = true;
+        }
+        return cachedAliasSymbol;
       },
-      getProperties: () => type.getProperties().map(adaptSymbol),
+      getProperties: () => (cachedProperties ??= type.getProperties().map(adaptSymbol)),
       isUnionOrIntersection: () => type.isUnionType() || type.isIntersectionType(),
       get types() {
-        return type.getTypes().map(adaptType);
+        cachedTypes ??= type.getTypes().map(adaptType);
+        return cachedTypes;
       },
-      getSymbol: () => adaptSymbol(type.getSymbol()),
+      getSymbol() {
+        if (!symbolResolved) {
+          cachedSymbol = adaptSymbol(type.getSymbol());
+          symbolResolved = true;
+        }
+        return cachedSymbol;
+      },
       getProperty: (name: string) => adaptSymbol(type.getProperty(name)),
       // Signatures stay native objects; rules only hand them back to getReturnTypeOfSignature.
-      getCallSignatures: () => type.getCallSignatures(),
+      getCallSignatures: () => (cachedCallSignatures ??= type.getCallSignatures()),
     };
     // Kept out of enumeration so adapted types still look like plain data; type relation queries
     // need the original.
     defineNativeType(adapted, type);
+    types.set(type, adapted);
     return adapted;
   }
 
@@ -218,14 +261,40 @@ function adaptProgram(program: NativeProgram, options: CompilerOptions = {}): Pr
       adaptSymbol(native.resolveName(name, meaning, node, excludeGlobals)),
     getBaseTypes: (type) => {
       const nativeType = nativeTypeOf(type);
-      return nativeType.isClassOrInterface() ? native.getBaseTypes(nativeType).map(adaptType) : [];
+      let cached = baseTypesCache.get(nativeType);
+      if (!cached) {
+        cached = nativeType.isClassOrInterface() ? native.getBaseTypes(nativeType).map(adaptType) : [];
+        baseTypesCache.set(nativeType, cached);
+      }
+      return cached;
     },
-    getNonNullableType: (type) => adaptType(native.getNonNullableType(nativeTypeOf(type))),
+    getNonNullableType: (type) => {
+      const nativeType = nativeTypeOf(type);
+      let cached = nonNullableTypes.get(nativeType);
+      if (!cached) {
+        cached = adaptType(native.getNonNullableType(nativeType));
+        nonNullableTypes.set(nativeType, cached);
+      }
+      return cached;
+    },
     getAwaitedType(type) {
-      const awaited = native.getAwaitedType(nativeTypeOf(type));
-      return awaited && adaptType(awaited);
+      const nativeType = nativeTypeOf(type);
+      const cached = awaitedTypes.get(nativeType);
+      if (cached !== undefined) return cached ?? undefined;
+      const awaited = native.getAwaitedType(nativeType);
+      const adapted = awaited ? adaptType(awaited) : null;
+      awaitedTypes.set(nativeType, adapted);
+      return adapted ?? undefined;
     },
-    isArrayType: (type) => native.isArrayType(nativeTypeOf(type)),
+    isArrayType: (type) => {
+      const nativeType = nativeTypeOf(type);
+      let cached = arrayTypeFlags.get(nativeType);
+      if (cached === undefined) {
+        cached = native.isArrayType(nativeType);
+        arrayTypeFlags.set(nativeType, cached);
+      }
+      return cached;
+    },
     // TypeScript 6 names the value type `type`; the native API calls it `valueType`.
     getIndexInfosOfType: (type) =>
       native.getIndexInfosOfType(nativeTypeOf(type)).map((info) => ({
@@ -237,8 +306,13 @@ function adaptProgram(program: NativeProgram, options: CompilerOptions = {}): Pr
     // tsgo's handleGetTypeArguments assumes a TypeReference and panics on other types.
     getTypeArguments: (type) => {
       const nativeType = nativeTypeOf(type);
-      if (!(nativeType.objectFlags & ObjectFlags.Reference)) return [];
-      return native.getTypeArguments(nativeType).map(adaptType);
+      let cached = typeArgumentsCache.get(nativeType);
+      if (!cached) {
+        cached =
+          nativeType.objectFlags & ObjectFlags.Reference ? native.getTypeArguments(nativeType).map(adaptType) : [];
+        typeArgumentsCache.set(nativeType, cached);
+      }
+      return cached;
     },
     getAliasedSymbol: (symbol) => {
       if (!isAdaptedSymbol(symbol)) throw new Error('Expected a symbol adapted by the native checker.');

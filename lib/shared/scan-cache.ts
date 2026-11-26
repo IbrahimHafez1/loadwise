@@ -63,11 +63,13 @@ function loadwiseFingerprint(): string {
     ...listSources(path.join(root, 'polyglot')),
     ...listSources(path.join(root, 'editor')),
   ].sort();
-  const lines = sources.map((file) => {
+  const hash = crypto.createHash('sha1').update(`${version}\n`);
+  for (let index = 0; index < sources.length; index++) {
+    const file = sources[index];
     const { size, mtimeMs } = fs.statSync(file);
-    return `${path.relative(root, file)}\0${size}\0${mtimeMs}`;
-  });
-  toolFingerprint = sha1(`${version}\n${lines.join('\n')}`);
+    hash.update(`${index > 0 ? '\n' : ''}${path.relative(root, file)}\0${size}\0${mtimeMs}`);
+  }
+  toolFingerprint = hash.digest('hex');
   return toolFingerprint;
 }
 
@@ -119,9 +121,9 @@ function inputFingerprint(cwd: string): string | undefined {
 
 const maxHashedFileBytes = 16 * 1024 * 1024;
 
-function fileHash(absolute: string): string {
+function fileHash(absolute: string, existingStat?: fs.Stats): string {
   try {
-    const stat = fs.lstatSync(absolute);
+    const stat = existingStat ?? fs.lstatSync(absolute);
     if (stat.isSymbolicLink()) return `symlink:${sha1(fs.readlinkSync(absolute))}`;
     if (!stat.isFile()) return `special:${stat.mode}`;
     if (binaryExtensions.has(path.extname(absolute).toLowerCase()) || stat.size > maxHashedFileBytes) {
@@ -147,7 +149,8 @@ function cacheKey(args: readonly string[], cwd: string): string | undefined {
     const candidate = arg.startsWith('-') && arg.includes('=') ? arg.slice(arg.indexOf('=') + 1) : arg;
     if (!candidate) return '';
     const absolute = path.resolve(cwd, candidate);
-    return fs.lstatSync(absolute, { throwIfNoEntry: false })?.isFile() ? fileHash(absolute) : '';
+    const stat = fs.lstatSync(absolute, { throwIfNoEntry: false });
+    return stat?.isFile() ? fileHash(absolute, stat) : '';
   });
   const parts = [formatVersion, loadwiseFingerprint(), path.resolve(cwd), args, namedFiles, environment, inputs];
   return crypto.createHash('sha256').update(JSON.stringify(parts)).digest('hex');
