@@ -104,7 +104,7 @@ function relativeLiterals(expression: Expression, followConstant = true): String
 export function urlModule(node: NewExpression): UrlModule | undefined {
   const urlConstructor = ts.skipOuterExpressions(node.expression);
   if (!ts.isIdentifier(urlConstructor) || urlConstructor.text !== 'URL' || node.arguments?.length !== 2) return;
-  const [specifier, base] = node.arguments.map((argument, index) => ts.skipOuterExpressions(argument, index));
+  const [specifier, base] = node.arguments.map((argument) => ts.skipOuterExpressions(argument));
   const literals = isImportMetaUrl(base) && relativeLiterals(specifier);
   if (literals) return { urlConstructor, literals };
 }
@@ -117,7 +117,7 @@ export function metaUrlLoad(node: CallExpression): StringLiteralLike | undefined
   const callee = node.expression;
   const name = ts.isPropertyAccessExpression(callee) ? callee.name : callee;
   if (!ts.isIdentifier(name) || !metaUrlLoaders.has(name.text) || node.arguments.length < 2) return;
-  const [specifier, base] = node.arguments.map((argument, index) => ts.skipOuterExpressions(argument, index));
+  const [specifier, base] = node.arguments.map((argument) => ts.skipOuterExpressions(argument));
   if (ts.isStringLiteralLike(specifier) && /^\.\.?\//.test(specifier.text) && isImportMetaUrl(base)) return specifier;
 }
 
@@ -137,7 +137,7 @@ function besideCurrentFile(pathCall: Expression): StringLiteralLike[] | undefine
   if (!ts.isCallExpression(pathCall) || !ts.isPropertyAccessExpression(pathCall.expression)) return;
   const method = pathCall.expression;
   if (!ts.isIdentifier(method.expression) || !['join', 'resolve'].includes(method.name.text)) return;
-  const [base, ...parts] = pathCall.arguments.map(ts.skipOuterExpressions);
+  const [base, ...parts] = pathCall.arguments.map((argument) => ts.skipOuterExpressions(argument));
   if (!base || !isCurrentDirname(base) || !parts.length) return;
   if (parts.every(ts.isStringLiteralLike) && !parts.some((part) => path.posix.isAbsolute(part.text))) return parts;
 }

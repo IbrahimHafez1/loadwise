@@ -2,7 +2,7 @@ import { ts } from './compiler.js';
 import { querySite } from './schema/query-sites.js';
 import { rawSqlSite } from './schema/raw-sql-sites.js';
 import { checkRedundantIndexes } from './redundant-indexes.js';
-import type { Node } from 'typescript';
+import type { Node, SourceFile } from 'typescript';
 import type { PerformanceRuleContext } from '../shared/types.js';
 import type { QueryCondition, QuerySite } from './types/query-site.js';
 import type { SchemaTable } from './types/schema-model.js';
@@ -109,6 +109,16 @@ function evaluateSite(site: QuerySite, context: PerformanceRuleContext): void {
   evaluateUnusable(site, infos, context);
 }
 
+const testSourceCache = new WeakMap<SourceFile, boolean>();
+
+function isCachedTestSource(sourceFile: SourceFile): boolean {
+  const cached = testSourceCache.get(sourceFile);
+  if (cached !== undefined) return cached;
+  const result = isTestSource(sourceFile.fileName);
+  testSourceCache.set(sourceFile, result);
+  return result;
+}
+
 function checkIndexUsage(node: Node, context: PerformanceRuleContext): void {
   if (!ts.isCallExpression(node)) return;
   checkRedundantIndexes(node, context);
@@ -119,7 +129,7 @@ function checkIndexUsage(node: Node, context: PerformanceRuleContext): void {
   checkDrizzleForeignKeys(node, context);
   // A query only tests run needs no production index, and the suggested one may undo a deliberate
   // drop.
-  if (isTestSource(node.getSourceFile().fileName)) return;
+  if (isCachedTestSource(node.getSourceFile())) return;
   const site = querySite(node, context.checker) ?? rawSqlSite(node, context.checker);
   if (site) evaluateSite(site, context);
 }

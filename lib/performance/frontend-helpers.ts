@@ -89,11 +89,12 @@ function containsReturnValue(body: Node): boolean {
 }
 
 function effectCallback(call: CallExpression, checker: CheckerAdapter) {
-  const hook = importedName(call.expression, checker, REACT_MODULES);
-  if (!hook || !REACT_EFFECTS.has(hook)) return;
   const callback = call.arguments[0] && ts.skipOuterExpressions(call.arguments[0]);
   const isFunction = callback && (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback));
-  return isFunction && ts.isBlock(callback.body) ? { hook, body: callback.body } : undefined;
+  if (!isFunction || !ts.isBlock(callback.body)) return;
+  const hook = importedName(call.expression, checker, REACT_MODULES);
+  if (!hook || !REACT_EFFECTS.has(hook)) return;
+  return { hook, body: callback.body };
 }
 
 function isVueImport(expression: Expression, checker: CheckerAdapter, exportName: string): boolean {

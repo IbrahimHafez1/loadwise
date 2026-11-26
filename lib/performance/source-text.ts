@@ -92,5 +92,4 @@ function printChangedFindings(findings: Finding[], fixCommand: string | undefine
   );
 }
 
-export type { BaselineSummary, SourceReport };
 export { printFullReport, printChangedFindings };

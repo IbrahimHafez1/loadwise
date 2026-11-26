@@ -1,6 +1,6 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import * as ts from 'typescript';
+import { isTempRoot, safeExists } from './project-root.js';
 
 // Semantic error codes that indicate a fix broke identifier resolution, types, or async context.
 const GATED_ERROR_CODES = new Set([2304, 2322, 2339, 2345, 2554, 1308]);
@@ -9,8 +9,9 @@ const TS_FILE_PATTERN = /\.[cm]?tsx?$/i;
 function findTsConfig(directory: string): string | undefined {
   let current = path.resolve(directory);
   for (;;) {
+    if (isTempRoot(current)) return undefined;
     const candidate = path.join(current, 'tsconfig.json');
-    if (fs.existsSync(candidate)) return candidate;
+    if (safeExists(candidate)) return candidate;
     const parent = path.dirname(current);
     if (parent === current) return undefined;
     current = parent;
@@ -30,47 +31,134 @@ function diagnosticCounts(program: ts.Program, file: string): Map<string, number
   return counts;
 }
 
-function createVirtualProgram(
-  tsconfigPath: string,
-  overrides: ReadonlyMap<string, string | undefined>,
-  oldProgram?: ts.Program,
-): ts.Program | undefined {
+interface CachedProjectConfig {
+  parsed: ts.ParsedCommandLine;
+  baseHost: ts.CompilerHost;
+  rootNames: string[];
+  rootKeys: Set<string>;
+  getCanonicalFileName: (fileName: string) => string;
+  cachedFileExists: (key: string, fileName: string) => boolean;
+  cachedDirectoryExists?: (directoryName: string) => boolean;
+  cachedReadFile: (key: string, fileName: string) => string | undefined;
+  cachedGetSourceFile: (
+    key: string,
+    fileName: string,
+    languageVersion: ts.ScriptTarget | ts.CreateSourceFileOptions,
+    onError?: (message: string) => void,
+    shouldCreateNewSourceFile?: boolean,
+  ) => ts.SourceFile | undefined;
+}
+
+function loadProjectConfig(tsconfigPath: string): CachedProjectConfig | undefined {
   const readFile = (filePath: string): string | undefined => ts.sys.readFile(filePath);
   const configFile = ts.readConfigFile(tsconfigPath, readFile);
   if (configFile.error) return undefined;
   const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, path.dirname(tsconfigPath));
-  const host = ts.createCompilerHost(parsed.options);
+  const baseHost = ts.createCompilerHost(parsed.options);
+  const getCanonicalFileName = baseHost.getCanonicalFileName.bind(baseHost);
+  const canonicalKey = (fileName: string) => getCanonicalFileName(path.resolve(fileName));
+
+  const originalGetSourceFile = baseHost.getSourceFile.bind(baseHost);
+  const originalFileExists = baseHost.fileExists.bind(baseHost);
+  const originalDirectoryExists = baseHost.directoryExists?.bind(baseHost);
+  const originalReadFile = baseHost.readFile.bind(baseHost);
+
+  const fileExistsCache = new Map<string, boolean>();
+  const directoryExistsCache = new Map<string, boolean>();
+  const readFileCache = new Map<string, string | undefined>();
+  const sourceFileCache = new Map<string, ts.SourceFile | undefined>();
+
+  const rootNames = [...new Set(parsed.fileNames.map((name) => path.resolve(name)))];
+  const rootKeys = new Set(rootNames.map((name) => getCanonicalFileName(name)));
+
+  return {
+    parsed,
+    baseHost,
+    rootNames,
+    rootKeys,
+    getCanonicalFileName,
+    cachedFileExists(key: string, fileName: string) {
+      const cached = fileExistsCache.get(key);
+      if (cached !== undefined) return cached;
+      const exists = originalFileExists(fileName);
+      fileExistsCache.set(key, exists);
+      return exists;
+    },
+    cachedDirectoryExists: originalDirectoryExists
+      ? (directoryName: string) => {
+          const key = canonicalKey(directoryName);
+          const cached = directoryExistsCache.get(key);
+          if (cached !== undefined) return cached;
+          const exists = originalDirectoryExists(directoryName);
+          directoryExistsCache.set(key, exists);
+          return exists;
+        }
+      : undefined,
+    cachedReadFile(key: string, fileName: string) {
+      if (readFileCache.has(key)) return readFileCache.get(key);
+      const content = originalReadFile(fileName);
+      readFileCache.set(key, content);
+      return content;
+    },
+    cachedGetSourceFile(key, fileName, languageVersion, onError, shouldCreateNew) {
+      if (!shouldCreateNew && sourceFileCache.has(key)) return sourceFileCache.get(key);
+      const loaded = originalGetSourceFile(fileName, languageVersion, onError, shouldCreateNew);
+      sourceFileCache.set(key, loaded);
+      return loaded;
+    },
+  };
+}
+
+function createVirtualProgram(
+  project: CachedProjectConfig,
+  overrides: ReadonlyMap<string, string | undefined>,
+  oldProgram?: ts.Program,
+): ts.Program | undefined {
+  const canonicalKey = (fileName: string) => project.getCanonicalFileName(path.resolve(fileName));
   const normalizedOverrides = new Map<string, string | undefined>();
-  for (const [file, text] of overrides) normalizedOverrides.set(path.resolve(file), text);
-
-  const originalGetSourceFile = host.getSourceFile.bind(host);
-  const originalFileExists = host.fileExists.bind(host);
-  const originalReadFile = host.readFile.bind(host);
-
-  host.fileExists = (fileName: string) => {
-    const resolved = path.resolve(fileName);
-    if (normalizedOverrides.has(resolved)) return normalizedOverrides.get(resolved) !== undefined;
-    return originalFileExists(fileName);
-  };
-  host.readFile = (fileName: string) => {
-    const resolved = path.resolve(fileName);
-    if (normalizedOverrides.has(resolved)) return normalizedOverrides.get(resolved);
-    return originalReadFile(fileName);
-  };
-  host.getSourceFile = (fileName, languageVersion, onError, shouldCreateNew) => {
-    const resolved = path.resolve(fileName);
-    if (normalizedOverrides.has(resolved)) {
-      const content = normalizedOverrides.get(resolved);
-      return content === undefined ? undefined : ts.createSourceFile(fileName, content, languageVersion, true);
-    }
-    return originalGetSourceFile(fileName, languageVersion, onError, shouldCreateNew);
-  };
-
-  const rootNames = new Set(parsed.fileNames.map((name) => path.resolve(name)));
-  for (const [file, text] of normalizedOverrides) {
-    if (text !== undefined && TS_FILE_PATTERN.test(file)) rootNames.add(file);
+  const resolvedOverridePaths = new Map<string, string>();
+  for (const [file, text] of overrides) {
+    const resolved = path.resolve(file);
+    const key = project.getCanonicalFileName(resolved);
+    normalizedOverrides.set(key, text);
+    resolvedOverridePaths.set(key, resolved);
   }
-  return ts.createProgram([...rootNames], parsed.options, host, oldProgram);
+
+  const host: ts.CompilerHost = {
+    ...project.baseHost,
+    fileExists: (fileName: string) => {
+      const key = canonicalKey(fileName);
+      if (normalizedOverrides.has(key)) return normalizedOverrides.get(key) !== undefined;
+      return project.cachedFileExists(key, fileName);
+    },
+    readFile: (fileName: string) => {
+      const key = canonicalKey(fileName);
+      if (normalizedOverrides.has(key)) return normalizedOverrides.get(key);
+      return project.cachedReadFile(key, fileName);
+    },
+    getSourceFile: (fileName, languageVersion, onError, shouldCreateNew) => {
+      const key = canonicalKey(fileName);
+      if (normalizedOverrides.has(key)) {
+        const content = normalizedOverrides.get(key);
+        return content === undefined ? undefined : ts.createSourceFile(fileName, content, languageVersion, true);
+      }
+      return project.cachedGetSourceFile(key, fileName, languageVersion, onError, shouldCreateNew);
+    },
+  };
+  if (project.cachedDirectoryExists) {
+    host.directoryExists = project.cachedDirectoryExists;
+  }
+
+  const rootNames = new Set(project.rootNames);
+  const rootKeys = new Set(project.rootKeys);
+  for (const [key, text] of normalizedOverrides) {
+    const file = resolvedOverridePaths.get(key);
+    if (text !== undefined && file && TS_FILE_PATTERN.test(file) && !rootKeys.has(key)) {
+      rootNames.add(file);
+      rootKeys.add(key);
+    }
+  }
+  return ts.createProgram([...rootNames], project.parsed.options, host, oldProgram);
 }
 
 function firstNewError(beforeProgram: ts.Program, afterProgram: ts.Program, file: string): string | undefined {
@@ -108,9 +196,11 @@ export function introducedTypeErrors(
   }
 
   for (const [tsconfigPath, groupFiles] of byTsConfig) {
-    const beforeProgram = createVirtualProgram(tsconfigPath, originals);
+    const project = loadProjectConfig(tsconfigPath);
+    if (!project) continue;
+    const beforeProgram = createVirtualProgram(project, originals);
     if (!beforeProgram) continue;
-    const afterProgram = createVirtualProgram(tsconfigPath, updates, beforeProgram);
+    const afterProgram = createVirtualProgram(project, updates, beforeProgram);
     if (!afterProgram) continue;
     for (const file of groupFiles) {
       const refusal = firstNewError(beforeProgram, afterProgram, file);

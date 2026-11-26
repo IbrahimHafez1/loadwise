@@ -57,7 +57,7 @@ function respawnWithLargerHeap(scriptPath: string, args: readonly string[]) {
   const run = spawnSync(
     process.execPath,
     [`${heapFlagName}=${recommendedHeapMegabytes()}`, ...process.execArgv, scriptPath, ...args],
-    { stdio: 'inherit' },
+    { stdio: 'inherit', windowsHide: true },
   );
   return run.status ?? 2;
 }

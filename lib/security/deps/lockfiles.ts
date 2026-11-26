@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { noteUnreadable } from '../../shared/coverage-notes.js';
+import { isTempRoot, safeExists } from '../../shared/project-root.js';
 import type { Lockfile, LockfilePackage } from '../types/lockfile.js';
 
 /** The dependency groups a manifest or a lockfile entry lists by name. */
@@ -95,10 +96,17 @@ function findLockfile(directory: string): LockfileLocation | undefined {
     home = path.resolve(os.homedir());
   }
   for (let current = path.resolve(directory); ; current = path.dirname(current)) {
-    const kind = lockfileKinds.find(({ file }) => fs.existsSync(path.join(current, file)));
+    if (isTempRoot(current)) return undefined;
+    const kind = lockfileKinds.find(({ file }) => safeExists(path.join(current, file)));
     if (kind) return { ...kind, filename: path.join(current, kind.file), root: current };
     const parent = path.dirname(current);
-    if (parent === current || fs.realpathSync.native(parent) === home) return undefined;
+    let realParent: string | undefined;
+    try {
+      realParent = fs.realpathSync.native(parent);
+    } catch {
+      realParent = undefined;
+    }
+    if (parent === current || realParent === home || isTempRoot(parent)) return undefined;
   }
 }
 
@@ -179,7 +187,8 @@ function parseYamlMaps(text: string): YamlNode {
   const stack = [rootNode];
   const keyPattern = /^(\s*)(?:'((?:[^']|'')*)'|"((?:[^"\\]|\\.)*)"|(.+?))\s*:(?:\s+(.*))?$/;
   text.split(/\r?\n/).forEach((lineText, index) => {
-    if (!lineText.trim() || lineText.trimStart().startsWith('#') || lineText.trimStart().startsWith('- ')) return;
+    const trimmed = lineText.trimStart();
+    if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('- ') || !lineText.includes(':')) return;
     const match = keyPattern.exec(lineText);
     if (!match) return;
     const indent = match[1].length;
@@ -356,4 +365,4 @@ function manifestLocation(directories: readonly string[], name: string): { file:
   return undefined;
 }
 
-export { findLockfile, readLockfilePackages, manifestLocation, splitPnpmKey };
+export { findLockfile, readLockfilePackages, manifestLocation };

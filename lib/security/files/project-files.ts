@@ -98,4 +98,4 @@ function searchTrackedText(root: string, pattern: string, exclusions: Iterable<s
   return run.status === 0 ? new Set(splitNames(root, run)) : undefined;
 }
 
-export { listProjectFiles, searchTrackedText, isEnvFileName, isSkippedPath };
+export { listProjectFiles, searchTrackedText, isEnvFileName };

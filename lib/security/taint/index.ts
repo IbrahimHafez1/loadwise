@@ -134,7 +134,11 @@ function promiseOfThenCallback(fn: Node): Expression | undefined {
 // Internal results: { taint } for a tainted value, { container } for a request object whose listed
 // fields are tainted, or { parameter: index } for the symbolic parameter of a return summary. Each
 // carries steps and hops.
+const taintByProgram = new WeakMap<ProgramAdapter, TaintApi>();
+
 function createTaint(program: ProgramAdapter): TaintApi {
+  const cached = taintByProgram.get(program);
+  if (cached) return cached;
   const checker = program.getTypeChecker();
   const summaries = summariesOf(program);
   const results = new Map<Expression, Map<string, TaintResult | undefined>>();
@@ -562,7 +566,9 @@ function createTaint(program: ProgramAdapter): TaintApi {
     return false;
   }
 
-  return { trace, isUntracedParameter, urlControl: createUrlControl(checker, trace, strip) };
+  const api: TaintApi = { trace, isUntracedParameter, urlControl: createUrlControl(checker, trace, strip) };
+  taintByProgram.set(program, api);
+  return api;
 }
 
 function propertyKey(name: PropertyName): string | undefined {
@@ -582,4 +588,4 @@ function prependBindingPathSegment(
   }
 }
 
-export { createTaint, sinkKinds };
+export { createTaint };

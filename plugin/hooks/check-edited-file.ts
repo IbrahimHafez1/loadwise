@@ -123,7 +123,8 @@ function main(): void {
     return;
 
   const safeRelativeFile = relativeFile.startsWith('-') ? `./${relativeFile}` : relativeFile;
-  const timeoutMs = Number(process.env.LOADWISE_HOOK_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS;
+  const parsedTimeout = Number(process.env.LOADWISE_HOOK_TIMEOUT_MS);
+  const timeoutMs = Number.isFinite(parsedTimeout) && parsedTimeout > 0 ? parsedTimeout : DEFAULT_TIMEOUT_MS;
   const deadline = Date.now() + timeoutMs;
   const perfReport = runLoadwise(local.binary, ['perf', safeRelativeFile, '--json'], local.projectRoot, deadline);
   const secReport = runLoadwise(local.binary, ['sec', safeRelativeFile, '--json'], local.projectRoot, deadline);

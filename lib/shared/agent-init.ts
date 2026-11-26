@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { writeFileAtomic } from './atomic-write.js';
+import { isTempRoot, safeExists } from './project-root.js';
 import { realTarget } from './real-target.js';
 import { replaceBlocks } from './managed-blocks.js';
 import type { MarkerPair } from './types/managed-blocks.js';
@@ -100,11 +101,11 @@ function findProjectRoot(start: string): string {
   const home = os.homedir();
   let configRoot: string | undefined;
   for (let candidate = directory; ; candidate = path.dirname(candidate)) {
+    if (isTempRoot(candidate)) return configRoot ?? directory;
     // Some users have a package.json in their home directory for personal npm tools.
     if (candidate !== directory && path.relative(home, candidate) === '') return configRoot ?? directory;
-    if (fs.existsSync(path.join(candidate, 'package.json')) || fs.existsSync(path.join(candidate, '.git')))
-      return candidate;
-    if (!configRoot && ['tsconfig.json', 'jsconfig.json'].some((name) => fs.existsSync(path.join(candidate, name))))
+    if (safeExists(path.join(candidate, 'package.json')) || safeExists(path.join(candidate, '.git'))) return candidate;
+    if (!configRoot && ['tsconfig.json', 'jsconfig.json'].some((name) => safeExists(path.join(candidate, name))))
       configRoot = candidate;
     if (path.dirname(candidate) === candidate) return configRoot ?? directory;
   }

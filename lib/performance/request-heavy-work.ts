@@ -59,7 +59,8 @@ function importsModule(sourceFile: SourceFile, moduleName: string): boolean {
   }
   let pattern = moduleImportPatterns.get(moduleName);
   if (!pattern) {
-    pattern = new RegExp(`['"]${moduleName}(?:/[^'"]*)?['"]`);
+    const escaped = moduleName.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    pattern = new RegExp(`['"]${escaped}(?:/[^'"]*)?['"]`);
     moduleImportPatterns.set(moduleName, pattern);
   }
   const imported = pattern.test(sourceFile.text);

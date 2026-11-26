@@ -338,4 +338,4 @@ function modelFallbackInPackages(access: Node, checker: CheckerAdapter, packages
   return !!fallback && packages.some((name: string) => fallback.packages.includes(name));
 }
 
-export { modelFallback, modelFallbackInPackages, isDrizzleTable, isTypeormEntity };
+export { modelFallback, modelFallbackInPackages };

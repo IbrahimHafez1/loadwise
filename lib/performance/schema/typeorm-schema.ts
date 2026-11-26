@@ -296,4 +296,4 @@ function typeormTableOf(expression: Node | undefined, checker: CheckerAdapter): 
   return typeormTable(declaration, checker);
 }
 
-export { typeormTable, typeormTableOf, typeormDecorators };
+export { typeormTable, typeormTableOf };

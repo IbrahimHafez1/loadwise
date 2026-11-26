@@ -1,4 +1,5 @@
-import { isContainedPath, hopReason } from './shared.js';
+import { ts } from '../../performance/compiler.js';
+import { isContainedPath, hopReason, strip } from './shared.js';
 import type { CallExpression } from 'typescript';
 import type { SecurityRuleContext } from '../../shared/types.js';
 
@@ -18,9 +19,17 @@ const writeFunctions = new Set([
   'outputFile',
   'writeFile',
 ]);
+function baseWriteName(name: string): string {
+  return name.endsWith('Sync') ? name.slice(0, -4) : name;
+}
+
 function checkArchiveWrite(call: CallExpression, context: SecurityRuleContext) {
+  if (!call.arguments.length) return;
+  const callee = strip(call.expression);
+  if (ts.isPropertyAccessExpression(callee) && !writeFunctions.has(baseWriteName(callee.name.text))) return;
   const library = context.libraryCall(call);
-  const writeName = (library?.method ?? library?.exported)?.replace(/Sync$/, '');
+  const rawName = library?.method ?? library?.exported;
+  const writeName = rawName === undefined ? undefined : baseWriteName(rawName);
   if (
     library?.module === undefined ||
     !fsModules.has(library.module) ||

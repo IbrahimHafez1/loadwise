@@ -491,3 +491,18 @@ test('every wildcard in an export target uses the same subpath, including build-
   });
   assert.deepEqual(summary(findings), ['unreferenced-file src/features/orders/load-other.ts']);
 });
+
+test('parenthesized or type-asserted new URL / import.meta.dirname / __dirname dynamic loads mark targets as used', async () => {
+  const findings = await scanProject({
+    'package.json': '{"main":"src/index.ts"}',
+    'src/task-url.ts': 'console.log("url task"); export {};',
+    'src/task-job.ts': 'console.log("job task"); export {};',
+    'src/index.ts': [
+      "import { Worker } from 'node:worker_threads';",
+      "import path from 'node:path';",
+      "export const urlRef = new URL(('./task-url.ts') as string, (import.meta.url));",
+      "export const workerRef = new Worker(path.join((__dirname), ('task-job.ts')));",
+    ].join('\n'),
+  });
+  assert.deepEqual(summary(findings), []);
+});

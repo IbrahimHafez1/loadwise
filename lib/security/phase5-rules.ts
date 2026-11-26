@@ -58,6 +58,7 @@ const COOKIE_AUTH_MODULES = new Set([
 ]);
 const COOKIE_AUTH_CALLEES = new Set(['cookieParser', 'cookieSession', 'session']);
 const STATE_CHANGING_METHODS = new Set(['post', 'put', 'patch', 'delete']);
+const COOKIE_OR_SESSION_PATTERN = /(?:cookie|session)/i;
 const CSRF_PATTERN =
   /(?:csurf|csrf-csrf|doubleCsrf|lusca|@fastify\/csrf-protection|fastify-csrf|csrfProtection|csrfSynchronisedProtection|verifyCsrf|validateCsrf|x-csrf-token)/i;
 
@@ -422,7 +423,7 @@ function checkGraphqlBatching(node: CallExpression | NewExpression, context: Sec
 
 function checkExpressCookieAuthCsrf(sourceFile: SourceFile, context: SecurityRuleContext): void {
   const text = sourceFile.text;
-  if (CSRF_PATTERN.test(text)) return;
+  if (!COOKIE_OR_SESSION_PATTERN.test(text) || CSRF_PATTERN.test(text)) return;
 
   let cookieAuthNode: Node | undefined;
   let hasStateChangingRoute = false;

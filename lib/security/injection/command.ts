@@ -17,6 +17,7 @@ const shellCommands = new Set(['exec', 'execSync']);
 const spawnCommands = new Set(['spawn', 'spawnSync', 'execFile', 'execFileSync']);
 const execaCommands = new Set(['execaCommand', 'execaCommandSync', 'command', 'commandSync']);
 const execaSpawns = new Set(['execa', 'execaSync', 'default', 'sync']);
+const allCommandMethods = new Set([...shellCommands, ...spawnCommands, ...execaCommands, ...execaSpawns]);
 const shellPrograms =
   /^(?:(?:\/usr)?\/bin\/)?(?:sh|bash|zsh|dash|ksh)$|^(?:cmd|cmd\.exe|powershell|powershell\.exe|pwsh)$/i;
 const commandFlags = new Set(['-c', '/c', '/C', '-Command', '-command']);
@@ -85,6 +86,9 @@ function shellScript(call: CallExpression) {
 
 // The expressions a shell parses for this call.
 function shellInputs(call: CallExpression, context: SecurityRuleContext): (Expression | undefined)[] {
+  if (!call.arguments.length) return [];
+  const callee = ts.skipOuterExpressions(call.expression);
+  if (ts.isPropertyAccessExpression(callee) && !allCommandMethods.has(callee.name.text)) return [];
   const exported = childProcessExport(call, context);
   const library = exported ? undefined : context.libraryCall(call);
   const name = exported ?? calledExport(library);

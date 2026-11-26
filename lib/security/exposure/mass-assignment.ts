@@ -30,6 +30,11 @@ const sequelizeDataIndex: Record<string, number> = { create: 0, update: 0, bulkC
 // `options.fields`.
 const sequelizeOptionsIndex: Record<string, number> = { create: 1, update: 1, bulkCreate: 1 };
 const sequelizeModules = new Set(['sequelize', 'sequelize-typescript']);
+const libraryDataMethods = new Set([
+  ...Object.keys(typeormDataIndex),
+  ...Object.keys(mongooseDataIndex),
+  ...Object.keys(sequelizeDataIndex),
+]);
 const dtoInheritanceDepth = 4;
 const schemaParsePattern =
   /(?<!JSON)\.(?:parse|safeParse|parseAsync|safeParseAsync|validateSync|validateAsync|attempt)\(/;
@@ -61,9 +66,10 @@ function sequelizeData(call: CallExpression, method: string): Expression[] {
 }
 
 function libraryData(call: CallExpression, context: SecurityRuleContext): Expression[] {
-  const info = context.libraryCall(call);
   const method = methodName(call);
-  if (!info || !method) return [];
+  if (method === undefined || !libraryDataMethods.has(method)) return [];
+  const info = context.libraryCall(call);
+  if (!info) return [];
   if (info.module === 'typeorm' && Object.hasOwn(typeormDataIndex, method))
     return dataAt(call, typeormDataIndex[method]);
   if (info.module === 'mongoose' && Object.hasOwn(mongooseDataIndex, method))

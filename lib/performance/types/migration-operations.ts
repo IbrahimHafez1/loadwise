@@ -5,8 +5,6 @@ import type { ParseErrorInfo } from './pg-statements.js';
 
 export type MigrationDialect = 'postgres' | 'mysql';
 
-export type MigrationFramework = 'prisma' | 'drizzle' | 'typeorm' | 'knex' | 'sequelize' | 'mikro-orm' | 'sql';
-
 export type OperationKind =
   | 'create-table'
   | 'create-index'
@@ -45,7 +43,7 @@ export interface ColumnType {
   array: boolean;
 }
 
-export interface CreatedColumn {
+interface CreatedColumn {
   name: string | null;
   type: ColumnType | null;
 }

@@ -424,4 +424,4 @@ function compareGraphql(oldText: string, newText: string): ContractFinding[] {
   return findings;
 }
 
-export { compareGraphql, parseSdl, OperationDocumentError };
+export { compareGraphql, OperationDocumentError };

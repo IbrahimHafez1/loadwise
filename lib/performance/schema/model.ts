@@ -7,7 +7,7 @@ import type {
   SchemaTable,
 } from '../types/schema-model.js';
 
-export interface TableInit {
+interface TableInit {
   name: string;
   dbName?: string;
   dialect?: string;
@@ -17,7 +17,7 @@ export interface TableInit {
   rowEstimate?: number;
 }
 
-export interface ColumnInit {
+interface ColumnInit {
   name: string;
   dbName?: string;
   type?: string;
@@ -27,7 +27,7 @@ export interface ColumnInit {
   foreignKey?: ColumnForeignKey;
 }
 
-export interface IndexInit {
+interface IndexInit {
   name?: string;
   keys: SchemaIndexKey[];
   unique?: boolean;
@@ -43,14 +43,14 @@ function allDefined<Item>(items: (Item | undefined)[]): items is Item[] {
   return items.every((item) => item !== undefined);
 }
 
-export type IndexCoverage = 'leading' | 'non-leading' | 'none';
+type IndexCoverage = 'leading' | 'non-leading' | 'none';
 
 interface Suggestion {
   name: string;
   sql: string;
 }
 
-export interface IndexFix {
+interface IndexFix {
   suggestion: string;
   sql: string;
   name: string;

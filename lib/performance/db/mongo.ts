@@ -356,4 +356,4 @@ async function inspectMongo(gateway: MongoGateway, { now = Date.now() }: { now?:
   return { serverVersion: String(build?.version ?? ''), findings, notes, tables };
 }
 
-export { createMongoGateway, validateCommand, MongoRefusal, inspectMongo, isKeyPrefix };
+export { createMongoGateway, validateCommand, MongoRefusal, inspectMongo };

@@ -20,7 +20,7 @@ import {
   resolveConfig,
 } from './source-inputs.js';
 import { recordSkippedFile } from './scan-outcome.js';
-import { workspacePackagesAround, workspaceSourceEntry } from '../shared/workspaces.js';
+import { missingPackageBase, workspacePackagesAround, workspaceSourceEntry } from '../shared/workspaces.js';
 import type {
   CompilerHost,
   CompilerOptions,
@@ -172,7 +172,7 @@ async function preReadSources({
 function cacheWorkspaceEntries(): WorkspaceEntryFinder {
   const entries = new Map<string, string | undefined>();
   return (directory: string, subpath: string) => {
-    const key = JSON.stringify([directory, subpath]);
+    const key = `${directory}\0${subpath}`;
     if (!entries.has(key)) entries.set(key, workspaceSourceEntry(directory, subpath));
     return entries.get(key);
   };
@@ -285,18 +285,6 @@ function reportMissingTypeLibraries(diagnostics: readonly Diagnostic[]) {
   console.error(
     `Note: type libraries not installed (${names.filter(Boolean).join(', ')}); analysis continued without them.`,
   );
-}
-
-// TypeScript's "File '{0}' not found." diagnostic.
-const missingFileCode = 6053;
-
-// A base config from a package (`"extends": "@org/tsconfig/base.json"`) is missing until
-// dependencies are installed, also when the config inherits it through a relative base. A missing
-// relative base or input file is reported by path and stays fatal.
-function missingPackageBase(diagnostic: Diagnostic): string | undefined {
-  if (diagnostic.code !== missingFileCode) return undefined;
-  const missing = /'([^']+)'/.exec(ts.flattenDiagnosticMessageText(diagnostic.messageText, ' '))?.[1];
-  return missing !== undefined && !/^(?:\.|\/|[a-z]:)/i.test(missing) ? missing : undefined;
 }
 
 function uninstalledBaseConfigs(parsed: ParsedCommandLine): Diagnostic[] {
@@ -450,13 +438,7 @@ function analyzeSources({ project, files, policy, onlyFiles, analyzers, preRead 
     });
     for (const finding of programFindings) {
       if (usesReferences || mergesFindings) {
-        const key = JSON.stringify([
-          canonicalFileName(finding.file ?? ''),
-          finding.line,
-          finding.column,
-          finding.ruleId,
-          finding.message,
-        ]);
+        const key = `${canonicalFileName(finding.file ?? '')}\0${finding.line}\0${finding.column}\0${finding.ruleId}\0${finding.message}`;
         mergeFinding(referenceFindings, key, finding);
       } else findings.push(finding);
     }

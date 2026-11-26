@@ -38,6 +38,7 @@ const hostHeaderReason =
   'The host comes from the Host header; a reverse proxy that accepts only known hosts makes this unreachable.';
 
 const verbMethods = new Set(['get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'request', 'stream']);
+const clientPropertyMethods = new Set([...verbMethods, 'fetch', 'default']);
 // Module -> how its calls take a URL: 'url' (first argument, a URL or a config object),
 // 'method-url' (the method name first, as `needle('get', url)`), or 'options' (a URL or an
 // http.request options object).
@@ -76,10 +77,12 @@ function createdClient(receiver: Expression, context: SecurityRuleContext): stri
 
 // { module, method } for a call to a known HTTP client, or undefined.
 function clientCall(call: CallExpression, context: SecurityRuleContext): ClientCall | undefined {
+  if (!call.arguments.length) return;
   const callee = strip(call.expression);
   if (ts.isIdentifier(callee) && callee.text === 'fetch' && isGlobalIdentifier(callee, context.checker))
     return { module: 'fetch', method: undefined };
   if (ts.isPropertyAccessExpression(callee)) {
+    if (!clientPropertyMethods.has(callee.name.text)) return;
     const created = createdClient(callee.expression, context);
     if (created) return { module: created, method: callee.name.text };
   }

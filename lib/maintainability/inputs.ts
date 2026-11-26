@@ -14,7 +14,7 @@ import type {
   StringLiteralLike,
 } from 'typescript';
 import type { ModuleResolver } from './types/module-resolver.js';
-import { coveringConfig } from '../shared/workspaces.js';
+import { coveringConfig, missingPackageBase } from '../shared/workspaces.js';
 
 // The compiler settings that apply to one folder, with the caches that make resolving under them
 // cheap.
@@ -41,18 +41,8 @@ const ignoredFolders = new Set([
   '.pytest_cache',
 ]);
 const implementation = /(?<!\.d)\.[cm]?[jt]sx?$/i;
-// TypeScript's "File '{0}' not found." diagnostic.
-const missingFileCode = 6053;
 const slash = (value: string): string => value.split(path.sep).join('/');
 const notedBases = new Set<string | undefined>();
-
-// A missing non-relative base is a package that is not installed; a missing relative base or input
-// stays fatal.
-function missingPackageBase(diagnostic: Diagnostic): string | undefined {
-  if (diagnostic.code !== missingFileCode) return undefined;
-  const missing = /'([^']+)'/.exec(ts.flattenDiagnosticMessageText(diagnostic.messageText, ' '))?.[1];
-  return missing !== undefined && !/^(?:\.|\/|[a-z]:)/i.test(missing) ? missing : undefined;
-}
 
 // Projects usually share their bases, so each missing base is noted once.
 function noteMissingBase(diagnostic: Diagnostic): void {

@@ -135,6 +135,8 @@ function cookieCallForm(call: CallExpression, context: SecurityRuleContext): Coo
 
 function serializeForm(call: CallExpression, context: SecurityRuleContext): CookieDefaults | undefined {
   if (call.arguments.length < 2) return;
+  const callee = unwrap(call.expression);
+  if (ts.isPropertyAccessExpression(callee) && callee.name.text !== 'serialize') return;
   const info = context.libraryCall(call);
   const isSerialize = info?.module === 'cookie' && (info.method === 'serialize' || info.exported === 'serialize');
   return isSerialize ? { httpOnlyDefault: false } : undefined;

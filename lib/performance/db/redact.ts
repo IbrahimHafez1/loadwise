@@ -8,12 +8,12 @@ interface RedactorSecrets {
   extra?: readonly string[];
 }
 
-export interface SafeError {
+interface SafeError {
   code: string | undefined;
   message: string;
 }
 
-export interface ParsedConnectionUrl {
+interface ParsedConnectionUrl {
   scheme: string;
   user: string;
   rawUserInfo: string;

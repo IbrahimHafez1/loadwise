@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
+import { isTempRoot } from '../../shared/project-root.js';
 import type { Node } from 'typescript';
 import type {
   MigrationDiscovery,
@@ -225,6 +226,7 @@ function readJson(file: string): PackageJson | null {
 // Dialects declared by the nearest package.json that names a database driver.
 function packageDialects(startDirectory: string): MigrationDialect[] {
   for (let directory = path.resolve(startDirectory); ; directory = path.dirname(directory)) {
+    if (isTempRoot(directory)) return [];
     const packageJson = readJson(path.join(directory, 'package.json'));
     if (packageJson) {
       const dependencies = { ...packageJson.dependencies, ...packageJson.devDependencies };

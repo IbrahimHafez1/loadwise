@@ -100,7 +100,9 @@ async function scanSourceFiles({ root, files, policy, migrations }: SourceScanRe
   const sources = Object.keys(files)
     .filter(isScannedSource)
     .map((name) => path.join(root, name));
-  const { findings } = analyzeSources({ files: sources, policy, analyzers: performanceAndSecurityAnalyzers });
+  const findings: Finding[] = sources.length
+    ? analyzeSources({ files: sources, policy, analyzers: performanceAndSecurityAnalyzers }).findings
+    : [];
   findings.push(...schemaFileFindings(root));
   if (migrations) findings.push(...(await migrationFindings(root)));
   attachPerformanceFixes(findings, { comments: false });

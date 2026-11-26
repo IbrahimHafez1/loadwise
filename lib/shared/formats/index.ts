@@ -38,4 +38,4 @@ function renderReports(format: string, entries: readonly ReportEntry[]): string 
   return renderers[format]()(entries);
 }
 
-export { formatNames, resolveFormat, renderReports };
+export { resolveFormat, renderReports };

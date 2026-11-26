@@ -130,5 +130,4 @@ function createJsonParseContext({
   return { localManifestReason, isCommandCallback, isResponseJsonWrapper };
 }
 
-export type { JsonParseContext, JsonParseHelpers };
 export { createJsonParseContext };

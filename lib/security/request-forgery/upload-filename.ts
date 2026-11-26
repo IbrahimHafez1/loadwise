@@ -66,6 +66,9 @@ function isClientName(
 }
 
 function checkDiskStorage(call: CallExpression, context: SecurityRuleContext) {
+  if (!call.arguments.length) return;
+  const callee = strip(call.expression);
+  if (ts.isPropertyAccessExpression(callee) && callee.name.text !== 'diskStorage') return;
   const library = context.libraryCall(call);
   if (library?.module !== 'multer' || (library.method ?? library.exported) !== 'diskStorage') return;
   const callback = filenameCallback(call.arguments[0]);

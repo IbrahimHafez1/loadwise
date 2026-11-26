@@ -135,3 +135,15 @@ test('a run that exits 2 for skipped files is not stored', async (context) => {
   assert.equal(stats.hits, before.hits);
   assert.equal(stats.misses, before.misses + 1);
 });
+
+test('editing a gitignored loadwise.config.json misses the cache', async (context) => {
+  isolateCache(context);
+  const root = project(context);
+  fs.writeFileSync(path.join(root, '.gitignore'), 'loadwise.config.json\nloadwise-baseline.json\n');
+  fs.writeFileSync(path.join(root, 'loadwise.config.json'), JSON.stringify({ rules: {} }));
+  await runChecker(['maint', '.', '--json'], root);
+  const before = counts();
+  fs.writeFileSync(path.join(root, 'loadwise.config.json'), JSON.stringify({ ignore: ['math.ts'] }));
+  await runChecker(['maint', '.', '--json'], root);
+  assert.deepEqual(delta(before), { hits: 0, misses: 1, bypasses: 0 });
+});

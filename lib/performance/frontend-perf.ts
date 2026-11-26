@@ -258,10 +258,8 @@ function checkReactEffect(call: CallExpression, context: PerformanceRuleContext)
   );
 }
 
-function isArrayMapCall(call: CallExpression, checker: CheckerAdapter) {
-  const callee = ts.skipOuterExpressions(call.expression);
-  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'map') return false;
-  const type = checker.getNonNullableType(checker.getTypeAtLocation(callee.expression));
+function isArrayExpression(expression: Expression, checker: CheckerAdapter) {
+  const type = checker.getNonNullableType(checker.getTypeAtLocation(expression));
   const name = type.getSymbol()?.name;
   return name === 'Array' || name === 'ReadonlyArray';
 }
@@ -310,14 +308,19 @@ function indexKeyAttribute(element: Expression, indexName: string): JsxAttribute
 }
 
 function checkReactIndexKey(call: CallExpression, context: PerformanceRuleContext) {
-  if (!isArrayMapCall(call, context.checker)) return;
+  const callee = ts.skipOuterExpressions(call.expression);
+  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'map') return;
   const callback = mapCallback(call);
   const indexParameter = callback?.parameters[1]?.name;
   if (!indexParameter || !ts.isIdentifier(indexParameter)) return;
-  if (isStaticList(call, context.checker)) return;
+  const attributes: JsxAttributeLike[] = [];
   for (const item of returnedExpressions(callback)) {
     const attribute = indexKeyAttribute(item, indexParameter.text);
-    if (!attribute) continue;
+    if (attribute) attributes.push(attribute);
+  }
+  if (!attributes.length) return;
+  if (!isArrayExpression(callee.expression, context.checker) || isStaticList(call, context.checker)) return;
+  for (const attribute of attributes) {
     context.report(
       attribute,
       'react-index-as-key',
@@ -415,6 +418,7 @@ function destroyHookReleases(classNode: ClassDeclaration): boolean {
 }
 
 function checkAngularClass(classNode: ClassDeclaration, context: PerformanceRuleContext) {
+  if (!ts.canHaveDecorators(classNode) || !ts.getDecorators(classNode)?.length) return;
   checkAngularChangeDetection(classNode, context);
   if (!isAngularComponentOrDirective(classNode, context.checker)) return;
   if (destroyHookReleases(classNode)) return;
@@ -460,9 +464,9 @@ function vueLeakInCallback(callback: Node, checker: CheckerAdapter): Leak | unde
 }
 
 function checkVueMounted(call: CallExpression, context: PerformanceRuleContext) {
-  if (!isVueImport(call.expression, context.checker, 'onMounted')) return;
   const callback = call.arguments[0] && ts.skipOuterExpressions(call.arguments[0]);
   if (!callback || !ts.isFunctionLike(callback)) return;
+  if (!isVueImport(call.expression, context.checker, 'onMounted')) return;
   if (scopeRegistersUnmount(enclosingScope(call), context.checker)) return;
   const leak = vueLeakInCallback(callback, context.checker);
   if (!leak) return;
@@ -499,11 +503,15 @@ function isChildrenArgument(expression: Expression, checker: CheckerAdapter) {
 }
 
 function checkVueListKey(call: CallExpression, context: PerformanceRuleContext) {
-  if (!isArrayMapCall(call, context.checker) || isStaticList(call, context.checker)) return;
+  const callee = ts.skipOuterExpressions(call.expression);
+  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'map') return;
   const callback = mapCallback(call);
   if (!callback) return;
-  for (const item of returnedExpressions(callback)) {
-    if (!ts.isCallExpression(item) || !isVueImport(item.expression, context.checker, 'h')) continue;
+  const calls = returnedExpressions(callback).filter(ts.isCallExpression);
+  if (!calls.length) return;
+  if (!isArrayExpression(callee.expression, context.checker) || isStaticList(call, context.checker)) return;
+  for (const item of calls) {
+    if (!isVueImport(item.expression, context.checker, 'h')) continue;
     if (!lacksKnownKey(item, context.checker)) continue;
     context.report(
       item,

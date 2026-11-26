@@ -339,4 +339,4 @@ function libraryCall(
   if (method && uniqueMethodNames.has(method)) return { module: undefined, exported: undefined, method, tier: 'name' };
 }
 
-export { stripExpression, libraryCall, importedFrom, declaredTypeImport, uniqueMethodNames, moduleName };
+export { stripExpression, libraryCall, importedFrom, declaredTypeImport, moduleName };

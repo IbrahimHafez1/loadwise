@@ -131,7 +131,8 @@ function prismaFix(entry: LoadedFile, declaration: DeclarationLink, finding: Fin
   if (!modelName || typeof suggestion !== 'string' || !prismaSuggestion.test(suggestion)) return;
   const lines = entry.text.split('\n').map((line) => line.replace(/\r$/, ''));
   const openingRow = declaration.line - 1;
-  const opening = new RegExp(`^\\s*model\\s+${modelName}\\s*\\{`);
+  const escapedModelName = modelName.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const opening = new RegExp(`^\\s*model\\s+${escapedModelName}\\s*\\{`);
   if (!opening.test(lines[openingRow] ?? '')) return;
   const closingRow = closingRowOf(lines, openingRow);
   if (closingRow === undefined || closingRow <= openingRow) return;

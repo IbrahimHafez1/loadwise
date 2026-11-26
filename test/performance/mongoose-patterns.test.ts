@@ -188,3 +188,11 @@ test('reports an untyped model(...) receiver when mongoose types are missing', (
   ).filter((finding: Finding) => finding.ruleId === 'mongoose-aggregate-uncast-id');
   assert.equal(found.length, 1);
 });
+
+test('treats ternary condition on a stored document as a presence check', () => {
+  const found = hydrate(
+    mongooseModel +
+      'export async function load(id: string) {\n  const user = await User.findById(id);\n  return user ? user.toObject() : null;\n}',
+  );
+  assert.equal(found.length, 1);
+});

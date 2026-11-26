@@ -182,6 +182,23 @@ function reportUnparsablePolyglot(skippedFiles: SkippedFile[], polyglot: Pick<Po
   for (const { file, parseError } of polyglot.unparsable) reportUnparsable(skippedFiles, file, parseError);
 }
 
+async function analyzeWithPolyglot(
+  root: string,
+  jsFiles: readonly string[],
+  otherSources: readonly string[],
+  parallelFrom: number,
+  options: AnalysisOptions,
+): Promise<{ analyses: SourceAnalysis[]; polyglot: PolyglotAnalysis }> {
+  const polyglotPromise = analyzePolyglot({ root, files: otherSources });
+  try {
+    const analyses = await analyzeFiles(root, jsFiles, parallelFrom, options);
+    return { analyses, polyglot: await polyglotPromise };
+  } catch (error) {
+    await polyglotPromise.catch(() => {});
+    throw error;
+  }
+}
+
 async function scan(
   root: string,
   policy: MaintainabilityPolicy,
@@ -210,7 +227,7 @@ async function scan(
   const skippedFiles: SkippedFile[] = [];
   const identifierIndex = createIdentifierIndex(root, indexIdentifiers);
   const fileFacts = new Map<string, SourceFacts>();
-  const analyses = await analyzeFiles(root, jsFiles, parallelFrom, {
+  const { analyses, polyglot } = await analyzeWithPolyglot(root, jsFiles, otherSources, parallelFrom, {
     dataAccess: policy.dataAccess,
     limits: policy.limits,
     indexIdentifiers: identifierIndex !== undefined,
@@ -234,7 +251,6 @@ async function scan(
     constEnums.set(file, analysis.constEnums);
     usages.push(analysis.usage);
   }
-  const polyglot = await analyzePolyglot({ root, files: otherSources });
   for (const finding of polyglot.findings) findings.push(finding);
   reportUnparsablePolyglot(skippedFiles, polyglot);
   for (const finding of duplicates.findings()) findings.push(finding);

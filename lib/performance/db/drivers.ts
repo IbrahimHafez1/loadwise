@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { parseEnv } from 'node:util';
+import { isTempRoot, safeExists } from '../../shared/project-root.js';
 import { createRedactor, parseConnectionUrl } from './redact.js';
 import type {
   ConnectionParts,
@@ -165,7 +166,8 @@ function resolveConnection({
 function findProjectRoot(start: string) {
   const begin = path.resolve(start);
   for (let directory = begin; ; directory = path.dirname(directory)) {
-    if (fs.existsSync(path.join(directory, 'package.json'))) return directory;
+    if (isTempRoot(directory)) return begin;
+    if (safeExists(path.join(directory, 'package.json'))) return directory;
     if (path.dirname(directory) === directory) return begin;
   }
 }
@@ -273,7 +275,13 @@ async function connectMongo(driver: MongoDriver, connection: DbConnection): Prom
     appName: applicationName,
   });
   await client.connect();
-  const databaseName = connection.databaseName || client.db().databaseName;
+  let databaseName: string;
+  try {
+    databaseName = connection.databaseName || client.db().databaseName;
+  } catch (error) {
+    await client.close(true).catch(() => {});
+    throw error;
+  }
   return {
     engine: 'mongo',
     databaseName,

@@ -181,4 +181,4 @@ function checkTestCall(call: CallExpression, context: SecurityRuleContext) {
   if (isFlawedRegexLiteral(pattern) || isUnescapedDynamicPattern(pattern)) context.report(pattern, ruleId, message);
 }
 
-export { checkOriginOption, checkTestCall, buildFix, fixedRegexLiteral, patternFlaws };
+export { checkOriginOption, checkTestCall, buildFix, fixedRegexLiteral };

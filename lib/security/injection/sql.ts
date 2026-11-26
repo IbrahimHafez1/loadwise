@@ -57,6 +57,16 @@ const typeormJoinMethods = new Set([
 ]);
 const knexRawMethods = new Set(['whereRaw', 'havingRaw', 'orderByRaw', 'groupByRaw', 'joinRaw', 'fromRaw']);
 const sequelizeModules = new Set(['sequelize', 'sequelize-typescript']);
+const allSqlMethods = new Set([
+  ...prismaUnsafeMethods,
+  'raw',
+  ...typeormBuilderMethods,
+  ...typeormJoinMethods,
+  ...knexRawMethods,
+  'query',
+  'execute',
+  'literal',
+]);
 
 const messages: Record<string, (suffix: string) => string> = {
   'prisma-raw-unsafe-dynamic': (suffix) =>
@@ -471,7 +481,9 @@ function drizzleText(call: CallExpression, method: string, library: LibraryCall 
 }
 
 function check(call: CallExpression, context: SecurityRuleContext) {
+  if (!call.arguments.length) return;
   const method = methodName(call);
+  if (method !== undefined && !allSqlMethods.has(method)) return;
   const library = context.libraryCall(call);
   const prisma = method && prismaText(call, method);
   if (prisma) return checkText(prisma, call, 'prisma-raw-unsafe-dynamic', context);

@@ -1,10 +1,10 @@
 // Looks up npm package versions in the GitHub Advisory Database through the OSV API. Only package
 // names and versions leave the machine. Answers are cached for a day so a repeated run makes no
 // requests.
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { writeFileAtomic } from '../../shared/atomic-write.js';
 import { isRecord } from '../../shared/is-record.js';
 import type {
   OsvRecord,
@@ -93,11 +93,8 @@ function readCache(cacheDirectory: string | undefined, now: number): OsvCache {
 // A cache that cannot be written only costs speed, so failures here must not fail the check.
 function writeCache(cacheDirectory: string, cache: OsvCache) {
   try {
-    fs.mkdirSync(cacheDirectory, { recursive: true });
-    const filename = path.join(cacheDirectory, cacheFileName);
-    const temporary = `${filename}.${crypto.randomBytes(4).toString('hex')}.tmp`;
-    fs.writeFileSync(temporary, JSON.stringify(cache));
-    fs.renameSync(temporary, filename);
+    fs.mkdirSync(cacheDirectory, { recursive: true, mode: 0o700 });
+    writeFileAtomic(path.join(cacheDirectory, cacheFileName), JSON.stringify(cache), 0o600);
   } catch {
     // Ignored on purpose; see above.
   }
@@ -138,7 +135,10 @@ async function requestJson<Body>(
       `Could not reach the OSV vulnerability database (${describeNetworkError(error)}). Check the network connection and retry.`,
     );
   }
-  if (!response.ok) throw new Error(`The OSV vulnerability database answered HTTP ${response.status} for ${url}.`);
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => {});
+    throw new Error(`The OSV vulnerability database answered HTTP ${response.status} for ${url}.`);
+  }
   // A proxy or captive portal can answer 200 with HTML or an empty body; that must read as a
   // database problem.
   const body: unknown = await response.json().catch(() => null);
@@ -210,7 +210,7 @@ async function queryBatch(
 }
 
 async function fetchVulnerabilities(fetchImpl: typeof fetch, origin: string, ids: readonly string[]) {
-  const fetched: OsvVulnerability[] = [];
+  const fetched: [string, OsvVulnerability][] = [];
   const pending = [...ids];
   const workers = Array.from({ length: Math.min(detailConcurrency, pending.length) }, async () => {
     for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
@@ -219,7 +219,7 @@ async function fetchVulnerabilities(fetchImpl: typeof fetch, origin: string, ids
         `${origin}/v1/vulns/${encodeURIComponent(id)}`,
         isVulnerabilityRecord,
       );
-      fetched.push(summarizeVulnerability(detail));
+      fetched.push([id, summarizeVulnerability(detail)]);
     }
   });
   await Promise.all(workers);
@@ -235,7 +235,14 @@ async function findVulnerabilities(
   const cachePath = cacheDirectory ?? (origin === osvOrigin ? defaultCacheDirectory() : undefined);
   const cache = readCache(cachePath, now);
   const keyOf = ({ name, version }: PackageVersion) => `${name}@${version}`;
-  const uncached = packages.filter((entry) => !cache.queries[keyOf(entry)]);
+  const uncached: PackageVersion[] = [];
+  const seenUncached = new Set<string>();
+  for (const entry of packages) {
+    const key = keyOf(entry);
+    if (cache.queries[key] || seenUncached.has(key)) continue;
+    seenUncached.add(key);
+    uncached.push(entry);
+  }
   for (let start = 0; start < uncached.length; start += maxBatchSize) {
     const batch = uncached.slice(start, start + maxBatchSize);
     const idLists = await queryBatch(fetchImpl, origin, batch);
@@ -245,15 +252,17 @@ async function findVulnerabilities(
   }
   const wantedIds = new Set(packages.flatMap((entry) => cache.queries[keyOf(entry)].ids));
   const missingIds = [...wantedIds].filter((id) => !cache.vulnerabilities[id]);
-  for (const vulnerability of await fetchVulnerabilities(fetchImpl, origin, missingIds)) {
-    cache.vulnerabilities[vulnerability.id] = { at: now, vulnerability };
+  for (const [requestedId, vulnerability] of await fetchVulnerabilities(fetchImpl, origin, missingIds)) {
+    const entry = { at: now, vulnerability };
+    cache.vulnerabilities[requestedId] = entry;
+    cache.vulnerabilities[vulnerability.id] = entry;
   }
   if (cachePath && (uncached.length || missingIds.length)) writeCache(cachePath, cache);
   const found = new Map<string, OsvVulnerability[]>();
   for (const entry of packages) {
     const vulnerabilities = cache.queries[keyOf(entry)].ids
-      .map((id) => cache.vulnerabilities[id].vulnerability)
-      .filter(({ withdrawn }) => !withdrawn);
+      .map((id) => cache.vulnerabilities[id]?.vulnerability)
+      .filter((vulnerability): vulnerability is OsvVulnerability => Boolean(vulnerability && !vulnerability.withdrawn));
     if (vulnerabilities.length) found.set(keyOf(entry), vulnerabilities);
   }
   return found;

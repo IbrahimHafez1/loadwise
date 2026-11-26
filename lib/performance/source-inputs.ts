@@ -87,7 +87,6 @@ function relativeToWorkingDirectory(filename: string): string {
   return path.relative(process.cwd(), filename).split(path.sep).join('/');
 }
 
-export type { ScanEntry };
 export {
   compareFindings,
   isInScope,

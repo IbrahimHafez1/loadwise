@@ -511,5 +511,4 @@ function checkNodeBlockingCall(
   if (origin && !origin.method) reportBlockingCall(call, { moduleName: origin.moduleName, method }, context);
 }
 
-export type { BlockingBinding };
 export { blockingBinding, checkNodeBlockingCall, flushBlockingCalls, privateProcessEntries };

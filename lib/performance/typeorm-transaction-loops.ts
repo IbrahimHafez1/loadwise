@@ -168,5 +168,4 @@ function createTransactionLoopCheck(
   };
 }
 
-export type { TransactionLoopTarget };
 export { createTransactionLoopCheck, transactionLoopTarget };

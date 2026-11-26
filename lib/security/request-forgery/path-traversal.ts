@@ -53,14 +53,16 @@ const onePathFunctions = new Set([
 ]);
 // fs functions that take a source and a destination path.
 const twoPathFunctions = new Set(['copy', 'copyFile', 'cp', 'link', 'move', 'rename', 'symlink']);
+const allPathFunctions = new Set([...onePathFunctions, ...twoPathFunctions]);
 
 function baseName(name: string | undefined) {
-  return name?.replace(/Sync$/, '');
+  return name?.endsWith('Sync') ? name.slice(0, -4) : name;
 }
 
 // The path arguments of an fs call, or of `res.sendFile` / `res.download` / `res.render` without a
 // `root` option.
 function pathArguments(call: CallExpression, context: SecurityRuleContext): readonly Expression[] {
+  if (!call.arguments.length) return [];
   const callee = strip(call.expression);
   if (ts.isPropertyAccessExpression(callee) && isResponseReceiver(callee.expression)) {
     const method = callee.name.text;
@@ -70,6 +72,10 @@ function pathArguments(call: CallExpression, context: SecurityRuleContext): read
     return call.arguments.slice(1).some((argument: Expression) => hasProperty(argument, 'root'))
       ? []
       : call.arguments.slice(0, 1);
+  }
+  if (ts.isPropertyAccessExpression(callee)) {
+    const base = baseName(callee.name.text);
+    if (base === undefined || !allPathFunctions.has(base)) return [];
   }
   const library = context.libraryCall(call);
   if (!library || library.module === undefined || !fsModules.has(library.module)) return [];

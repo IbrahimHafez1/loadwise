@@ -202,7 +202,7 @@ export interface ReportDetails {
   [detail: string]: unknown;
 }
 
-export type ReportFinding = (
+type ReportFinding = (
   node: ts.Node,
   ruleId: string,
   message: string,
@@ -266,7 +266,7 @@ export interface FileContext {
  * How a call was tied to a library: by import, by declaring type, or by a distinctive method name
  * alone.
  */
-export type LibraryCallTier = 'import' | 'type' | 'name';
+type LibraryCallTier = 'import' | 'type' | 'name';
 
 /**
  * `exec` in `import { exec } from 'child_process'`; `exported` is a name, 'default', or '*' for a
@@ -307,7 +307,7 @@ export interface TraceStep {
   text: string;
 }
 
-export type TraceShape = 'string' | 'object' | 'unknown';
+type TraceShape = 'string' | 'object' | 'unknown';
 
 /** A sink argument that traces back to request data. */
 export interface Trace {
@@ -321,7 +321,7 @@ export interface Trace {
   steps: TraceStep[];
 }
 
-export type TaintKind = 'whole' | 'scalar';
+type TaintKind = 'whole' | 'scalar';
 
 /** A request object whose listed fields, element and method results are client data. */
 export interface TaintContainer {
@@ -349,7 +349,7 @@ export interface SchemaShape {
 }
 
 /** The function whose parameter a return summary treats as the only tainted value. */
-export interface SummaryState {
+interface SummaryState {
   fn: ts.SignatureDeclaration;
   index: number;
 }

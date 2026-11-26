@@ -215,17 +215,20 @@ function schemaText(fileName: string): string {
   return text;
 }
 
+const FIELDS_LIST = /fields\s*:\s*\[([^\]]*)\]/;
+const REFERENCES_LIST = /references\s*:\s*\[([^\]]*)\]/;
+
 function relationAttribute(rest: string): RelationAttribute | undefined {
   const match = /@relation\(([^)]*)\)/.exec(rest);
   if (!match) return;
-  const list = (key: string) =>
-    new RegExp(`${key}\\s*:\\s*\\[([^\\]]*)\\]`)
+  const list = (pattern: RegExp) =>
+    pattern
       .exec(match[1])?.[1]
       .split(',')
       .map((item) => item.trim())
       .filter(Boolean);
   const name = /^\s*"([^"]*)"/.exec(match[1])?.[1] ?? /name\s*:\s*"([^"]*)"/.exec(match[1])?.[1];
-  return { name, fields: list('fields'), references: list('references') };
+  return { name, fields: list(FIELDS_LIST), references: list(REFERENCES_LIST) };
 }
 
 // model name -> [{ name, type, list, relation }]
@@ -438,6 +441,7 @@ function countedRelations(
     if (!key) return;
     relations.push({ name, ...key, where: filter.where });
   }
+  if (!relations.length) return;
   const reference = relations[0].reference;
   if (relations.some((relation) => relation.reference !== reference)) return;
   return { relations, reference };

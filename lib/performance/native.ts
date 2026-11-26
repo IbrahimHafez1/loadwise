@@ -257,7 +257,7 @@ function analyzeNative({
           if (finding.file !== undefined) finding.file = relativeToWorkingDirectory(finding.file);
           mergeFinding(
             findings,
-            JSON.stringify([key, finding.line, finding.column, finding.ruleId, finding.message]),
+            `${key}\0${finding.line}\0${finding.column}\0${finding.ruleId}\0${finding.message}`,
             finding,
           );
         }

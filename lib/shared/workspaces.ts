@@ -5,6 +5,7 @@ import path from 'node:path';
 import { globExpression } from './glob.js';
 import { errorCode } from './error-code.js';
 import { isRecord } from './is-record.js';
+import { isTempRoot } from './project-root.js';
 import * as ts from 'typescript';
 import { listFiles } from '../maintainability/inputs.js';
 
@@ -226,6 +227,7 @@ function packagesByName(workspaceRoot: string, patterns: readonly string[]): Map
 // a sibling package can resolve to its source before it is built or linked.
 function workspacePackagesAround(directory: string): Map<string, string> {
   for (let current = path.resolve(directory); ; current = path.dirname(current)) {
+    if (isTempRoot(current)) return new Map<string, string>();
     const patterns =
       isFile(path.join(current, 'package.json')) || isFile(path.join(current, 'pnpm-workspace.yaml'))
         ? workspacePatterns(current)
@@ -248,7 +250,7 @@ function workspaceSourceEntry(directory: string, subpath: string): string | unde
   if (!subpath) {
     let manifest: Record<string, unknown>;
     try {
-      manifest = JSON.parse(fs.readFileSync(path.join(directory, 'package.json'), 'utf8'));
+      manifest = readJson(path.join(directory, 'package.json')) ?? {};
     } catch {
       manifest = {};
     }
@@ -299,10 +301,21 @@ function plainJavaScriptSources(directory: string): string[] | undefined {
   return sources.length ? sources : undefined;
 }
 
+const missingFileCode = 6053;
+
+// A missing non-relative tsconfig base (`"extends": "@org/tsconfig/base.json"`) is a package that
+// is not installed; a missing relative base or input file stays fatal.
+function missingPackageBase(diagnostic: ts.Diagnostic): string | undefined {
+  if (diagnostic.code !== missingFileCode) return undefined;
+  const missing = /'([^']+)'/.exec(ts.flattenDiagnosticMessageText(diagnostic.messageText, ' '))?.[1];
+  return missing !== undefined && !/^(?:\.|\/|[a-z]:)/i.test(missing) ? missing : undefined;
+}
+
 export {
   coveringConfig,
   discoverWorkspaces,
   isWithin,
+  missingPackageBase,
   projectConfig,
   selectWorkspaces,
   plainJavaScriptSources,

@@ -160,4 +160,4 @@ function withoutAliasDuplicates(vulnerabilities: OsvVulnerability[]): OsvVulnera
   return kept.sort((left, right) => left.id.localeCompare(right.id));
 }
 
-export { severityLevel, highestSeverity, fixedVersion, withoutAliasDuplicates, compareVersions, cvssV3BaseScore };
+export { severityLevel, highestSeverity, fixedVersion, withoutAliasDuplicates, cvssV3BaseScore };

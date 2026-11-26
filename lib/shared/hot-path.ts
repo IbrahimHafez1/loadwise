@@ -21,4 +21,4 @@ function hotPathLabel(finding: Finding): string | undefined {
   return finding.hotPath ? rankLabels[finding.hotPath.rank] : undefined;
 }
 
-export { hotPathRanks, hotPathOrder, hotPathLabel };
+export { hotPathOrder, hotPathLabel };

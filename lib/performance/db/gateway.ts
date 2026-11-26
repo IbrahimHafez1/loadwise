@@ -107,7 +107,10 @@ function createGateway(adapter: RelationalAdapter, options: GatewayOptions = {})
 
   // Ctrl+C mid-transaction still rolls back, then ends the session so nothing can stay open.
   async function withInterruptGuard<Result>(rollbackStatement: string, body: () => Promise<Result>) {
+    let interrupted = false;
     const onInterrupt = () => {
+      if (interrupted) return;
+      interrupted = true;
       rollbackOrDestroy(rollbackStatement)
         .then(() => destroy())
         .catch(() => {})
@@ -216,4 +219,4 @@ function createGateway(adapter: RelationalAdapter, options: GatewayOptions = {})
   };
 }
 
-export { createGateway, GatewayRefusal, interruptExitCode };
+export { createGateway, GatewayRefusal };

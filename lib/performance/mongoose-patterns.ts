@@ -191,6 +191,7 @@ function isPresenceCheck(reference: Node): boolean {
   const parent = reference.parent;
   if (ts.isPrefixUnaryExpression(parent)) return parent.operator === ts.SyntaxKind.ExclamationToken;
   if (ts.isIfStatement(parent)) return parent.expression === reference;
+  if (ts.isConditionalExpression(parent)) return parent.condition === reference;
   if (ts.isBinaryExpression(parent) && isNullComparisonOperator(parent.operatorToken.kind)) {
     return isNullLiteral(parent.left === reference ? parent.right : parent.left);
   }

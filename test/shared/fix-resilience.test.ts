@@ -187,3 +187,42 @@ test('resilience: temp project without package.json stops upward root walks at o
   const fixRes = runCli(root, ['fix', '--yes', '--dry-run', '--json']);
   assert.notEqual(fixRes.status, 2, fixRes.stderr);
 });
+
+test('resilience: Layer-2 typecheck matches virtual overrides regardless of Windows drive/path case', (context) => {
+  const root = tempProject(context, {
+    'tsconfig.json': JSON.stringify({
+      compilerOptions: { target: 'ES2022', module: 'NodeNext', strict: true, noEmit: true },
+    }),
+    'src/index.ts': 'export const answer: number = 42;\n',
+  });
+  const file = path.join(root, 'src', 'index.ts');
+  const altCaseFile =
+    process.platform === 'win32' ? file[0].toLowerCase() + file.slice(1).replace('index.ts', 'INDEX.ts') : file;
+  const result = applyBulkFixes(
+    [
+      {
+        id: 'case1',
+        ruleId: 'r1',
+        checker: 'perf',
+        file: 'src/index.ts',
+        line: 1,
+        message: 'break type',
+        fix: {
+          changes: [
+            {
+              file: altCaseFile,
+              line: 1,
+              before: 'export const answer: number = 42;',
+              after: 'export const answer: number = "bad";',
+            },
+          ],
+        },
+      },
+    ],
+    root,
+    { verifyTypes: true },
+  );
+  assert.equal(result.applied.length, 0);
+  assert.equal(result.refused.length, 1);
+  assert.match(result.refused[0].reason, /TS2322/);
+});

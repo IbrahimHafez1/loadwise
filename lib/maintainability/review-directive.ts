@@ -67,7 +67,7 @@ function createSourceLoader(root: string) {
     try {
       if (scriptKind !== undefined) {
         const text = fs.readFileSync(path.resolve(root, file), 'utf8').replace(/^\uFEFF/, '');
-        entry = { text, lines: text.split('\n'), scriptKind };
+        if (text.includes('-reviewed')) entry = { text, lines: text.split('\n'), scriptKind };
       }
     } catch (error) {
       if (!(error instanceof Error)) throw error;

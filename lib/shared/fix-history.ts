@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { isAgentSession } from './agent-session.js';
+import { renameWithRetry } from './atomic-write.js';
 import type { Finding, FixChange } from './types.js';
 import type { HistoryStorage, ReviewOutcome } from './types/review-history.js';
 import { findProjectRoot } from './agent-init.js';
@@ -201,7 +202,7 @@ function writeRecord(directory: string, filenameSuffix: string, data: object): v
     } finally {
       fs.closeSync(fd);
     }
-    fs.renameSync(temporary, prefix + filenameSuffix);
+    renameWithRetry(temporary, prefix + filenameSuffix);
   } finally {
     fs.rmSync(temporary, { force: true });
   }

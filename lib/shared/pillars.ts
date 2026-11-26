@@ -112,9 +112,23 @@ async function withContractChecks(
   const stderr = perfRun.stderr + contracts.stderr;
   if (contracts.code === invalidInputCode) return { ...perfRun, code, stderr };
   if (!contractFlags.includes('--json')) return { code, stdout: perfRun.stdout + contracts.stdout, stderr };
-  const perfReport: FindingsReport = perfRun.stdout.trim() ? JSON.parse(perfRun.stdout) : { findings: [] };
-  const { findings }: FindingsReport = JSON.parse(contracts.stdout);
-  return { code, stdout: JSON.stringify({ ...perfReport, findings: [...perfReport.findings, ...findings] }), stderr };
+  let perfReport: FindingsReport;
+  let contractReport: FindingsReport;
+  try {
+    perfReport = perfRun.stdout.trim() ? JSON.parse(perfRun.stdout) : { findings: [] };
+    contractReport = JSON.parse(contracts.stdout);
+  } catch {
+    return {
+      code: invalidInputCode,
+      stdout: '',
+      stderr: stderr || 'Checker produced invalid JSON output.\n',
+    };
+  }
+  return {
+    code,
+    stdout: JSON.stringify({ ...perfReport, findings: [...perfReport.findings, ...contractReport.findings] }),
+    stderr,
+  };
 }
 
 // What `-p` names for the folder's own config. A tsconfig.json beside a jsconfig.json is passed as

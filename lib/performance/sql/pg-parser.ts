@@ -36,8 +36,13 @@ async function ensureLoaded(): Promise<void> {
   if (queryModule) return;
   // Lazy: the WASM module is only paid for when a Postgres migration is actually parsed.
   loading ??= (async () => {
-    await loaded.loadModule();
-    queryModule = loaded;
+    try {
+      await loaded.loadModule();
+      queryModule = loaded;
+    } catch (error) {
+      loading = null;
+      throw error;
+    }
   })();
   await loading;
 }
@@ -196,12 +201,39 @@ function stripLeadingByteOrderMark(text: string) {
   return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
 }
 
+const MAX_PARSE_CACHE = 512;
+const MAX_CACHED_CHUNK_LENGTH = 16_384;
+const parseCache = new Map<string, ChunkParse>();
+
 function parseChunk(chunk: string): ChunkParse {
-  try {
-    return { result: requireLoaded().parseSync(chunk) };
-  } catch (error) {
-    return { failure: error };
+  const parser = requireLoaded();
+  if (chunk.length > MAX_CACHED_CHUNK_LENGTH) {
+    try {
+      return { result: parser.parseSync(chunk) };
+    } catch (error) {
+      return { failure: error };
+    }
   }
+  const cached = parseCache.get(chunk);
+  if (cached) {
+    if (parseCache.size >= MAX_PARSE_CACHE) {
+      parseCache.delete(chunk);
+      parseCache.set(chunk, cached);
+    }
+    return cached;
+  }
+  let parsed: ChunkParse;
+  try {
+    parsed = { result: parser.parseSync(chunk) };
+  } catch (error) {
+    parsed = { failure: error };
+  }
+  parseCache.set(chunk, parsed);
+  if (parseCache.size > MAX_PARSE_CACHE) {
+    const oldest = parseCache.keys().next().value;
+    if (oldest !== undefined) parseCache.delete(oldest);
+  }
+  return parsed;
 }
 
 function readCursorPosition(failure: unknown): unknown {

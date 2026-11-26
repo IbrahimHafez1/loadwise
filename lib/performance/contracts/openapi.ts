@@ -155,12 +155,18 @@ function isOpenApiNode(value: unknown): value is OpenApiNode {
 
 function resolveReference(document: OpenApiDocument, reference: string) {
   if (!reference.startsWith('#/')) return undefined;
-  const segments = reference
-    .slice(2)
-    .split('/')
-    .map((segment) => decodeURIComponent(segment).replaceAll('~1', '/').replaceAll('~0', '~'));
+  const segments: string[] = [];
+  for (const part of reference.slice(2).split('/')) {
+    try {
+      segments.push(decodeURIComponent(part).replaceAll('~1', '/').replaceAll('~0', '~'));
+    } catch {
+      return undefined;
+    }
+  }
   let value: unknown = document;
-  for (const segment of segments) value = isRecord(value) ? value[segment] : undefined;
+  for (const segment of segments) {
+    value = isRecord(value) && Object.hasOwn(value, segment) ? value[segment] : undefined;
+  }
   return isOpenApiNode(value) ? { value, segments } : undefined;
 }
 
@@ -170,12 +176,21 @@ function resolveSchema(document: OpenApiDocument, schema: OpenApiNode | undefine
   return target ? { schema: target.value, segments: target.segments } : { schema: undefined, segments };
 }
 
-function schemaType(document: OpenApiDocument, rawSchema: OpenApiNode | undefined): string {
+function schemaType(
+  document: OpenApiDocument,
+  rawSchema: OpenApiNode | undefined,
+  seen = new Set<OpenApiNode>(),
+): string {
   const { schema } = resolveSchema(document, rawSchema, []);
-  if (!schema) return 'any';
-  if (schema.type === 'array') return `array<${schemaType(document, schema.items)}>`;
-  if (typeof schema.type === 'string') return schema.type;
-  return schema.properties ? 'object' : 'any';
+  if (!schema || seen.has(schema)) return 'any';
+  seen.add(schema);
+  try {
+    if (schema.type === 'array') return `array<${schemaType(document, schema.items, seen)}>`;
+    if (typeof schema.type === 'string') return schema.type;
+    return schema.properties ? 'object' : 'any';
+  } finally {
+    seen.delete(schema);
+  }
 }
 
 interface SchemaPart {

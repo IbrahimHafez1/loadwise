@@ -8,6 +8,7 @@ import { scanDependencies } from '../../lib/security/deps/scan.js';
 import { findLockfile, readLockfilePackages } from '../../lib/security/deps/lockfiles.js';
 import { cvssV3BaseScore } from '../../lib/security/deps/advisory.js';
 import { main as depsMain } from '../../lib/security/deps/cli.js';
+import { findVulnerabilities } from '../../lib/security/deps/osv.js';
 import { main as securityMain } from '../../lib/security/cli.js';
 import { asResponse } from '../types/osv-fake.js';
 import type { TestContext } from 'node:test';
@@ -425,4 +426,30 @@ test('sec deps --online without a lockfile exits 2 with a message', (context) =>
   const run = spawnSync(process.execPath, args, { encoding: 'utf8', windowsHide: true });
   assert.equal(run.status, 2);
   assert.match(run.stderr, /No package-lock\.json, pnpm-lock\.yaml or yarn\.lock found/);
+});
+
+test('OSV lookup deduplicates repeated packages and handles canonical advisory id mismatches', async (context) => {
+  const seenQueries: number[] = [];
+  async function fetchImpl(input: string | URL | Request, init: RequestInit = {}): Promise<Response> {
+    const url = String(input);
+    if (url.endsWith('/v1/querybatch')) {
+      const body: { queries: unknown[] } = JSON.parse(String(init.body));
+      seenQueries.push(body.queries.length);
+      return asResponse({ ok: true, status: 200, json: async () => ({ results: [{ vulns: [{ id: 'OLD-ID-1' }] }] }) });
+    }
+    return asResponse({
+      ok: true,
+      status: 200,
+      json: async () => vulnerability('GHSA-canonical-1'),
+    });
+  }
+  const found = await findVulnerabilities(
+    [
+      { name: 'alpha', version: '1.0.0' },
+      { name: 'alpha', version: '1.0.0' },
+    ],
+    { fetchImpl, cacheDirectory: cacheDirectory(context) },
+  );
+  assert.deepEqual(seenQueries, [1]);
+  assert.equal(found.get('alpha@1.0.0')?.[0].id, 'GHSA-canonical-1');
 });

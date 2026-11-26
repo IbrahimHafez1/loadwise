@@ -28,6 +28,8 @@ const compilerOptions: CompilerOptions = {
   types: [],
 };
 
+let previousProgram: WeakRef<Program> | undefined;
+
 function programFor(sourceFile: SourceFile): Program {
   const host: CompilerHost = {
     getSourceFile: (name) => (name === sourceFile.fileName ? sourceFile : libFile(name)),
@@ -40,7 +42,14 @@ function programFor(sourceFile: SourceFile): Program {
     fileExists: (name) => name === sourceFile.fileName || libFile(name) !== undefined,
     readFile: () => undefined,
   };
-  return ts.createProgram({ rootNames: [sourceFile.fileName], options: compilerOptions, host });
+  const program = ts.createProgram({
+    rootNames: [sourceFile.fileName],
+    options: compilerOptions,
+    host,
+    oldProgram: previousProgram?.deref(),
+  });
+  previousProgram = new WeakRef(program);
+  return program;
 }
 
 const originalPrograms = new WeakMap<SourceFile, Program>();

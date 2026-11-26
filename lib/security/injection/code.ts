@@ -8,6 +8,7 @@ import type { CheckerAdapter, SecurityRuleContext } from '../../shared/types.js'
 
 const evaluatingGlobals = new Set(['eval', 'Function', 'setTimeout', 'setInterval', 'require']);
 const vmFunctions = new Set(['runInNewContext', 'runInContext', 'runInThisContext', 'compileFunction', 'Script']);
+const vmAndSerializeMethods = new Set([...vmFunctions, 'unserialize']);
 const parameterEvaluators = new Set(['eval', 'Function']);
 const parameterReason =
   'Contextual: the evaluated text comes from a function parameter; confirm callers never pass untrusted input.';
@@ -22,6 +23,7 @@ const templateCompilers: Record<string, ReadonlySet<string>> = {
   'lodash.template': new Set(['default']),
   'lodash/template': new Set(['default']),
 };
+const templateMethodNames = new Set(['render', 'compile', 'precompile', 'renderString', 'template', 'default']);
 
 function codeMessage(label: string) {
   return `\`${label}\` is evaluated as code here. Parse the input as data (\`JSON.parse\`, a schema) or map it to a fixed set of functions.`;
@@ -33,23 +35,28 @@ function templateMessage(label: string) {
 
 // The arguments evaluated as code by this call or `new` expression.
 function codeInputs(node: CallExpression | NewExpression, context: SecurityRuleContext): (Expression | undefined)[] {
+  if (!node.arguments?.length) return [];
   const callee = ts.skipOuterExpressions(node.expression);
   if (ts.isCallExpression(node) && callee.kind === ts.SyntaxKind.ImportKeyword) return [node.arguments[0]];
   if (isGlobalName(callee, evaluatingGlobals, context.checker)) {
-    if (callee.text === 'Function') return [...(node.arguments ?? [])];
+    if (callee.text === 'Function') return [...node.arguments];
     if (ts.isNewExpression(node)) return [];
     const [first] = node.arguments;
     // A function passed to a timer is not evaluated as text.
     return first && !ts.isFunctionLike(first) ? [first] : [];
   }
+  if (ts.isPropertyAccessExpression(callee) && !vmAndSerializeMethods.has(callee.name.text)) return [];
   const library = context.libraryCall(node);
   const name = calledExport(library);
-  if (library?.module === 'vm' && name !== undefined && vmFunctions.has(name)) return [node.arguments?.[0]];
-  if (library?.module === 'node-serialize' && name === 'unserialize') return [node.arguments?.[0]];
+  if (library?.module === 'vm' && name !== undefined && vmFunctions.has(name)) return [node.arguments[0]];
+  if (library?.module === 'node-serialize' && name === 'unserialize') return [node.arguments[0]];
   return [];
 }
 
 function templateInput(call: CallExpression, context: SecurityRuleContext) {
+  if (!call.arguments.length) return undefined;
+  const callee = ts.skipOuterExpressions(call.expression);
+  if (ts.isPropertyAccessExpression(callee) && !templateMethodNames.has(callee.name.text)) return undefined;
   const library = context.libraryCall(call);
   const compiler = library?.module === undefined ? undefined : templateCompilers[library.module];
   const name = calledExport(library);

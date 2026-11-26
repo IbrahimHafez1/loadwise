@@ -3,6 +3,27 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { errorCode } from './error-code.js';
+
+const TRANSIENT_RENAME_ERRORS = new Set(['EPERM', 'EACCES', 'EBUSY']);
+const RENAME_RETRY_DELAYS_MS = [10, 20, 40, 80];
+const SLEEP_LOCK = new Int32Array(new SharedArrayBuffer(4));
+
+function renameWithRetry(from: string, to: string): void {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      fs.renameSync(from, to);
+      return;
+    } catch (error) {
+      const code = errorCode(error);
+      if (code && TRANSIENT_RENAME_ERRORS.has(code) && attempt < RENAME_RETRY_DELAYS_MS.length) {
+        Atomics.wait(SLEEP_LOCK, 0, 0, RENAME_RETRY_DELAYS_MS[attempt]);
+        continue;
+      }
+      throw error;
+    }
+  }
+}
 
 // `mode` sets the file's permissions; without it a replaced file keeps its own.
 function writeFileAtomic(filename: string, text: string, mode?: number) {
@@ -22,10 +43,10 @@ function writeFileAtomic(filename: string, text: string, mode?: number) {
     // Set after creation: the umask would narrow a mode passed to the write.
     const finalMode = mode ?? existing?.mode;
     if (finalMode !== undefined) fs.chmodSync(temporary, finalMode & 0o7777);
-    fs.renameSync(temporary, target);
+    renameWithRetry(temporary, target);
   } finally {
     fs.rmSync(temporary, { force: true });
   }
 }
 
-export { writeFileAtomic };
+export { renameWithRetry, writeFileAtomic };

@@ -307,4 +307,4 @@ function loadSettings({
   return createSettings(loaded, ignore);
 }
 
-export { configFileName, loadConfig, loadSettings };
+export { loadConfig, loadSettings };

@@ -133,6 +133,7 @@ function createSummaries(program: ProgramAdapter): TaintSummaries {
   const checker = program.getTypeChecker();
   const summaries = new WeakMap<SignatureDeclaration, Map<SinkKind, number[]>>();
   const callSitesByDeclaration = new WeakMap<SignatureDeclaration, CallExpression[]>();
+  const resolvedByName = new Map<string, Map<Node, CallExpression[]>>();
   let callsByName: Map<string, CallExpression[]> | undefined;
 
   // Parameter indexes whose value can flow to a return of `fn` for a sink kind. `flows(expression,
@@ -182,10 +183,19 @@ function createSummaries(program: ProgramAdapter): TaintSummaries {
         })(sourceFile);
       }
     }
-    const calls = (callsByName.get(name) ?? []).filter(
-      (call: CallExpression) =>
-        (checker.getResolvedSignature(call)?.declaration ?? constructorMethod(call, checker)) === fn,
-    );
+    let byDeclaration = resolvedByName.get(name);
+    if (!byDeclaration) {
+      byDeclaration = new Map<Node, CallExpression[]>();
+      for (const call of callsByName.get(name) ?? []) {
+        const target = checker.getResolvedSignature(call)?.declaration ?? constructorMethod(call, checker);
+        if (!target) continue;
+        const list = byDeclaration.get(target);
+        if (list) list.push(call);
+        else byDeclaration.set(target, [call]);
+      }
+      resolvedByName.set(name, byDeclaration);
+    }
+    const calls = byDeclaration.get(fn) ?? [];
     callSitesByDeclaration.set(fn, calls);
     return calls;
   }

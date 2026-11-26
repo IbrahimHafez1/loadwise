@@ -111,9 +111,9 @@ function retryLoopOf(node: Node): RetryLoop | undefined {
 }
 
 function checkRetryLoop(node: CallExpression, context: PerformanceRuleContext): void {
-  if (!isNetworkCall(node, context)) return;
   const loop = retryLoopOf(node);
   if (!loop || waitsInside(loop)) return;
+  if (!isNetworkCall(node, context)) return;
   context.report(
     node,
     RULE_ID,
@@ -131,8 +131,8 @@ function lacksRetryDelay(options: Expression | undefined): boolean {
 
 function checkAxiosRetry(node: CallExpression, context: PerformanceRuleContext): void {
   const callee = ts.skipOuterExpressions(node.expression);
-  if (!ts.isIdentifier(callee) || importedPackage(callee, context.checker) !== 'axios-retry') return;
-  if (!lacksRetryDelay(node.arguments[1])) return;
+  if (!ts.isIdentifier(callee) || !lacksRetryDelay(node.arguments[1])) return;
+  if (importedPackage(callee, context.checker) !== 'axios-retry') return;
   context.report(
     node,
     RULE_ID,

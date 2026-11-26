@@ -3,6 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import * as ts from 'typescript';
 import { applyFix } from '../../editor/apply-fix.cjs';
+import { renameWithRetry } from './atomic-write.js';
 import { realTarget } from './real-target.js';
 import { introducedSyntaxError, refusalReason } from './fix-safety.js';
 import { errorCode, errorMessage } from './error-code.js';
@@ -53,9 +54,6 @@ export interface WrittenFixes {
   changedFiles: number;
   updates: FileUpdate[];
 }
-
-const TRANSIENT_RENAME_ERRORS = new Set(['EPERM', 'EACCES', 'EBUSY']);
-const RENAME_RETRY_DELAYS_MS = [10, 20, 40, 80];
 
 function hasFix(finding: Finding): finding is FixableFinding {
   return Boolean(finding.fix);
@@ -118,22 +116,6 @@ function validateSource(file: string, text: string): void {
   }
   const duplicate = duplicateImplementation(source);
   if (duplicate) throw new Error(`${file}: duplicate implementation of ${duplicate}. No fixes applied.`);
-}
-
-function renameWithRetry(from: string, to: string): void {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      fs.renameSync(from, to);
-      return;
-    } catch (error) {
-      const code = errorCode(error);
-      if (code && TRANSIENT_RENAME_ERRORS.has(code) && attempt < RENAME_RETRY_DELAYS_MS.length) {
-        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, RENAME_RETRY_DELAYS_MS[attempt]);
-        continue;
-      }
-      throw error;
-    }
-  }
 }
 
 function commitStagedUpdates(staged: readonly StagedUpdate[], written: StagedUpdate[]): void {

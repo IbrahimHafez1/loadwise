@@ -1,5 +1,6 @@
 // xml-external-entities: libxmljs asked to load external entities or the DTD.
-import { objectLiteralOf, findProperty, isTrue } from './literals.js';
+import { ts } from '../../performance/compiler.js';
+import { objectLiteralOf, findProperty, isTrue, unwrap } from './literals.js';
 import type { CallExpression } from 'typescript';
 import type { SecurityRuleContext } from '../../shared/types.js';
 
@@ -11,6 +12,9 @@ const entityOptions = ['noent', 'dtdload'];
 const libxmlModules = new Set(['libxmljs', 'libxmljs2']);
 
 function check(call: CallExpression, context: SecurityRuleContext) {
+  if (call.arguments.length < 2) return;
+  const callee = unwrap(call.expression);
+  if (ts.isPropertyAccessExpression(callee) && !parseFunctions.has(callee.name.text)) return;
   const info = context.libraryCall(call);
   const functionName = info?.method ?? info?.exported;
   if (!info?.module || !libxmlModules.has(info.module) || !functionName || !parseFunctions.has(functionName)) return;

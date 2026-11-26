@@ -44,11 +44,12 @@ function sha1(content: string | Buffer): string {
 
 // Editing loadwise itself must invalidate every entry; sizes and mtimes of its sources are enough
 // for that.
-function listSources(directory: string, files: string[] = []): string[] {
+function listSources(directory: string, includeYaml = false, files: string[] = []): string[] {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const absolute = path.join(directory, entry.name);
-    if (entry.isDirectory()) listSources(absolute, files);
-    else if (entry.name.endsWith('.js') || entry.name.endsWith('.cjs')) files.push(absolute);
+    if (entry.isDirectory()) listSources(absolute, includeYaml, files);
+    else if (entry.name.endsWith('.js') || entry.name.endsWith('.cjs') || (includeYaml && entry.name.endsWith('.yml')))
+      files.push(absolute);
   }
   return files;
 }
@@ -60,7 +61,7 @@ function loadwiseFingerprint(): string {
   const sources = [
     ...listSources(path.join(root, 'lib')),
     ...listSources(path.join(root, 'bin')),
-    ...listSources(path.join(root, 'polyglot')),
+    ...listSources(path.join(root, 'polyglot'), true),
     ...listSources(path.join(root, 'editor')),
   ].sort();
   const hash = crypto.createHash('sha1').update(`${version}\n`);
@@ -110,11 +111,19 @@ function inputFingerprint(cwd: string): string | undefined {
   const names = [...new Set(listing.split('\0').filter(Boolean))].sort();
   const hash = crypto.createHash('sha256').update(topLevel);
   for (const name of names) hash.update(`\0${name}\0${fileHash(path.join(topLevel, name))}`);
+  const unindexedConfigs = new Set<string>();
   for (const directory of new Set([topLevel, path.resolve(cwd)])) {
+    for (const configName of ['loadwise-baseline.json', 'loadwise.config.json']) {
+      const candidate = path.join(directory, configName);
+      if (fs.statSync(candidate, { throwIfNoEntry: false })?.isFile()) unindexedConfigs.add(candidate);
+    }
     for (const marker of installMarkers) {
       const stat = fs.statSync(path.join(directory, marker), { throwIfNoEntry: false });
       if (stat) hash.update(`\0${directory}\0${marker}\0${stat.size}\0${stat.mtimeMs}`);
     }
+  }
+  for (const filename of [...unindexedConfigs].sort()) {
+    hash.update(`\0config\0${filename}\0${fileHash(filename)}`);
   }
   return hash.digest('hex');
 }

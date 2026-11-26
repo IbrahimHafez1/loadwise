@@ -6,6 +6,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { describe, test, type TestContext } from 'node:test';
 import type { Finding } from '../../lib/shared/types.js';
 import type { FileMap } from '../types/project-files.js';
+import { compareOpenApi } from '../../lib/performance/contracts/openapi.js';
 
 interface ContractsReport {
   findings: Finding[];
@@ -187,6 +188,40 @@ describe('loadwise perf contracts: OpenAPI', () => {
     const run = contracts(root);
     assert.equal(run.code, 0);
     assert.match(run.stderr, /Skipped openapi\.yaml: YAML OpenAPI documents are not compared/);
+  });
+
+  test('ignores malformed $ref escapes, prototype keys, and recursive array $ref cycles', () => {
+    const doc = JSON.stringify({
+      openapi: '3.0.0',
+      paths: {
+        '/cycle': {
+          get: {
+            responses: {
+              200: {
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        badPercent: { $ref: '#/components/schemas/%E0%A4%A' },
+                        protoRef: { $ref: '#/toString' },
+                        node: { $ref: '#/components/schemas/NodeList' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      components: {
+        schemas: {
+          NodeList: { type: 'array', items: { $ref: '#/components/schemas/NodeList' } },
+        },
+      },
+    });
+    assert.deepEqual(compareOpenApi(doc, doc), []);
   });
 });
 

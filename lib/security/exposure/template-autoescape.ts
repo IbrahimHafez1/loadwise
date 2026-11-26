@@ -1,7 +1,8 @@
 // template-autoescape-disabled: a template engine configured to stop HTML-escaping every value it
 // renders.
+import { ts } from '../../performance/compiler.js';
 import { classifyExecutionContext } from '../../shared/execution-context.js';
-import { objectLiteralOf, findProperty, isTrue, isFalse } from './literals.js';
+import { objectLiteralOf, findProperty, isTrue, isFalse, unwrap } from './literals.js';
 import type { CallExpression, Node } from 'typescript';
 import type { SecurityRuleContext } from '../../shared/types.js';
 
@@ -19,10 +20,14 @@ const escapeSettings: Record<string, Record<string, EscapeSetting>> = {
   nunjucks: { configure: [-1, 'autoescape', isFalse], Environment: [1, 'autoescape', isFalse] },
   handlebars: { compile: [1, 'noEscape', isTrue], precompile: [1, 'noEscape', isTrue] },
 };
+const escapeMethods = new Set(['setDefaults', 'configure', 'Environment', 'compile', 'precompile']);
 
 function check(call: CallExpression, context: SecurityRuleContext) {
+  if (!call.arguments?.length) return;
+  const callee = unwrap(call.expression);
+  if (ts.isPropertyAccessExpression(callee) && !escapeMethods.has(callee.name.text)) return;
   const info = context.libraryCall(call);
-  if (!info?.module || !Object.hasOwn(escapeSettings, info.module) || !call.arguments?.length) return;
+  if (!info?.module || !Object.hasOwn(escapeSettings, info.module)) return;
   const functions = escapeSettings[info.module];
   const name = info.method ?? info.exported;
   if (!name || !Object.hasOwn(functions, name)) return;

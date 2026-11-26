@@ -11,6 +11,7 @@ const message =
 const singleKeyReason = 'Sets one own key; pollution needs a nested write.';
 const deepMergeFunctions = new Set(['merge', 'mergeWith', 'defaultsDeep']);
 const pathWriteFunctions = new Set(['set', 'setWith', 'update', 'updateWith', 'setProperty']);
+const libraryMethods = new Set([...deepMergeFunctions, ...pathWriteFunctions]);
 const pathLibraries = /^(?:lodash(?:-es)?(?:\/.*)?|object-path|dot-prop)$/;
 const parameterPathReason =
   'Contextual: the key path is a function parameter; confirm callers never pass request-controlled keys.';
@@ -167,6 +168,9 @@ function wholeRequest(expression: Expression, context: SecurityRuleContext) {
 }
 
 function checkLibraryCall(call: CallExpression, context: SecurityRuleContext) {
+  if (call.arguments.length < 2) return;
+  const callee = unwrap(call.expression);
+  if (ts.isPropertyAccessExpression(callee) && !libraryMethods.has(callee.name.text)) return;
   const info = context.libraryCall(call);
   if (!info?.module || !pathLibraries.test(info.module) || info.tier === 'name') return;
   const name = functionName(info);
@@ -250,9 +254,26 @@ function isUnguardedRecursiveMerge({ name, body }: LocalFunction) {
   return merges && callsItself(body, name);
 }
 
+const localMergeCache = new WeakMap<Node, Map<string, boolean>>();
+
+function isCachedUnguardedRecursiveMerge(local: LocalFunction): boolean {
+  let byName = localMergeCache.get(local.body);
+  if (byName) {
+    const cached = byName.get(local.name);
+    if (cached !== undefined) return cached;
+  } else {
+    byName = new Map();
+    localMergeCache.set(local.body, byName);
+  }
+  const result = isUnguardedRecursiveMerge(local);
+  byName.set(local.name, result);
+  return result;
+}
+
 function checkLocalMerge(call: CallExpression, context: SecurityRuleContext) {
+  if (call.arguments.length < 2) return;
   const local = localFunctionOf(call, context.checker);
-  if (!local || !isUnguardedRecursiveMerge(local)) return;
+  if (!local || !isCachedUnguardedRecursiveMerge(local)) return;
   for (const argument of call.arguments.slice(1)) {
     const traced = wholeRequest(argument, context);
     if (traced) return reportTraced(context, argument, ruleId, reportMessage(traced), traced);

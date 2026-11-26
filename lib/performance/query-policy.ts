@@ -104,4 +104,4 @@ function validateQueryPolicy(policy: unknown): PerformancePolicy {
   return validated;
 }
 
-export { loadQueryPolicy, record, rejectDuplicateKeys, validateQueryPolicy, stableModuleName };
+export { loadQueryPolicy, rejectDuplicateKeys, validateQueryPolicy };

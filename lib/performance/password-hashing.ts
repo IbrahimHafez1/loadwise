@@ -25,6 +25,22 @@ const PASSWORD_HASH_KIND = 'password-hash';
 // A hash reached through this many project functions below the callee is reported by default;
 // deeper is contextual.
 const MAX_DEFAULT_HELPER_HOPS = 1;
+const SYNC_HASH_PATTERN = /\b(?:hashSync|compareSync|genSaltSync)\b/;
+const syncHashPresence = new WeakMap<ProgramAdapter, boolean>();
+
+function programHasSyncHash(program: ProgramAdapter): boolean {
+  const cached = syncHashPresence.get(program);
+  if (cached !== undefined) return cached;
+  const sources = program.getToolingSourceFiles?.() ?? program.getSourceFiles?.() ?? [];
+  const found = sources.some(
+    (source) =>
+      !source.isDeclarationFile &&
+      !/[\\/]node_modules[\\/]/.test(source.fileName) &&
+      SYNC_HASH_PATTERN.test(source.text),
+  );
+  syncHashPresence.set(program, found);
+  return found;
+}
 
 // The wording of a sync call's async replacement and the time the sync call blocks for.
 interface SyncHashAdvice {
@@ -215,7 +231,7 @@ function checkCryptoHashCall(node: CallExpression, name: MemberName, context: Pe
 // helpers. A direct call inside the callee is reported at the bcrypt call itself, by
 // reportThroughHelper.
 function checkHashReachedThroughCallee(node: CallExpression, name: MemberName, context: PerformanceRuleContext) {
-  if (!context.program || !runsOnRequestPath(node)) return;
+  if (!context.program || !programHasSyncHash(context.program) || !runsOnRequestPath(node)) return;
   const summary = functionSummaries(context.program).summaryOfCall(node);
   const hash = summary?.blocking.find((effect) => effect.kind === PASSWORD_HASH_KIND && effect.via.length > 0);
   if (!hash) return;
