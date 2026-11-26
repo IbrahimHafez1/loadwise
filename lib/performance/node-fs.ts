@@ -231,7 +231,9 @@ const startupMethodNames = new Set([
   'start',
 ]);
 const applicationFactories = new Set(['create', 'createApplicationContext', 'createMicroservice']);
-const memoizingAssignments = new Set([ts.SyntaxKind.QuestionQuestionEqualsToken, ts.SyntaxKind.BarBarEqualsToken]);
+function isMemoizingAssignment(kind: number): boolean {
+  return kind === ts.SyntaxKind.QuestionQuestionEqualsToken || kind === ts.SyntaxKind.BarBarEqualsToken;
+}
 
 // `await NestFactory.create(AppModule)`: the function builds the application, so it runs once per
 // boot.
@@ -281,7 +283,7 @@ function isMemoized(call: CallExpression): boolean {
   const assignment = ts.skipOuterExpressions(call).parent;
   return (
     ts.isBinaryExpression(assignment) &&
-    memoizingAssignments.has(assignment.operatorToken.kind) &&
+    isMemoizingAssignment(assignment.operatorToken.kind) &&
     ts.skipOuterExpressions(assignment.right) === call
   );
 }

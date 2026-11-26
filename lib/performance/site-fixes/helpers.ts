@@ -12,7 +12,24 @@ import type {
   Statement,
 } from 'typescript';
 import type { FixResult, TextEdit } from '../../shared/types.js';
-const { isPlainReference, mentionsIdentifier } = createReferenceChecks(ts);
+let cachedRefChecksTs: typeof ts | undefined;
+let cachedRefChecks: ReturnType<typeof createReferenceChecks> | undefined;
+
+function refChecks() {
+  if (cachedRefChecksTs !== ts || !cachedRefChecks) {
+    cachedRefChecksTs = ts;
+    cachedRefChecks = createReferenceChecks(ts);
+  }
+  return cachedRefChecks;
+}
+
+function isPlainReference(node: Node): boolean {
+  return refChecks().isPlainReference(node);
+}
+
+function mentionsIdentifier(node: Node, name: string): boolean {
+  return refChecks().mentionsIdentifier(node, name);
+}
 
 function textOf(node: Node): string {
   return node.getText(node.getSourceFile());
@@ -64,13 +81,15 @@ function insertLinesBefore(node: Node, lines: readonly string[]): TextEdit {
   return { start, end: start, text: lines.map((line) => indentation + line + '\n').join('') };
 }
 
-const loopKinds = new Set([
-  ts.SyntaxKind.ForOfStatement,
-  ts.SyntaxKind.ForInStatement,
-  ts.SyntaxKind.ForStatement,
-  ts.SyntaxKind.WhileStatement,
-  ts.SyntaxKind.DoStatement,
-]);
+function isLoopKind(kind: number): boolean {
+  return (
+    kind === ts.SyntaxKind.ForOfStatement ||
+    kind === ts.SyntaxKind.ForInStatement ||
+    kind === ts.SyntaxKind.ForStatement ||
+    kind === ts.SyntaxKind.WhileStatement ||
+    kind === ts.SyntaxKind.DoStatement
+  );
+}
 const iteratingMethods = new Set([
   'map',
   'forEach',
@@ -100,7 +119,7 @@ type Iteration = LoopIteration | CallbackIteration;
 // The nearest loop statement or array-iteration callback around `node`, inside the same function.
 function enclosingIteration(node: Node): Iteration | undefined {
   for (let current = node.parent; current; current = current.parent) {
-    if (loopKinds.has(current.kind)) return { kind: 'loop', node: current };
+    if (isLoopKind(current.kind)) return { kind: 'loop', node: current };
     if (ts.isFunctionLike(current)) {
       const call = current.parent;
       if (

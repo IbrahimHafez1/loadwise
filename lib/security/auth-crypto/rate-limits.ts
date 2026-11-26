@@ -362,6 +362,13 @@ function controllerPath(classNode: Node) {
 }
 
 const bodyLimiterCall = /\b\w*(?:rateLimit|throttl)\w*\s*\(/i;
+const nestPermissionDecorator = /^@(?:RequirePermissions|Permissions|Roles)\b/;
+const directAuthPath =
+  /(?<![a-z])(?:login|sign-?in|register|sign-?up|forgot-?password|reset-?password|password\/reset|verify-otp|otp|2fa|mfa)(?![a-z])/i;
+
+function hasPermissionDecorator(node: Node) {
+  return decoratorsOf(node).some((decorator: Decorator) => nestPermissionDecorator.test(decorator.getText()));
+}
 
 // `@Post('login')` on a controller method.
 function checkNestRoute(call: CallExpression, context: SecurityRuleContext) {
@@ -374,6 +381,14 @@ function checkNestRoute(call: CallExpression, context: SecurityRuleContext) {
   const fullPath = `${controllerPath(classNode)}/${pathOf(call.arguments[0]) ?? ''}`;
   if (!credentialPath.test(fullPath) || hasNestLimiter(method) || hasNestLimiter(classNode)) return;
   if (method.body && bodyLimiterCall.test(method.body.getText())) return;
+  if (!directAuthPath.test(fullPath) && (hasPermissionDecorator(method) || hasPermissionDecorator(classNode))) {
+    return context.report(
+      call,
+      ruleId,
+      message,
+      'This endpoint requires authenticated permissions rather than accepting unauthenticated credentials.',
+    );
+  }
   reportUnlimited(call, context);
 }
 

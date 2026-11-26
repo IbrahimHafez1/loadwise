@@ -144,9 +144,16 @@ function isKeyDerivationOrDigestAuth(top: Node, context: SecurityRuleContext) {
   return false;
 }
 
+function isTokenDerivationFunction(node: Node): boolean {
+  const fn = enclosingFunction(node);
+  const name = fn ? functionName(fn) : undefined;
+  return Boolean(name && /token$/i.test(name));
+}
+
 function reportWeakHash(node: Node, top: Node, inputs: readonly Expression[], context: SecurityRuleContext) {
   if (isBcryptInput(top, context) || isComparedInConstantTime(top, context)) return;
   if (isBreachRangePrefix(top, context) || isKeyDerivationOrDigestAuth(top, context)) return;
+  if (isTokenDerivationFunction(top)) return;
   if (inputs.some(containsPasswordName) || digestLandsInPasswordName(top))
     context.report(node, 'weak-password-hash', weakHashMessage);
 }
@@ -225,7 +232,12 @@ function checkLocalWeakHash(call: CallExpression, context: SecurityRuleContext) 
     .map((index) => call.arguments[index])
     .filter(Boolean);
   if (!inputs.length) return;
-  if (isBcryptInput(call, context) || isComparedInConstantTime(call, context) || isBreachRangePrefix(call, context))
+  if (
+    isBcryptInput(call, context) ||
+    isComparedInConstantTime(call, context) ||
+    isBreachRangePrefix(call, context) ||
+    isTokenDerivationFunction(call)
+  )
     return;
   if (inputs.some(containsPasswordName) || digestLandsInPasswordName(call))
     context.report(call, 'weak-password-hash', weakHashMessage);

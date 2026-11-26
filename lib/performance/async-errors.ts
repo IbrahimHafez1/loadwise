@@ -103,17 +103,16 @@ const asyncErrorPackagePrograms = new WeakMap<ProgramAdapter, boolean>();
 
 // express-async-errors patches Express globally, so one import anywhere covers every handler.
 function programPatchesAsyncErrors(program: ProgramAdapter, sourceFile: SourceFile): boolean {
-  if (!program?.getSourceFiles) return ASYNC_ERROR_PACKAGES.test(sourceFile.text);
+  const files = program?.getSourceFiles?.() ?? program?.getToolingSourceFiles?.();
+  if (!files) return ASYNC_ERROR_PACKAGES.test(sourceFile.text);
   const known = asyncErrorPackagePrograms.get(program);
   if (known !== undefined) return known;
-  const patched = program
-    .getSourceFiles()
-    .some(
-      (source) =>
-        !source.isDeclarationFile &&
-        !source.fileName.replaceAll('\\', '/').includes('/node_modules/') &&
-        ASYNC_ERROR_PACKAGES.test(source.text),
-    );
+  const patched = files.some(
+    (source) =>
+      !source.isDeclarationFile &&
+      !source.fileName.replaceAll('\\', '/').includes('/node_modules/') &&
+      ASYNC_ERROR_PACKAGES.test(source.text),
+  );
   asyncErrorPackagePrograms.set(program, patched);
   return patched;
 }

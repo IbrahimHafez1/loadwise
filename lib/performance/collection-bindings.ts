@@ -36,7 +36,9 @@ export const maxBoundDepth = 8;
 export const arrays = new Set(['Array', 'ReadonlyArray']);
 export const setTypes = new Set(['Set', 'ReadonlySet']);
 export const repeatableCollections = new Set([...arrays, ...setTypes, 'Map', 'ReadonlyMap']);
-export const fallbackOperators = new Set([ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarToken]);
+export const fallbackOperators = {
+  has: (kind: number): boolean => kind === ts.SyntaxKind.QuestionQuestionToken || kind === ts.SyntaxKind.BarBarToken,
+};
 
 const mutatingMethods = new Set([
   'add',

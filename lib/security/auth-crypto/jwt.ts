@@ -479,8 +479,12 @@ function checkJwtSign(call: CallExpression, context: SecurityRuleContext) {
       'The token payload is not an object literal, so an `exp` claim may be set elsewhere.',
     );
   if (!findProperty(payload, 'exp')) {
-    const reason =
-      moduleExpiry === undefined ? 'The injected JwtService might inherit an expiry from its module.' : undefined;
+    const hasCustomTimestamp = Boolean(findProperty(payload, 'expiresAt') || findProperty(payload, 'createdAt'));
+    const reason = hasCustomTimestamp
+      ? 'The payload carries an application-level timestamp (`expiresAt` or `createdAt`); confirm the verifier enforces expiry.'
+      : moduleExpiry === undefined
+        ? 'The injected JwtService might inherit an expiry from its module.'
+        : undefined;
     context.report(call, 'jwt-sign-without-expiry', messages.expiry, reason);
   }
 }

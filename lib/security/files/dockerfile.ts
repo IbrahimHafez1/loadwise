@@ -15,6 +15,8 @@ const developmentFolderWords = new Set([
   'fixtures',
   'sandbox',
   'playwright',
+  'scanner',
+  'ci',
 ]);
 const developmentReason = 'Development or test image.';
 const nonRootImage = /nonroot|unprivileged|rootless/i;

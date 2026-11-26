@@ -197,7 +197,16 @@ function createPairMatcher(ts: Syntax) {
   return pageCountPair;
 }
 
-const pageCountPair = createPairMatcher(ts);
+let cachedPairMatcherTs: typeof ts | undefined;
+let cachedPageCountPair: ReturnType<typeof createPairMatcher> | undefined;
+
+function pageCountPair(statement: Statement) {
+  if (cachedPairMatcherTs !== ts || !cachedPageCountPair) {
+    cachedPairMatcherTs = ts;
+    cachedPageCountPair = createPairMatcher(ts);
+  }
+  return cachedPageCountPair(statement);
+}
 
 function isInsideTransactionCallback(node: Node) {
   for (let current = node.parent; current; current = current.parent) {

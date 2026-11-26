@@ -64,10 +64,17 @@ function isDigestOfHash(node: Expression, context: SecurityRuleContext) {
   return false;
 }
 
+function isUrlPasswordProperty(node: Expression, checker: CheckerAdapter): boolean {
+  const expr = ts.skipOuterExpressions(node);
+  if (!ts.isPropertyAccessExpression(expr) || expr.name.text !== 'password') return false;
+  return checker.getTypeAtLocation(expr.expression).getSymbol()?.name === 'URL';
+}
+
 function checkSecretComparison(comparison: BinaryExpression, context: SecurityRuleContext) {
   if (!comparisonOperators().has(comparison.operatorToken.kind)) return;
   const { left, right } = comparison;
   if (isConstantOperand(left) || isConstantOperand(right)) return;
+  if (isUrlPasswordProperty(left, context.checker) || isUrlPasswordProperty(right, context.checker)) return;
   const candidates = [
     [left, right],
     [right, left],

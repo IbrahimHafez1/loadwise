@@ -252,13 +252,26 @@ function isSampleName(name: string | undefined) {
   return name !== undefined && nameWords(name).some((word) => sampleNameWords.has(word));
 }
 
+const samplePersonaValues = /^(?:john\s+doe|jane\s+doe|john@doe\.com|jane@doe\.com)$/i;
+
+function isSampleObjectLiteral(node: Node): boolean {
+  if (!ts.isObjectLiteralExpression(node)) return false;
+  return node.properties.some(
+    (prop) =>
+      ts.isPropertyAssignment(prop) &&
+      ts.isStringLiteralLike(prop.initializer) &&
+      samplePersonaValues.test(prop.initializer.text.trim()),
+  );
+}
+
 // API documentation samples (`@ApiBody({ example: { password: 'Pass123!' } })`,
-// `REGISTRATION_EXAMPLE = {...}`) are not credentials.
+// `REGISTRATION_EXAMPLE = {...}`, or template previews with placeholder personas like 'John Doe')
+// are not credentials.
 function isDocumentationSample(literal: Node, context: SecurityRuleContext) {
   if (sampleFileName.test(context.sourceFile.fileName.split(/[\\/]/).pop() ?? '')) return true;
   return Boolean(
     ts.findAncestor(literal, (node: Node) => {
-      if (ts.isDecorator(node)) return true;
+      if (ts.isDecorator(node) || isSampleObjectLiteral(node)) return true;
       if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) return isSampleName(node.name.text);
       if (ts.isPropertyAssignment(node) || ts.isPropertyDeclaration(node))
         return isSampleName(propertyKeyName(node.name));
@@ -292,11 +305,41 @@ function keyLiteral(expression: Expression, checker: CheckerAdapter): StringLite
   if (ts.isStringLiteralLike(resolved)) return resolved;
 }
 
-function reportSigningKey(keyExpression: Expression, context: SecurityRuleContext) {
+// `createHmac('sha256', 'label').update(id).digest('hex').slice(0, 8)` derives a short
+// deterministic resource-name suffix rather than a cryptographic authentication tag.
+function isTruncatedHmacSuffix(call: CallExpression): boolean {
+  let current: Node = call;
+  for (;;) {
+    const access = current.parent;
+    const nextCall = access?.parent;
+    if (
+      !ts.isPropertyAccessExpression(access) ||
+      access.expression !== current ||
+      !nextCall ||
+      !ts.isCallExpression(nextCall)
+    )
+      break;
+    if (nextCall.expression !== access) break;
+    if (
+      (access.name.text === 'slice' || access.name.text === 'substring') &&
+      nextCall.arguments.length === 2 &&
+      ts.isNumericLiteral(nextCall.arguments[0]) &&
+      ts.isNumericLiteral(nextCall.arguments[1]) &&
+      Number(nextCall.arguments[0].text) === 0 &&
+      Number(nextCall.arguments[1].text) <= 16
+    ) {
+      return true;
+    }
+    current = nextCall;
+  }
+  return false;
+}
+
+function reportSigningKey(keyExpression: Expression, context: SecurityRuleContext, contextualReason?: string) {
   const literal = keyLiteral(keyExpression, context.checker);
   if (!literal || literal.text.length < shortestSigningKey || hasStrongPlaceholder(literal.text)) return;
   if (isEnvironmentVariableName(literal.text) || publicKeyShape.test(literal.text)) return;
-  context.report(literal, 'hardcoded-secret', message);
+  context.report(literal, 'hardcoded-secret', message, contextualReason);
 }
 
 function checkSigningKey(call: CallExpression, context: SecurityRuleContext) {
@@ -317,8 +360,13 @@ function checkSigningKey(call: CallExpression, context: SecurityRuleContext) {
     return;
   }
   const name = libraryFunction(call, context, Object.keys(signingKeyCalls));
-  if (name && signingKeyCalls[info.module]?.has(name) && call.arguments[1])
-    reportSigningKey(call.arguments[1], context);
+  if (name && signingKeyCalls[info.module]?.has(name) && call.arguments[1]) {
+    const reason =
+      name === 'createHmac' && isTruncatedHmacSuffix(call)
+        ? 'The HMAC output is truncated to a short suffix, suggesting a deterministic label rather than a secret MAC.'
+        : undefined;
+    reportSigningKey(call.arguments[1], context, reason);
+  }
 }
 
 export { checkStringLiteral, checkTemplateText, checkSigningKey };

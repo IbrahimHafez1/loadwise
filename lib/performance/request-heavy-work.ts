@@ -29,18 +29,17 @@ const HEAVY_MEDIA_REASON =
 const compressionByProgram = new WeakMap<ProgramAdapter, boolean>();
 
 function programUsesCompression(program: ProgramAdapter): boolean {
-  if (!program?.getSourceFiles) return false;
+  const files = program?.getSourceFiles?.() ?? program?.getToolingSourceFiles?.();
+  if (!files) return false;
   if (!compressionByProgram.has(program)) {
     compressionByProgram.set(
       program,
-      program
-        .getSourceFiles()
-        .some(
-          (file) =>
-            !file.isDeclarationFile &&
-            !/[\\/]node_modules[\\/]/.test(file.fileName) &&
-            COMPRESSION_PATTERN.test(file.text),
-        ),
+      files.some(
+        (file) =>
+          !file.isDeclarationFile &&
+          !/[\\/]node_modules[\\/]/.test(file.fileName) &&
+          COMPRESSION_PATTERN.test(file.text),
+      ),
     );
   }
   return compressionByProgram.get(program) === true;

@@ -336,7 +336,7 @@ function boundedReduceReason(call: CallExpression, input: Expression, checker: C
   if (reducesFiniteValues(call, checker)) return enumListReason;
   if (enumeratesSchemaProperties(input, checker)) return schemaPropertiesReason;
   const inputName = ts.isIdentifier(input) ? input.text : ts.isPropertyAccessExpression(input) ? input.name.text : '';
-  if (/^(?:filters|options|meta)$/i.test(inputName)) {
+  if (/^(?:filters|options)$/i.test(inputName)) {
     return 'Reduces over a small configuration or filter list, so the accumulator copy stays bounded.';
   }
   const fileName = call.getSourceFile().fileName;

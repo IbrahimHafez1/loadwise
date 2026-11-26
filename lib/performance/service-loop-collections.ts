@@ -35,7 +35,7 @@ function isArrayValue(node: Node, checker: CheckerAdapter): boolean {
 // nests one level deeper.
 function carriesInList(argument: Expression, checker: CheckerAdapter, depth = 0): boolean {
   let value = ts.skipOuterExpressions(argument);
-  if (depth === 0 && ts.isIdentifier(value)) {
+  if (ts.isIdentifier(value)) {
     const declaration = resolvedSymbol(value, checker)?.valueDeclaration;
     if (
       declaration &&
@@ -49,12 +49,13 @@ function carriesInList(argument: Expression, checker: CheckerAdapter, depth = 0)
   if (depth > 2 || !ts.isObjectLiteralExpression(value)) return false;
   return value.properties.some(
     (property) =>
-      ts.isPropertyAssignment(property) &&
-      ((!ts.isComputedPropertyName(property.name) &&
-        listOperators.has(property.name.text) &&
-        isArrayValue(property.initializer, checker)) ||
-        isTypeormInList(property.initializer, checker) ||
-        carriesInList(property.initializer, checker, depth + 1)),
+      (ts.isSpreadAssignment(property) && carriesInList(property.expression, checker, depth + 1)) ||
+      (ts.isPropertyAssignment(property) &&
+        ((!ts.isComputedPropertyName(property.name) &&
+          listOperators.has(property.name.text) &&
+          isArrayValue(property.initializer, checker)) ||
+          isTypeormInList(property.initializer, checker) ||
+          carriesInList(property.initializer, checker, depth + 1))),
   );
 }
 

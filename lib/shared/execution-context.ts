@@ -72,6 +72,8 @@ const cache = new WeakMap<SourceFile, ExecutionContext>();
 const packageProfileCache = new Map<string, PackageProfile>();
 const packageRootCache = new Map<string, string | undefined>();
 const workspaceSubpackageCache = new Map<string, boolean>();
+const workspaceScopedPathCache = new Map<string, string>();
+const relativeProjectPathCache = new Map<string, string>();
 
 function hasAncestorPackageJson(directory: string): boolean {
   if (workspaceSubpackageCache.has(directory)) return workspaceSubpackageCache.get(directory) === true;
@@ -91,10 +93,13 @@ function hasAncestorPackageJson(directory: string): boolean {
 }
 
 function relativePathInProject(fileName: string): string {
+  const cached = relativeProjectPathCache.get(fileName);
+  if (cached !== undefined) return cached;
   const resolved = path.resolve(fileName);
   const root = findPackageRoot(path.dirname(resolved));
-  const rel = root ? path.relative(root, resolved) : path.basename(resolved);
-  return normalizeSlashes(rel);
+  const rel = normalizeSlashes(root ? path.relative(root, resolved) : path.basename(resolved));
+  relativeProjectPathCache.set(fileName, rel);
+  return rel;
 }
 
 // Inside a monorepo workspace subpackage (a package with a workspace package.json above it),
@@ -103,15 +108,25 @@ function relativePathInProject(fileName: string): string {
 // `quality/environments`, and `release-notes-generator` stay visible without leaking an unrelated
 // ancestor directory onto standalone projects.
 function workspaceScopedPath(fileName: string): string {
+  const cached = workspaceScopedPathCache.get(fileName);
+  if (cached !== undefined) return cached;
   const resolved = path.resolve(fileName);
   const root = findPackageRoot(path.dirname(resolved));
-  if (!root) return normalizeSlashes(path.basename(resolved));
-  const rel = normalizeSlashes(path.relative(root, resolved));
-  if (!hasAncestorPackageJson(root)) return rel;
-  const pkgName = path.basename(root);
-  const parentName = path.basename(path.dirname(root));
-  if (parentName.toLowerCase() === 'quality') return `${parentName}/${pkgName}/${rel}`;
-  return `${pkgName}/${rel}`;
+  let result: string;
+  if (!root) {
+    result = normalizeSlashes(path.basename(resolved));
+  } else {
+    const rel = normalizeSlashes(path.relative(root, resolved));
+    if (!hasAncestorPackageJson(root)) {
+      result = rel;
+    } else {
+      const pkgName = path.basename(root);
+      const parentName = path.basename(path.dirname(root));
+      result = parentName.toLowerCase() === 'quality' ? `${parentName}/${pkgName}/${rel}` : `${pkgName}/${rel}`;
+    }
+  }
+  workspaceScopedPathCache.set(fileName, result);
+  return result;
 }
 
 function findPackageRoot(directory: string): string | undefined {

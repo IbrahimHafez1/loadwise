@@ -4,9 +4,10 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import ts from 'typescript';
-import { classifyExecutionContext } from '../../lib/shared/execution-context.js';
+import { classifyExecutionContext, isVendoredMinified } from '../../lib/shared/execution-context.js';
 import { checkDockerfile } from '../../lib/security/files/dockerfile.js';
 import { checkCompose } from '../../lib/security/files/compose.js';
+import { isCatastrophicPattern } from '../../lib/security/injection/redos.js';
 import { checkSwallowedErrors } from '../../lib/maintainability/swallowed-errors.js';
 import { configFilePaths } from '../../lib/maintainability/config-entry-points.js';
 
@@ -98,4 +99,49 @@ test('dockerfile and compose mark test/dev/local files as contextual', () => {
   );
   assert.equal(compose[0]?.ruleId, 'compose-hardcoded-secret');
   assert.ok(compose[0]?.contextualReason);
+
+  const scannerDf = checkDockerfile('.oss-scanner/Dockerfile', 'FROM node:22\nENV DB_PASSWORD=postgres\n');
+  assert.ok(scannerDf.every((finding) => Boolean(finding.contextualReason)));
+});
+
+test('classifyExecutionContext distinguishes CLI-only packages from server packages with bin', (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-exec-pkg-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(root, 'package.json'), '{}');
+
+  const cliPkg = path.join(root, 'packages', 'my-cli');
+  fs.mkdirSync(path.join(cliPkg, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(cliPkg, 'package.json'), JSON.stringify({ bin: './dist/index.js' }));
+  assert.equal(
+    classifyExecutionContext(sourceOf(path.join(cliPkg, 'src', 'helper.ts'), 'export const x = 1;')).runtime,
+    'cli-tooling',
+  );
+
+  const serverCliPkg = path.join(root, 'packages', 'server-cli');
+  fs.mkdirSync(path.join(serverCliPkg, 'src'), { recursive: true });
+  fs.writeFileSync(
+    path.join(serverCliPkg, 'package.json'),
+    JSON.stringify({ bin: './dist/index.js', dependencies: { express: '^4.18.0' } }),
+  );
+  assert.equal(
+    classifyExecutionContext(sourceOf(path.join(serverCliPkg, 'src', 'service.ts'), 'export const x = 1;')).runtime,
+    'unknown',
+  );
+
+  const nextRoute = path.join(root, 'apps', 'api', 'app', 'stats', 'route.ts');
+  fs.mkdirSync(path.dirname(nextRoute), { recursive: true });
+  assert.equal(
+    classifyExecutionContext(sourceOf(nextRoute, 'export async function GET() { return new Response(); }'), {
+      getCompilerOptions: () => ({ lib: ['dom', 'esnext'] }),
+    }).runtime,
+    'node-server',
+  );
+});
+
+test('isVendoredMinified and redos anchored trailing-dot heuristics', () => {
+  assert.equal(isVendoredMinified('app/assets/vendor/chart/raphael-min.js'), true);
+  assert.equal(isVendoredMinified('src/utils/chart.ts'), false);
+  assert.equal(isCatastrophicPattern('^[Bb][Ee][Aa][Rr][Ee][Rr]\\s+(.+)$'), false);
+  assert.equal(isCatastrophicPattern('^Bearer[ \\t]+(.+)$', 'i'), false);
+  assert.equal(isCatastrophicPattern('^(a+)+$'), true);
 });

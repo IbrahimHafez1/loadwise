@@ -63,10 +63,29 @@ function isStandardPromise(type: TypeAdapter, checker: CheckerAdapter): boolean 
   );
 }
 
+// `return new Promise((resolve) => ...)` without a `reject` parameter and without a synchronous
+// throw never rejects asynchronously.
+function isResolveOnlyNewPromise(value: Node): boolean {
+  if (!ts.isNewExpression(value) || !ts.isIdentifier(value.expression) || value.expression.text !== 'Promise') {
+    return false;
+  }
+  const executor = value.arguments?.[0] && ts.skipOuterExpressions(value.arguments[0]);
+  if (!executor || (!ts.isArrowFunction(executor) && !ts.isFunctionExpression(executor))) return false;
+  if (executor.parameters.length > 1) return false;
+  let throwsSync = false;
+  (function visit(node: Node): void {
+    if (throwsSync || (node !== executor && ts.isFunctionLike(node))) return;
+    if (ts.isThrowStatement(node)) throwsSync = true;
+    else ts.forEachChild(node, visit);
+  })(executor.body);
+  return !throwsSync;
+}
+
 function checkPromiseReturnEscapesCatch(statement: ReturnStatement, { checker, report }: PerformanceRuleContext) {
   if (!statement.expression) return;
   const value = ts.skipOuterExpressions(statement.expression);
   if (ts.isAwaitExpression(value) || !returnsInsideLocalCatch(statement)) return;
+  if (isResolveOnlyNewPromise(value)) return;
   if (!isStandardPromise(checker.getTypeAtLocation(value), checker)) return;
   report(
     statement,

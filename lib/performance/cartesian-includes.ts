@@ -293,6 +293,24 @@ function findEntityAndOptions(
   return { entityClass: entity && classSymbolOf(entity, checker), options };
 }
 
+function hasSiblingCollections(
+  entityClass: SymbolAdapter | undefined,
+  tree: RelationTree,
+  checker: CheckerAdapter,
+): boolean {
+  let branchesWithCollections = 0;
+  for (const [name, subtree] of Object.entries(tree)) {
+    const target = relationTarget(entityClass, name, checker);
+    if (!target) continue;
+    if (hasSiblingCollections(target.targetSymbol, subtree, checker)) return true;
+    if (target.isCollection || countCollections(target.targetSymbol, subtree, checker) > 0) {
+      branchesWithCollections++;
+      if (branchesWithCollections >= MIN_COLLECTIONS) return true;
+    }
+  }
+  return false;
+}
+
 function checkFindRelations(call: MethodCall, context: PerformanceRuleContext): void {
   if (!declaredInPackage(call.expression, context.checker, TYPEORM)) return;
   const { entityClass, options } = findEntityAndOptions(call, context.checker);
@@ -301,7 +319,17 @@ function checkFindRelations(call: MethodCall, context: PerformanceRuleContext): 
   if (stringLiteralValue(objectProperty(literal, 'relationLoadStrategy')) === 'query') return;
   const tree = relationTree(objectProperty(literal, 'relations'));
   if (countCollections(entityClass, tree, context.checker) < MIN_COLLECTIONS) return;
-  context.report(call.expression.name, RULE_ID, typeormMessage());
+  const method = call.expression.name.text;
+  const nestedOnlyOnSingle =
+    (method === 'findOne' || method === 'findOneOrFail') && !hasSiblingCollections(entityClass, tree, context.checker);
+  context.report(
+    call.expression.name,
+    RULE_ID,
+    typeormMessage(),
+    nestedOnlyOnSingle
+      ? 'Loads a single nested relation chain on one parent row rather than two sibling collections; verify the child lists stay small.'
+      : undefined,
+  );
 }
 
 // --- Sequelize include

@@ -42,18 +42,24 @@ const VALUE_PRESERVING_MATH = new Set(['max', 'floor', 'ceil', 'round', 'trunc',
 const CLAMP_NAME = /clamp|Math\.min/i;
 // Validation text that caps a numeric field: zod, joi, yup and class-validator.
 const MAX_CONSTRAINT = /\.(?:max|lte|lt|maximum|less)\(|@Max\(|\.between\(|@Clamp/;
-const ARITHMETIC_OPERATORS = new Set([
-  ts.SyntaxKind.PlusToken,
-  ts.SyntaxKind.MinusToken,
-  ts.SyntaxKind.AsteriskToken,
-  ts.SyntaxKind.SlashToken,
-  ts.SyntaxKind.PercentToken,
-  ts.SyntaxKind.BarBarToken,
-  ts.SyntaxKind.QuestionQuestionToken,
-  ts.SyntaxKind.AmpersandAmpersandToken,
-]);
-const UPPER_BOUND_OPERATORS = new Set([ts.SyntaxKind.GreaterThanToken, ts.SyntaxKind.GreaterThanEqualsToken]);
-const LOWER_BOUND_OPERATORS = new Set([ts.SyntaxKind.LessThanToken, ts.SyntaxKind.LessThanEqualsToken]);
+function isArithmeticOperator(kind: number): boolean {
+  return (
+    kind === ts.SyntaxKind.PlusToken ||
+    kind === ts.SyntaxKind.MinusToken ||
+    kind === ts.SyntaxKind.AsteriskToken ||
+    kind === ts.SyntaxKind.SlashToken ||
+    kind === ts.SyntaxKind.PercentToken ||
+    kind === ts.SyntaxKind.BarBarToken ||
+    kind === ts.SyntaxKind.QuestionQuestionToken ||
+    kind === ts.SyntaxKind.AmpersandAmpersandToken
+  );
+}
+function isUpperBoundOperator(kind: number): boolean {
+  return kind === ts.SyntaxKind.GreaterThanToken || kind === ts.SyntaxKind.GreaterThanEqualsToken;
+}
+function isLowerBoundOperator(kind: number): boolean {
+  return kind === ts.SyntaxKind.LessThanToken || kind === ts.SyntaxKind.LessThanEqualsToken;
+}
 
 function chainRoot(node: Node) {
   let current = ts.skipOuterExpressions(node);
@@ -175,7 +181,7 @@ function traceInputs<Extra extends object = object>(
       visit(current.expression, depth, fieldName, schema);
     } else if (ts.isCallExpression(current)) {
       visitCall(current, depth, fieldName, schema);
-    } else if (ts.isBinaryExpression(current) && ARITHMETIC_OPERATORS.has(current.operatorToken.kind)) {
+    } else if (ts.isBinaryExpression(current) && isArithmeticOperator(current.operatorToken.kind)) {
       visit(current.left, depth, fieldName, schema);
       visit(current.right, depth, fieldName, schema);
     } else if (ts.isPrefixUnaryExpression(current)) {
@@ -201,8 +207,8 @@ function isComparedToUpperLimit(scope: FunctionWithBody, name: string | undefine
   (function visit(node: Node): void {
     if (ts.isBinaryExpression(node)) {
       const operator = node.operatorToken.kind;
-      const [subject, limit] = UPPER_BOUND_OPERATORS.has(operator) ? [node.left, node.right] : [node.right, node.left];
-      const isComparison = UPPER_BOUND_OPERATORS.has(operator) || LOWER_BOUND_OPERATORS.has(operator);
+      const [subject, limit] = isUpperBoundOperator(operator) ? [node.left, node.right] : [node.right, node.left];
+      const isComparison = isUpperBoundOperator(operator) || isLowerBoundOperator(operator);
       if (isComparison && leafName(subject) === name && !isLowerBoundLiteral(limit)) compared = true;
     }
     ts.forEachChild(node, visit);

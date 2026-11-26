@@ -70,7 +70,10 @@ function checkSizeLimits(sourceFile: SourceFile, file: string, limits: SizeLimit
     findings.push({ file, line: position.line + 1, column: position.character + 1, ruleId, message });
   }
 
-  if (isVendoredMinified(file) || /\/assets\/private\/three\.js$/i.test(file.replaceAll('\\', '/'))) {
+  if (
+    isVendoredMinified(file) ||
+    /(?:^|\/)(?:vendors?|third[-_]party|assets\/private)\/.*\.js$/i.test(file.replaceAll('\\', '/'))
+  ) {
     return findings;
   }
   const lineCount = sourceFile.getLineStarts().length;

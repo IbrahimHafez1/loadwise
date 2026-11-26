@@ -179,6 +179,7 @@ const projectRootMarkers = ['package.json', 'tsconfig.json', 'jsconfig.json', '.
 
 function createProjectRelativizer() {
   const roots = new Map<string, string | undefined>();
+  const relatives = new Map<string, string>();
   function projectRoot(directory: string): string | undefined {
     if (!roots.has(directory)) {
       const parent = path.dirname(directory);
@@ -190,20 +191,28 @@ function createProjectRelativizer() {
     return roots.get(directory);
   }
   return (file: string): string => {
+    const cached = relatives.get(file);
+    if (cached !== undefined) return cached;
     const absolute = path.resolve(file);
     const root = projectRoot(path.dirname(absolute));
-    return root ? path.relative(root, absolute) : path.basename(absolute);
+    const result = root ? path.relative(root, absolute) : path.basename(absolute);
+    relatives.set(file, result);
+    return result;
   };
 }
 
 const relativeToProject = createProjectRelativizer();
+const testSourceCache = new Map<string, boolean>();
 
 function isTestSource(file: string): boolean {
-  return (
+  const cached = testSourceCache.get(file);
+  if (cached !== undefined) return cached;
+  const result =
     testSourcePattern.test(file) ||
     testDirectoryPattern.test(relativeToProject(file)) ||
-    testDirectoryPattern.test(workspaceScopedPath(file))
-  );
+    testDirectoryPattern.test(workspaceScopedPath(file));
+  testSourceCache.set(file, result);
+  return result;
 }
 
 function isSeedSource(file: string): boolean {
@@ -370,7 +379,7 @@ function blockingSourceContext(node: Node, checker: CheckerAdapter, source: Sour
     return 'Synchronous call in a build or tool configuration file, which runs when the tool starts rather than on a request path.';
   if (blockingToolingDirectoryPattern.test(rootRelativePath(file)))
     return 'Synchronous call in container, boot, codemod, tooling or test-support code rather than a request path.';
-  if ((runtime === 'cli-tooling' || isToolingSource(source)) && !findRepeatOwner(node, checker)) {
+  if (runtime === 'cli-tooling' || (isToolingSource(source) && !findRepeatOwner(node, checker))) {
     return 'Synchronous call in operator or CLI tooling (scripts, deployment, migrations or commands). Prioritize if the server also imports this module.';
   }
 }

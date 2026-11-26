@@ -200,21 +200,26 @@ function createUrlControl(
     // Literal text after the last clean runtime piece, or undefined while every piece so far is
     // literal.
     let textAfterBase: string | undefined;
+    // Once a fixed origin or leading path separator has been crossed, subsequent clean path
+    // segments cannot un-fix the origin.
+    let pastOrigin = false;
     for (const piece of pieces) {
       if ('text' in piece) {
         if (textAfterBase === undefined) prefix += piece.text;
         else textAfterBase += piece.text;
+        if (partAfter(prefix, textAfterBase) === 'path') pastOrigin = true;
         continue;
       }
       const traced = tracedUrl(piece.expression);
       if (!traced) {
         if (!prefix && textAfterBase === undefined) prefix = formatterPrefix(piece.expression, checker, strip) ?? '';
+        if (partAfter(prefix, textAfterBase) === 'path') pastOrigin = true;
         textAfterBase = '';
         continue;
       }
       // A traced first piece can itself be a whole URL.
       if (!prefix && textAfterBase === undefined) return control(piece.expression, depth + 1);
-      return { part: partAfter(prefix, textAfterBase), trace: traced };
+      return { part: pastOrigin ? 'path' : partAfter(prefix, textAfterBase), trace: traced };
     }
   }
 

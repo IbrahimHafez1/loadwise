@@ -480,6 +480,16 @@ function canFail(node: PatternNode) {
   return !nullable(node) || node.kind === 'assert' || node.kind === 'lookaround';
 }
 
+function isTrailingDotEndAnchor(items: readonly PatternNode[], index: number, followed: boolean): boolean {
+  if (followed || index === 0) return false;
+  const first = items[0];
+  if (first.kind !== 'assert' || first.anchor !== '^') return false;
+  const tail = items.slice(index + 1);
+  if (tail.length !== 1 || tail[0].kind !== 'assert' || tail[0].anchor !== '$') return false;
+  const chars = repeatedCharacters(items[index]);
+  return Boolean(chars && chars.length === 1 && chars[0][0] === 0 && chars[0][1] === maxCodePoint);
+}
+
 // Two unbounded repeats over overlapping characters with nothing required between them
 // (`\s+.*\s+$`,
 // `\w+\s*\w+$`) can split one run of n characters in n ways. The split is only retried when
@@ -495,7 +505,12 @@ function hasAmbiguousRun(items: readonly PatternNode[], followed: boolean) {
       if (canFail(item)) reachable = [];
       continue;
     }
-    if (overlaps(reachable, characters) && (followed || items.slice(index + 1).some(canFail))) return true;
+    if (
+      overlaps(reachable, characters) &&
+      (followed || items.slice(index + 1).some(canFail)) &&
+      !isTrailingDotEndAnchor(items, index, followed)
+    )
+      return true;
     reachable = nullable(item) ? normalize([...reachable, ...characters]) : characters;
   }
   return false;
@@ -638,8 +653,7 @@ function checkCall(node: CallExpression, context: SecurityRuleContext) {
   const parts = regexAndSubject(node);
   if (!parts?.regex || !parts.subject || ts.isSpreadElement(parts.subject) || isTruncated(parts.subject)) return;
   const regex = fixedRegex(parts.regex, context.checker);
-  if (!regex || /^\^?Bearer(?:\\s|\[[^\]]*\])\+\(\.\+\)\$$/.test(regex.source)) return;
-  const kind = backtrackingKind(regex.source, regex.flags);
+  const kind = regex && backtrackingKind(regex.source, regex.flags);
   if (!kind) return;
   const trace = context.taint.trace(parts.subject, 'regex');
   if (trace) return reportTraced(context, node, ruleId, message(trace.label, kind), trace);

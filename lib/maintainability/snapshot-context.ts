@@ -30,7 +30,8 @@ function archivedCopies(files: readonly string[]): Set<string> {
 // Findings in these rules describe request-path code, so tests, seeds and operator scripts are
 // context only.
 const setupSourceRules = new Set(['high-branch-complexity', 'deep-control-flow', 'query-mutates-state']);
-const testSourcePattern = /(?:^|\/)(?:__tests__|tests?|e2e)\/|[.-](?:spec|test|e2e-spec)\.[cm]?[jt]sx?$/i;
+const testSourcePattern =
+  /(?:^|\/)(?:__tests__|tests?|e2e|integration-tests?)\/|[.-](?:spec|test|e2e-spec)\.[cm]?[jt]sx?$/i;
 const seedSourcePattern = /(?:^|\/)(?:seeds?|seeders?|scripts?)\/|(?:^|[/.-])seed\.[cm]?[jt]sx?$/i;
 
 function setupSourceContext(file: string): string | undefined {

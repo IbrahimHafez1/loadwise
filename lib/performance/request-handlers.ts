@@ -71,11 +71,13 @@ const TRANSPARENT_KINDS = [
   'isSpreadElement',
   'isSpreadAssignment',
 ] as const satisfies readonly (keyof typeof ts)[];
-const FALLBACK_OPERATORS = new Set([
-  ts.SyntaxKind.BarBarToken,
-  ts.SyntaxKind.QuestionQuestionToken,
-  ts.SyntaxKind.AmpersandAmpersandToken,
-]);
+function isFallbackOperator(kind: number): boolean {
+  return (
+    kind === ts.SyntaxKind.BarBarToken ||
+    kind === ts.SyntaxKind.QuestionQuestionToken ||
+    kind === ts.SyntaxKind.AmpersandAmpersandToken
+  );
+}
 const MAX_ALIAS_DEPTH = 3;
 
 function isMemberCall(node: Node): node is MethodCall {
@@ -331,8 +333,10 @@ function isFrameworkHandler(node: FunctionLikeDeclaration): boolean {
   );
 }
 
-function isRequestHandler(node: Node): node is RequestHandlerFunction {
-  if (!isFunctionLikeDeclaration(node) || !node.body) return false;
+const requestHandlerCache = new WeakMap<Node, boolean>();
+
+function computeIsRequestHandler(node: FunctionLikeDeclaration): boolean {
+  if (!node.body) return false;
   if (ts.isMethodDeclaration(node)) return hasDecoratorNamed(node, ROUTE_DECORATORS) || isFastifyRouteOption(node);
   const [first, second] = node.parameters.map(parameterName);
   if (first && REQUEST_PARAMETER.test(first)) {
@@ -346,6 +350,15 @@ function isRequestHandler(node: Node): node is RequestHandlerFunction {
       return true;
   }
   return isFrameworkHandler(node);
+}
+
+function isRequestHandler(node: Node): node is RequestHandlerFunction {
+  if (!isFunctionLikeDeclaration(node)) return false;
+  const cached = requestHandlerCache.get(node);
+  if (cached !== undefined) return cached;
+  const result = computeIsRequestHandler(node);
+  requestHandlerCache.set(node, result);
+  return result;
 }
 
 function enclosingRequestHandler(node: Node): RequestHandlerFunction | undefined {
@@ -393,7 +406,7 @@ function reachesResponse(value: Node, handler: RequestHandlerFunction, depth = 0
     if (isTransparent(parent)) continue;
     if (ts.isConditionalExpression(parent) && parent.condition !== current) continue;
     if (ts.isBinaryExpression(parent) && parent.left === current) continue;
-    if (ts.isBinaryExpression(parent) && FALLBACK_OPERATORS.has(parent.operatorToken.kind)) continue;
+    if (ts.isBinaryExpression(parent) && isFallbackOperator(parent.operatorToken.kind)) continue;
     if (ts.isCallExpression(parent)) {
       return (
         parent.arguments.some((argument) => argument === current) &&

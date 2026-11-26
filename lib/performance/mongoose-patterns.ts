@@ -22,12 +22,14 @@ const OBJECT_ID_NAMES = new Set(['ObjectId', 'createFromHexString', 'createFromT
 const TO_PLAIN_METHODS = new Set(['toObject', 'toJSON']);
 // Query builder calls that keep the chain a query, so a `.lean()` after them still skips hydration.
 const QUERY_MODIFIERS = new Set(['select', 'sort', 'limit', 'skip', 'where', 'populate', 'session', 'exec', 'lean']);
-const NULL_COMPARISONS = new Set([
-  ts.SyntaxKind.EqualsEqualsToken,
-  ts.SyntaxKind.EqualsEqualsEqualsToken,
-  ts.SyntaxKind.ExclamationEqualsToken,
-  ts.SyntaxKind.ExclamationEqualsEqualsToken,
-]);
+function isNullComparisonOperator(kind: number): boolean {
+  return (
+    kind === ts.SyntaxKind.EqualsEqualsToken ||
+    kind === ts.SyntaxKind.EqualsEqualsEqualsToken ||
+    kind === ts.SyntaxKind.ExclamationEqualsToken ||
+    kind === ts.SyntaxKind.ExclamationEqualsEqualsToken
+  );
+}
 // A schema with a String `_id` (UUID keys) stores strings, so matching `_id` against a string is
 // correct there.
 const STRING_ID_SCHEMA =
@@ -40,16 +42,15 @@ const PLAIN_OUTPUT_CUSTOMIZATION =
 const programScans = new WeakMap<ProgramAdapter, Map<RegExp, boolean>>();
 
 function programSourceMatches(program: ProgramAdapter, pattern: RegExp): boolean {
-  if (!program?.getSourceFiles) return false;
+  const files = program?.getSourceFiles?.() ?? program?.getToolingSourceFiles?.();
+  if (!files) return false;
   const scans = programScans.get(program) ?? new Map<RegExp, boolean>();
   programScans.set(program, scans);
   const known = scans.get(pattern);
   if (known !== undefined) return known;
-  const matches = program
-    .getSourceFiles()
-    .some(
-      (file) => !file.isDeclarationFile && !/[\\/]node_modules[\\/]/.test(file.fileName) && pattern.test(file.text),
-    );
+  const matches = files.some(
+    (file) => !file.isDeclarationFile && !/[\\/]node_modules[\\/]/.test(file.fileName) && pattern.test(file.text),
+  );
   scans.set(pattern, matches);
   return matches;
 }
@@ -190,7 +191,7 @@ function isPresenceCheck(reference: Node): boolean {
   const parent = reference.parent;
   if (ts.isPrefixUnaryExpression(parent)) return parent.operator === ts.SyntaxKind.ExclamationToken;
   if (ts.isIfStatement(parent)) return parent.expression === reference;
-  if (ts.isBinaryExpression(parent) && NULL_COMPARISONS.has(parent.operatorToken.kind)) {
+  if (ts.isBinaryExpression(parent) && isNullComparisonOperator(parent.operatorToken.kind)) {
     return isNullLiteral(parent.left === reference ? parent.right : parent.left);
   }
   return false;

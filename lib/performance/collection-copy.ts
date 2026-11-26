@@ -139,22 +139,35 @@ function growingObjectCopy(
   return assigned !== undefined && addsDynamicKey(assigned.properties, varies, checker);
 }
 
+function isImmediateExit(statement: Node | undefined): boolean {
+  return Boolean(
+    statement && (ts.isReturnStatement(statement) || ts.isThrowStatement(statement) || ts.isBreakStatement(statement)),
+  );
+}
+
 function exitsLoopImmediately(assignment: BinaryExpression, owner: RepeatOwner): boolean {
   const statement = assignment.parent;
   if (!ts.isExpressionStatement(statement) || !ts.isBlock(statement.parent)) return false;
   const statements = statement.parent.statements;
   const index = statements.indexOf(statement);
-  if (index < 0 || index + 1 >= statements.length) return false;
-  const next = statements[index + 1];
-  if (ts.isReturnStatement(next) || ts.isThrowStatement(next) || ts.isBreakStatement(next)) {
+  if (index >= 0 && index + 1 < statements.length && isImmediateExit(statements[index + 1])) {
     return statement.parent.parent === owner || ts.isIfStatement(statement.parent.parent);
+  }
+  // If the assignment is the last statement of an `if` block immediately followed by `return`/`break`/`throw`.
+  if (index === statements.length - 1 && ts.isIfStatement(statement.parent.parent)) {
+    const ifStmt = statement.parent.parent;
+    if (ts.isBlock(ifStmt.parent)) {
+      const parentStmts = ifStmt.parent.statements;
+      const ifIndex = parentStmts.indexOf(ifStmt);
+      if (ifIndex >= 0 && ifIndex + 1 < parentStmts.length && isImmediateExit(parentStmts[ifIndex + 1])) {
+        return true;
+      }
+    }
   }
   return false;
 }
 
-function isDotSplitLoop(owner: RepeatOwner): boolean {
-  if (!ts.isForOfStatement(owner)) return false;
-  const expr = ts.skipOuterExpressions(owner.expression);
+function isDotSplitCall(expr: Expression): boolean {
   return (
     ts.isCallExpression(expr) &&
     ts.isPropertyAccessExpression(expr.expression) &&
@@ -165,6 +178,19 @@ function isDotSplitLoop(owner: RepeatOwner): boolean {
   );
 }
 
+function isDotSplitLoop(owner: RepeatOwner, checker: CheckerAdapter): boolean {
+  if (!ts.isForOfStatement(owner)) return false;
+  const expr = ts.skipOuterExpressions(owner.expression);
+  if (isDotSplitCall(expr)) return true;
+  if (ts.isIdentifier(expr)) {
+    const decl = checker.getSymbolAtLocation(expr)?.valueDeclaration;
+    if (decl && ts.isVariableDeclaration(decl) && decl.initializer && decl.parent.flags & ts.NodeFlags.Const) {
+      return isDotSplitCall(ts.skipOuterExpressions(decl.initializer));
+    }
+  }
+  return false;
+}
+
 export function checkCollectionAssignment(assignment: BinaryExpression, context: PerformanceRuleContext): void {
   if (assignment.operatorToken.kind !== ts.SyntaxKind.EqualsToken || !ts.isIdentifier(assignment.left)) return;
   const target = assignment.left;
@@ -173,7 +199,7 @@ export function checkCollectionAssignment(assignment: BinaryExpression, context:
   const copiesArray = growingArrayCopy(result, target);
   if (!copiesArray && !ts.isObjectLiteralExpression(result) && !ts.isCallExpression(result)) return;
   const owner = findRepeatOwner(assignment, checker);
-  if (!owner || exitsLoopImmediately(assignment, owner) || isDotSplitLoop(owner)) return;
+  if (!owner || exitsLoopImmediately(assignment, owner) || isDotSplitLoop(owner, checker)) return;
   const symbol = externalBinding(target, owner, checker);
   if (!symbol) return;
   if (copiesArray) {

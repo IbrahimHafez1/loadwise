@@ -89,20 +89,18 @@ const SINK_METHODS = new Set(['slice', 'splice', 'limit', 'skip', 'take', 'offse
 const SINK_PROPERTIES = new Set(['limit', 'skip', 'take', 'offset', 'first', 'last', 'top', 'perPage', 'pageSize']);
 const QUERY_METHODS =
   /^(?:find\w*|query|execute|raw|where\w*|update\w*|delete\w*|destroy|count|aggregate|paginate|get(?:By\w*)?|select\w*|insert\w*|upsert|create\w*)$/;
-const COMPARISONS = new Set([
-  ts.SyntaxKind.LessThanToken,
-  ts.SyntaxKind.LessThanEqualsToken,
-  ts.SyntaxKind.GreaterThanToken,
-  ts.SyntaxKind.GreaterThanEqualsToken,
-]);
-const ARITHMETIC = new Set([
-  ts.SyntaxKind.PlusToken,
-  ts.SyntaxKind.MinusToken,
-  ts.SyntaxKind.AsteriskToken,
-  ts.SyntaxKind.SlashToken,
-  ts.SyntaxKind.PercentToken,
-  ts.SyntaxKind.AsteriskAsteriskToken,
-]);
+const isComparisonOperator = (kind: number): boolean =>
+  kind === ts.SyntaxKind.LessThanToken ||
+  kind === ts.SyntaxKind.LessThanEqualsToken ||
+  kind === ts.SyntaxKind.GreaterThanToken ||
+  kind === ts.SyntaxKind.GreaterThanEqualsToken;
+const isArithmeticOperator = (kind: number): boolean =>
+  kind === ts.SyntaxKind.PlusToken ||
+  kind === ts.SyntaxKind.MinusToken ||
+  kind === ts.SyntaxKind.AsteriskToken ||
+  kind === ts.SyntaxKind.SlashToken ||
+  kind === ts.SyntaxKind.PercentToken ||
+  kind === ts.SyntaxKind.AsteriskAsteriskToken;
 
 function enclosingFunction(node: Node): SignatureDeclaration | undefined {
   return ts.findAncestor(node.parent, ts.isFunctionLike);
@@ -608,7 +606,7 @@ function reachesSink(use: Node): boolean {
     if (ts.isParenthesizedExpression(parent) || ts.isAsExpression(parent) || ts.isNonNullExpression(parent)) continue;
     if (ts.isElementAccessExpression(parent)) return parent.argumentExpression === child;
     if (ts.isBinaryExpression(parent)) {
-      if (ARITHMETIC.has(parent.operatorToken.kind)) return !ts.isExpressionStatement(parent.parent);
+      if (isArithmeticOperator(parent.operatorToken.kind)) return !ts.isExpressionStatement(parent.parent);
       return false;
     }
     if (ts.isPropertyAssignment(parent) || ts.isShorthandPropertyAssignment(parent)) {
@@ -642,7 +640,7 @@ function isGuardOf(node: Node, name: string): boolean {
   if (ts.isBinaryExpression(node)) {
     const kind = node.operatorToken.kind;
     const isAssignment = kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(node.left) && node.left.text === name;
-    return isAssignment || (COMPARISONS.has(kind) && (mentions(node.left) || mentions(node.right)));
+    return isAssignment || (isComparisonOperator(kind) && (mentions(node.left) || mentions(node.right)));
   }
   // `if (!page) ...` rejects NaN as well as 0.
   return (

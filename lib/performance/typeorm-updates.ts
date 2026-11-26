@@ -30,11 +30,11 @@ const scalarFlags =
   ts.TypeFlags.BigIntLike |
   ts.TypeFlags.Null |
   ts.TypeFlags.Undefined;
-const compoundKinds = new Map<SyntaxKind, UpdateStepKind>([
-  [ts.SyntaxKind.EqualsToken, 'set'],
-  [ts.SyntaxKind.PlusEqualsToken, 'increment'],
-  [ts.SyntaxKind.MinusEqualsToken, 'decrement'],
-]);
+function compoundKindOf(kind: SyntaxKind): UpdateStepKind | undefined {
+  if (kind === ts.SyntaxKind.EqualsToken) return 'set';
+  if (kind === ts.SyntaxKind.PlusEqualsToken) return 'increment';
+  if (kind === ts.SyntaxKind.MinusEqualsToken) return 'decrement';
+}
 const maxWhereLength = 40;
 
 function isMemberCall(node: Node): node is MethodCall {
@@ -77,7 +77,7 @@ function stepOf(statement: Statement, name: string): UpdateStep | undefined {
   if (!ts.isExpressionStatement(statement)) return;
   const expression = ts.skipOuterExpressions(statement.expression);
   if (ts.isBinaryExpression(expression)) {
-    const kind = compoundKinds.get(expression.operatorToken.kind);
+    const kind = compoundKindOf(expression.operatorToken.kind);
     const access = propertyOf(expression.left, name);
     if (!kind || !access || mentions(expression.right, name)) return;
     return { statement, kind, access, field: access.name.text, value: expression.right };

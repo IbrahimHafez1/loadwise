@@ -6,6 +6,7 @@
 // - webhook-missing-idempotency-check
 import { ts } from './compiler.js';
 import { isTestSource } from './review-context.js';
+import { classifyExecutionContext } from '../shared/execution-context.js';
 import { enclosingRequestHandler } from './request-handlers.js';
 import { findRepeatOwner } from './repeated.js';
 import { describeCall, isDefaultAxios, isGlobalFetch } from './http-timeouts.js';
@@ -42,7 +43,16 @@ interface ChainBase {
   proxiedNames: string[];
 }
 
-const { mentionsIdentifier } = createReferenceChecks(ts);
+let cachedRefChecksTs: typeof ts | undefined;
+let cachedRefChecks: ReturnType<typeof createReferenceChecks> | undefined;
+
+function mentionsIdentifier(node: Node, name: string): boolean {
+  if (cachedRefChecksTs !== ts || !cachedRefChecks) {
+    cachedRefChecksTs = ts;
+    cachedRefChecks = createReferenceChecks(ts);
+  }
+  return cachedRefChecks.mentionsIdentifier(node, name);
+}
 
 const SQL_QUERY_PACKAGES = [
   'pg',
@@ -215,15 +225,20 @@ function isIndependentRequestLoop(call: CallExpression, loop: RepeatOwner | unde
 }
 
 function checkSequentialHttp(call: CallExpression, context: PerformanceRuleContext): void {
-  if (JSX_FILE_RE.test(call.getSourceFile().fileName)) return;
+  const sourceFile = call.getSourceFile();
+  if (JSX_FILE_RE.test(sourceFile.fileName)) return;
   if (!isAwaitedRequest(call) || !isHttpRequest(call, context)) return;
   const loop = findRepeatOwner(call, context.checker);
   if (!isIndependentRequestLoop(call, loop)) return;
+  const testReason =
+    isTestSource(sourceFile.fileName) || classifyExecutionContext(sourceFile).runtime === 'test-fixture'
+      ? 'Runs in a test or evaluation source rather than a request path.'
+      : undefined;
   context.report(
     call,
     'sequential-http-in-loop',
     'Awaiting an HTTP request inside a loop runs the requests one after another, so total latency grows with the number of items. Start independent requests together with `Promise.all`, or with a bounded pool such as `p-limit` when the list can be large or the API rate-limits.',
-    loopReviewReason(call, loop, context.checker, 'sequential-http-in-loop'),
+    testReason ?? loopReviewReason(call, loop, context.checker, 'sequential-http-in-loop'),
   );
 }
 
