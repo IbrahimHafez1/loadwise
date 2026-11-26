@@ -207,6 +207,30 @@ function hasNonEmptyDependencies(effectCall: CallExpression): boolean {
   return !ts.isArrayLiteralExpression(dependencies) || dependencies.elements.length > 0;
 }
 
+function isFireAndForgetMutation(fetchCall: CallExpression): boolean {
+  const options = fetchCall.arguments[1] && ts.skipOuterExpressions(fetchCall.arguments[1]);
+  if (!options || !ts.isObjectLiteralExpression(options)) return false;
+  const isMutation = options.properties.some(
+    (p) =>
+      ts.isPropertyAssignment(p) &&
+      propertyName(p) === 'method' &&
+      ts.isStringLiteralLike(p.initializer) &&
+      /^(?:POST|PUT|PATCH|DELETE)$/i.test(p.initializer.text),
+  );
+  if (!isMutation) return false;
+  const parent = fetchCall.parent;
+  if (ts.isVoidExpression(parent) || ts.isExpressionStatement(parent)) return true;
+  if (
+    ts.isPropertyAccessExpression(parent) &&
+    parent.name.text === 'catch' &&
+    ts.isCallExpression(parent.parent) &&
+    ts.isExpressionStatement(parent.parent.parent)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 function checkReactEffect(call: CallExpression, context: PerformanceRuleContext) {
   const effect = effectCallback(call, context.checker);
   if (!effect || containsReturnValue(effect.body)) return;
@@ -221,11 +245,16 @@ function checkReactEffect(call: CallExpression, context: PerformanceRuleContext)
   }
   const fetchCall = findFetchWithoutAbort(effect.body, context.checker);
   if (!fetchCall) return;
+  const reason = isFireAndForgetMutation(fetchCall)
+    ? 'Fire-and-forget mutating request whose response is unused.'
+    : hasNonEmptyDependencies(call)
+      ? undefined
+      : FETCH_STATIC_DEPS_REASON;
   context.report(
     fetchCall,
     'react-fetch-in-effect-no-abort',
     `\`fetch()\` inside \`${effect.hook}\` has no \`AbortController\` cleanup, so fast navigation or dependency changes can trigger race conditions and stale state updates. Pass \`signal: controller.signal\` and call \`controller.abort()\` in the cleanup function.`,
-    hasNonEmptyDependencies(call) ? undefined : FETCH_STATIC_DEPS_REASON,
+    reason,
   );
 }
 

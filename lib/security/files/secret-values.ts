@@ -30,7 +30,7 @@ const settingSuffixes = new Set([
 const publicPrefix = /^(?:NEXT_PUBLIC|NUXT_PUBLIC|EXPO_PUBLIC|VITE|REACT_APP|PUBLIC)_/;
 const minimumSecretLength = 8;
 const placeholderPattern =
-  /change.?me|example|sample|dummy|fake|placeholder|your[-_ ]|<[^>]*>|\$\{|\$\(|\{\{|xxx|\*{3}|\.{3}|todo|replace|insert|here$|(?:^|[^a-z])(?:test|testing|dev)(?:[^a-z]|$)/i;
+  /change.?me|example|sample|dummy|fake|placeholder|your[-_ ]|<[^>]*>|\$\{|\$\(|\{\{|xxx|\*{3}|\.{3}|todo|replace|insert|here$|(?:^|[-_])unused$|(?:^|[^a-z])(?:test|testing|dev)(?:[^a-z]|$)/i;
 const literalWords = /^(?:none|null|undefined|empty|secret|password|token|admin|default|true|false|\d+)$/i;
 const localHosts = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]']);
 const defaultPasswords = new Set([

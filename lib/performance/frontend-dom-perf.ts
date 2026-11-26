@@ -240,21 +240,58 @@ function handlerMeasuresLayout(handler: FunctionWithBody, checker: CheckerAdapte
   return measures;
 }
 
+function handlerWritesDom(handler: FunctionWithBody, checker: CheckerAdapter): boolean {
+  let writes = false;
+  walkAll(handler.body, (node: Node) => {
+    if (isDomWrite(node, checker)) writes = true;
+  });
+  return writes;
+}
+
+function handlerCallsPreventDefault(handler: FunctionWithBody): boolean {
+  let calls = false;
+  walkAll(handler.body, (node: Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'preventDefault'
+    ) {
+      calls = true;
+    }
+  });
+  return calls;
+}
+
+const PASSIVE_SCROLL_REASON =
+  'Runs a passive scroll/resize listener; verify whether throttling or requestAnimationFrame is needed.';
+const STATE_ONLY_HANDLER_REASON = 'Handler only reads geometry to update state without writing to the DOM.';
+const PREVENT_DEFAULT_REASON =
+  'Handler calls preventDefault(), so it cannot be passive and throttling would delay cancellation.';
+
 // undefined: nothing to report. Otherwise the contextual reason ('' when the finding is a firm
 // one).
-function unthrottledHandlerReason(call: CallExpression, checker: CheckerAdapter): string | undefined {
+function unthrottledHandlerReason(
+  call: CallExpression,
+  eventName: string,
+  passive: boolean,
+  checker: CheckerAdapter,
+): string | undefined {
   const handler = resolveHandler(call.arguments[1], checker);
   if (handler === 'wrapped') return;
   if (!handler) return UNKNOWN_HANDLER_REASON;
   if (handlerSchedulesWork(handler, checker)) return;
-  return handlerMeasuresLayout(handler, checker) ? '' : CHEAP_HANDLER_REASON;
+  if (BLOCKING_TOUCH_EVENTS.has(eventName) && handlerCallsPreventDefault(handler)) return PREVENT_DEFAULT_REASON;
+  if (!handlerMeasuresLayout(handler, checker)) return CHEAP_HANDLER_REASON;
+  if (!handlerWritesDom(handler, checker)) return STATE_ONLY_HANDLER_REASON;
+  if (passive) return PASSIVE_SCROLL_REASON;
+  return '';
 }
 
 function checkUnthrottledListener(call: CallExpression, eventName: string, context: PerformanceRuleContext): void {
   if (!HIGH_FREQ_EVENTS.has(eventName)) return;
   const passive = isPassive(call);
   if (BLOCKING_TOUCH_EVENTS.has(eventName) && passive) return;
-  const reason = unthrottledHandlerReason(call, context.checker);
+  const reason = unthrottledHandlerReason(call, eventName, passive, context.checker);
   if (reason === undefined) return;
   if (passive && reason === CHEAP_HANDLER_REASON) return;
   const advice = BLOCKING_TOUCH_EVENTS.has(eventName)

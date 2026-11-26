@@ -5,6 +5,7 @@ import {
   isSeedSource,
   relativeToProject,
 } from '../performance/review-context.js';
+import { classifyExecutionContext, workspaceScopedPath } from '../shared/execution-context.js';
 import type { Expression, Node, SourceFile } from 'typescript';
 
 // Fixtures, mocks, examples and stories hold sample values on purpose, so security findings there
@@ -28,6 +29,7 @@ function isTestSource(file: string) {
     isPerformanceTestSource(file) ||
     isSeedSource(file) ||
     sampleSourcePattern.test(relativeToCheckedFolder(file)) ||
+    sampleSourcePattern.test(workspaceScopedPath(file)) ||
     storySourcePattern.test(file) ||
     testHelperSourcePattern.test(file)
   );
@@ -74,7 +76,8 @@ function underNonProductionGuard(node: Node) {
 }
 
 function createFileContext(sourceFile: SourceFile) {
-  const testSource = isTestSource(sourceFile.fileName);
+  const testSource =
+    isTestSource(sourceFile.fileName) || classifyExecutionContext(sourceFile).runtime === 'test-fixture';
   return {
     isTestSource: testSource,
     testSourceReason: testSource ? testSourceReason : undefined,

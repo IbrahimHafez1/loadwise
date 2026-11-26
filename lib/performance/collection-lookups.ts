@@ -95,11 +95,18 @@ function receiverName(receiver: Expression): string | undefined {
   return ts.isPropertyAccessExpression(target) ? target.name.text : undefined;
 }
 
+const smallConfigSuffixPattern =
+  /^(?:providers|origins|candidates|hosts)$|(?:Filters|Options|Props|Columns|Fields|Roles|Permissions|Tabs|Steps|Providers|Origins|Candidates|Hosts)$/;
+
 // Only a weak hint: it applies when the array's size is unknown, never over a database read or
 // request payload.
 function nameSuggestsSmallConfigList(receiver: Expression, checker: CheckerAdapter): boolean {
   const name = receiverName(receiver);
-  return name !== undefined && smallConfigListNames.has(name) && !isKnownDataSource(receiver, checker);
+  return (
+    name !== undefined &&
+    (smallConfigListNames.has(name) || smallConfigSuffixPattern.test(name)) &&
+    !isKnownDataSource(receiver, checker)
+  );
 }
 
 // `const [rows, other] = await Promise.all([repo.find(), ...])`: the member's own promise is the

@@ -136,7 +136,10 @@ function checkRequestUrl(call: CallExpression, context: SecurityRuleContext) {
     if (!control || (control.part === 'path' && !control.rawPathname)) continue;
     if (isAllowedHost(call, expression, context, hostOnly)) continue;
     const { trace } = control;
-    const reason = hopReason(trace) ?? (isHostHeader(trace) ? hostHeaderReason : undefined);
+    const reason =
+      (control.part === 'path' ? 'The host is fixed; only the URL path is derived from input.' : undefined) ??
+      hopReason(trace) ??
+      (isHostHeader(trace) ? hostHeaderReason : undefined);
     context.report(call, ruleId, message(trace.label), reason, { taint: trace });
     return;
   }

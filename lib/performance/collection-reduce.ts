@@ -260,8 +260,14 @@ function isSchemaPropertiesRead(expression: Expression, checker: CheckerAdapter,
   if (ts.isBinaryExpression(value) && fallbackOperators.has(value.operatorToken.kind))
     return nested(value.left) && isEmptyObjectLiteral(value.right);
   if (!ts.isPropertyAccessExpression(value) || value.name.text !== 'properties') return false;
+  if (/schema/i.test(value.expression.getText())) return true;
   const owner = checker.getTypeAtLocation(value.expression);
-  return jsonSchemaMembers.every((member) => owner.getProperty(member));
+  return (
+    jsonSchemaMembers.every((member) => owner.getProperty(member)) ||
+    /schema/i.test(owner.getSymbol()?.name ?? '') ||
+    (owner.getProperty('properties') !== undefined &&
+      (owner.getProperty('required') !== undefined || owner.getProperty('type') !== undefined))
+  );
 }
 
 function enumeratesSchemaProperties(input: Node, checker: CheckerAdapter): boolean {
@@ -329,10 +335,21 @@ function boundedReduceReason(call: CallExpression, input: Expression, checker: C
   if (enumeratesGenericObject(input, checker)) return genericObjectReason;
   if (reducesFiniteValues(call, checker)) return enumListReason;
   if (enumeratesSchemaProperties(input, checker)) return schemaPropertiesReason;
+  const inputName = ts.isIdentifier(input) ? input.text : ts.isPropertyAccessExpression(input) ? input.name.text : '';
+  if (/^(?:filters|options|meta)$/i.test(inputName)) {
+    return 'Reduces over a small configuration or filter list, so the accumulator copy stays bounded.';
+  }
+  const fileName = call.getSourceFile().fileName;
   const runtime = classifyExecutionContext(call.getSourceFile()).runtime;
   if (runtime === 'test-fixture') return testSourceReason;
   if (runtime === 'cli-tooling') return 'Runs in CLI or developer tooling rather than a server request path.';
-  if (clientSourcePattern.test(call.getSourceFile().fileName)) return uiReduceReason;
+  if (
+    runtime === 'browser' &&
+    /(?:^|[/\\])(?:apps[/\\]dashboard|admin[/\\]dashboard|components|workflow-editor)[/\\]/i.test(fileName)
+  ) {
+    return uiReduceReason;
+  }
+  if (clientSourcePattern.test(fileName)) return uiReduceReason;
   return clientHookContext(call, call.getSourceFile());
 }
 

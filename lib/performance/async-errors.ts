@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ts } from './compiler.js';
+import { classifyExecutionContext } from '../shared/execution-context.js';
+import { isTempRoot } from '../shared/project-root.js';
 import type {
   ArrowFunction,
   CallExpression,
@@ -158,7 +160,7 @@ function expressMajor(program: ProgramAdapter, fileName: string): number | undef
       major = majorOf(range);
       break;
     }
-    if (path.dirname(directory) === directory) break;
+    if (path.dirname(directory) === directory || isTempRoot(directory)) break;
   }
   majors.set(start, major);
   return major;
@@ -205,9 +207,13 @@ function isWorkerPortHandler(callee: Expression, sourceFile: SourceFile): boolea
 function checkCallback(node: CallExpression, context: PerformanceRuleContext): void {
   const callee = ts.skipOuterExpressions(node.expression);
   if (!isCallbackTaker(callee) || isWorkerPortHandler(callee, node.getSourceFile())) return;
+  const testReason =
+    classifyExecutionContext(node.getSourceFile()).runtime === 'test-fixture'
+      ? 'Runs in a test fixture rather than a production process.'
+      : undefined;
   for (const argument of node.arguments) {
     if (isAsyncFunctionArgument(argument) && hasUncaughtAwait(argument)) {
-      context.report(argument, CALLBACK_RULE, CALLBACK_MESSAGE);
+      context.report(argument, CALLBACK_RULE, CALLBACK_MESSAGE, testReason);
     }
   }
 }

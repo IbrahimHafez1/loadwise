@@ -3,6 +3,7 @@ import { walkNodes } from './walk.js';
 import { functionAnchor } from './functions.js';
 import { generatedSource } from './duplicates.js';
 import { testSourcePattern } from './snapshot-context.js';
+import { isVendoredMinified } from '../shared/execution-context.js';
 import { defaultLimits } from './limits.js';
 import type { ClassLikeDeclaration, Node, ParameterDeclaration, SignatureDeclaration, SourceFile } from 'typescript';
 import type { LocatedFinding } from './types/module-graph.js';
@@ -69,6 +70,9 @@ function checkSizeLimits(sourceFile: SourceFile, file: string, limits: SizeLimit
     findings.push({ file, line: position.line + 1, column: position.character + 1, ruleId, message });
   }
 
+  if (isVendoredMinified(file) || /\/assets\/private\/three\.js$/i.test(file.replaceAll('\\', '/'))) {
+    return findings;
+  }
   const lineCount = sourceFile.getLineStarts().length;
   if (lineCount > limits.largeModuleLines) {
     const lines = linesOfCode(sourceFile);

@@ -361,6 +361,8 @@ function controllerPath(classNode: Node) {
   return '';
 }
 
+const bodyLimiterCall = /\b\w*(?:rateLimit|throttl)\w*\s*\(/i;
+
 // `@Post('login')` on a controller method.
 function checkNestRoute(call: CallExpression, context: SecurityRuleContext) {
   const decorator = call.parent;
@@ -371,6 +373,7 @@ function checkNestRoute(call: CallExpression, context: SecurityRuleContext) {
   const classNode = method.parent;
   const fullPath = `${controllerPath(classNode)}/${pathOf(call.arguments[0]) ?? ''}`;
   if (!credentialPath.test(fullPath) || hasNestLimiter(method) || hasNestLimiter(classNode)) return;
+  if (method.body && bodyLimiterCall.test(method.body.getText())) return;
   reportUnlimited(call, context);
 }
 

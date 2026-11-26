@@ -1,5 +1,6 @@
 // template-autoescape-disabled: a template engine configured to stop HTML-escaping every value it
 // renders.
+import { classifyExecutionContext } from '../../shared/execution-context.js';
 import { objectLiteralOf, findProperty, isTrue, isFalse } from './literals.js';
 import type { CallExpression, Node } from 'typescript';
 import type { SecurityRuleContext } from '../../shared/types.js';
@@ -29,7 +30,14 @@ function check(call: CallExpression, context: SecurityRuleContext) {
   // `nunjucks.configure(options)` or `nunjucks.configure(path, options)`: the options come last.
   const options = objectLiteralOf(call.arguments.at(index), context.checker);
   const option = options && findProperty(options, optionName);
-  if (option && disables(option.value)) context.report(option.property, ruleId, message);
+  if (option && disables(option.value)) {
+    const runtime = classifyExecutionContext(context.sourceFile).runtime;
+    const reason =
+      runtime === 'cli-tooling' || runtime === 'test-fixture'
+        ? 'Runs in CLI or test tooling rather than a server request path.'
+        : undefined;
+    context.report(option.property, ruleId, message, reason);
+  }
 }
 
 export { check };

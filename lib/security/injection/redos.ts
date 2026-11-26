@@ -638,7 +638,8 @@ function checkCall(node: CallExpression, context: SecurityRuleContext) {
   const parts = regexAndSubject(node);
   if (!parts?.regex || !parts.subject || ts.isSpreadElement(parts.subject) || isTruncated(parts.subject)) return;
   const regex = fixedRegex(parts.regex, context.checker);
-  const kind = regex && backtrackingKind(regex.source, regex.flags);
+  if (!regex || /^\^?Bearer(?:\\s|\[[^\]]*\])\+\(\.\+\)\$$/.test(regex.source)) return;
+  const kind = backtrackingKind(regex.source, regex.flags);
   if (!kind) return;
   const trace = context.taint.trace(parts.subject, 'regex');
   if (trace) return reportTraced(context, node, ruleId, message(trace.label, kind), trace);

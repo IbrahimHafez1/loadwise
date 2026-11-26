@@ -1,7 +1,7 @@
 import { ts } from './compiler.js';
-import fs from 'node:fs';
 import path from 'node:path';
-import { classifyExecutionContext } from '../shared/execution-context.js';
+import { classifyExecutionContext, workspaceScopedPath } from '../shared/execution-context.js';
+import { isTempRoot, safeExists } from '../shared/project-root.js';
 import { privateProcessEntries } from './node-fs.js';
 import { rootRelativePath } from './node-fs-context.js';
 import { findRepeatOwner, isStandardArrayCall } from './repeated.js';
@@ -141,6 +141,9 @@ const setupContextRules = new Set([
   'orm-deep-offset',
   'list-count-per-request',
   'stream-pipe-unhandled-error',
+  'orm-count-materialization',
+  'session-memory-store',
+  'whole-payload-in-memory',
 ]);
 // Per-item loop rules whose loops can be one-at-a-time on purpose; see loopReviewReason.
 const loopRules = new Set([
@@ -151,8 +154,10 @@ const loopRules = new Set([
 ]);
 // A suffix identifies a test anywhere. A directory name identifies one only inside the project,
 // because the project itself may live under a test directory.
-const testSourcePattern = /[.-]i?(?:spec|test|e2e(?:-ee|-spec)?)\.[cm]?[jt]sx?$/i;
-const testDirectoryPattern = /(?:^|[/\\])(?:__tests__|tests?|e2e)[/\\]/i;
+const testSourcePattern =
+  /[.-]i?(?:spec|test|e2e(?:-ee|-spec)?)\.[cm]?[jt]sx?$|(?:^|[/\\])(?:vitest\.[^/\\]+\.setup|jest\.setup)\.[cm]?[jt]sx?$/i;
+const testDirectoryPattern =
+  /(?:^|[/\\])(?:__tests__|tests?|e2e|[\w-]*test-utils|sandbox|__stories__|[\w-]*evals?|evaluations?|playwright|quality[/\\](?:testing|environments))[/\\]/i;
 const clientSourcePattern = /\.[jt]sx$/i;
 // Only unambiguous demo-data names: a bare "data" directory often holds production code.
 const seedSourcePattern =
@@ -166,7 +171,7 @@ const databaseScriptPattern = /(?:^|[/\\])database[/\\](?:[^/\\]+[/\\])*(?:run-[
 // Blocking calls in these places run at build time, at boot, in container or codemod tooling or in
 // test support, even inside a loop. The path is taken from the repository root, because a tooling
 // folder often has its own package.json.
-const blockingToolingDirectoryPattern = /(?:^|\/)(?:docker|tools?|codemods?|startup|migrations?|tests?-[\w-]+)\//i;
+const blockingToolingDirectoryPattern = /(?:^|\/)(?:docker|tools?|codemods?|startup|migrations?|tests?-[\w-]+|rsn)\//i;
 const buildConfigPattern = /[.-]config\.[cm]?[jt]s$/i;
 // Folders holding operator or container tooling, matched from the repository root.
 const lookupToolingDirectoryPattern = /(?:^|\/)(?:docker|tools?|scripts?)\//i;
@@ -178,8 +183,8 @@ function createProjectRelativizer() {
     if (!roots.has(directory)) {
       const parent = path.dirname(directory);
       let root: string | undefined;
-      if (projectRootMarkers.some((name) => fs.existsSync(path.join(directory, name)))) root = directory;
-      else if (parent !== directory) root = projectRoot(parent);
+      if (projectRootMarkers.some((name) => safeExists(path.join(directory, name)))) root = directory;
+      else if (parent !== directory && !isTempRoot(directory)) root = projectRoot(parent);
       roots.set(directory, root);
     }
     return roots.get(directory);
@@ -194,7 +199,11 @@ function createProjectRelativizer() {
 const relativeToProject = createProjectRelativizer();
 
 function isTestSource(file: string): boolean {
-  return testSourcePattern.test(file) || testDirectoryPattern.test(relativeToProject(file));
+  return (
+    testSourcePattern.test(file) ||
+    testDirectoryPattern.test(relativeToProject(file)) ||
+    testDirectoryPattern.test(workspaceScopedPath(file))
+  );
 }
 
 function isSeedSource(file: string): boolean {
@@ -300,11 +309,16 @@ function clientHookContext(node: Node, source: SourceFile): string | undefined {
   return 'Runs in a browser UI hook or composable module over UI state rather than on a server request path. Review in a front-end context if the list can grow large.';
 }
 
-function setupSourceContext(source: SourceFile): string | undefined {
+function setupSourceContext(source: SourceFile, ruleId: string): string | undefined {
   const file = source.fileName;
   const runtime = classifyExecutionContext(source).runtime;
   if (isTestSource(file) || runtime === 'test-fixture') return 'Runs in a test source rather than a request path.';
+  if (runtime === 'cli-tooling' && ruleId !== 'http-call-without-timeout')
+    return 'Runs in CLI or developer tooling rather than a request path.';
+  if (ruleId === 'await-before-early-exit' && runtime === 'browser')
+    return 'Runs in a browser UI hook rather than a server request path.';
   if (isSeedSource(file)) return 'Runs in seed or demo-data setup rather than a request path.';
+  if (buildConfigPattern.test(file)) return 'Runs in a build or tool configuration file rather than a request path.';
   if (isToolingSource(source))
     return 'Runs in operator tooling (scripts, standalone entry points, deployment, migrations or commands) rather than a request path.';
 }
@@ -356,8 +370,8 @@ function blockingSourceContext(node: Node, checker: CheckerAdapter, source: Sour
     return 'Synchronous call in a build or tool configuration file, which runs when the tool starts rather than on a request path.';
   if (blockingToolingDirectoryPattern.test(rootRelativePath(file)))
     return 'Synchronous call in container, boot, codemod, tooling or test-support code rather than a request path.';
-  if ((isToolingSource(source) || runtime === 'cli-tooling') && !findRepeatOwner(node, checker)) {
-    return 'One synchronous call in operator tooling (scripts, deployment, migrations or commands). Prioritize if the server also imports this module.';
+  if ((runtime === 'cli-tooling' || isToolingSource(source)) && !findRepeatOwner(node, checker)) {
+    return 'Synchronous call in operator or CLI tooling (scripts, deployment, migrations or commands). Prioritize if the server also imports this module.';
   }
 }
 
@@ -368,7 +382,7 @@ function sourceKindContext(
   source: SourceFile,
 ): string | undefined {
   if (perItemQueryRules.has(ruleId)) return perItemQueryContext(ruleId, source);
-  if (setupContextRules.has(ruleId)) return setupSourceContext(source);
+  if (setupContextRules.has(ruleId)) return setupSourceContext(source, ruleId);
   if (lookupRules.has(ruleId)) return lookupSourceContext(node, source);
   if (blockingRules.has(ruleId)) return blockingSourceContext(node, checker, source);
 }

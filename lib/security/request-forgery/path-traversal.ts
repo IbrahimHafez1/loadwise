@@ -1,5 +1,6 @@
 // path-traversal: a file-system path built from request data.
 import { ts } from '../../performance/compiler.js';
+import { classifyExecutionContext } from '../../shared/execution-context.js';
 import { strip, hasProperty, isResponseReceiver, hopReason, isContainedPath, isProjectValidated } from './shared.js';
 import type { CallExpression, Expression } from 'typescript';
 import type { SecurityRuleContext } from '../../shared/types.js';
@@ -85,7 +86,11 @@ function checkFilePath(call: CallExpression, context: SecurityRuleContext) {
     if (!trace) continue;
     if (isContainedPath(call, argument, context) || isProjectValidated(call, argument, validatedKinds, context))
       continue;
-    const reason = hopReason(trace) ?? (uploadNameLabel.test(trace.label) ? uploadNameReason : undefined);
+    const runtime = classifyExecutionContext(context.sourceFile).runtime;
+    const reason =
+      (runtime === 'cli-tooling' ? 'Runs in CLI or developer tooling rather than a server request path.' : undefined) ??
+      hopReason(trace) ??
+      (uploadNameLabel.test(trace.label) ? uploadNameReason : undefined);
     context.report(call, ruleId, message(trace.label), reason, { taint: trace });
     return;
   }

@@ -1,4 +1,5 @@
 import { ts, isDefaultLibrary } from './compiler.js';
+import { classifyExecutionContext } from '../shared/execution-context.js';
 import { isStandardArrayCall, outerExpression, standardInterface } from './repeated.js';
 import type {
   ArrowFunction,
@@ -168,10 +169,13 @@ function checkSortExtreme(call: CallExpression, { checker, report }: Performance
   )
     return;
   const extreme = order.ascending === endpoint.last ? 'maximum' : 'minimum';
+  const runtime = classifyExecutionContext(call.getSourceFile()).runtime;
+  const reason = runtime === 'browser' ? 'Runs in a browser UI module where the array is typically small.' : undefined;
   report(
     method.name,
     'numeric-sort-for-extreme',
     `Sorting the whole array to read one end costs O(n log n). For dense numbers without NaN, track a running ${extreme} in one pass; empty input must still yield undefined and signed-zero ties must keep the element the sort picked.`,
+    reason,
   );
 }
 

@@ -117,7 +117,16 @@ function landingNames(start: Node, context: SecurityRuleContext, depth = 0): (st
 
 function checkMathRandom(call: CallExpression, context: SecurityRuleContext) {
   if (!isMathRandomCall(call)) return;
-  const classes = landingNames(call, context).map(classifyName);
+  const names = landingNames(call, context);
+  if (names[0] && /(?:MessageId|CorrelationId)$/i.test(names[0])) {
+    return context.report(
+      call,
+      'insecure-random-for-secret',
+      message,
+      'The value is only used as a message or correlation identifier; confirm it is not a secret or capability.',
+    );
+  }
+  const classes = names.map(classifyName);
   if (classes.includes('secret')) return context.report(call, 'insecure-random-for-secret', message);
   if (classes.includes('identifier'))
     context.report(

@@ -1,8 +1,8 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import { ts } from './compiler.js';
 import { runsOnlyInSchemaTooling } from './schema-tooling.js';
 import { classifyExecutionContext } from '../shared/execution-context.js';
+import { isTempRoot, safeExists } from '../shared/project-root.js';
 import type {
   CallExpression,
   Expression,
@@ -285,18 +285,27 @@ function isConstProcessEntry(owner: Node): boolean {
 }
 
 function hasMarker(directory: string, markers: readonly string[]): boolean {
-  return markers.some((marker) => fs.existsSync(path.join(directory, marker)));
+  return markers.some((marker) => safeExists(path.join(directory, marker)));
 }
 
 function ancestorWith(directory: string, markers: readonly string[]): string | undefined {
   for (let current = directory; ; current = path.dirname(current)) {
     if (hasMarker(current, markers)) return current;
-    if (path.dirname(current) === current) return;
+    if (path.dirname(current) === current || isTempRoot(current)) return;
   }
 }
 
 function toForwardSlashes(file: string): string {
   return file.split(path.sep).join('/');
+}
+
+function tempProjectRoot(directory: string): string | undefined {
+  for (let current = directory; ;) {
+    const parent = path.dirname(current);
+    if (parent === current) return;
+    if (isTempRoot(parent)) return current;
+    current = parent;
+  }
 }
 
 function computeRootRelativePath(fileName: string): string {
@@ -308,8 +317,8 @@ function computeRootRelativePath(fileName: string): string {
   if (!fromWorkingDirectory.startsWith('..') && !path.isAbsolute(fromWorkingDirectory)) {
     return toForwardSlashes(fromWorkingDirectory);
   }
-  const packageRoot = ancestorWith(directory, projectRootMarkers);
-  return packageRoot ? toForwardSlashes(path.relative(packageRoot, absolute)) : path.basename(absolute);
+  const root = ancestorWith(directory, projectRootMarkers) ?? tempProjectRoot(directory);
+  return root ? toForwardSlashes(path.relative(root, absolute)) : path.basename(absolute);
 }
 
 // The file's path inside its repository (or the directory being scanned), so the folders above the

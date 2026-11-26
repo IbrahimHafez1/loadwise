@@ -209,6 +209,12 @@ function prismaContextualReason(
   return onlySmallJson ? SMALL_JSON_REASON : undefined;
 }
 
+function isExportFunction(call: CallExpression): boolean {
+  const fn = ts.findAncestor(call, hasFunctionBody);
+  const name = fn && 'name' in fn && fn.name && ts.isIdentifier(fn.name) ? fn.name.text : '';
+  return /^export/i.test(name);
+}
+
 function checkPrisma(call: CallExpression, access: PropertyAccessExpression, context: PerformanceRuleContext): void {
   if (access.name.text !== 'findMany' || !prismaModelName(access.name, context.checker)) return;
   const options = objectArgument(call);
@@ -219,7 +225,9 @@ function checkPrisma(call: CallExpression, access: PropertyAccessExpression, con
   const depth = prismaIncludeDepth(options);
   if (!wide.length && depth < MIN_NESTED_RELATIONS) return;
   const onlyUnfollowedColumns = !followed && depth < MIN_NESTED_RELATIONS;
-  const reason = prismaContextualReason(table, wide, depth, onlyUnfollowedColumns);
+  const reason = isExportFunction(call)
+    ? 'Runs in an export function that may intentionally load full columns.'
+    : prismaContextualReason(table, wide, depth, onlyUnfollowedColumns);
   report(context, access.name, 'findMany()', describe(wide, depth, 'includes'), reason);
 }
 

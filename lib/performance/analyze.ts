@@ -60,6 +60,7 @@ import { checkFrontendFile } from './frontend-perf.js';
 import { collectPhase5PerfFindings } from './phase5-rules.js';
 import { checkLastInsertId } from './last-insert-id.js';
 import { checkWorkbookDecodes } from './workbook-decodes.js';
+import { isVendoredMinified } from '../shared/execution-context.js';
 import { hotPathOf } from '../shared/hot-path-graph.js';
 import type { CallExpression, Node, SourceFile } from 'typescript';
 import type { PerformancePolicy } from './types/performance-policy.js';
@@ -136,6 +137,7 @@ function analyzeFile(
   policy?: PerformancePolicy,
   forEachSourceCandidate = program.forEachSourceCandidate,
 ): Finding[] {
+  if (isVendoredMinified(sourceFile.fileName)) return [];
   const checker = program.getTypeChecker();
   const findings: Finding[] = [];
   const checkDrizzle = includesDrizzle(program);

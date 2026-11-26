@@ -34,7 +34,18 @@ function isArrayValue(node: Node, checker: CheckerAdapter): boolean {
 // the callee a whole key set; a relation filter such as `{ where: { folder: { id: In(ids) } } }`
 // nests one level deeper.
 function carriesInList(argument: Expression, checker: CheckerAdapter, depth = 0): boolean {
-  const value = ts.skipOuterExpressions(argument);
+  let value = ts.skipOuterExpressions(argument);
+  if (depth === 0 && ts.isIdentifier(value)) {
+    const declaration = resolvedSymbol(value, checker)?.valueDeclaration;
+    if (
+      declaration &&
+      ts.isVariableDeclaration(declaration) &&
+      declaration.initializer &&
+      declaration.parent.flags & ts.NodeFlags.Const
+    ) {
+      value = ts.skipOuterExpressions(declaration.initializer);
+    }
+  }
   if (depth > 2 || !ts.isObjectLiteralExpression(value)) return false;
   return value.properties.some(
     (property) =>

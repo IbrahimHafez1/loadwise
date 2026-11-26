@@ -139,6 +139,32 @@ function growingObjectCopy(
   return assigned !== undefined && addsDynamicKey(assigned.properties, varies, checker);
 }
 
+function exitsLoopImmediately(assignment: BinaryExpression, owner: RepeatOwner): boolean {
+  const statement = assignment.parent;
+  if (!ts.isExpressionStatement(statement) || !ts.isBlock(statement.parent)) return false;
+  const statements = statement.parent.statements;
+  const index = statements.indexOf(statement);
+  if (index < 0 || index + 1 >= statements.length) return false;
+  const next = statements[index + 1];
+  if (ts.isReturnStatement(next) || ts.isThrowStatement(next) || ts.isBreakStatement(next)) {
+    return statement.parent.parent === owner || ts.isIfStatement(statement.parent.parent);
+  }
+  return false;
+}
+
+function isDotSplitLoop(owner: RepeatOwner): boolean {
+  if (!ts.isForOfStatement(owner)) return false;
+  const expr = ts.skipOuterExpressions(owner.expression);
+  return (
+    ts.isCallExpression(expr) &&
+    ts.isPropertyAccessExpression(expr.expression) &&
+    expr.expression.name.text === 'split' &&
+    expr.arguments.length === 1 &&
+    ts.isStringLiteralLike(expr.arguments[0]) &&
+    expr.arguments[0].text === '.'
+  );
+}
+
 export function checkCollectionAssignment(assignment: BinaryExpression, context: PerformanceRuleContext): void {
   if (assignment.operatorToken.kind !== ts.SyntaxKind.EqualsToken || !ts.isIdentifier(assignment.left)) return;
   const target = assignment.left;
@@ -147,7 +173,7 @@ export function checkCollectionAssignment(assignment: BinaryExpression, context:
   const copiesArray = growingArrayCopy(result, target);
   if (!copiesArray && !ts.isObjectLiteralExpression(result) && !ts.isCallExpression(result)) return;
   const owner = findRepeatOwner(assignment, checker);
-  if (!owner) return;
+  if (!owner || exitsLoopImmediately(assignment, owner) || isDotSplitLoop(owner)) return;
   const symbol = externalBinding(target, owner, checker);
   if (!symbol) return;
   if (copiesArray) {

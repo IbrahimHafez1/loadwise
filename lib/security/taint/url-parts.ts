@@ -44,7 +44,7 @@ function beginsLocalPath(text: string) {
 // `req.protocol`), or undefined.
 function partAfter(prefix: string, textAfterBase?: string): string {
   if (fixedOrigin.test(prefix) || beginsLocalPath(prefix) || relativeReference.test(prefix)) return 'path';
-  if (textAfterBase !== undefined && beginsLocalPath(textAfterBase)) return 'path';
+  if (textAfterBase !== undefined && (textAfterBase === '/' || beginsLocalPath(textAfterBase))) return 'path';
   if (openHost.test(prefix)) return 'host';
   return 'whole';
 }
@@ -95,6 +95,39 @@ function constantDeclaration(node: Node, checker: CheckerAdapter): VariableDecla
   const declaration = checker.getSymbolAtLocation(node)?.valueDeclaration;
   if (declaration && ts.isVariableDeclaration(declaration) && declaration.parent.flags & ts.NodeFlags.Const)
     return declaration;
+}
+
+function singleBlockAssignment(
+  declaration: VariableDeclaration,
+  usage: Node,
+  checker: CheckerAdapter,
+): Expression | undefined {
+  const init = declaration.initializer && stripEmpty(declaration.initializer);
+  if (init !== '') return;
+  const block = ts.findAncestor(declaration, ts.isBlock);
+  if (!block || usage.pos < declaration.end || usage.end > block.end) return;
+  const symbol = checker.getSymbolAtLocation(declaration.name);
+  let assigned: Expression | undefined;
+  let count = 0;
+  (function visit(node: Node): void {
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isIdentifier(node.left) &&
+      node.end < usage.pos &&
+      checker.getSymbolAtLocation(node.left) === symbol
+    ) {
+      assigned = node.right;
+      count++;
+    }
+    ts.forEachChild(node, visit);
+  })(block);
+  return count === 1 ? assigned : undefined;
+}
+
+function stripEmpty(node: Expression): string | undefined {
+  const value = ts.skipOuterExpressions(node);
+  return ts.isStringLiteralLike(value) ? value.text : undefined;
 }
 
 // The text a list of pieces starts with, when it starts with literal text.
@@ -185,6 +218,15 @@ function createUrlControl(
     }
   }
 
+  function aliasTarget(expression: Expression): Expression | undefined {
+    const declaration = constantDeclaration(expression, checker);
+    if (declaration) return declaration.initializer;
+    const rawDecl = checker.getSymbolAtLocation(expression)?.valueDeclaration;
+    return rawDecl && ts.isVariableDeclaration(rawDecl)
+      ? singleBlockAssignment(rawDecl, expression, checker)
+      : undefined;
+  }
+
   function control(node: Expression | undefined, depth: number): UrlControl | undefined {
     const expression = strip(node);
     if (!expression) return;
@@ -196,8 +238,8 @@ function createUrlControl(
       // A guard on the alias (`if (!ALLOWED.includes(next)) return`) cleans it even though its
       // initializer is not.
       if (!tracedUrl(expression)) return;
-      const declaration = constantDeclaration(expression, checker);
-      if (declaration) return control(declaration.initializer, depth + 1);
+      const target = aliasTarget(expression);
+      if (target) return control(target, depth + 1);
     }
     if (ts.isPropertyAccessExpression(expression) && urlInstance(expression.expression, depth + 1)) {
       if (pathOnlyFields.has(expression.name.text)) {

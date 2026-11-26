@@ -26,7 +26,9 @@ const tlsMessage =
 
 // An operator opt-in such as `process.env.PG_SSL_ALLOW_SELF_SIGNED === 'true'` or
 // `config.get('ALLOW_SELF_SIGNED')`.
-const selfSignedOptIn = /ALLOW_SELF_SIGNED|ALLOW_INSECURE|ALLOW_UNAUTHORIZED|SKIP_TLS_VERIFY|INSECURE_SKIP_VERIFY/i;
+const selfSignedOptIn =
+  /ALLOW_SELF_SIGNED|ALLOW_INSECURE|ALLOW_UNAUTHORIZED|SKIP_TLS_VERIFY|INSECURE_SKIP_VERIFY|IGNORE_SSL|IGNORE_TLS|ACCEPT_INVALID_CERTS|accept_invalid_certs|ignoreSSLIssues|allowUnauthorized|rejectUnauthorized\s*===\s*false/i;
+const loopbackCondition = /\b(?:localhost|127\.0\.0\.1|::1|isLoopback)/i;
 // libpq `sslmode` values that encrypt without verifying the certificate.
 const unverifiedSslModes = new Set(['require', 'prefer', 'allow', 'no-verify']);
 
@@ -61,7 +63,11 @@ function isExplicitOptIn(node: Node) {
     if (branch !== 'true') continue;
     const text = condition.getText();
     if (selfSignedOptIn.test(text) && !/!|\|\|/.test(text)) return true;
+    if (loopbackCondition.test(text) && !/!/.test(text)) return true;
     if (isUnverifiedSslModeTest(condition)) return true;
+  }
+  for (let current: Node | undefined = node.parent; current; current = current.parent) {
+    if (ts.isCaseClause(current) && selfSignedOptIn.test(current.expression.getText())) return true;
   }
   return false;
 }

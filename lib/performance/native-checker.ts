@@ -12,6 +12,7 @@ import type {
   NativeType,
 } from './types/native-typescript.js';
 const { SyntaxKind } = requireNative('typescript/ast');
+const { ObjectFlags } = requireNative('typescript/sync');
 const { NODE_LEN, NODE_OFFSET_KIND, NODE_OFFSET_PARENT, HEADER_OFFSET_NODES } =
   requireNative('./dist/api/node/protocol.js');
 
@@ -215,7 +216,10 @@ function adaptProgram(program: NativeProgram, options: CompilerOptions = {}): Pr
     getSymbolAtLocation: cachedByNode((node: Node) => adaptSymbol(native.getSymbolAtLocation(node))),
     resolveName: (name, node, meaning, excludeGlobals) =>
       adaptSymbol(native.resolveName(name, meaning, node, excludeGlobals)),
-    getBaseTypes: (type) => native.getBaseTypes(nativeTypeOf(type)).map(adaptType),
+    getBaseTypes: (type) => {
+      const nativeType = nativeTypeOf(type);
+      return nativeType.isClassOrInterface() ? native.getBaseTypes(nativeType).map(adaptType) : [];
+    },
     getNonNullableType: (type) => adaptType(native.getNonNullableType(nativeTypeOf(type))),
     getAwaitedType(type) {
       const awaited = native.getAwaitedType(nativeTypeOf(type));
@@ -230,7 +234,12 @@ function adaptProgram(program: NativeProgram, options: CompilerOptions = {}): Pr
         isReadonly: info.isReadonly,
         declaration: info.declaration?.resolve(),
       })),
-    getTypeArguments: (type) => native.getTypeArguments(nativeTypeOf(type)).map(adaptType),
+    // tsgo's handleGetTypeArguments assumes a TypeReference and panics on other types.
+    getTypeArguments: (type) => {
+      const nativeType = nativeTypeOf(type);
+      if (!(nativeType.objectFlags & ObjectFlags.Reference)) return [];
+      return native.getTypeArguments(nativeType).map(adaptType);
+    },
     getAliasedSymbol: (symbol) => {
       if (!isAdaptedSymbol(symbol)) throw new Error('Expected a symbol adapted by the native checker.');
       return symbol.resolveAlias();

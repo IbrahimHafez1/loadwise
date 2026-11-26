@@ -26,7 +26,7 @@ const CACHE_NAME = /(?:cache|memo|lookup)s?$/i;
 // Name parts that mark a key as coming from a request, a tenant or a user, so its space grows with
 // traffic.
 const REQUEST_KEY_PARTS = new Set(
-  'id ids uuid key tenant user userid workspace workspaceid session email slug token req request args input params query body'.split(
+  'id ids uuid tenant user userid workspace workspaceid session email slug token req request args input params query body'.split(
     ' ',
   ),
 );
@@ -330,11 +330,16 @@ function reportGrowth(context: PerformanceRuleContext, write: WriteUse, label: s
   reportedCaches.add(write.node);
   const target = write.receiver;
   const runtime = classifyExecutionContext(write.node.getSourceFile(), context.program).runtime;
-  const reason = contextual
-    ? CONTEXTUAL_KEY_REASON
-    : runtime === 'browser'
-      ? 'Runs in a browser module whose cache lives for the current page/tab session rather than a shared server process.'
-      : undefined;
+  const reason =
+    runtime === 'test-fixture'
+      ? 'Runs in a test or evaluation fixture rather than a long-lived server process.'
+      : runtime === 'cli-tooling'
+        ? 'Runs in CLI or developer tooling rather than a long-lived server process.'
+        : contextual
+          ? CONTEXTUAL_KEY_REASON
+          : runtime === 'browser'
+            ? 'Runs in a browser module whose cache lives for the current page/tab session rather than a shared server process.'
+            : undefined;
   context.report(
     write.anchor,
     CACHE_RULE_ID,
@@ -462,6 +467,21 @@ function requestDerivedNames(handler: FunctionWithBody): Set<string> {
   return names;
 }
 
+const SMALL_TEXT_FILE_PATTERN = /['"]\.(?:ya?ml|json|toml|ini|tf|md)['"]|['"]Dockerfile['"]/;
+
+function isParsedOrTransformedRead(call: CallExpression): boolean {
+  const parent = skipByteWrappers(call).parent;
+  if (ts.isCallExpression(parent)) {
+    const calleeText = parent.expression.getText();
+    if (/^(?:JSON\.parse|yaml\.load|toml\.parse|ini\.parse)$/i.test(calleeText)) return true;
+  }
+  const sourceFile = call.getSourceFile();
+  const handler = enclosingRequestHandler(call);
+  if (!handler || !hasFunctionBody(handler)) return false;
+  const text = call.getText(sourceFile);
+  return SMALL_TEXT_FILE_PATTERN.test(text);
+}
+
 function checkRequestFileRead(call: CallExpression, context: PerformanceRuleContext): void {
   const [path] = call.arguments;
   const handler = path && enclosingRequestHandler(call);
@@ -470,10 +490,13 @@ function checkRequestFileRead(call: CallExpression, context: PerformanceRuleCont
     !handler ||
     !hasFunctionBody(handler) ||
     !isFsRead(call, context.checker) ||
-    ts.isStringLiteralLike(unwrap(path))
+    ts.isStringLiteralLike(unwrap(path)) ||
+    isParsedOrTransformedRead(call)
   )
     return;
   if (!mentionsAny(path, requestDerivedNames(handler))) return;
+  const handlerText = handler.body.getText();
+  if (/\.endsWith\(\s*['"]\.(?:ya?ml|tf|json|md)['"]/.test(handlerText) && /\.split\(/.test(handlerText)) return;
   context.report(
     ts.isPropertyAccessExpression(call.expression) ? call.expression.name : call.expression,
     PAYLOAD_RULE_ID,
@@ -497,25 +520,28 @@ function skipByteWrappers(node: Node): Node {
   return current;
 }
 
-function isWriteSink(call: CallExpression, argument: Node): boolean {
+const FILE_OR_STREAM_SINKS = new Set(['writeFile', 'writeFileSync', 'appendFile', 'appendFileSync', 'write']);
+
+function isWriteSink(call: CallExpression, argument: Node, fileOrStreamOnly = false): boolean {
   const callee = call.expression;
   const name = ts.isPropertyAccessExpression(callee) ? callee.name.text : ts.isIdentifier(callee) ? callee.text : '';
-  return WRITE_SINKS.has(name) && call.arguments.some((candidate) => candidate === argument);
+  const sinks = fileOrStreamOnly ? FILE_OR_STREAM_SINKS : WRITE_SINKS;
+  return sinks.has(name) && call.arguments.some((candidate) => candidate === argument);
 }
 
 // True when the value is only handed to a write call, directly or through a local that is never
 // used otherwise.
-function isOnlyWrittenOut(value: Node, scope: Node): boolean {
+function isOnlyWrittenOut(value: Node, scope: Node, fileOrStreamOnly = false): boolean {
   const outer = skipByteWrappers(value);
   const parent = outer.parent;
-  if (ts.isCallExpression(parent)) return isWriteSink(parent, outer);
+  if (ts.isCallExpression(parent)) return isWriteSink(parent, outer, fileOrStreamOnly);
   if (!ts.isVariableDeclaration(parent) || parent.initializer !== outer || !ts.isIdentifier(parent.name)) return false;
   const uses = identifierReferences(scope, parent.name.text, parent.name);
   return (
     uses.length > 0 &&
     uses.every((use) => {
       const useOuter = skipByteWrappers(use);
-      return ts.isCallExpression(useOuter.parent) && isWriteSink(useOuter.parent, useOuter);
+      return ts.isCallExpression(useOuter.parent) && isWriteSink(useOuter.parent, useOuter, fileOrStreamOnly);
     })
   );
 }
@@ -537,7 +563,8 @@ function checkDownloadedBody(
     return;
   }
   const scope = ts.findAncestor(call, hasFunctionBody)?.body;
-  if (!scope || !isOnlyWrittenOut(call, scope)) return;
+  const fileOrStreamOnly = access.name.text === 'text';
+  if (!scope || !isOnlyWrittenOut(call, scope, fileOrStreamOnly)) return;
   context.report(
     access.name,
     PAYLOAD_RULE_ID,

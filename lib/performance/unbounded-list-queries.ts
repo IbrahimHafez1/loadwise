@@ -10,6 +10,8 @@ import {
   isFunctionLikeDeclaration,
   reachesResponse,
   isRequestHandler,
+  isUserScopedQuery,
+  USER_SCOPED_REASON,
 } from './request-handlers.js';
 import { traceInputs, boundOf, requestInputOf, leafName } from './request-inputs.js';
 import type {
@@ -686,7 +688,12 @@ function check(call: CallExpression, context: PerformanceRuleContext): void {
   if (!list) return checkOneHop(call, handler, context);
   if (!reachesResponse(list.top, handler)) return;
   if (list.idList) return checkIdList(list, list.idList, handler, context);
-  context.report(list.reportNode, RULE_ID, message(list.label, 'a request handler'));
+  context.report(
+    list.reportNode,
+    RULE_ID,
+    message(list.label, 'a request handler'),
+    isUserScopedQuery(call) ? USER_SCOPED_REASON : undefined,
+  );
 }
 
 export { check };

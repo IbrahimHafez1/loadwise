@@ -1,5 +1,6 @@
 // secret-in-log: a credential-like value passed to a logger call.
 import { ts } from '../../performance/compiler.js';
+import { classifyExecutionContext } from '../../shared/execution-context.js';
 import { unwrap, nameText, chainRootName } from './literals.js';
 import type {
   CallExpression,
@@ -169,10 +170,15 @@ function isNewCredential(node: SecretNode, call: CallExpression, checker: Checke
 function check(call: CallExpression, context: SecurityRuleContext) {
   if (!isLoggerCall(call)) return;
   const commandOutput = isCommandOutput(call, context.sourceFile);
+  const runtime = classifyExecutionContext(context.sourceFile).runtime;
+  const cliOrTestReason =
+    runtime === 'cli-tooling' || runtime === 'test-fixture'
+      ? 'Runs in CLI or test tooling rather than a server request path.'
+      : undefined;
   for (const argument of call.arguments) {
     if (isWholeRequest(argument, context.checker)) {
       const name = requestObjectText(argument);
-      context.report(argument, ruleId, messageFor(name), wholeRequestReason);
+      context.report(argument, ruleId, messageFor(name), cliOrTestReason ?? wholeRequestReason);
       continue;
     }
     const secrets: SecretSite[] = [];
@@ -180,7 +186,7 @@ function check(call: CallExpression, context: SecurityRuleContext) {
     for (const { node, name } of secrets) {
       if (commandOutput && isNewCredential(node, call, context.checker)) continue;
       if (!isScalarType(ts.isShorthandPropertyAssignment(node) ? node.name : node, context.checker))
-        context.report(node, ruleId, messageFor(name));
+        context.report(node, ruleId, messageFor(name), cliOrTestReason);
     }
   }
 }

@@ -10,6 +10,7 @@ import type {
   Node,
   NodeArray,
   ParameterDeclaration,
+  PropertyAssignment,
   SourceFile,
   Statement,
   VariableStatement,
@@ -423,6 +424,37 @@ function usesReachResponse(declaredName: Identifier, handler: RequestHandlerFunc
   );
 }
 
+const USER_SCOPED_FIELDS = new Set([
+  'userId',
+  'UserId',
+  'user_id',
+  'email',
+  'ownerId',
+  'owner_id',
+  'accountId',
+  'memberId',
+]);
+const USER_SCOPED_REASON =
+  'The query is scoped to a single user or owner; verify the per-user list cannot grow unbounded.';
+
+function isUserScopedQuery(call: CallExpression): boolean {
+  const options = call.arguments[0] && ts.skipOuterExpressions(call.arguments[0]);
+  if (!options || !ts.isObjectLiteralExpression(options)) return false;
+  const where = options.properties.find(
+    (p): p is PropertyAssignment => ts.isPropertyAssignment(p) && ts.isIdentifier(p.name) && p.name.text === 'where',
+  );
+  const whereLiteral = where && ts.skipOuterExpressions(where.initializer);
+  if (!whereLiteral || !ts.isObjectLiteralExpression(whereLiteral)) return false;
+  return whereLiteral.properties.some((property) => {
+    const name =
+      (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) &&
+      ts.isIdentifier(property.name)
+        ? property.name.text
+        : undefined;
+    return !!name && USER_SCOPED_FIELDS.has(name);
+  });
+}
+
 export {
   isFunctionLikeDeclaration,
   enclosingRequestHandler,
@@ -433,4 +465,6 @@ export {
   isFastifyHandler,
   isPagesApiHandler,
   isServerAction,
+  isUserScopedQuery,
+  USER_SCOPED_REASON,
 };

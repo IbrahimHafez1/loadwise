@@ -130,9 +130,23 @@ function isBreachRangePrefix(top: Node, context: SecurityRuleContext) {
   });
 }
 
+function isKeyDerivationOrDigestAuth(top: Node, context: SecurityRuleContext) {
+  const fn = enclosingFunction(top);
+  const fnText = fn ? fn.getText() : '';
+  const fnName = fn && 'name' in fn && fn.name && ts.isIdentifier(fn.name) ? fn.name.text : '';
+  if (/\b(?:createCipheriv|createDecipheriv|EVP_BytesToKey)\b/i.test(fnText)) return true;
+  if (
+    /^(?:getKeyAndIv|deriveKey|evpBytesToKey)$/i.test(fnName) &&
+    /\b(?:createCipheriv|createDecipheriv|EVP_BytesToKey)\b/i.test(context.sourceFile.text)
+  )
+    return true;
+  if (/\bDigest\s+username=|\bWWW-Authenticate\b/i.test(context.sourceFile.text)) return true;
+  return false;
+}
+
 function reportWeakHash(node: Node, top: Node, inputs: readonly Expression[], context: SecurityRuleContext) {
   if (isBcryptInput(top, context) || isComparedInConstantTime(top, context)) return;
-  if (isBreachRangePrefix(top, context)) return;
+  if (isBreachRangePrefix(top, context) || isKeyDerivationOrDigestAuth(top, context)) return;
   if (inputs.some(containsPasswordName) || digestLandsInPasswordName(top))
     context.report(node, 'weak-password-hash', weakHashMessage);
 }
