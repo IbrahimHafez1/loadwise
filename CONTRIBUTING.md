@@ -49,6 +49,7 @@ npm run bench:recall
 1. In a pull request, bump `version` in `package.json` and `plugin/.claude-plugin/plugin.json` and move the `[Unreleased]` notes in `CHANGELOG.md` under the new version.
 2. After it merges, tag the merge commit `vX.Y.Z` and push the tag. The `release` workflow runs the full check, stages the npm publish through Trusted Publishing (no token), creates the GitHub release and moves the `v0` Action tag.
 3. Approve the staged version on npmjs.com with 2FA; only then does it go live. A `-` in the version (for example `v0.6.0-rc.1`) publishes under the `next` dist-tag instead of `latest`.
+4. If the workflow fails after the stage step, settle the staged version on npmjs.com before re-running it. Re-staging the same version fails with `409 Conflict`, and the workflow's token cannot see or clear a pending stage. Approve it if the build was good, and the re-run skips straight to the GitHub release and `v0` tag; reject it to stage again from the re-run.
 
 ## License
 
