@@ -44,6 +44,12 @@ npm run bench:recall
 - Keep commits small and focused: one logical change per commit (a rule, a fix, a refactor, a docs update), with its tests in the same commit, and a [Conventional Commits](https://www.conventionalcommits.org/) message such as `fix(rel): ...` or `feat(a11y): ...`. Don't mix unrelated changes, formatting sweeps or dependency updates into a feature commit. Each commit should build and pass its tests.
 - Do not commit built `.js` / `.cjs` artifacts or `.tgz` / `.vsix` archives (they are gitignored).
 
+## Releasing (maintainers)
+
+1. In a pull request, bump `version` in `package.json` and `plugin/.claude-plugin/plugin.json` and move the `[Unreleased]` notes in `CHANGELOG.md` under the new version.
+2. After it merges, tag the merge commit `vX.Y.Z` and push the tag. The `release` workflow runs the full check, stages the npm publish through Trusted Publishing (no token), creates the GitHub release and moves the `v0` Action tag.
+3. Approve the staged version on npmjs.com with 2FA; only then does it go live. A `-` in the version (for example `v0.6.0-rc.1`) publishes under the `next` dist-tag instead of `latest`.
+
 ## License
 
 By contributing, you agree that your contributions will be licensed under the [Apache License 2.0](LICENSE).
