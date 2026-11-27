@@ -1,0 +1,17 @@
+# Qodo is the standby reviewer: CodeRabbit and Sourcery review every pull request automatically, and
+# Qodo runs only when someone comments `/agentic_review` (for example when one of the others is down).
+# Keep the Qodo portal's "Code review trigger" on "Manual only" to match.
+
+[github_app]
+# No review or summary when a pull request opens; CodeRabbit already writes the summary.
+pr_commands = []
+# No re-review on each push.
+handle_push_trigger = false
+push_commands = []
+# Dependabot and other bot pull requests are not worth a third review.
+ignore_bot_pr = true
+
+[review_agent]
+# A requested review posts once, without a temporary progress comment or "updated" notices.
+publish_in_progress_comment = false
+persistent_comment_notification = false
