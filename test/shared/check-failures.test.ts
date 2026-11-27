@@ -95,6 +95,14 @@ function checkWithTinyHeap(root: string, args: readonly string[]) {
   return { code: run.status, stdout: run.stdout, stderr: run.stderr };
 }
 
+test('--fix on check points to the fix command', (context) => {
+  for (const args of [['--fix'], ['check', '--fix']]) {
+    const run = loadwise(quietProject(context), args);
+    assert.equal(run.code, 2);
+    assert.match(run.stderr, /Run `loadwise fix --yes`/);
+  }
+});
+
 test('a child that runs out of memory gives one clear line and exit 2, never a pass', (context) => {
   const run = checkWithTinyHeap(quietProject(context), ['check', '--only', 'perf', '--json']);
   assert.equal(run.code, 2, run.stderr);
