@@ -152,6 +152,16 @@ async function waitFor(condition: () => boolean): Promise<void> {
   }
 }
 
+// Windows keeps the folder locked until the killed watcher process exits, which a slow CI runner can stretch past
+// every retry. A leftover temporary folder is harmless, so only that lock is tolerated.
+function removeTemporaryRoot(root: string): void {
+  try {
+    fs.rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+  } catch (error) {
+    if (!(error instanceof Error && 'code' in error && error.code === 'EBUSY')) throw error;
+  }
+}
+
 function startedPids(logFile: string): number[] {
   return fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8').split('\n').filter(Boolean).map(Number) : [];
 }
@@ -196,8 +206,7 @@ test('changes during a running scan abort the stale child and coalesce into one 
   context.after(() => {
     moduleHooks._load = originalLoad;
     for (const subscription of subscriptions) subscription.dispose();
-    // Windows keeps the folder locked while the killed watch child exits.
-    fs.rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+    removeTemporaryRoot(root);
   });
   delete requireFromHere.cache[requireFromHere.resolve('../../editor/extension.cjs')];
   const extension: typeof Extension = requireFromHere('../../editor/extension.cjs');
