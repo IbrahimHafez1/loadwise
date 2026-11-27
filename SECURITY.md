@@ -16,3 +16,5 @@ Include a brief description of the issue, steps to reproduce (or a minimal fixtu
 ## Scope
 
 Loadwise runs locally on your source files, configs, traces, and query plans and does not send telemetry. Issues that could lead to unintended file writes, command execution via untrusted project inputs, or sandbox/path escapes in `--fix` or MCP tools are in scope.
+
+A vulnerable pattern that the security checker misses or reports by mistake is not a vulnerability in Loadwise: report it as a [bug](https://github.com/IbrahimHafez1/loadwise/issues/new?template=bug-report.yml) or a [false positive](https://github.com/IbrahimHafez1/loadwise/issues/new?template=false-positive.yml).

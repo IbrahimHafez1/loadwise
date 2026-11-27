@@ -2,10 +2,12 @@
 
 Thanks for your interest in contributing to Loadwise.
 
+This project follows the [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to uphold it.
+
 ## Prerequisites
 
-- **Node.js 22.12+** and **npm**
-- Install dependencies including optional native packages (`@ast-grep/cli` and `@typescript/native-preview` binaries):
+- **Node.js 22.13+** and **npm**
+- Install dependencies including optional native packages (`@ast-grep/cli` and the `@typescript/typescript-*` native compiler binaries):
 
 ```sh
 npm ci --include=optional
@@ -39,6 +41,7 @@ npm run bench:recall
 
 - Keep rules, autofixes, and `README.md` rule anchors / `--help` docs in sync (`test/shared/docs-sync.test.js` enforces this).
 - Include focused positive and negative regression tests for any rule, parser, or autofix change.
+- Keep commits small and focused: one logical change per commit (a rule, a fix, a refactor, a docs update), with its tests in the same commit, and a [Conventional Commits](https://www.conventionalcommits.org/) message such as `fix(rel): ...` or `feat(a11y): ...`. Don't mix unrelated changes, formatting sweeps or dependency updates into a feature commit. Each commit should build and pass its tests.
 - Do not commit built `.js` / `.cjs` artifacts or `.tgz` / `.vsix` archives (they are gitignored).
 
 ## License
