@@ -174,3 +174,29 @@ test('only registered Express middleware makes a NoSQL finding contextual', (con
   assert.equal(reason(setup + '\napp.use(sanitize.sanitize({}));'), undefined);
   assert.match(reason(setup + '\napp.use(sanitize());') ?? '', /express-mongo-sanitize/);
 });
+
+test('operator-key values, spread nested objects, local filters and pipelines, where values and $or branches are reported', () => {
+  const source = route(
+    'User.find({ $or: req.body.branches });',
+    'User.find({ profile: { ...req.body } });',
+    'const pipeline = [{ $match: { name: req.body.name } }];',
+    'User.aggregate(pipeline);',
+    'const filter = { name: req.body.name };',
+    'User.find(filter);',
+    'User.where("name", req.body.name);',
+    'User.find({ $or: [req.body, { active: true }] });',
+  );
+  assert.deepEqual(nosqlLines(source), [
+    [5, 'D'],
+    [6, 'D'],
+    [7, 'D'],
+    [9, 'D'],
+    [11, 'D'],
+    [12, 'D'],
+  ]);
+});
+
+test('an exact nested sub-document match and a computed key are silent', () => {
+  const source = route('User.find({ profile: { name: req.body.name } });', 'User.find({ [req.body.field]: true });');
+  assert.deepEqual(nosqlLines(source), []);
+});

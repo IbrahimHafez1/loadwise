@@ -71,7 +71,9 @@ function filenameValidation(condition: Expression, isSubject: SubjectTest, check
   );
 }
 
-const separatorRegexPattern = /^\/(?:\[[^\]]*[/\\][^\]]*\]|\\\.\.)\/[gi]*$/;
+// A negated class (`[^a-z/]`) matches everything except its members, so a separator inside it is
+// evidence of nothing.
+const separatorRegexPattern = /^\/(?:\[(?!\^)[^\]]*[/\\][^\]]*\]|\\\.\.)\/[gi]*$/;
 const foundIndexComparisons = new Set(['!== -1', '!= -1', '>= 0', '> -1']);
 const missingIndexComparisons = new Set(['=== -1', '== -1', '< 0']);
 

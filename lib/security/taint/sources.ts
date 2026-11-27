@@ -194,9 +194,12 @@ function decoratorCall(decorator: Decorator) {
   return ts.isCallExpression(expression) && ts.isIdentifier(expression.expression) ? expression : undefined;
 }
 
-function isParsingPipe(argument: Expression) {
+// A same-named pipe of the project can return its input unchanged, so only the `@nestjs/common`
+// export counts, under whatever local name it is imported.
+function isParsingPipe(argument: Expression, checker: CheckerAdapter) {
   const node = ts.isNewExpression(argument) ? argument.expression : argument;
-  return ts.isIdentifier(node) && parsingPipes.has(node.text);
+  const binding = importedFrom(node, checker);
+  return binding?.module === '@nestjs/common' && binding.exported !== undefined && parsingPipes.has(binding.exported);
 }
 
 // The parameter's NestJS source decorator, or undefined. A parsing pipe makes the value clean
@@ -207,7 +210,7 @@ function nestSource(parameter: ParameterDeclaration, checker: CheckerAdapter): P
     const binding = call && importedFrom(call.expression, checker);
     if (!call || !binding || binding.exported === undefined || !nestDecorators[binding.module]?.has(binding.exported))
       continue;
-    if (call.arguments.some(isParsingPipe)) return null;
+    if (call.arguments.some((argument) => isParsingPipe(argument, checker))) return null;
     const label = `@${binding.exported}(${call.arguments[0] && ts.isStringLiteralLike(call.arguments[0]) ? call.arguments[0].getText() : ''}) ${parameter.name.getText()}`;
     if (binding.exported === 'Req' || binding.exported === 'Request') return { container: expressRequest, label };
     if (binding.exported === 'UploadedFile') return { container: upload, label };

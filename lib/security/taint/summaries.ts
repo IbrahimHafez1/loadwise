@@ -135,6 +135,8 @@ function createSummaries(program: ProgramAdapter): TaintSummaries {
   const callSitesByDeclaration = new WeakMap<SignatureDeclaration, CallExpression[]>();
   const resolvedByName = new Map<string, Map<Node, CallExpression[]>>();
   let callsByName: Map<string, CallExpression[]> | undefined;
+  // `import { consume as run }`: a call spelled `run` can still resolve to `consume`.
+  const aliasSpellings = new Map<string, string[]>();
 
   // Parameter indexes whose value can flow to a return of `fn` for a sink kind. `flows(expression,
   // parameterIndex)` resolves an expression inside `fn` with only that parameter treated as
@@ -171,6 +173,11 @@ function createSummaries(program: ProgramAdapter): TaintSummaries {
       for (const sourceFile of program.getSourceFiles?.() ?? program.getToolingSourceFiles?.() ?? []) {
         if (!isProjectSource(sourceFile)) continue;
         (function visit(node: Node): void {
+          if (ts.isImportSpecifier(node) && node.propertyName) {
+            const spellings = aliasSpellings.get(node.propertyName.text);
+            if (spellings) spellings.push(node.name.text);
+            else aliasSpellings.set(node.propertyName.text, [node.name.text]);
+          }
           if (ts.isCallExpression(node)) {
             const calledName = calleeName(node);
             if (calledName) {
@@ -186,7 +193,9 @@ function createSummaries(program: ProgramAdapter): TaintSummaries {
     let byDeclaration = resolvedByName.get(name);
     if (!byDeclaration) {
       byDeclaration = new Map<Node, CallExpression[]>();
-      for (const call of callsByName.get(name) ?? []) {
+      const spellings = [name, ...(aliasSpellings.get(name) ?? [])];
+      const candidates = spellings.flatMap((spelling) => callsByName?.get(spelling) ?? []);
+      for (const call of candidates) {
         const target = checker.getResolvedSignature(call)?.declaration ?? constructorMethod(call, checker);
         if (!target) continue;
         const list = byDeclaration.get(target);

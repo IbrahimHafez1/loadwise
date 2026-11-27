@@ -1,6 +1,8 @@
 // Guards that pin a request value before it reaches a sink.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { ts } from '../../lib/performance/compiler.js';
+import { isGuardedUse } from '../../lib/security/taint/guards.js';
 import { withContext, sinkArgument, stubs } from './helpers.js';
 import type { SourceFile } from 'typescript';
 import type { SecurityRuleContext } from '../../lib/shared/types.js';
@@ -58,4 +60,25 @@ test('a guard does not hold when the value is reassigned or the guard comes afte
     'req.query',
   );
   assert.equal(tracedLabel("sink(sort); if (sort !== 'asc') return;"), 'req.query');
+});
+
+// Whether the use of `p` inside `sink(p)` is credited as guarded by the allowlist check.
+function parameterGuarded(rewrite: string) {
+  const source = [
+    'declare function sink(value: unknown): void;',
+    'function outer(p: string) {',
+    `  const rewrite = () => { ${rewrite} };`,
+    "  const consumer = () => { if (p === 'safe') { rewrite(); sink(p); } };",
+    '  consumer();',
+    '}',
+  ].join('\n');
+  return withContext(source, {}, (context: SecurityRuleContext, sourceFile: SourceFile) => {
+    const use = sinkArgument(sourceFile);
+    return ts.isIdentifier(use) && isGuardedUse(use, use, context.checker);
+  });
+}
+
+test('a parameter rewritten by a sibling callback loses its guard', () => {
+  assert.equal(parameterGuarded("p = 'other';"), false);
+  assert.equal(parameterGuarded('console.log(p);'), true);
 });

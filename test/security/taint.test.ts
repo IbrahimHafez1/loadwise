@@ -3,7 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { withContext, sinkArgument, stubs } from './helpers.js';
-import type { SourceFile } from 'typescript';
+import * as ts from 'typescript';
+import type { Expression, Node, SourceFile } from 'typescript';
 import type { SecurityRuleContext, SinkKind } from '../../lib/shared/types.js';
 
 const sinkDeclaration = 'declare function sink(value: unknown): void;';
@@ -276,4 +277,45 @@ test('isUntracedParameter is true only for a parameter with no known source', ()
   assert.equal(untraced(`${sinkDeclaration}\nexport function run(text: string) { sink(text); }`, {}), true);
   assert.equal(untraced(expressRoute('sink(req);'), stubs.express), false);
   assert.equal(untraced(`${sinkDeclaration}\nsink('fixed');`, {}), false);
+});
+
+test('a request object passed intact to a helper keeps its request fields', () => {
+  const source = [
+    "import express from 'express';",
+    sinkDeclaration,
+    'function find(request: { body: { name: string } }) { sink(request.body.name); }',
+    'const app = express();',
+    "app.get('/items', (req, res) => { find(req); });",
+  ].join('\n');
+  assert.equal(traced(source)?.hops, 1);
+});
+
+test('a cycle does not cache a miss', () => {
+  const body = "let a = ''; let b = ''; a = b || req.query.x; b = a; sink(QUERY);";
+  assert.ok(traced(expressRoute(body.replace('QUERY', 'a'))));
+  assert.ok(traced(expressRoute(body.replace('QUERY', 'b'))));
+  const both = expressRoute("let a = ''; let b = ''; a = b || req.query.x; b = a; sink(a); sink(b);");
+  const labels = withContext(both, stubs.express, (context: SecurityRuleContext, sourceFile: SourceFile) => {
+    const calls: Expression[] = [];
+    (function visit(node: Node): void {
+      if (ts.isCallExpression(node) && node.expression.getText() === 'sink') calls.push(node.arguments[0]);
+      ts.forEachChild(node, visit);
+    })(sourceFile);
+    return calls.map((call) => Boolean(context.taint.trace(call, 'sql')));
+  });
+  assert.deepEqual(labels, [true, true]);
+});
+
+test('a spread does not hide later fields', () => {
+  const source = expressRoute(
+    'const o = { ...{ label: req.query.x }, description: req.query.y }; sink(o.description);',
+  );
+  assert.ok(traced(source));
+});
+
+test('a reassigned record uses its later fields', () => {
+  const source = expressRoute(
+    "let record = { a: req.query.x, b: 'fixed' }; record = { a: 'fixed', b: req.query.y }; sink(record.b);",
+  );
+  assert.ok(traced(source));
 });

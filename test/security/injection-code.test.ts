@@ -118,3 +118,15 @@ test('eval of text derived from a function parameter is contextual, constant tex
   assert.equal(evaluate('return require(value);').length, 0);
   assert.equal(evaluate('return setTimeout(value, 10);').length, 0);
 });
+
+test('a spread argument and a local alias of a global evaluator are still sinks', () => {
+  const source = route(
+    'new Function(...req.body.parts);',
+    'const run = eval;',
+    'run(req.body.expression);',
+    'const Constructor = Function;',
+    'new Constructor(req.body.code);',
+    'const local = (text: string) => text;\nconst safe = local;\nsafe(req.body.expression);',
+  );
+  assert.deepEqual(findings(source, 'code-injection'), [9, 11, 13]);
+});

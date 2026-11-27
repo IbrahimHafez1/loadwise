@@ -115,3 +115,19 @@ test('an exec function that is not from child_process is not a sink', () => {
   const source = route('const db = { exec(text: string) {} };', 'db.exec(`VACUUM ${req.query.table}`);');
   assert.deepEqual(commandFindings(source), []);
 });
+
+test('shell options held in a constant or spread into the options object still run a shell', () => {
+  const source = route(
+    'const shellOptions = { shell: true };',
+    'execFile(req.body.program, [], shellOptions);',
+    'spawn(req.query.cmd, [], { ...shellOptions });',
+    'const plainOptions = { shell: false };',
+    "execFile('grep', [req.body.pattern], plainOptions);",
+    'exec(...[req.body.command]);',
+  );
+  assert.deepEqual(commandFindings(source), [
+    [10, 'D'],
+    [11, 'D'],
+    [14, 'D'],
+  ]);
+});

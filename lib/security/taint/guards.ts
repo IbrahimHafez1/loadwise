@@ -89,7 +89,14 @@ function pinningComparison(condition: Expression, isSubject: SubjectTest): 'equa
   }
 }
 
-function isNumberCheck(condition: Expression, isSubject: SubjectTest) {
+// A name no project code declares: it is the runtime built-in, or has no declaration without types.
+// A local `const Number = ...` or `parseInt` function can return anything, so it earns no credit.
+function isBuiltinReference(identifier: Identifier, checker: CheckerAdapter) {
+  const declarations = checker.getSymbolAtLocation(identifier)?.declarations;
+  return !declarations || declarations.every((declaration) => declaration.getSourceFile().isDeclarationFile);
+}
+
+function isNumberCheck(condition: Expression, isSubject: SubjectTest, checker: CheckerAdapter) {
   if (!ts.isCallExpression(condition) || condition.arguments.length !== 1 || !isSubject(condition.arguments[0]))
     return false;
   const callee = stripParentheses(condition.expression);
@@ -97,8 +104,16 @@ function isNumberCheck(condition: Expression, isSubject: SubjectTest) {
     ts.isPropertyAccessExpression(callee) &&
     ts.isIdentifier(callee.expression) &&
     callee.expression.text === 'Number' &&
-    numberChecks.has(callee.name.text)
+    numberChecks.has(callee.name.text) &&
+    isBuiltinReference(callee.expression, checker)
   );
+}
+
+// `ALLOWED.includes(value)`: the call checks the guarded binding itself, not another one that
+// shares its name.
+function checksSubject(condition: Expression, isSubject: SubjectTest) {
+  const call = ts.skipOuterExpressions(condition);
+  return ts.isCallExpression(call) && call.arguments.length === 1 && isSubject(call.arguments[0]);
 }
 
 // When `condition` is true, the value is safe.
@@ -121,7 +136,10 @@ function confirms(node: Expression, guard: Guard): boolean {
     const filename = filenameValidation(condition, guard.isSubject, guard.checker);
     if (filename !== undefined) return filename;
   }
-  return isNumberCheck(condition, guard.isSubject) || isValidation(condition, guard.name, guard.checker);
+  return (
+    isNumberCheck(condition, guard.isSubject, guard.checker) ||
+    (checksSubject(condition, guard.isSubject) && isValidation(condition, guard.name, guard.checker))
+  );
 }
 
 // When `condition` is false, the value is safe.
@@ -235,11 +253,20 @@ function isReassigned(scope: Node, symbol: SymbolAdapter, checker: CheckerAdapte
   })(scope);
 }
 
+// Writes that can store the right-hand value in the variable.
+const valueAssignmentOperators = new Set([
+  ts.SyntaxKind.EqualsToken,
+  ts.SyntaxKind.PlusEqualsToken,
+  ts.SyntaxKind.BarBarEqualsToken,
+  ts.SyntaxKind.QuestionQuestionEqualsToken,
+  ts.SyntaxKind.AmpersandAmpersandEqualsToken,
+]);
+
 const assignmentIndexes = new WeakMap<CheckerAdapter, WeakMap<Node, Map<Node, BinaryExpression[]>>>();
 
-// The `=` and `+=` writes to `declaration` inside `scope`, in source order. The writes of a scope
-// are indexed once per checker, so resolving each `let` of a long function or module does not walk
-// the whole scope again.
+// The `=`, `+=`, `||=`, `??=` and `&&=` writes to `declaration` inside `scope`, in source order. The
+// writes of a scope are indexed once per checker, so resolving each `let` of a long function or
+// module does not walk the whole scope again.
 function assignmentsTo(declaration: Declaration, scope: Node, checker: CheckerAdapter): BinaryExpression[] {
   let byScope = assignmentIndexes.get(checker);
   if (!byScope) assignmentIndexes.set(checker, (byScope = new WeakMap()));
@@ -250,8 +277,7 @@ function assignmentsTo(declaration: Declaration, scope: Node, checker: CheckerAd
     (function visit(node: Node): void {
       if (
         ts.isBinaryExpression(node) &&
-        (node.operatorToken.kind === ts.SyntaxKind.EqualsToken ||
-          node.operatorToken.kind === ts.SyntaxKind.PlusEqualsToken) &&
+        valueAssignmentOperators.has(node.operatorToken.kind) &&
         ts.isIdentifier(node.left)
       ) {
         const written = checker.getSymbolAtLocation(node.left)?.valueDeclaration;
@@ -271,6 +297,14 @@ function isStableDeclaration(declaration: Node) {
   while (ts.isBindingElement(current)) current = current.parent.parent;
   if (ts.isParameter(current)) return true;
   return ts.isVariableDeclaration(current) && !!(current.parent.flags & ts.NodeFlags.Const);
+}
+
+// Where a rewrite of the binding can happen: a parameter is writable from every closure of the
+// function that declares it, not only from the function that holds the use.
+function rewriteScope(declaration: Node, useBody: Node): Node {
+  let current: Node = declaration;
+  while (ts.isBindingElement(current)) current = current.parent.parent;
+  return ts.isParameter(current) ? current.parent : useBody;
 }
 
 // The use of `identifier` runs only after a guard pinned its value, and the value is not rewritten
@@ -295,7 +329,7 @@ function isGuardedUse(identifier: Identifier, use: Node, checker: CheckerAdapter
         (node) => rejects(node, guard),
       )
     )
-      return !isReassigned(body, symbol, checker);
+      return !isReassigned(rewriteScope(declaration, body), symbol, checker);
   }
   return false;
 }
@@ -329,4 +363,4 @@ function isGuardedByCondition(use: Node, evidence: EvidenceTest): boolean {
   return false;
 }
 
-export { isGuardedUse, isGuardedByCondition, isReassigned, assignmentsTo };
+export { isBuiltinReference, isGuardedUse, isGuardedByCondition, isReassigned, assignmentsTo };

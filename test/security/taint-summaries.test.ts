@@ -40,3 +40,17 @@ test('call-site summaries preserve source order and cache resolved calls by decl
     }
   });
 });
+
+test('call sites include calls spelled through an import alias', () => {
+  const declaration = 'export function consume(value: string) { return value; }';
+  const caller = "import { consume as run } from './consume.js';\nrun('first');";
+  withProgram(caller, { 'consume.ts': declaration }, (program: ProgramAdapter) => {
+    const summaries = createSummaries(program);
+    const consume = program
+      .getSourceFiles?.()
+      .flatMap((file) => file.statements)
+      .find((statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === 'consume');
+    assert.ok(consume && ts.isFunctionDeclaration(consume));
+    assert.equal(summaries.callSites(consume).length, 1);
+  });
+});

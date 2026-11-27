@@ -116,11 +116,38 @@ function unwrapGroups(node: PatternNode): PatternNode {
   return current;
 }
 
+// The character set at each position of an alternative made only of single characters, or
+// undefined when its length can vary.
+function fixedPositions(node: PatternNode): CodePointRange[][] | undefined {
+  const unwrapped = unwrapGroups(node);
+  if (unwrapped.kind === 'char') return [unwrapped.ranges];
+  if (unwrapped.kind !== 'seq') return;
+  const positions: CodePointRange[][] = [];
+  for (const item of unwrapped.items) {
+    const itemPositions = fixedPositions(item);
+    if (!itemPositions) return;
+    positions.push(...itemPositions);
+  }
+  return positions;
+}
+
+// Same-length fixed alternatives such as `ab|ac` match the same text only when every position
+// overlaps; sharing a first character alone leaves each iteration one way to match.
+function alternativesCanMatchSameText(left: PatternNode, right: PatternNode) {
+  const leftPositions = fixedPositions(left);
+  const rightPositions = fixedPositions(right);
+  if (leftPositions && rightPositions && leftPositions.length === rightPositions.length) {
+    return leftPositions.every((positionRanges, index) => overlaps(positionRanges, rightPositions[index]));
+  }
+  return overlaps(firstSet(left), firstSet(right));
+}
+
 function hasOverlappingAlternatives(node: PatternNode) {
   const body = unwrapGroups(node);
   if (body.kind !== 'alt') return false;
-  const starts = body.alternatives.map(firstSet);
-  return starts.some((start, index) => starts.slice(index + 1).some((other) => overlaps(start, other)));
+  return body.alternatives.some((alternative, index) =>
+    body.alternatives.slice(index + 1).some((other) => alternativesCanMatchSameText(alternative, other)),
+  );
 }
 
 // An unbounded loop whose iterations can split the same text in more than one way.
@@ -369,16 +396,23 @@ function fixedRegex(expression: Expression | undefined, checker: CheckerAdapter,
   return { source, flags };
 }
 
+// A cut at a huge literal such as `1e9` does not shorten the input in practice. A negative end
+// is a prefix expression, not a numeric literal, so it never counts as a cap.
+const maxTruncationLength = 10_000;
+
+function isShortLimit(limit: Expression) {
+  return ts.isNumericLiteral(limit) && Number(limit.text) <= maxTruncationLength;
+}
+
 // `text.slice(0, 200)`: a fixed-length cut keeps the input short enough for polynomial patterns.
-// A negative end such as `slice(0, -1)` is a prefix-minus expression, not a numeric literal, so it
-// does not count. `substring` swaps its arguments when the start is larger, so `substring(start,
-// 200)` returns everything from 200 to `start`; it needs a literal start too.
+// `substring` swaps its arguments when the start is larger, so `substring(start, 200)` returns
+// everything from 200 to `start`; it needs a literal start too.
 function isTruncated(subject: Expression) {
   const node = ts.skipOuterExpressions(subject);
   const method = ts.isCallExpression(node) ? methodName(node) : undefined;
   if (!ts.isCallExpression(node) || method === undefined || !truncatingMethods.has(method)) return false;
   const [start, end] = node.arguments;
-  if (node.arguments.length !== 2 || !ts.isNumericLiteral(ts.skipOuterExpressions(end))) return false;
+  if (node.arguments.length !== 2 || !isShortLimit(ts.skipOuterExpressions(end))) return false;
   return method !== 'substring' || ts.isNumericLiteral(ts.skipOuterExpressions(start));
 }
 

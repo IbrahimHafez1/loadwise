@@ -139,6 +139,7 @@ function isPlaceholderList(node: Expression, call: CallExpression, context: Secu
   }
   if (!ts.isCallExpression(list)) return false;
   const method = methodName(list);
+  if ((method === 'fill' || method === 'map') && !isBuiltInArrayReceiver(list, context)) return false;
   if (method === 'fill' && list.arguments.length >= 1) {
     return isFixedPart(list.arguments[0], call, context);
   }
@@ -151,6 +152,15 @@ function isPlaceholderList(node: Expression, call: CallExpression, context: Secu
   }
   if (method !== 'map' || list.arguments.length !== 1) return false;
   return isFixedPlaceholderCallback(list.arguments[0], call, context);
+}
+
+// A custom `map` or `fill` can return runtime text without calling its callback, so a method the
+// project declares itself loses the placeholder-list exemption; the library's array methods and an
+// unresolved call (plain JavaScript, loose request types) keep it.
+function isBuiltInArrayReceiver(list: CallExpression, context: SecurityRuleContext) {
+  if (!ts.isPropertyAccessExpression(list.expression)) return false;
+  const method = context.checker.getSymbolAtLocation(list.expression.name);
+  return !method?.declarations?.some((declaration) => !declaration.getSourceFile().isDeclarationFile);
 }
 
 // Any identifier with the same text counts as a use, shadowed or not, so the answer errs towards
@@ -195,11 +205,51 @@ function iteratedArray(expression: Expression, checker: CheckerAdapter): Express
   if (!ts.isIdentifier(iterated) && !isField) return;
   const declaration = checker.getSymbolAtLocation(isField ? iterated.name : iterated)?.valueDeclaration;
   if (!declaration) return;
+  const symbol = checker.getSymbolAtLocation(isField ? iterated.name : iterated);
   if (ts.isVariableDeclaration(declaration) && declaration.parent.flags & ts.NodeFlags.Const)
-    return declaration.initializer;
+    return symbol && hasElementWrites(declaration, symbol, checker) ? undefined : declaration.initializer;
   if (!ts.isPropertyDeclaration(declaration)) return;
   const readonly = declaration.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ReadonlyKeyword);
-  return readonly ? declaration.initializer : undefined;
+  if (!readonly || (symbol && hasElementWrites(declaration, symbol, checker))) return;
+  return declaration.initializer;
+}
+
+const arrayMutatingMethods = new Set([
+  'push',
+  'pop',
+  'shift',
+  'unshift',
+  'splice',
+  'sort',
+  'reverse',
+  'fill',
+  'copyWithin',
+]);
+
+// `const` and `readonly` only pin the binding: `TABLES[0] = x` or `TABLES.push(x)` still changes the
+// elements. Passing the array to another function is not tracked.
+function hasElementWrites(declaration: Node, symbol: SymbolAdapter, checker: CheckerAdapter) {
+  const refersToSymbol = (node: Expression) => {
+    const target = ts.skipOuterExpressions(node);
+    const named =
+      ts.isPropertyAccessExpression(target) && target.expression.kind === ts.SyntaxKind.ThisKeyword
+        ? target.name
+        : target;
+    return checker.getSymbolAtLocation(named) === symbol;
+  };
+  return Boolean(
+    (function visit(node: Node): boolean | undefined {
+      if (ts.isElementAccessExpression(node) && ts.isAssignmentTarget(node) && refersToSymbol(node.expression))
+        return true;
+      if (
+        ts.isPropertyAccessExpression(node) &&
+        arrayMutatingMethods.has(node.name.text) &&
+        refersToSymbol(node.expression)
+      )
+        return true;
+      return ts.forEachChild(node, visit);
+    })(declaration.getSourceFile()),
+  );
 }
 
 // `for (const table of ['a', 'b'])` and `for (const [table, policy] of POLICIES)`: each value is a
@@ -251,6 +301,12 @@ function fieldValuesAreFixed(
           values.push(assignment.right);
         else otherWrite = true;
       }
+    }
+    // `this['table'] = x` writes the field without a property access; a computed key may name any field.
+    if (ts.isElementAccessExpression(child) && child.expression.kind === ts.SyntaxKind.ThisKeyword) {
+      const key = child.argumentExpression;
+      const namesOtherField = ts.isStringLiteralLike(key) && key.text !== symbol.name;
+      if (ts.isAssignmentTarget(child) && !namesOtherField) otherWrite = true;
     }
     ts.forEachChild(child, visit);
   })(declaration.parent);

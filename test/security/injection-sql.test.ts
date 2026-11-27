@@ -226,3 +226,56 @@ test('a parsing pipe and a number type keep request values out of the SQL rules'
   ].join('\n');
   assert.deepEqual(sqlFindings(source), []);
 });
+
+test('a bracket write to a private field keeps the field from counting as fixed text', () => {
+  const source = [
+    'declare const prisma: any;',
+    'class Reports {',
+    "  private table = 'users';",
+    "  rename(next: string) { this['table'] = next; }",
+    '  run() { return prisma.$queryRawUnsafe(`SELECT * FROM ${this.table}`); }',
+    '}',
+  ].join('\n');
+  assert.deepEqual(sqlFindings(source), [['prisma-raw-unsafe-dynamic', 5, 'C']]);
+});
+
+test('a logical assignment to a local keeps the SQL text from counting as fixed', () => {
+  const source = route(
+    [
+      "let text = '';",
+      'text ||= req.query.q as string;',
+      'prisma.$queryRawUnsafe(text);',
+      "let fixed = 'SELECT 1';",
+      "fixed += ' WHERE 1 = 1';",
+      'prisma.$queryRawUnsafe(fixed);',
+    ].join('\n'),
+    'declare const prisma: any;',
+  );
+  assert.deepEqual(sqlFindings(source), [['prisma-raw-unsafe-dynamic', 7, 'D']]);
+});
+
+test('a map method that is not Array.prototype.map is not a placeholder list', () => {
+  const source = [
+    'declare const prisma: any;',
+    'declare const ids: number[];',
+    'class Names { map(callback: () => string): string { return process.env.X ?? callback(); } }',
+    'export async function run(names: Names) {',
+    "  await prisma.$queryRawUnsafe(`SELECT * FROM t WHERE id IN (${names.map(() => '?')})`);",
+    "  await prisma.$queryRawUnsafe(`SELECT * FROM t WHERE id IN (${ids.map(() => '?').join(', ')})`);",
+    '}',
+  ].join('\n');
+  assert.deepEqual(sqlFindings(source), [['prisma-raw-unsafe-dynamic', 5, 'C']]);
+});
+
+test('a loop over a const array whose elements are reassigned is not a fixed value', () => {
+  const source = [
+    'declare const prisma: any;',
+    "const TABLES = ['a', 'b'];",
+    'export async function run(input: string) {',
+    '  TABLES[0] = input;',
+    '  for (const table of TABLES) await prisma.$queryRawUnsafe(`SELECT * FROM ${table}`);',
+    "  for (const table of ['c', 'd']) await prisma.$queryRawUnsafe(`SELECT * FROM ${table}`);",
+    '}',
+  ].join('\n');
+  assert.deepEqual(sqlFindings(source), [['prisma-raw-unsafe-dynamic', 5, 'C']]);
+});

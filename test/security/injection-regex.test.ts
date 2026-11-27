@@ -63,3 +63,16 @@ test('a request value reaching a search helper is reported in the helper', () =>
   ].join('\n');
   assert.deepEqual(regexLines(source), [2]);
 });
+
+test('bracket-notation calls, string | RegExp patterns and computed $regex keys are reported', () => {
+  const source = route(
+    "const title: string = 'x';",
+    "title['search'](req.body.term);",
+    'const pattern: string | RegExp = req.query.q;',
+    "'title'.search(pattern);",
+    "users.find({ name: { ['$regex']: req.query.q } });",
+    'const known: RegExp = /a/;',
+    "'title'.search(known);",
+  );
+  assert.deepEqual(regexLines(source), [8, 10, 11]);
+});

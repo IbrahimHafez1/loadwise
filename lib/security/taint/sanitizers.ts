@@ -1,6 +1,6 @@
 // Values that cannot carry injectable text (design section 2.4).
 import { ts } from '../../performance/compiler.js';
-import { isGuardedUse } from './guards.js';
+import { isBuiltinReference, isGuardedUse } from './guards.js';
 import type { CallExpression, Identifier, Node } from 'typescript';
 import type { CheckerAdapter, SinkKind, TypeAdapter } from '../../shared/types.js';
 
@@ -8,12 +8,16 @@ import type { CheckerAdapter, SinkKind, TypeAdapter } from '../../shared/types.j
 const numericFunctions = new Set(['Number', 'parseInt', 'parseFloat', 'BigInt', 'Boolean']);
 const regexMetacharacters = /[.*+?^${}()|[\]\\]/g;
 
-function isNumericCall(call: CallExpression) {
+// A name that a project declaration shadows (`const parseInt = (v) => v`) is not the built-in and
+// earns no credit.
+function isNumericCall(call: CallExpression, checker: CheckerAdapter) {
   const callee = ts.skipOuterExpressions(call.expression);
-  if (ts.isIdentifier(callee)) return numericFunctions.has(callee.text);
+  const isBuiltin = (identifier: Identifier) => isBuiltinReference(identifier, checker);
+  if (ts.isIdentifier(callee)) return numericFunctions.has(callee.text) && isBuiltin(callee);
   return (
     ts.isPropertyAccessExpression(callee) &&
     ts.isIdentifier(callee.expression) &&
+    isBuiltin(callee.expression) &&
     (callee.expression.text === 'Math' ||
       (callee.expression.text === 'Number' && ['parseInt', 'parseFloat'].includes(callee.name.text)))
   );

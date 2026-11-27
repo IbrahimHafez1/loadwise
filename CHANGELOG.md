@@ -24,7 +24,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - A monorepo package without a `tsconfig.json` or `jsconfig.json` is now checked by the performance, reliability and security checkers with the standalone defaults (ES2022, NodeNext), instead of being skipped with a note. A monorepo made only of such packages is checked too, `--workspace` can select them, and `loadwise fix` no longer refuses to run because of them.
 - A package without a config that mixes JavaScript and TypeScript is now checked the same way, instead of skipping the performance, reliability and security checkers. A package whose TypeScript sits under a sub-folder's own `tsconfig.json` is still skipped with a note.
-
+- The injection checks now see request data that reaches a sink through a spread argument, an aliased `eval` or `Function`, shell options held in a variable or spread, a filter or pipeline built in a local variable, a request object spread into a nested filter, `where(path, value)`, a nonliteral `$or` branch, a `string | RegExp` value, bracket notation (`['$regex']`, `text['search']`) and `||=`, `??=` or `&&=`.
+- SQL checks no longer treat a project's own `map` or `fill` method, an array changed after its declaration, or a `this['field']` write as fixed text.
+- Taint now follows a request object passed to a helper, fields after an object spread, later reassignments of a mutable object, renamed imports, the array argument of a `map` callback, `+=` on a URL and adjacent literal URL pieces; a shadowed `Number`, `parseInt` or `ParseIntPipe` and a negated character class no longer count as sanitizers, and an allowlist check must test the guarded value itself.
+- A ReDoS check no longer flags fixed alternatives such as `(?:ab|ac)+`, and a huge literal `slice` end no longer counts as a length cap.
 - The performance and security checks no longer skip a project's JavaScript when its `tsconfig.json` does not set `allowJs`. Loadwise now checks those files with the standalone defaults (ES2022, NodeNext) instead of only naming them in a note, so a JavaScript-heavy project no longer reports 0 findings. A `jsconfig.json` beside the `tsconfig.json`, or `"allowJs": true`, still checks them with the project's own settings.
 
 ### Added

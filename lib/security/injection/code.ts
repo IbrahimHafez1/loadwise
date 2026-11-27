@@ -2,7 +2,7 @@
 // `template-injection`: request data compiled as a server-side template, whose expressions run with
 // the server's privileges.
 import { ts } from '../../performance/compiler.js';
-import { reportTraced, isGlobalName, calledExport } from './shared.js';
+import { reportTraced, isGlobalName, calledExport, initializerOf } from './shared.js';
 import type { CallExpression, Expression, NewExpression, Node } from 'typescript';
 import type { CheckerAdapter, SecurityRuleContext } from '../../shared/types.js';
 
@@ -33,13 +33,21 @@ function templateMessage(label: string) {
   return `\`${label}\` is compiled as a template, which lets a caller run template code on the server. Keep templates fixed and pass input only as data.`;
 }
 
+// `const run = eval;` makes `run(...)` an evaluator call; one hop keeps the lookup bounded.
+function resolveAlias(callee: Expression, context: SecurityRuleContext): Expression {
+  if (!ts.isIdentifier(callee)) return callee;
+  const initializer = initializerOf(callee, context.checker);
+  return initializer && ts.isIdentifier(initializer) ? initializer : callee;
+}
+
 // The arguments evaluated as code by this call or `new` expression.
 function codeInputs(node: CallExpression | NewExpression, context: SecurityRuleContext): (Expression | undefined)[] {
   if (!node.arguments?.length) return [];
   const callee = ts.skipOuterExpressions(node.expression);
+  const evaluator = resolveAlias(callee, context);
   if (ts.isCallExpression(node) && callee.kind === ts.SyntaxKind.ImportKeyword) return [node.arguments[0]];
-  if (isGlobalName(callee, evaluatingGlobals, context.checker)) {
-    if (callee.text === 'Function') return [...node.arguments];
+  if (isGlobalName(evaluator, evaluatingGlobals, context.checker)) {
+    if (evaluator.text === 'Function') return [...node.arguments];
     if (ts.isNewExpression(node)) return [];
     const [first] = node.arguments;
     // A function passed to a timer is not evaluated as text.
@@ -87,8 +95,10 @@ function isEvaluatorCall(node: CallExpression | NewExpression, context: Security
 }
 
 function checkCode(node: CallExpression | NewExpression, context: SecurityRuleContext) {
-  for (const input of codeInputs(node, context)) {
-    if (!input || ts.isSpreadElement(input) || ts.isStringLiteralLike(input)) continue;
+  for (const argument of codeInputs(node, context)) {
+    // `new Function(...parts)` evaluates whatever the spread supplies.
+    const input = argument && ts.isSpreadElement(argument) ? argument.expression : argument;
+    if (!input || ts.isStringLiteralLike(input)) continue;
     const trace = context.taint.trace(input, 'code');
     if (trace) reportTraced(context, input, 'code-injection', codeMessage(trace.label), trace);
     else if (isEvaluatorCall(node, context) && derivesFromParameter(input, context.checker))
