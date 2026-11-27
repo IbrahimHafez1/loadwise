@@ -15,6 +15,7 @@ interface LeftOutScope {
 }
 
 const javaScript = /\.[cm]?jsx?$/i;
+const javaScriptExtensions = ['.js', '.jsx', '.cjs', '.mjs'];
 // Tool configs such as eslint.config.js or .prettierrc.cjs are rarely in a tsconfig and hold no
 // application code.
 const toolConfig = /(?:^|\/)(?:[^/]*\.config|\.[^/]*rc)\.[cm]?js$/i;
@@ -26,18 +27,27 @@ const canonical = (filename: string): string => {
 };
 
 // A config's `include` usually names only its TypeScript, so only its `exclude` marks JavaScript its author left
-// out on purpose. Listing every file under the config's folder through a config that extends it applies that
-// `exclude`, inherited ones included.
+// out on purpose. Listing the files under the config's folder through a config that extends it applies that
+// `exclude`, inherited ones included. Each extension is listed on its own, because a wildcard drops a file when a
+// sibling has a higher-priority extension (`foo.js` beside `foo.d.ts`), which is not an exclusion.
 function excludedBy(config: string): (filename: string) => boolean {
   const folder = path.dirname(config);
-  const everything = ts.parseJsonConfigFileContent(
-    { extends: './' + path.basename(config), files: [], include: ['**/*'], compilerOptions: { allowJs: true } },
-    ts.sys,
-    folder,
-    undefined,
-    path.join(folder, 'loadwise-left-out.json'),
-  );
-  const kept = new Set(everything.fileNames.map(canonical));
+  const kept = new Set<string>();
+  for (const extension of javaScriptExtensions) {
+    const listed = ts.parseJsonConfigFileContent(
+      {
+        extends: './' + path.basename(config),
+        files: [],
+        include: [`**/*${extension}`],
+        compilerOptions: { allowJs: true },
+      },
+      ts.sys,
+      folder,
+      undefined,
+      path.join(folder, 'loadwise-left-out.json'),
+    );
+    listed.fileNames.forEach((filename) => kept.add(canonical(filename)));
+  }
   return (filename) => isWithin(folder, filename) && !kept.has(canonical(filename));
 }
 

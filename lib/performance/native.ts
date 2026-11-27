@@ -326,7 +326,9 @@ function analyzeNative({
     for (const reference of parsed.projectReferences ?? []) {
       visitConfig(resolveConfig(reference.path), projects, scope, false, explicit);
     }
-    if (!allowsJs) {
+    // The companion jsconfig names the JavaScript the project checks, so its folder needs no fallback.
+    if (companion) scopesWithoutJs.delete(scope ?? path.dirname(filename));
+    else if (!allowsJs) {
       const jsScope = scope ?? path.dirname(filename);
       const leftOut = scopesWithoutJs.get(jsScope) ?? { configs: [], checksLeftOut: !explicit };
       leftOut.configs.push(filename);
