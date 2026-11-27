@@ -2,7 +2,7 @@
 // The checkers get a larger limit derived from the machine unless the user already chose one.
 import os from 'node:os';
 import v8 from 'node:v8';
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 
 const bytesPerMegabyte = 1024 * 1024;
 const heapFractionOfMemory = 0.6;
@@ -50,16 +50,26 @@ function shouldRespawnWithLargerHeap(env = process.env) {
   return recommendedHeapMegabytes() > defaultHeapMegabytes();
 }
 
-function respawnWithLargerHeap(scriptPath: string, args: readonly string[]) {
+// Editors and process managers signal only the process they started. Without forwarding, stopping a
+// `--watch` run would leave the re-spawned watcher running, holding its output pipes open forever.
+const forwardedSignals = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
+
+// Sets process.exitCode once the child exits.
+function respawnWithLargerHeap(scriptPath: string, args: readonly string[]): void {
   // The child inherits process.env; copying it here would read every variable, connection strings
   // included.
   process.env[respawnMarker] = '1';
-  const run = spawnSync(
+  const child = spawn(
     process.execPath,
     [`${heapFlagName}=${recommendedHeapMegabytes()}`, ...process.execArgv, scriptPath, ...args],
     { stdio: 'inherit', windowsHide: true },
   );
-  return run.status ?? 2;
+  const forward = (signal: NodeJS.Signals) => child.kill(signal);
+  for (const signal of forwardedSignals) process.on(signal, forward);
+  child.on('exit', (code) => {
+    for (const signal of forwardedSignals) process.off(signal, forward);
+    process.exitCode = code ?? 2;
+  });
 }
 
 const heapExhaustionPattern = /(heap|javascript) out of memory/i;
