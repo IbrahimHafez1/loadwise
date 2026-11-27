@@ -1,4 +1,6 @@
-name: loadwise
+# The Marketplace listing name; it cannot be plain "loadwise", which an unrelated GitHub organization owns. Workflows
+# still refer to the Action as IbrahimHafez1/loadwise@v0.
+name: Loadwise Check
 description: Check TypeScript and JavaScript projects for performance, reliability, maintainability, security and accessibility problems.
 branding:
   icon: check-circle
