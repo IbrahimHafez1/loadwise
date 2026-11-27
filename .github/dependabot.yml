@@ -1,7 +1,8 @@
 version: 2
 updates:
   - package-ecosystem: npm
-    directory: /
+    # The ORM integration fixture pins real driver versions, so it gets security and version updates too.
+    directories: ['/', '/test/performance/integration/orms']
     schedule:
       interval: weekly
     groups:
