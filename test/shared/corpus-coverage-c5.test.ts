@@ -74,14 +74,44 @@ test('a folder that no ancestor config includes keeps the skipped-checker note',
   assert.equal(JSON.parse(run.stdout).performance, null);
 });
 
-test('the ancestor search stops at the package root', (context) => {
+test('the ancestor search stops at the package root, which is checked with the standalone defaults', (context) => {
   const root = project(context, {
     'tsconfig.json': JSON.stringify({ include: ['**/*.ts'] }),
     'packages/api/package.json': '{"name":"api"}',
     'packages/api/slow.ts': slowSource,
   });
   const run = loadwise(path.join(root, 'packages/api'), 'check', '--json', '--only', 'perf');
-  assert.match(run.stderr, /no tsconfig\.json or jsconfig\.json in .*api\b.*skipped the performance checker/);
+  assert.equal(run.code, 1, run.stderr);
+  assert.doesNotMatch(run.stderr, /no tsconfig\.json or jsconfig\.json/);
+  assert.deepEqual(files(JSON.parse(run.stdout).performance), ['slow.ts']);
+});
+
+test('a package without a config is checked when it mixes JavaScript and TypeScript', (context) => {
+  const root = project(context, {
+    'package.json': '{"name":"mixed"}',
+    'lib/model.js': slowJavaScript,
+    'src/slow.ts': slowSource,
+  });
+  const run = loadwise(root, 'check', '--json', '--only', 'perf,sec,rel');
+  assert.doesNotMatch(run.stderr, /no tsconfig\.json or jsconfig\.json/);
+  const report = JSON.parse(run.stdout);
+  assert.deepEqual(files(report.performance), ['lib/model.js', 'src/slow.ts']);
+  assert.equal(report.security.scannedFiles, 2);
+  // The security checker run alone also reads both sources rather than only its file checks.
+  const security = loadwise(root, 'sec', '--json');
+  assert.doesNotMatch(security.stderr, /no tsconfig\.json or jsconfig\.json/);
+  assert.ok(JSON.parse(security.stdout).scannedFiles >= 2, security.stderr);
+});
+
+test("a package without a config keeps the skipped-checker note when a sub-folder's tsconfig holds its TypeScript", (context) => {
+  const root = project(context, {
+    'package.json': '{"name":"nested"}',
+    'src/tsconfig.json': JSON.stringify({ include: ['*.ts'] }),
+    'src/slow.ts': slowSource,
+  });
+  const run = loadwise(root, 'check', '--json', '--only', 'perf');
+  assert.equal(run.code, 0, run.stderr);
+  assert.match(run.stderr, /no tsconfig\.json or jsconfig\.json in .*; skipped the performance checker/);
 });
 
 test('perf reports only files under the config folder, not files its include pulls in from outside', (context) => {

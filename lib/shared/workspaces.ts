@@ -294,16 +294,37 @@ function selectWorkspaces<Workspace extends WorkspaceDirectory>(
   return packages.filter((entry) => chosen.has(entry));
 }
 
-// Configless Node packages can use the explicit-JavaScript compiler options. Keep mixed-language
-// projects and workspace roots on the config-based path so an incomplete scan cannot authorize
-// fixes.
-function plainJavaScriptSources(directory: string): string[] | undefined {
+const implementationSource = /(?<!\.d)\.[cm]?[jt]sx?$/i;
+const typeScriptSource = /(?<!\.d)\.[cm]?tsx?$/i;
+const nestedSourceConfig = /(?:^|\/)[jt]sconfig\.json$/i;
+
+// The sources of a Node package without a config of its own, which are checked with the standalone
+// defaults (ES2022, NodeNext). A workspace root keeps to its packages' configs. TypeScript under a
+// sub-folder's own tsconfig.json needs that config's settings, such as paths and decorators, so such a
+// package is left out rather than checked with defaults that would misread it and let fixes through.
+function configlessSources(directory: string): string[] | undefined {
   if (!isFile(path.join(directory, 'package.json')) || projectConfig(directory) || workspacePatterns(directory).length)
     return undefined;
   const files = listFiles(directory);
-  if (files.some((file) => /\.[cm]?tsx?$/i.test(file) && !/\.d\.[cm]?ts$/i.test(file))) return undefined;
-  const sources = files.filter((file) => /\.[cm]?jsx?$/i.test(file)).map((file) => path.join(directory, file));
+  if (files.some((file) => typeScriptSource.test(file)) && files.some((file) => nestedSourceConfig.test(file)))
+    return undefined;
+  const sources = files.filter((file) => implementationSource.test(file)).map((file) => path.join(directory, file));
   return sources.length ? sources : undefined;
+}
+
+// Whether a monorepo root has a package the source checkers can read, with its own config or without.
+function hasWorkspaceSources(root: string): boolean {
+  const { packages, withoutConfig } = discoverWorkspaces(root);
+  return packages.length > 0 || withoutConfig.some(({ directory }) => configlessSources(directory) !== undefined);
+}
+
+// Packages without a config whose sources cannot be checked with the standalone defaults.
+function uncheckedWorkspaces(withoutConfig: readonly WorkspaceDirectory[]): WorkspaceDirectory[] {
+  return withoutConfig.filter(
+    ({ directory }) =>
+      configlessSources(directory) === undefined &&
+      listFiles(directory).some((file) => implementationSource.test(file)),
+  );
 }
 
 const missingFileCode = 6053;
@@ -323,7 +344,9 @@ export {
   missingPackageBase,
   projectConfig,
   selectWorkspaces,
-  plainJavaScriptSources,
+  configlessSources,
+  hasWorkspaceSources,
+  uncheckedWorkspaces,
   isProjectDirectory,
   workspacePackagesAround,
   workspaceSourceEntry,

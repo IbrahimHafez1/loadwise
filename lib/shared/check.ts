@@ -12,7 +12,7 @@ import type { BaselineFlagOptions } from './types/baseline.js';
 import type { ChildRun, CheckerReport, PillarDefinition, PillarRunOptions } from './types/checker-run.js';
 import type { OutputFormat, ReportEntry } from './types/report-formats.js';
 import type { LoadwiseSettings } from './types/settings.js';
-import { discoverWorkspaces, projectConfig } from './workspaces.js';
+import { discoverWorkspaces, projectConfig, uncheckedWorkspaces } from './workspaces.js';
 import { writeReviewHandoff } from './review-delivery.js';
 
 /** The values `loadwise check` reads from its command line. */
@@ -237,11 +237,12 @@ async function scanCheck({
 async function scanForFixes(checkers?: readonly string[]): Promise<Finding[]> {
   const options = parseCheckArgs(checkers ? ['--json', '--only', checkers.join(',')] : ['--json']);
   if (options.selected.some(({ name }) => name !== 'maint') && !projectConfig(options.directory)) {
-    const { packages, withoutConfig } = discoverWorkspaces(options.directory);
-    if (packages.length && withoutConfig.length) {
+    // A package the scan skips could hold callers a fix breaks.
+    const unchecked = uncheckedWorkspaces(discoverWorkspaces(options.directory).withoutConfig);
+    if (unchecked.length) {
       throw new Error(
         'Workspace packages are missing a source config: ' +
-          withoutConfig.map(({ name }) => name).join(', ') +
+          unchecked.map(({ name }) => name).join(', ') +
           '. No fixes applied.',
       );
     }

@@ -5,7 +5,13 @@ import type { SourceCheckValues } from './types/source-check-values.js';
 import type { ScanSettings } from './types/source-scan-values.js';
 import { resolveConfig } from './source-inputs.js';
 import { validateQueryPolicy, loadQueryPolicy } from './query-policy.js';
-import { discoverWorkspaces, projectConfig, selectWorkspaces } from '../shared/workspaces.js';
+import {
+  configlessSources,
+  discoverWorkspaces,
+  projectConfig,
+  selectWorkspaces,
+  uncheckedWorkspaces,
+} from '../shared/workspaces.js';
 import { errorMessage } from './cli-arguments.js';
 import type { PolicySource, WorkspaceTarget } from './cli-types.js';
 
@@ -48,7 +54,7 @@ export function sourcePolicy(explicit: string | undefined, settings: ScanSetting
 }
 
 // A directory without its own config, or an explicit --workspace, means a monorepo: one config per
-// package.
+// package, and the sources of each package without one, checked with the standalone defaults.
 export function workspaceTarget(
   values: Pick<SourceCheckValues, 'project' | 'workspace'>,
   positionals: readonly string[],
@@ -61,18 +67,25 @@ export function workspaceTarget(
   }
   if (!values.workspace.length && projectConfig(directory)) return undefined;
   const { packages, withoutConfig } = discoverWorkspaces(directory);
-  if (!packages.length) {
+  const configless = withoutConfig.flatMap((workspace) => {
+    const sources = configlessSources(workspace.directory);
+    return sources ? [{ ...workspace, sources }] : [];
+  });
+  if (!packages.length && !configless.length) {
     if (values.workspace.length)
-      throw new Error('--workspace found no workspace package with a tsconfig.json or jsconfig.json.');
+      throw new Error('--workspace found no workspace package with JavaScript or TypeScript.');
     return undefined;
   }
-  for (const { name } of withoutConfig) {
-    console.error(`Note: workspace ${name} has no tsconfig.json or jsconfig.json; skipped it.`);
+  for (const { name } of uncheckedWorkspaces(withoutConfig)) {
+    console.error(
+      `Note: workspace ${name} has no tsconfig.json or jsconfig.json, and a sub-folder's own tsconfig.json holds its TypeScript; skipped it. Add a tsconfig.json to the package to check it.`,
+    );
   }
-  const chosen = selectWorkspaces(packages, directory, values.workspace);
+  const chosen = selectWorkspaces([...packages, ...configless], directory, values.workspace);
   return {
     directory,
-    configs: chosen.map(({ config }) => config),
+    configs: chosen.flatMap((workspace) => ('config' in workspace ? [workspace.config] : [])),
+    standaloneFiles: chosen.flatMap((workspace) => ('sources' in workspace ? workspace.sources : [])),
     packages: chosen.map(({ name, directory: packageDirectory }) => ({
       name,
       directory: relativeToCwd(packageDirectory),

@@ -23,6 +23,8 @@ interface WorkspacePackageSummary {
 export interface WorkspaceTarget {
   directory: string;
   configs: string[];
+  /** Sources of the packages without a config, checked with the standalone defaults. */
+  standaloneFiles: string[];
   packages: WorkspacePackageSummary[];
 }
 
@@ -64,6 +66,7 @@ export interface PrintValues extends Omit<SourceReportValues, 'projectDirectory'
 export interface SourceCodeOptions {
   project?: string | string[];
   files: string[];
+  standaloneFiles?: readonly string[];
   policy?: PerformancePolicy;
   onlyFiles?: (filename: string) => boolean;
   analyzers?: SourceAnalyzer[];

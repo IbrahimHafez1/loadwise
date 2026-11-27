@@ -14,7 +14,7 @@ import type { SourceAnalyzer } from './types/source-analyzer.js';
 import type { scanDependencies } from '../security/deps/scan.js';
 import type { SourceCheckValues } from './types/source-check-values.js';
 import type { ChangedScope } from './types/source-scan-values.js';
-import { coveringConfig, plainJavaScriptSources, projectConfig } from '../shared/workspaces.js';
+import { coveringConfig, configlessSources, projectConfig } from '../shared/workspaces.js';
 import { enableCompileCache } from 'node:module';
 import { notifyEditor } from './notify-editor.js';
 import { sourceHistoryProject } from '../shared/fix-history.js';
@@ -135,7 +135,8 @@ function markupScan({ values, workspace, scope, markupFiles, hasNamedSources }: 
   if (hasNamedSources && !markupFiles.length) return { scannedFiles: 0, findings: [] };
   const project = path.resolve(values.project ?? '.');
   const root = fs.statSync(project).isDirectory() ? project : path.dirname(project);
-  const roots = workspace && values.workspace.length ? workspace.configs.map((config) => path.dirname(config)) : [root];
+  const roots =
+    workspace && values.workspace.length ? workspace.packages.map(({ directory }) => path.resolve(directory)) : [root];
   return scanMarkupFiles({
     roots: markupFiles.length ? [] : roots,
     explicitFiles: markupFiles,
@@ -286,7 +287,7 @@ function resolveScanInputs(
 ): { directory: string; inferredFiles: string[] | undefined } {
   // A monorepo root keeps its policy and config at the root, beside no project config.
   const input = path.resolve(values.project ?? '.');
-  const inferredFiles = !workspace && !positionals.length && !values.watch ? plainJavaScriptSources(input) : undefined;
+  const inferredFiles = !workspace && !positionals.length && !values.watch ? configlessSources(input) : undefined;
   // A folder of plain markup has no project config to take its folder from.
   const isMarkupFolder = readsMarkupOnly && !workspace && !positionals.length;
   const directory =
@@ -335,6 +336,7 @@ async function scanSource({
     {
       project: workspace?.configs ?? values.project,
       files: inferredFiles ?? positionals,
+      standaloneFiles: workspace?.standaloneFiles,
       policy,
       onlyFiles: scanFilter(values.settings, scope),
       analyzers: editor ? await editorAnalyzers() : analyzers,
@@ -430,6 +432,7 @@ async function checkWithPillars({
   const result: PerformanceScanResult = analyzeSources({
     project: workspace?.configs ?? values.project,
     files: inferredFiles ?? positionals,
+    standaloneFiles: workspace?.standaloneFiles,
     policy,
     onlyFiles: scanFilter(values.settings, scope),
     analyzers: sharedAnalyzers(commands),
