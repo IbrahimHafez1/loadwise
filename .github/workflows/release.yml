@@ -24,13 +24,17 @@ jobs:
           node-version: 24
           registry-url: 'https://registry.npmjs.org'
           cache: npm
+      # Staged publishing through Trusted Publishing needs npm 11.20 or later; Node 24 may bundle an older npm.
+      - run: npm install --global npm@11.20.0
       - name: Check the tag matches package.json
         run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
       - run: npm ci
       - run: npm run check
       - run: npm run bench:recall
       # npm Trusted Publishing authenticates this workflow through OIDC (id-token: write), so no token secret is stored.
-      - name: Publish to npm
+      # The trusted publisher may only stage: the version goes live after a maintainer approves it on npmjs.com with
+      # 2FA, so a compromised workflow run cannot release on its own.
+      - name: Stage the npm publish
         run: |
           # A re-run, or a version published by hand, skips straight to the release steps.
           if npm view "loadwise@${GITHUB_REF_NAME#v}" version > /dev/null 2>&1; then
@@ -38,10 +42,11 @@ jobs:
             exit 0
           fi
           if [[ "$GITHUB_REF_NAME" == *-* ]]; then
-            npm publish --provenance --access public --tag next
+            npm stage publish . --provenance --access public --tag next
           else
-            npm publish --provenance --access public
+            npm stage publish . --provenance --access public
           fi
+          echo "Approve loadwise@${GITHUB_REF_NAME#v} at https://www.npmjs.com/package/loadwise to make it live." >> "$GITHUB_STEP_SUMMARY"
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
