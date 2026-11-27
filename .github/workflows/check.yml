@@ -52,6 +52,25 @@ jobs:
       - run: npm run build
       - run: node scripts/run-tests.js --test-shard=${{ matrix.shard }}/3
 
+  # macOS has case-insensitive paths, /private/var temp folders and its own native TypeScript binary, so it runs the
+  # whole suite and the native engine's performance tests.
+  macos:
+    name: tests (macos-latest, node 24)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node scripts/run-tests.js
+      - run: node --import ./test/manual-session.js --test --test-concurrency=2 test/performance/*.test.js
+        env:
+          PERF_CHECK_TEST_NATIVE: '1'
+
   native-engine:
     name: performance tests on the native engine
     runs-on: ubuntu-latest
@@ -72,7 +91,7 @@ jobs:
   passed:
     name: CI passed
     if: always()
-    needs: [check, windows, native-engine]
+    needs: [check, windows, macos, native-engine]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
