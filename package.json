@@ -1,6 +1,6 @@
 {
   "name": "loadwise",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "type": "module",
   "description": "Find performance, reliability, maintainability, security and accessibility issues, review suggested fixes, and check changed code locally or in CI.",
   "license": "Apache-2.0",
