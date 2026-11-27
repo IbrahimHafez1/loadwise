@@ -5,7 +5,7 @@
     "verify": "node verify.cjs"
   },
   "dependencies": {
-    "@sequelize/core": "7.0.0-alpha.47",
+    "@sequelize/core": "7.0.0-alpha.48",
     "knex": "3.3.0",
     "kysely": "0.28.17",
     "mongoose": "9.13.0",
