@@ -58,8 +58,17 @@ const migrations = {
   '004_recreate/migration.sql': 'CREATE INDEX "Account_recreated_idx" ON "Account"("recreated");',
 };
 
+// The fixture imports the project through a path relative to virtualRoot, which cannot cross drives. GitHub's Windows
+// runners check out on D: with TEMP on C:, so the project then goes under the checkout's ignored node_modules/.cache.
+function temporaryParent(): string {
+  if (path.parse(os.tmpdir()).root === path.parse(virtualRoot).root) return os.tmpdir();
+  const cacheDirectory = path.resolve(import.meta.dirname, '..', '..', 'node_modules', '.cache');
+  fs.mkdirSync(cacheDirectory, { recursive: true });
+  return cacheDirectory;
+}
+
 function createProject(context: TestContext) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'index-coverage-'));
+  const root = fs.mkdtempSync(path.join(temporaryParent(), 'index-coverage-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.writeFileSync(
     path.join(root, 'package.json'),
