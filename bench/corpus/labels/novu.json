@@ -1,0 +1,730 @@
+[
+  {
+    "pillar": "maint",
+    "ruleId": "deep-control-flow",
+    "file": "apps/api/migrations/normalize-users-email/normalize-users-email.migration.ts",
+    "line": 35,
+    "verdict": "tp",
+    "note": "nested try, loop and if reaches four levels"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "dependency-cycle",
+    "file": "apps/api/src/app/agents/agents.module.ts",
+    "line": 37,
+    "verdict": "tp",
+    "note": "agents module and integrations module import each other"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "dependency-cycle",
+    "file": "libs/application-generic/src/usecases/trigger-event/index.ts",
+    "line": 2,
+    "verdict": "tp",
+    "note": "barrel and usecase import each other"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "duplicate-implementation",
+    "file": "apps/agent-inbox-mcp/src/inbox-digest.ts",
+    "line": 29,
+    "verdict": "tp",
+    "note": "formatRelativeTime duplicated in another module"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "duplicate-implementation",
+    "file": "apps/api/src/app/agents/channels/integrations/add-agent-integration/add-agent-integration.usecase.ts",
+    "line": 293,
+    "verdict": "tp",
+    "note": "enforceEmailTier repeated in another usecase"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "high-branch-complexity",
+    "file": "apps/api/src/app/activity/usecases/get-charts/get-charts.usecase.ts",
+    "line": 59,
+    "verdict": "tp",
+    "note": "execute has branch complexity 15"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-class",
+    "file": "apps/api/src/app/agents/conversation-runtime/conversation/agent-conversation.service.ts",
+    "line": 97,
+    "verdict": "tp",
+    "note": "AgentConversationService has 54 methods"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-module",
+    "file": "apps/agent-inbox-mcp/src/spec-support.ts",
+    "line": 1,
+    "verdict": "tp",
+    "note": "735 lines of code"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "long-parameter-list",
+    "file": "apps/agent-inbox-mcp/src/spec-support.ts",
+    "line": 287,
+    "verdict": "tp",
+    "note": "seven positional parameters"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "apps/api/src/app/blueprint/usecases/get-grouped-blueprints/get-grouped-blueprints.usecase.ts",
+    "line": 58,
+    "verdict": "tp",
+    "note": "storedBlueprints.find per popular id in a loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "apps/api/src/app/human/services/human-delivery.service.ts",
+    "line": 770,
+    "verdict": "tp",
+    "note": "integrations.find per entry of byIntegration"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "apps/api/src/app/topics-v2/usecases/delete-topic-subscriptions/delete-topic-subscriptions.usecase.ts",
+    "line": 196,
+    "verdict": "tp",
+    "note": "itemsToDelete.find per identifier in a loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "apps/api/src/app/topics-v2/usecases/delete-topic-subscriptions/delete-topic-subscriptions.usecase.ts",
+    "line": 268,
+    "verdict": "tp",
+    "note": "foundSubscribers.find per subscription in a loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "apps/api/src/app/agents/management/usecases/sync-agent-to-environment/sync-agent-to-environment.usecase.ts",
+    "line": 87,
+    "verdict": "tp",
+    "note": "existingTargetLinks.find per target integration in a loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "apps/api/src/app/inbox/usecases/get-inbox-preferences/get-inbox-preferences.usecase.ts",
+    "line": 85,
+    "verdict": "tp",
+    "note": "preference list rescanned twice per comparison inside sort"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "apps/api/src/app/inbox/usecases/get-inbox-preferences/get-inbox-preferences.usecase.ts",
+    "line": 87,
+    "verdict": "tp",
+    "note": "preference list rescanned twice per comparison inside sort"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "apps/api/src/app/subscriptions/usecases/create-subscriptions/create-subscriptions.usecase.ts",
+    "line": 217,
+    "verdict": "tp",
+    "note": "preferencesArray.find per created subscription in a batch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "docker/box/src/box/supervisor.ts",
+    "line": 53,
+    "verdict": "fp",
+    "note": "container tooling checks a handful of stores against a short process list"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "filter-for-existence",
+    "file": "apps/api/src/app/domains/usecases/diagnose-domain/diagnose-domain.usecase.ts",
+    "line": 54,
+    "verdict": "tp",
+    "note": "filter().length === 0 used only as an existence check"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "floating-promise",
+    "file": "apps/api/src/app/layouts-v2/usecases/upsert-layout/upsert-layout.usecase.ts",
+    "line": 190,
+    "verdict": "tp",
+    "note": "repository delete is not awaited so the write can fail unseen"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "floating-promise",
+    "file": "apps/worker/src/app/workflow/usecases/send-message/send-message-push.usecase.ts",
+    "line": 313,
+    "verdict": "tp",
+    "note": "message update is not awaited so the write can fail unseen"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "http-call-without-timeout",
+    "file": "apps/api/src/app/agents/channels/agent-config-resolver.service.ts",
+    "line": 551,
+    "verdict": "tp",
+    "note": "server axios call to Slack with no timeout"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "http-call-without-timeout",
+    "file": "apps/api/src/app/integrations/usecases/azure-setup-oauth-callback/azure-setup-oauth-callback.usecase.ts",
+    "line": 184,
+    "verdict": "tp",
+    "note": "server axios token exchange with no timeout"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "apps/api/admin/make-json-backup.ts",
+    "line": 9,
+    "verdict": "fp",
+    "note": "admin backup script"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "apps/api/exportOpenAPIJSON.ts",
+    "line": 10,
+    "verdict": "fp",
+    "note": "build-time OpenAPI export script"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "docker/box/src/box/apply.ts",
+    "line": 99,
+    "verdict": "fp",
+    "note": "container tooling run once at start"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "apps/inbound-mail/src/server/index.ts",
+    "line": 87,
+    "verdict": "fp",
+    "note": "creates the temp directory once while the server starts"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "docker/box/src/box/build.ts",
+    "line": 469,
+    "verdict": "fp",
+    "note": "container build tooling run once"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "docker/box/src/box/lifecycle.ts",
+    "line": 140,
+    "verdict": "fp",
+    "note": "container bootstrap run once"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/js/tsup.config.ts",
+    "line": 22,
+    "verdict": "fp",
+    "note": "build configuration read when the tool starts"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-process-in-async",
+    "file": "packages/add-inbox/src/cli/index.ts",
+    "line": 206,
+    "verdict": "fp",
+    "note": "interactive CLI installer"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-process-in-async",
+    "file": "packages/add-inbox/src/config/package-manager.ts",
+    "line": 135,
+    "verdict": "fp",
+    "note": "interactive CLI installer"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-process-in-async",
+    "file": "packages/agentinbox/src/listen/codex.ts",
+    "line": 132,
+    "verdict": "fp",
+    "note": "local CLI preflight check"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "promise-return-escapes-catch",
+    "file": "apps/api/src/app/inbox/usecases/unsnooze-notification/unsnooze-notification.usecase.ts",
+    "line": 59,
+    "verdict": "tp",
+    "note": "returned promise inside try without await bypasses the catch"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "promise-return-escapes-catch",
+    "file": "apps/dashboard/src/components/ai-elements/prompt-input.tsx",
+    "line": 572,
+    "verdict": "fp",
+    "note": "FileReader promise with only a resolve handler"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "promise-return-escapes-catch",
+    "file": "libs/application-generic/src/agent-runtimes/anthropic/anthropic-agent-runtime.provider.ts",
+    "line": 465,
+    "verdict": "tp",
+    "note": "returned promise inside try without await bypasses the catch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "apps/api/src/app/inbox/usecases/update-preferences/update-preferences.usecase.ts",
+    "line": 332,
+    "verdict": "fp",
+    "note": "accumulates the handful of notification channels"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "apps/api/src/app/shared/framework/swagger/headers.decorator.ts",
+    "line": 11,
+    "verdict": "fp",
+    "note": "accumulates a few declared headers"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "apps/dashboard/src/components/workflow-editor/step-utils.ts",
+    "line": 142,
+    "verdict": "fp",
+    "note": "accumulates a handful of validation errors"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "apps/dashboard/src/utils/schema.ts",
+    "line": 162,
+    "verdict": "fp",
+    "note": "accumulates the keys of one schema object"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "apps/api/src/app/partner-integrations/usecases/update-vercel-integration/update-vercel-integration.usecase.ts",
+    "line": 348,
+    "verdict": "tp",
+    "note": "concat of the accumulator across every organization with the integration"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "apps/api/src/app/shared/framework/swagger/responses.decorator.ts",
+    "line": 30,
+    "verdict": "fp",
+    "note": "runs once at module load over the swagger response decorator names"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "apps/dashboard/src/components/workflow-editor/schema.ts",
+    "line": 86,
+    "verdict": "fp",
+    "note": "builds a schema from the few fields of one workflow step"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "apps/dashboard/src/utils/schema.ts",
+    "line": 192,
+    "verdict": "fp",
+    "note": "builds defaults from the properties of one schema object"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "libs/application-generic/src/modules/cron.module.ts",
+    "line": 62,
+    "verdict": "fp",
+    "note": "module setup over the handful of active workers at bootstrap"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "libs/application-generic/src/usecases/conditions-filter/conditions-filter.usecase.ts",
+    "line": 116,
+    "verdict": "fp",
+    "note": "concatenates the conditions of the few filters on one workflow"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "libs/application-generic/src/utils/template-parser/new-liquid-parser.ts",
+    "line": 905,
+    "verdict": "fp",
+    "note": "collects issues over the few liquid filters used in one template"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "serial-awaits-in-literal",
+    "file": "apps/api/src/app/auth/usecases/register/user-register.usecase.ts",
+    "line": 58,
+    "verdict": "tp",
+    "note": "user lookup and token generation awaited in sequence"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "serial-awaits-in-literal",
+    "file": "apps/dashboard/tests/page-object-models/workflow-editor-page.ts",
+    "line": 65,
+    "verdict": "fp",
+    "note": "Playwright page object reads"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "serial-awaits-in-literal",
+    "file": "packages/framework/src/resources/workflow/workflow.resource.ts",
+    "line": 128,
+    "verdict": "tp",
+    "note": "eleven independent factory calls awaited in sequence"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "service-query-in-loop",
+    "file": "apps/api/src/app/inbox/usecases/get-topic-subscriptions/get-topic-subscriptions.usecase.ts",
+    "line": 52,
+    "verdict": "missed",
+    "note": "preferences find per subscription inside a loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "service-query-in-loop",
+    "file": "libs/dal/src/repositories/context/context.repository.ts",
+    "line": 24,
+    "verdict": "tp",
+    "note": "findOrCreateContext per item inside a map"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "service-query-in-loop",
+    "file": "libs/dal/src/repositories/integration/integration.repository.ts",
+    "line": 207,
+    "verdict": "tp",
+    "note": "update per id inside Promise.all map"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "service-query-in-loop",
+    "file": "libs/dal/src/repositories/message/message.repository.ts",
+    "line": 967,
+    "verdict": "fp",
+    "note": "loop runs over pre-chunked id batches, one update per batch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "service-query-in-loop",
+    "file": "libs/dal/src/repositories/message/message.repository.ts",
+    "line": 968,
+    "verdict": "fp",
+    "note": "loop runs over pre-chunked id batches, one update per batch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "service-query-in-loop",
+    "file": "libs/dal/src/repositories/message/message.repository.ts",
+    "line": 974,
+    "verdict": "fp",
+    "note": "loop runs over pre-chunked id batches, one update per batch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-module-cache",
+    "file": "apps/dashboard/src/hooks/use-init-demo-workflow.ts",
+    "line": 13,
+    "verdict": "fp",
+    "note": "browser dashboard map keyed by environment id"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-module-cache",
+    "file": "packages/agentinbox/src/mascot/drawing.ts",
+    "line": 495,
+    "verdict": "fp",
+    "note": "CLI mascot cache keyed by a small set of shapes"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-module-cache",
+    "file": "packages/agentinbox/src/screen/terminal.ts",
+    "line": 87,
+    "verdict": "fp",
+    "note": "CLI colour lookup cache over a bounded palette"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-module-cache",
+    "file": "playground/nextjs/src/components/ai-elements/code-block.tsx",
+    "line": 185,
+    "verdict": "fp",
+    "note": "browser playground syntax highlight cache"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "committed-secret",
+    "file": "apps/api/src/.env.agent",
+    "line": 114,
+    "verdict": "fp",
+    "note": "local development env file for agent runs"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "committed-secret",
+    "file": "apps/api/src/.env.test",
+    "line": 116,
+    "verdict": "fp",
+    "note": "mock Clerk signing key for the test environment"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "committed-secret",
+    "file": "libs/agent-evals/src/suites/agent-onboarding/scenarios/slack-in-chat-rerun/scenario.ts",
+    "line": 18,
+    "verdict": "fp",
+    "note": "obviously fake test token in an eval scenario"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "cors-origin-regex-unanchored",
+    "file": "apps/api/src/config/cors.config.ts",
+    "line": 6,
+    "verdict": "tp",
+    "note": "RegExp built from an unanchored env value, an empty value matches every origin"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "dockerfile-runs-as-root",
+    "file": ".devcontainer/Dockerfile",
+    "line": 3,
+    "verdict": "fp",
+    "note": "developer container image"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "error-stack-in-response",
+    "file": "apps/dashboard/tests/utils/test-bridge-server.ts",
+    "line": 68,
+    "verdict": "fp",
+    "note": "test-only bridge server"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "insecure-random-for-secret",
+    "file": "apps/api/src/app/integrations/usecases/whatsapp/whatsapp-graph-api.utils.ts",
+    "line": 317,
+    "verdict": "tp",
+    "note": "registration PIN generated with Math.random"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "jwt-sign-without-expiry",
+    "file": "apps/api/src/app/shared/services/novu-tokens.service.ts",
+    "line": 145,
+    "verdict": "fp",
+    "note": "explicit exp claim is set before signing"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "nest-validation-without-whitelist",
+    "file": "apps/api/src/bootstrap.ts",
+    "line": 116,
+    "verdict": "tp",
+    "note": "global ValidationPipe without whitelist"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "nest-validation-without-whitelist",
+    "file": "apps/worker/src/bootstrap.ts",
+    "line": 40,
+    "verdict": "tp",
+    "note": "global ValidationPipe without whitelist"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "tls-verification-disabled",
+    "file": "packages/agentinbox/src/api/client.ts",
+    "line": 36,
+    "verdict": "fp",
+    "note": "only applies to loopback hosts"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "tls-verification-disabled",
+    "file": "packages/novu/src/commands/shared/novu-http.ts",
+    "line": 59,
+    "verdict": "fp",
+    "note": "only applies to loopback hosts"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-process-in-async",
+    "file": "packages/agentinbox/src/listen/codex.ts",
+    "line": 149,
+    "verdict": "fp",
+    "note": "CLI login check, one-shot with timeout"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-process-in-async",
+    "file": "packages/agentinbox/src/listen/opencode.ts",
+    "line": 126,
+    "verdict": "fp",
+    "note": "CLI version check, one-shot with timeout"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "await-before-early-exit",
+    "file": "apps/dashboard/src/hooks/use-template-store.ts",
+    "line": 222,
+    "verdict": "fp",
+    "note": "guard is isMounted unmount check, not a rejection"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-compression-in-async",
+    "file": "apps/human-dashboard/src/lib/agent-skills.ts",
+    "line": 115,
+    "verdict": "tp",
+    "note": "sync gunzip of whole GitHub archive in request path"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "auth-route-without-rate-limit",
+    "file": "apps/api/src/app/outbound-webhooks/outbound-webhooks.controller.ts",
+    "line": 41,
+    "verdict": "fp",
+    "note": "authenticated webhook portal token creation, not a credential check"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "ssrf-request-url",
+    "file": "playground/nextjs/src/app/api/mcp-proxy/[...path]/route.ts",
+    "line": 46,
+    "verdict": "fp",
+    "note": "fixed backend host, path segments encoded"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "ssrf-request-url",
+    "file": "playground/nextjs/src/pages/api/novu-proxy/[...path].ts",
+    "line": 74,
+    "verdict": "fp",
+    "note": "fixed host, route allowlist and encoded segments"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "hardcoded-secret",
+    "file": "libs/agent-evals/src/suites/agent-onboarding/scenarios/slack-in-chat-rerun/scenario.ts",
+    "line": 18,
+    "verdict": "fp",
+    "note": "fake token in eval test scenario"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "frontend-storage-secret-token",
+    "file": "apps/dashboard/src/utils/better-auth/client.ts",
+    "line": 29,
+    "verdict": "tp",
+    "note": "session token kept in localStorage"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "frontend-storage-secret-token",
+    "file": "apps/dashboard/src/utils/better-auth/components/sign-in.tsx",
+    "line": 70,
+    "verdict": "tp",
+    "note": "session token kept in localStorage"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "frontend-storage-secret-token",
+    "file": "apps/dashboard/src/utils/better-auth/components/sign-up.tsx",
+    "line": 118,
+    "verdict": "tp",
+    "note": "session token kept in localStorage"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "frontend-storage-secret-token",
+    "file": "apps/dashboard/src/utils/better-auth/use-cursor-agent-auto-login.ts",
+    "line": 50,
+    "verdict": "tp",
+    "note": "session token kept in localStorage"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "frontend-storage-secret-token",
+    "file": "apps/dashboard/src/utils/self-hosted/components.tsx",
+    "line": 50,
+    "verdict": "tp",
+    "note": "JWT kept in localStorage"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "frontend-storage-secret-token",
+    "file": "apps/dashboard/src/utils/self-hosted/components.tsx",
+    "line": 209,
+    "verdict": "tp",
+    "note": "JWT kept in localStorage"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "storage-object-public-acl",
+    "file": "libs/application-generic/src/services/storage/storage.service.ts",
+    "line": 160,
+    "verdict": "tp",
+    "note": "uploads set ACL public-read"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "json-parse-unguarded",
+    "file": "libs/application-generic/src/services/auth/shared.ts",
+    "line": 8,
+    "verdict": "tp",
+    "note": "request.query.state parsed unguarded in auth callback"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "async-callback-unhandled-rejection",
+    "file": "apps/dashboard/src/hooks/use-form-autosave.ts",
+    "line": 99,
+    "verdict": "tp",
+    "note": "onSave rejection in setTimeout leaves outer promise unresolved"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "dom-unthrottled-scroll-resize",
+    "file": "apps/dashboard/src/components/primitives/code-block.tsx",
+    "line": 248,
+    "verdict": "fp",
+    "note": "cheap handler sets idempotent boolean state"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "dom-unthrottled-scroll-resize",
+    "file": "apps/dashboard/src/hooks/use-horizontal-scroll-edges.ts",
+    "line": 57,
+    "verdict": "fp",
+    "note": "passive listener, setState bails out when unchanged"
+  }
+]

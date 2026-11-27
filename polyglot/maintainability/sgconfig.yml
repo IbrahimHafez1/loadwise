@@ -1,0 +1,12 @@
+ruleDirs: []
+languageGlobs:
+  Python: ['*.[pP][yY]']
+  Go: ['*.[gG][oO]']
+  Java: ['*.[jJ][aA][vV][aA]']
+  CSharp: ['*.[cC][sS]']
+  Rust: ['*.[rR][sS]']
+  Php: ['*.[pP][hH][pP]']
+  Ruby: ['*.[rR][bB]']
+  Kotlin: ['*.[kK][tT]', '*.[kK][tT][sS]']
+  C: ['*.[cC]', '*.[hH]']
+  Cpp: ['*.[cC][cC]', '*.[cC][pP][pP]', '*.[cC][xX][xX]', '*.[hH][hH]', '*.[hH][pP][pP]', '*.[hH][xX][xX]']

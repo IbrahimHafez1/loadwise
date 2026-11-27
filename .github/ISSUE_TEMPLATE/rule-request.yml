@@ -1,0 +1,24 @@
+name: Rule request
+description: Suggest an issue Loadwise should catch.
+labels: [rule-request]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What goes wrong in production
+      description: The failure the rule would prevent, such as an outage, slow query, leak or vulnerability.
+    validations:
+      required: true
+  - type: textarea
+    id: bad-code
+    attributes:
+      label: Code that should be reported
+      render: ts
+    validations:
+      required: true
+  - type: textarea
+    id: good-code
+    attributes:
+      label: Similar code that must not be reported
+      description: Correct code the rule has to leave alone. This keeps the rule precise.
+      render: ts

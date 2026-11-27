@@ -1,0 +1,298 @@
+[
+  {
+    "pillar": "maint",
+    "ruleId": "deep-control-flow",
+    "file": "app/components/Sharing/Collection/PublicAccess.tsx",
+    "line": 118,
+    "verdict": "tp",
+    "note": "nested handler branches four levels deep"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "duplicate-implementation",
+    "file": ".oxlint/bundle.mjs",
+    "line": 7,
+    "verdict": "tp",
+    "note": "isProperty duplicated across lint rule files"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "high-branch-complexity",
+    "file": "app/components/DocumentMeta.tsx",
+    "line": 45,
+    "verdict": "tp",
+    "note": "component has branch complexity 19"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-class",
+    "file": "app/editor/extensions/FindAndReplace.tsx",
+    "line": 31,
+    "verdict": "tp",
+    "note": "extension class has 34 methods"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-module",
+    "file": "app/actions/definitions/documents.tsx",
+    "line": 1,
+    "verdict": "tp",
+    "note": "1764 lines of code"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "swallowed-error",
+    "file": "build.js",
+    "line": 202,
+    "verdict": "fp",
+    "note": "dev build script reports the error and keeps the watcher running"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "server/routes/api/authenticationProviders/authenticationProviders.ts",
+    "line": 187,
+    "verdict": "fp",
+    "note": "provider lists hold a few entries so the rescan cost is negligible"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "loop-copy-accumulator",
+    "file": "server/utils/getInstallationInfo.ts",
+    "line": 44,
+    "verdict": "fp",
+    "note": "concat over a few release pages"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-crypto-in-async",
+    "file": "server/utils/passport.ts",
+    "line": 424,
+    "verdict": "tp",
+    "note": "scryptSync on the OAuth start request path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "shared/editor/lib/ExtensionManager.ts",
+    "line": 183,
+    "verdict": "fp",
+    "note": "spreads over a small fixed set of editor extensions"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "service-query-in-loop",
+    "file": "server/queues/tasks/RevokeUserNotificationsTask.ts",
+    "line": 95,
+    "verdict": "missed",
+    "note": "findByPk per collection inside a loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-module-cache",
+    "file": "shared/utils/date.ts",
+    "line": 444,
+    "verdict": "fp",
+    "note": "formatter cache keyed by locale and option combinations, a small bounded set"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "cookie-missing-security-flags",
+    "file": "server/routes/api/auth/auth.ts",
+    "line": 213,
+    "verdict": "fp",
+    "note": "logout clears the cookie, it does not set a session"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "cookie-missing-security-flags",
+    "file": "server/utils/authentication.ts",
+    "line": 150,
+    "verdict": "fp",
+    "note": "Koa cookies default to httpOnly"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "cookie-missing-security-flags",
+    "file": "server/utils/SessionsCookieHelper.ts",
+    "line": 60,
+    "verdict": "fp",
+    "note": "explicit httpOnly false: the cookie lists workspaces for the client, it is not an auth token"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "jwt-sign-without-expiry",
+    "file": "server/models/User.ts",
+    "line": 642,
+    "verdict": "tp",
+    "note": "expiresAt is optional, so a call without it signs a session token with no expiry"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "jwt-sign-without-expiry",
+    "file": "server/models/User.ts",
+    "line": 659,
+    "verdict": "fp",
+    "note": "expiry is carried in an expiresAt claim enforced by the verifier"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "jwt-sign-without-expiry",
+    "file": "server/models/User.ts",
+    "line": 677,
+    "verdict": "fp",
+    "note": "expiry is carried in an expiresAt claim enforced by the verifier"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "jwt-sign-without-expiry",
+    "file": "server/models/User.ts",
+    "line": 697,
+    "verdict": "fp",
+    "note": "expiry is carried in an expiresAt claim enforced by the verifier"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "jwt-sign-without-expiry",
+    "file": "server/models/User.ts",
+    "line": 731,
+    "verdict": "fp",
+    "note": "expiry is carried in an expiresAt claim enforced by the verifier"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "server/routes/shares.ts",
+    "line": 16,
+    "verdict": "fp",
+    "note": "redirect target always starts with /s"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "sequelize-dynamic-query-text",
+    "file": "server/models/helpers/Filters.ts",
+    "line": 71,
+    "verdict": "fp",
+    "note": "duration is validated as ISO 8601 first"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "sequelize-dynamic-query-text",
+    "file": "server/queues/tasks/RevokeDynamicOAuthClientsTask.ts",
+    "line": 47,
+    "verdict": "fp",
+    "note": "teamId is escaped with sequelize.escape"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "tls-verification-disabled",
+    "file": "server/storage/database.ts",
+    "line": 247,
+    "verdict": "tp",
+    "note": "rejectUnauthorized false for the postgres ssl connection"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "tls-verification-disabled",
+    "file": "server/storage/redis.ts",
+    "line": 38,
+    "verdict": "tp",
+    "note": "rejectUnauthorized false for rediss connections"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "filter-for-existence",
+    "file": "app/components/Sidebar/components/SharedWithMeLink.tsx",
+    "line": 243,
+    "verdict": "tp",
+    "note": "filter().length>0 for badge; some() fits"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-query-in-loop",
+    "file": "server/commands/documentPermanentDeleter.ts",
+    "line": 36,
+    "verdict": "tp",
+    "note": "findAll per document in permanent-delete batch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-query-in-loop",
+    "file": "server/commands/groupsSyncer.ts",
+    "line": 84,
+    "verdict": "tp",
+    "note": "findByPk plus updates per external group in sync"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-query-in-loop",
+    "file": "server/queues/processors/WebsocketsProcessor.ts",
+    "line": 560,
+    "verdict": "tp",
+    "note": "User.findByPk per group member on websocket fan-out"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-count-materialization",
+    "file": "server/queues/tasks/JSONAPIImportTask.test.ts",
+    "line": 738,
+    "verdict": "fp",
+    "note": "test code asserting a count"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-count-materialization",
+    "file": "server/queues/tasks/JSONAPIImportTask.test.ts",
+    "line": 752,
+    "verdict": "fp",
+    "note": "test code asserting a count"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "json-parse-unguarded",
+    "file": "server/routes/assets.ts",
+    "line": 132,
+    "verdict": "fp",
+    "note": "repo-bundled locale file, not external input"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "async-callback-unhandled-rejection",
+    "file": "app/components/WebsocketProvider.tsx",
+    "line": 569,
+    "verdict": "tp",
+    "note": "revokeCollectionAccess awaited in socket handler, no catch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "dom-unthrottled-scroll-resize",
+    "file": "app/components/DragAndDrop/DragAndDropProvider.tsx",
+    "line": 296,
+    "verdict": "fp",
+    "note": "drag overlay position sync, passive, only active during drag"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "dom-unthrottled-scroll-resize",
+    "file": "app/components/DragAndDrop/DragAndDropProvider.tsx",
+    "line": 301,
+    "verdict": "fp",
+    "note": "wheel needs passive:false to preventDefault; suggestion would break it"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-redundant-prefix",
+    "file": "server/migrations/baseline/schema.sql",
+    "line": 1629,
+    "verdict": "fp",
+    "note": "index flagged against itself; single definition"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-redundant-prefix",
+    "file": "server/migrations/baseline/schema.sql",
+    "line": 1641,
+    "verdict": "fp",
+    "note": "later migration already drops search_queries_user_id"
+  }
+]

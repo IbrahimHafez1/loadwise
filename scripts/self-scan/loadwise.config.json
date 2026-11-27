@@ -1,0 +1,16 @@
+{
+  "ignore": [
+    "../../lib/performance/vendor/**",
+    "../../lib/*/types/typescript-*.ts",
+    "../../bench/**",
+    "../../dist/**",
+    "../../editor/**",
+    "../../examples/**",
+    "../../hooks/**",
+    "../../plugin/**",
+    "../../polyglot/**",
+    "../../schema/**",
+    "../../test/**",
+    "../../node_modules/**"
+  ]
+}

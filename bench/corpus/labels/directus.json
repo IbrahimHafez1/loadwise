@@ -1,0 +1,338 @@
+[
+  {
+    "pillar": "rel",
+    "ruleId": "swallowed-error",
+    "file": "api/src/middleware/respond.ts",
+    "line": 57,
+    "verdict": "fp",
+    "note": "best-effort cache write, continuing is intended"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "api/src/database/get-ast-from-query/lib/parse-fields.ts",
+    "line": 376,
+    "verdict": "tp",
+    "note": "find over nestedCollectionNodes inside a children filter loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "app/src/composables/use-collab.ts",
+    "line": 360,
+    "verdict": "fp",
+    "note": "lookup over the few users in one collaboration room"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "app/src/utils/get-revision-fields.ts",
+    "line": 13,
+    "verdict": "tp",
+    "note": "fields.find per revision field in a filter"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "api/src/services/deployment-projects.ts",
+    "line": 62,
+    "verdict": "tp",
+    "note": "providerProjects.find per selected project in a map"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "api/src/services/relations.ts",
+    "line": 563,
+    "verdict": "tp",
+    "note": "results.find per meta row inside a filter"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "api/src/utils/get-schema.ts",
+    "line": 113,
+    "verdict": "tp",
+    "note": "collections.find per database collection in the schema build loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "api/src/services/import/import.ts",
+    "line": 810,
+    "verdict": "fp",
+    "note": "fkFields holds the few foreign-key columns of one collection"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/release-notes-generator/src/utils/process-packages.ts",
+    "line": 175,
+    "verdict": "fp",
+    "note": "release tooling over workspace packages, not a request path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-membership",
+    "file": "packages/composables/src/use-shortcut.ts",
+    "line": 104,
+    "verdict": "fp",
+    "note": "keys is a short shortcut key list"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "filter-for-existence",
+    "file": "api/src/database/migrations/20210805B-change-image-metadata-structure.ts",
+    "line": 69,
+    "verdict": "tp",
+    "note": "filter().length > 0 used only as an existence check"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "floating-promise",
+    "file": "api/src/controllers/server.ts",
+    "line": 149,
+    "verdict": "tp",
+    "note": "fixed since the first campaign: now reported|setOwner is not awaited inside a try so a rejection escapes the catch"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "floating-promise",
+    "file": "api/src/schedules/telemetry.ts",
+    "line": 34,
+    "verdict": "fp",
+    "note": "track with wait false is a deliberate fire-and-forget"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "http-call-without-timeout",
+    "file": "api/src/telemetry/lib/send-report.ts",
+    "line": 31,
+    "verdict": "tp",
+    "note": "server fetch with no signal or timeout"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "loop-copy-accumulator",
+    "file": "api/src/services/collections.ts",
+    "line": 208,
+    "verdict": "tp",
+    "note": "concat on the accumulator in a for loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/release-notes-generator/src/utils/process-packages.ts",
+    "line": 32,
+    "verdict": "fp",
+    "note": "release tooling script, not a server request path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "tests/sandbox/src/steps/docker.ts",
+    "line": 61,
+    "verdict": "fp",
+    "note": "test sandbox setup"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-process-in-async",
+    "file": "tests/sandbox/src/steps/docker.ts",
+    "line": 38,
+    "verdict": "fp",
+    "note": "test sandbox setup script"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-query-in-loop",
+    "file": "api/src/services/utils.ts",
+    "line": 76,
+    "verdict": "missed",
+    "note": "one UPDATE per row inside a loop on the sort path"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "promise-return-escapes-catch",
+    "file": "api/src/ai/providers/anthropic-file-support.ts",
+    "line": 49,
+    "verdict": "tp",
+    "note": "return fetch() inside try without await bypasses the catch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "api/src/services/collections.ts",
+    "line": 353,
+    "verdict": "tp",
+    "note": "object spread of the accumulator in reduce"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "api/src/services/meta.ts",
+    "line": 37,
+    "verdict": "fp",
+    "note": "merges at most two requested meta values"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "serial-awaits-in-literal",
+    "file": "api/src/license/manager.ts",
+    "line": 476,
+    "verdict": "tp",
+    "note": "three independent usage lookups awaited in sequence"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "compose-hardcoded-secret",
+    "file": "docker-compose.yml",
+    "line": 114,
+    "verdict": "fp",
+    "note": "throwaway password for a local test database container"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "compose-hardcoded-secret",
+    "file": "docker-compose.yml",
+    "line": 116,
+    "verdict": "fp",
+    "note": "throwaway password for a local test database container"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "compose-hardcoded-secret",
+    "file": "docker-compose.yml",
+    "line": 133,
+    "verdict": "fp",
+    "note": "throwaway object-store key for the local test matrix"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "compose-hardcoded-secret",
+    "file": "docker-compose.yml",
+    "line": 134,
+    "verdict": "fp",
+    "note": "throwaway object-store key for the local test matrix"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "knex-raw-dynamic-text",
+    "file": "api/src/database/helpers/fn/types.ts",
+    "line": 105,
+    "verdict": "fp",
+    "note": "SQL is compiled by knex and its bindings are passed along"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "knex-raw-dynamic-text",
+    "file": "api/src/database/run-ast/lib/apply-query/filter/operator.ts",
+    "line": 345,
+    "verdict": "fp",
+    "note": "only ? placeholders are interpolated, values are bound"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "knex-raw-dynamic-text",
+    "file": "api/src/services/fields.ts",
+    "line": 988,
+    "verdict": "fp",
+    "note": "defaultValue is allowlist-checked before knex.raw"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "api/src/auth/drivers/oauth2.ts",
+    "line": 405,
+    "verdict": "fp",
+    "note": "fixed relative target, request data only lands in the query string"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "api/src/auth/drivers/saml.ts",
+    "line": 218,
+    "verdict": "fp",
+    "note": "RelayState is validated by resolveLoginRedirect before redirecting"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-compared-non-constant-time",
+    "file": "api/src/services/mcp-oauth/utils/redirect.ts",
+    "line": 144,
+    "verdict": "fp",
+    "note": "compares URL userinfo in redirect URI matching, not a secret check"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-in-url-query",
+    "file": "tests/sandbox/src/steps/schema.ts",
+    "line": 39,
+    "verdict": "fp",
+    "note": "sandbox test tooling script"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "dependency-cycle",
+    "file": "packages/errors/src/errors/addon-not-available.ts",
+    "line": 1,
+    "verdict": "tp",
+    "note": "error file imports createError via ../index.js barrel"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "json-parse-unguarded",
+    "file": "api/src/deployment/drivers/netlify.ts",
+    "line": 354,
+    "verdict": "tp",
+    "note": "websocket message parsed with no try/catch"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "promise-return-escapes-catch",
+    "file": "api/src/ai/providers/anthropic-file-support.ts",
+    "line": 74,
+    "verdict": "tp",
+    "note": "fetch returned inside try; rejection bypasses logging catch"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "async-callback-unhandled-rejection",
+    "file": "packages/extensions-sdk/src/cli/commands/build.ts",
+    "line": 477,
+    "verdict": "tp",
+    "note": "event.result.close awaited in rollup watcher handler, no catch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "serial-awaits-in-literal",
+    "file": "api/src/license/manager.ts",
+    "line": 595,
+    "verdict": "tp",
+    "note": "three independent getUsage awaits run serially"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "stream-pipe-unhandled-error",
+    "file": "api/src/controllers/assets.ts",
+    "line": 56,
+    "verdict": "fp",
+    "note": "archive errors surfaced via complete() in try/catch"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "stream-pipe-unhandled-error",
+    "file": "api/src/controllers/assets.ts",
+    "line": 125,
+    "verdict": "fp",
+    "note": "archive errors surfaced via complete() in try/catch"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "stream-pipe-unhandled-error",
+    "file": "api/src/controllers/extensions.ts",
+    "line": 342,
+    "verdict": "tp",
+    "note": "source stream piped to res; only disconnect handled, not source error"
+  }
+]

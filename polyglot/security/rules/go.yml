@@ -1,0 +1,42 @@
+id: go-exec-command-shell
+language: Go
+severity: warning
+message: Invoking a shell via exec.Command risks command injection. Execute the target binary directly with explicit arguments.
+rule:
+  any:
+    - pattern: exec.Command("sh", "-c", $$$ARGS)
+    - pattern: exec.Command("bash", "-c", $$$ARGS)
+    - pattern: exec.CommandContext($CTX, "sh", "-c", $$$ARGS)
+    - pattern: exec.CommandContext($CTX, "bash", "-c", $$$ARGS)
+
+---
+id: go-sql-sprintf-injection
+language: Go
+severity: warning
+message: Formatting SQL with fmt.Sprintf risks SQL injection. Use parameterized queries with placeholders instead.
+rule:
+  all:
+    - any:
+        - pattern:
+            context: 'func check() { _ = $DB.Query($$$QARGS) }'
+            selector: call_expression
+        - pattern:
+            context: 'func check() { _ = $DB.QueryRow($$$QARGS) }'
+            selector: call_expression
+        - pattern:
+            context: 'func check() { _ = $DB.Exec($$$QARGS) }'
+            selector: call_expression
+        - pattern:
+            context: 'func check() { _ = $DB.QueryContext($$$QARGS) }'
+            selector: call_expression
+        - pattern:
+            context: 'func check() { _ = $DB.QueryRowContext($$$QARGS) }'
+            selector: call_expression
+        - pattern:
+            context: 'func check() { _ = $DB.ExecContext($$$QARGS) }'
+            selector: call_expression
+    - has:
+        pattern:
+          context: 'func check() { _ = fmt.Sprintf($$$ARGS) }'
+          selector: call_expression
+        stopBy: end

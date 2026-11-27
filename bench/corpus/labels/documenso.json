@@ -1,0 +1,594 @@
+[
+  {
+    "pillar": "maint",
+    "ruleId": "deep-control-flow",
+    "file": "apps/remix/app/components/embed/authoring/configure-fields-view.tsx",
+    "line": 204,
+    "verdict": "tp",
+    "note": "loop body nested four levels deep"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "dependency-cycle",
+    "file": "apps/remix/app/components/dialogs/organisation-create-dialog.tsx",
+    "line": 40,
+    "verdict": "tp",
+    "note": "dialog imports billing-plans which imports the dialog back"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "duplicate-implementation",
+    "file": "apps/remix/app/components/dialogs/admin-organisation-member-delete-dialog.tsx",
+    "line": 56,
+    "verdict": "tp",
+    "note": "identical onError handlers across dialogs"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "duplicate-implementation",
+    "file": "apps/remix/app/components/forms/editor/editor-field-checkbox-form.tsx",
+    "line": 110,
+    "verdict": "tp",
+    "note": "removeValue repeated across editor field forms"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-module",
+    "file": "apps/remix/app/components/dialogs/template-use-dialog.tsx",
+    "line": 1,
+    "verdict": "tp",
+    "note": "739 lines of code"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "long-parameter-list",
+    "file": "packages/lib/universal/content-renderer/content-geometry.ts",
+    "line": 66,
+    "verdict": "tp",
+    "note": "six positional parameters"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "swallowed-error",
+    "file": "apps/remix/app/routes/embed+/v2+/authoring+/envelope.edit.$id.tsx",
+    "line": 137,
+    "verdict": "fp",
+    "note": "logged fallback to default embed params"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unreferenced-file",
+    "file": "packages/ee/server-only/signing/csc/client/index.ts",
+    "line": 1,
+    "verdict": "tp",
+    "note": "no file imports this barrel"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unreferenced-file",
+    "file": "packages/ee/server-only/stripe/get-customer.ts",
+    "line": 1,
+    "verdict": "tp",
+    "note": "nothing imports get-customer"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unreferenced-file",
+    "file": "packages/ee/server-only/stripe/update-customer.ts",
+    "line": 1,
+    "verdict": "tp",
+    "note": "nothing imports update-customer"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unreferenced-file",
+    "file": "packages/lib/jobs/client/index.ts",
+    "line": 1,
+    "verdict": "fp",
+    "note": "intentionally empty file required by the Vite build"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unreferenced-file",
+    "file": "packages/ui/primitives/aspect-ratio.tsx",
+    "line": 1,
+    "verdict": "tp",
+    "note": "no file imports this UI primitive"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unused-export",
+    "file": "apps/openpage-api/lib/growth/get-monthly-completed-document.ts",
+    "line": 40,
+    "verdict": "tp",
+    "note": "type is only referenced in its own file"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unused-export",
+    "file": "apps/remix/server/api/ai/detect-fields.client.ts",
+    "line": 6,
+    "verdict": "tp",
+    "note": "type re-export nobody imports"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unused-export",
+    "file": "apps/remix/server/api/ai/detect-fields.client.ts",
+    "line": 39,
+    "verdict": "tp",
+    "note": "type export nobody imports"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "floating-promise",
+    "file": "packages/lib/server-only/envelope/update-envelope.ts",
+    "line": 82,
+    "verdict": "tp",
+    "note": "assertEnvelopeMutable returns Promise<void> and is not awaited so the guard does not block"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "floating-promise",
+    "file": "packages/lib/server-only/recipient/delete-envelope-recipient.ts",
+    "line": 68,
+    "verdict": "tp",
+    "note": "async assertEnvelopeMutable guard is not awaited"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "floating-promise",
+    "file": "packages/trpc/server/envelope-router/replace-envelope-item-pdf.ts",
+    "line": 63,
+    "verdict": "tp",
+    "note": "fixed since the first campaign: now reported|async assertEnvelopeMutable guard is not awaited"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "http-call-without-timeout",
+    "file": "apps/openpage-api/app/community/total-forks/route.ts",
+    "line": 5,
+    "verdict": "tp",
+    "note": "server route fetches an external service with no timeout"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "http-call-without-timeout",
+    "file": "apps/openpage-api/app/github/issues/route.ts",
+    "line": 4,
+    "verdict": "tp",
+    "note": "server route fetches GitHub with no timeout"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "http-call-without-timeout",
+    "file": "packages/lib/client-only/hooks/use-embed-popup-auth.ts",
+    "line": 149,
+    "verdict": "fp",
+    "note": "browser code under client-only, not a Node socket"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "http-call-without-timeout",
+    "file": "packages/lib/jobs/client/local.ts",
+    "line": 380,
+    "verdict": "fp",
+    "note": "job request intentionally stops waiting after 150 ms"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-foreign-key",
+    "file": "packages/prisma/schema.prisma",
+    "line": 112,
+    "verdict": "tp",
+    "note": "UserSecurityAuditLog.userId has no @@index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-foreign-key",
+    "file": "packages/prisma/schema.prisma",
+    "line": 126,
+    "verdict": "tp",
+    "note": "PasswordResetToken.userId has no @@index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-foreign-key",
+    "file": "packages/prisma/schema.prisma",
+    "line": 132,
+    "verdict": "tp",
+    "note": "Passkey.userId has no @@index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-foreign-key",
+    "file": "packages/prisma/schema.prisma",
+    "line": 163,
+    "verdict": "tp",
+    "note": "VerificationToken.userId has no @@index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-foreign-key",
+    "file": "packages/prisma/schema.prisma",
+    "line": 192,
+    "verdict": "tp",
+    "note": "Webhook.userId has no @@index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-foreign-key",
+    "file": "packages/prisma/schema.prisma",
+    "line": 194,
+    "verdict": "tp",
+    "note": "Webhook.teamId has no @@index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-foreign-key",
+    "file": "packages/prisma/schema.prisma",
+    "line": 214,
+    "verdict": "tp",
+    "note": "WebhookCall.webhookId has no @@index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-foreign-key",
+    "file": "packages/prisma/schema.prisma",
+    "line": 230,
+    "verdict": "tp",
+    "note": "ApiToken.userId has no @@index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-foreign-key",
+    "file": "packages/prisma/schema.prisma",
+    "line": 232,
+    "verdict": "tp",
+    "note": "ApiToken.teamId has no @@index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "loop-copy-accumulator",
+    "file": "packages/lib/server-only/template/create-document-from-direct-template.ts",
+    "line": 520,
+    "verdict": "tp",
+    "note": "concat on the accumulator in a for loop over recipients"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/lib/server-only/pdf/render-certificate.ts",
+    "line": 584,
+    "verdict": "tp",
+    "note": "readFileSync of the logo while rendering a certificate in a request"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/signing/transports/google-cloud.ts",
+    "line": 59,
+    "verdict": "tp",
+    "note": "existsSync in the async signing path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/signing/transports/google-cloud.ts",
+    "line": 15,
+    "verdict": "tp",
+    "note": "readFileSync of the certificate chain in the async signing path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/signing/transports/google-cloud.ts",
+    "line": 27,
+    "verdict": "tp",
+    "note": "readFileSync of the certificate in the async signing path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/signing/transports/google-cloud.ts",
+    "line": 62,
+    "verdict": "tp",
+    "note": "existsSync of the credentials file in the async signing path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-distinct-in-memory",
+    "file": "packages/lib/server-only/recipient/get-recipient-suggestions.ts",
+    "line": 33,
+    "verdict": "tp",
+    "note": "findMany with distinct email reads all matching rows first"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-query-in-loop",
+    "file": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+    "line": 211,
+    "verdict": "tp",
+    "note": "findUniqueOrThrow per session item"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-query-in-loop",
+    "file": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+    "line": 375,
+    "verdict": "tp",
+    "note": "update per item inside a transaction loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-query-in-loop",
+    "file": "packages/ee/server-only/signing/csc/finalize-tsp-completion.ts",
+    "line": 94,
+    "verdict": "tp",
+    "note": "update per item inside a transaction loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-query-in-loop",
+    "file": "packages/lib/jobs/definitions/internal/seal-document.handler.ts",
+    "line": 302,
+    "verdict": "tp",
+    "note": "update per item inside a transaction loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-query-in-loop",
+    "file": "packages/lib/server-only/ai/envelope/detect-fields/index.ts",
+    "line": 60,
+    "verdict": "tp",
+    "note": "findMany per envelope item inside a loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-query-in-loop",
+    "file": "packages/lib/server-only/document/send-document.ts",
+    "line": 359,
+    "verdict": "tp",
+    "note": "field update per field inside a transaction map"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-query-in-loop",
+    "file": "packages/trpc/server/embedding-router/create-embedding-template.ts",
+    "line": 54,
+    "verdict": "missed",
+    "note": "recipient.create per item inside a Promise.all map"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-relation-count-in-list",
+    "file": "packages/lib/server-only/user/get-all-users.ts",
+    "line": 30,
+    "verdict": "tp",
+    "note": "paged findMany selects _count of a relation"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "packages/lib/client-only/providers/i18n-server.tsx",
+    "line": 51,
+    "verdict": "fp",
+    "note": "reduces over the handful of locales"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "apps/remix/app/routes/_authenticated+/t.$teamUrl+/documents.$id._layout.tsx",
+    "line": 62,
+    "verdict": "fp",
+    "note": "redirect stays on the same origin, only the path segment is rewritten"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "apps/remix/app/routes/_authenticated+/t.$teamUrl+/templates.$id._layout.tsx",
+    "line": 80,
+    "verdict": "fp",
+    "note": "only the path segment of the own url is rewritten"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "apps/remix/app/routes/_unauthenticated+/signin.tsx",
+    "line": 63,
+    "verdict": "fp",
+    "note": "returnTo is checked with isValidReturnTo and normalised first"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "prototype-pollution",
+    "file": "packages/trpc/server/admin-router/update-subscription-claim.ts",
+    "line": 65,
+    "verdict": "fp",
+    "note": "assigns true to a typed flag key, a primitive cannot change a prototype"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-in-log",
+    "file": "packages/trpc/server/envelope-router/signing-status-envelope.ts",
+    "line": 20,
+    "verdict": "tp",
+    "note": "signing token written to the request log"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "postmessage-missing-origin-check",
+    "file": "apps/remix/app/routes/embed+/playground.tsx",
+    "line": 182,
+    "verdict": "fp",
+    "note": "embed playground only displays received messages in a log"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-compared-non-constant-time",
+    "file": "packages/ee/server-only/signing/csc/hono/session-status.ts",
+    "line": 38,
+    "verdict": "tp",
+    "note": "session token compared with === to query token"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-compared-non-constant-time",
+    "file": "packages/ee/server-only/signing/csc/hono/session-status.ts",
+    "line": 45,
+    "verdict": "tp",
+    "note": "recipient token compared with === to query token"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-compared-non-constant-time",
+    "file": "packages/lib/server-only/2fa/verify-2fa-token.ts",
+    "line": 44,
+    "verdict": "tp",
+    "note": "TOTP code compared with === instead of timing-safe"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "ssrf-request-url",
+    "file": "packages/lib/jobs/client/local.ts",
+    "line": 380,
+    "verdict": "fp",
+    "note": "host fixed from internal URL; job id only in path"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "dependency-cycle",
+    "file": "apps/remix/app/components/general/document-signing/document-signing-auth-2fa.tsx",
+    "line": 18,
+    "verdict": "tp",
+    "note": "2fa -> provider -> dialog -> 2fa runtime cycle"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unused-export",
+    "file": "apps/openpage-api/lib/growth/get-signer-conversion.ts",
+    "line": 39,
+    "verdict": "tp",
+    "note": "type unused; remix imports packages/lib copy instead"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "json-parse-unguarded",
+    "file": "packages/ui/primitives/document-flow/field-item-advanced-settings.tsx",
+    "line": 167,
+    "verdict": "tp",
+    "note": "localStorage value parsed unguarded in useState init"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "react-fetch-in-effect-no-abort",
+    "file": "apps/remix/app/components/general/unified-settings-layout.tsx",
+    "line": 113,
+    "verdict": "fp",
+    "note": "fire-and-forget preference POST, no stale state to race"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-query-in-loop",
+    "file": "packages/ee/server-only/signing/csc/materialize-anchors.ts",
+    "line": 195,
+    "verdict": "fp",
+    "note": "per-item update paired with per-item upload, data differs, cannot batch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-query-in-loop",
+    "file": "packages/lib/jobs/client/bullmq.ts",
+    "line": 139,
+    "verdict": "fp",
+    "note": "per-job create run in Promise.all, rows need returned ids"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-filter",
+    "file": "packages/lib/server-only/auth/create-passkey.ts",
+    "line": 44,
+    "verdict": "tp",
+    "note": "userId+identifier lookup on VerificationToken with no index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-filter",
+    "file": "packages/lib/server-only/auth/create-passkey.ts",
+    "line": 60,
+    "verdict": "tp",
+    "note": "userId+identifier deleteMany with no index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-filter",
+    "file": "packages/lib/server-only/user/disable-user.ts",
+    "line": 33,
+    "verdict": "tp",
+    "note": "ApiToken.userId FK filtered with no index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-filter",
+    "file": "packages/lib/server-only/user/disable-user.ts",
+    "line": 40,
+    "verdict": "tp",
+    "note": "Webhook.userId FK filtered with no index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-filter",
+    "file": "packages/lib/server-only/user/disable-user.ts",
+    "line": 47,
+    "verdict": "tp",
+    "note": "VerificationToken.userId filtered with no index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-deep-offset",
+    "file": "packages/trpc/server/admin-router/email-transport/find-email-transports.ts",
+    "line": 27,
+    "verdict": "fp",
+    "note": "admin-only list over small email transport table"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-deep-offset",
+    "file": "packages/trpc/server/envelope-router/find-envelope-audit-logs.ts",
+    "line": 54,
+    "verdict": "tp",
+    "note": "page has min(1) but no max; user-facing audit log offset"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-list-query",
+    "file": "packages/trpc/server/organisation-router/get-organisation-member-invites.ts",
+    "line": 18,
+    "verdict": "fp",
+    "note": "scoped to the user own email invites"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-missing-foreign-key",
+    "file": "packages/prisma/schema.prisma",
+    "line": 52,
+    "verdict": "tp",
+    "note": "User.avatarImageId FK without index"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-redundant-prefix",
+    "file": "packages/prisma/schema.prisma",
+    "line": 77,
+    "verdict": "tp",
+    "note": "index on email duplicates the unique email constraint"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-redundant-prefix",
+    "file": "packages/prisma/schema.prisma",
+    "line": 148,
+    "verdict": "tp",
+    "note": "@id @unique on id is a duplicate of the primary key"
+  }
+]

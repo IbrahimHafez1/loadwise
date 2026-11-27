@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  # Skipped reviews (rebases that bring no new changes) would otherwise each post a "Review skipped" comment.
+  review_status: false
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    # Deliberately vulnerable apps that Loadwise must detect, and generated benchmark output.
+    - '!bench/recall/cases/**'
+    - '!bench/corpus/scores.json'
+    - '!package-lock.json'
+  path_instructions:
+    - path: '**/*.{ts,cts}'
+      instructions: >-
+        Follow CONTRIBUTING.md: no `any`, no non-null `!`, no `as` type assertions except `as const` (import and
+        export aliases such as `import * as vscode` are fine), relative imports use the emitted file's extension
+        (`.js` from `.ts`, `.cjs` from `.cts`), descriptive names. A rule or autofix change needs positive and negative tests and matching README docs.

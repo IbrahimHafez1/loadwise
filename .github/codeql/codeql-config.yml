@@ -1,0 +1,7 @@
+name: loadwise
+# The recall cases are deliberately vulnerable apps that Loadwise must detect, and tests build hostile inputs on
+# purpose. Neither ships in the npm package, so CodeQL reviews only the code that does.
+paths-ignore:
+  - bench/recall/cases
+  - test
+  - editor/test

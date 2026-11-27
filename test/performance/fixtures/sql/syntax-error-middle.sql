@@ -1,0 +1,3 @@
+CREATE INDEX a_idx ON t (a);
+ALTER TABLE t ADD COLUMN;
+CREATE INDEX b_idx ON t (b);

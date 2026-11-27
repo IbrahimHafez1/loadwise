@@ -1,0 +1,522 @@
+[
+  {
+    "pillar": "maint",
+    "ruleId": "duplicate-implementation",
+    "file": "data/static/codefixes/chatbotGreedyInjectionChallenge_1.ts",
+    "line": 75,
+    "verdict": "fp",
+    "note": "static code-fix variants are parallel snippets on purpose"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "high-branch-complexity",
+    "file": "data/datacreator.ts",
+    "line": 67,
+    "verdict": "tp",
+    "note": "createChallenges has branch complexity 26"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-module",
+    "file": "data/datacreator.ts",
+    "line": 1,
+    "verdict": "tp",
+    "note": "745 lines of code"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "long-parameter-list",
+    "file": "frontend/src/assets/private/three.js",
+    "line": 4062,
+    "verdict": "fp",
+    "note": "vendored third-party three.js build"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "swallowed-error",
+    "file": "frontend/src/assets/private/three.js",
+    "line": 26899,
+    "verdict": "fp",
+    "note": "vendored third-party three.js build"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "swallowed-error",
+    "file": "routes/profileImageFileUpload.ts",
+    "line": 43,
+    "verdict": "tp",
+    "note": "file write failure is only logged and the request continues as a success"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unreferenced-file",
+    "file": "data/static/codefixes/accessLogDisclosureChallenge_1_correct.ts",
+    "line": 1,
+    "verdict": "fp",
+    "note": "code-fix snippets are read from disk by challenge key"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unreferenced-file",
+    "file": "data/static/codefixes/accessLogDisclosureChallenge_2.ts",
+    "line": 1,
+    "verdict": "fp",
+    "note": "code-fix snippets are read from disk by challenge key"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "unreferenced-file",
+    "file": "data/static/codefixes/accessLogDisclosureChallenge_4.ts",
+    "line": 1,
+    "verdict": "fp",
+    "note": "code-fix snippets are read from disk by challenge key"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "floating-promise",
+    "file": "routes/fileUpload.ts",
+    "line": 88,
+    "verdict": "tp",
+    "note": "challengeUtils.solve is async and its result is dropped"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "lib/startup/restoreOverwrittenFilesWithOriginals.ts",
+    "line": 18,
+    "verdict": "fp",
+    "note": "one-time boot work, not a request path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "lib/startup/restoreOverwrittenFilesWithOriginals.ts",
+    "line": 25,
+    "verdict": "fp",
+    "note": "one-time boot work"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "lib/startup/restoreOverwrittenFilesWithOriginals.ts",
+    "line": 34,
+    "verdict": "fp",
+    "note": "one-time boot work"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "routes/videoHandler.ts",
+    "line": 21,
+    "verdict": "tp",
+    "note": "statSync on every video request"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "routes/vulnCodeFixes.ts",
+    "line": 82,
+    "verdict": "tp",
+    "note": "existsSync on every fix request"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "routes/vulnCodeFixes.ts",
+    "line": 83,
+    "verdict": "tp",
+    "note": "readFileSync of the fix info on every request"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "rsn/rsnUtil.ts",
+    "line": 66,
+    "verdict": "fp",
+    "note": "release-check script, not a request path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "rsn/rsnUtil.ts",
+    "line": 155,
+    "verdict": "fp",
+    "note": "release-check script, not a request path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "rsn/rsnUtil.ts",
+    "line": 55,
+    "verdict": "tp",
+    "note": "object spread of the accumulator in reduce"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-module-cache",
+    "file": "routes/vulnCodeFixes.ts",
+    "line": 42,
+    "verdict": "fp",
+    "note": "keyed by the fixed set of challenge keys"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "whole-payload-in-memory",
+    "file": "routes/vulnCodeFixes.ts",
+    "line": 83,
+    "verdict": "fp",
+    "note": "reads a small yml info file selected from a fixed key set"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "whole-payload-in-memory",
+    "file": "routes/vulnCodeSnippet.ts",
+    "line": 90,
+    "verdict": "fp",
+    "note": "reads a small yml info file selected from a fixed key set"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "committed-secret",
+    "file": "infrastructure/terraform/networking.tf",
+    "line": 171,
+    "verdict": "tp",
+    "note": "RSA private key literal in terraform"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "committed-secret",
+    "file": "lib/insecurity.ts",
+    "line": 21,
+    "verdict": "tp",
+    "note": "JWT RSA private key literal in source"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "committed-secret",
+    "file": "terraform/networking.tf",
+    "line": 171,
+    "verdict": "tp",
+    "note": "RSA private key literal in terraform"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "cookie-missing-security-flags",
+    "file": "lib/insecurity.ts",
+    "line": 192,
+    "verdict": "tp",
+    "note": "res.cookie('token', token) sets the auth token with no flags"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "cookie-missing-security-flags",
+    "file": "routes/updateUserProfile.ts",
+    "line": 42,
+    "verdict": "tp",
+    "note": "res.cookie('token', updatedToken) sets the auth token with no flags"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "dockerfile-unpinned-base-image",
+    "file": "Dockerfile",
+    "line": 22,
+    "verdict": "tp",
+    "note": "distroless base referenced without a tag"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "error-stack-in-response",
+    "file": "server.ts",
+    "line": 722,
+    "verdict": "missed",
+    "note": "errorhandler renders stack traces and is registered unconditionally"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "hardcoded-secret",
+    "file": "lib/insecurity.ts",
+    "line": 21,
+    "verdict": "tp",
+    "note": "private key literal in source"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "hardcoded-secret",
+    "file": "lib/insecurity.ts",
+    "line": 42,
+    "verdict": "tp",
+    "note": "HMAC key literal in source"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "insecure-random-for-secret",
+    "file": "lib/insecurity.ts",
+    "line": 53,
+    "verdict": "fp",
+    "note": "random value is a throwaway secret for denyAll, no token is issued from it"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "jwt-verify-without-algorithms",
+    "file": "lib/insecurity.ts",
+    "line": 189,
+    "verdict": "tp",
+    "note": "jwt.verify without an algorithms list"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "jwt-verify-without-algorithms",
+    "file": "routes/verify.ts",
+    "line": 125,
+    "verdict": "tp",
+    "note": "jwt.verify without an algorithms list"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "nosql-operator-injection",
+    "file": "routes/likeProductReviews.ts",
+    "line": 25,
+    "verdict": "tp",
+    "note": "req.body.id used directly as the _id filter"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "nosql-operator-injection",
+    "file": "routes/likeProductReviews.ts",
+    "line": 36,
+    "verdict": "tp",
+    "note": "req.body.id used directly as the _id filter"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "nosql-operator-injection",
+    "file": "routes/likeProductReviews.ts",
+    "line": 43,
+    "verdict": "tp",
+    "note": "req.body.id used directly as the _id filter"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "nosql-operator-injection",
+    "file": "routes/likeProductReviews.ts",
+    "line": 51,
+    "verdict": "tp",
+    "note": "req.body.id used directly as the _id filter"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "nosql-operator-injection",
+    "file": "routes/showProductReviews.ts",
+    "line": 36,
+    "verdict": "tp",
+    "note": "req.params.id concatenated into a $where expression"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "nosql-operator-injection",
+    "file": "routes/trackOrder.ts",
+    "line": 18,
+    "verdict": "tp",
+    "note": "fixed since the first campaign: now reported|$where built from the request id"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "nosql-operator-injection",
+    "file": "routes/updateProductReviews.ts",
+    "line": 18,
+    "verdict": "tp",
+    "note": "fixed since the first campaign: now reported|req.body.id can be an operator object such as $ne"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "routes/redirect.ts",
+    "line": 18,
+    "verdict": "tp",
+    "note": "res.redirect(query.to) with only an allowlist substring check"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "path-traversal",
+    "file": "routes/fileServer.ts",
+    "line": 32,
+    "verdict": "fp",
+    "note": "file name is checked for slashes and an allowlisted extension before resolve"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "path-traversal",
+    "file": "routes/keyServer.ts",
+    "line": 14,
+    "verdict": "fp",
+    "note": "file name containing a slash is rejected, so it cannot leave the directory"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "path-traversal",
+    "file": "routes/logfileServer.ts",
+    "line": 14,
+    "verdict": "fp",
+    "note": "file name containing a slash is rejected, so it cannot leave the directory"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "path-traversal",
+    "file": "routes/profileImageUrlUpload.ts",
+    "line": 29,
+    "verdict": "fp",
+    "note": "path uses the user id and a whitelisted extension, not the raw url"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "path-traversal",
+    "file": "routes/quarantineServer.ts",
+    "line": 14,
+    "verdict": "fp",
+    "note": "file name containing a slash is rejected, so it cannot leave the directory"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "sequelize-dynamic-query-text",
+    "file": "routes/login.ts",
+    "line": 34,
+    "verdict": "tp",
+    "note": "req.body.email interpolated into raw SQL"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "sequelize-dynamic-query-text",
+    "file": "routes/search.ts",
+    "line": 23,
+    "verdict": "tp",
+    "note": "req.query.q interpolated into raw SQL"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "ssrf-request-url",
+    "file": "routes/profileImageUrlUpload.ts",
+    "line": 24,
+    "verdict": "tp",
+    "note": "fetch(req.body.imageUrl) with no host restriction"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "weak-password-hash",
+    "file": "models/user.ts",
+    "line": 73,
+    "verdict": "tp",
+    "note": "passwords stored as unsalted md5"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "weak-password-hash",
+    "file": "routes/2fa.ts",
+    "line": 107,
+    "verdict": "tp",
+    "note": "compares an unsalted md5 password hash"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "weak-password-hash",
+    "file": "routes/2fa.ts",
+    "line": 152,
+    "verdict": "tp",
+    "note": "compares an unsalted md5 password hash"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "weak-password-hash",
+    "file": "routes/changePassword.ts",
+    "line": 39,
+    "verdict": "tp",
+    "note": "compares an unsalted md5 password hash"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "weak-password-hash",
+    "file": "routes/login.ts",
+    "line": 34,
+    "verdict": "tp",
+    "note": "login hashes the password with unsalted md5"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "zip-slip-extraction",
+    "file": "routes/fileUpload.ts",
+    "line": 34,
+    "verdict": "tp",
+    "note": "archive entry name written under uploads with only a weak includes check"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "database-error-in-response",
+    "file": "routes/likeProductReviews.ts",
+    "line": 56,
+    "verdict": "tp",
+    "note": "raw DB error object returned in 500 response"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "json-parse-unguarded",
+    "file": "lib/startup/validateDependencies.ts",
+    "line": 15,
+    "verdict": "fp",
+    "note": "startup check of own package.json; failing loudly is intended"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "whole-payload-in-memory",
+    "file": "server.ts",
+    "line": 281,
+    "verdict": "fp",
+    "note": "small infra text files post-processed in memory, not streamable"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "stream-pipe-unhandled-error",
+    "file": "routes/order.ts",
+    "line": 45,
+    "verdict": "tp",
+    "note": "pdfkit piped to file write stream with no error handler"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "stream-pipe-unhandled-error",
+    "file": "routes/videoHandler.ts",
+    "line": 38,
+    "verdict": "tp",
+    "note": "file read stream piped to res with no error handler"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-list-query",
+    "file": "routes/address.ts",
+    "line": 11,
+    "verdict": "fp",
+    "note": "scoped to one user own addresses"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-list-query",
+    "file": "routes/authenticatedUsers.ts",
+    "line": 12,
+    "verdict": "tp",
+    "note": "findAll over every user returned from handler"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-list-query",
+    "file": "routes/memory.ts",
+    "line": 24,
+    "verdict": "tp",
+    "note": "findAll memories with user include, no limit"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-list-query",
+    "file": "routes/passkey.ts",
+    "line": 247,
+    "verdict": "fp",
+    "note": "scoped to one user own passkeys"
+  }
+]

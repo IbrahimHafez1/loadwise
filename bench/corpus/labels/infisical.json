@@ -1,0 +1,114 @@
+[
+  {
+    "pillar": "rel",
+    "ruleId": "http-call-without-timeout",
+    "file": "backend/src/db/seed-saml.ts",
+    "line": 59,
+    "verdict": "fp",
+    "note": "dev seed script"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-query-in-loop",
+    "file": "backend/src/services/pki-sync/pki-sync-certificate-map-fns.ts",
+    "line": 89,
+    "verdict": "missed",
+    "note": "findOne per certificate inside a loop"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "compose-hardcoded-secret",
+    "file": "backend-go/docker-compose.test.yml",
+    "line": 7,
+    "verdict": "fp",
+    "note": "test compose file with a throwaway database password"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "compose-hardcoded-secret",
+    "file": "docker-compose.dev-read-replica.yml",
+    "line": 23,
+    "verdict": "fp",
+    "note": "dev-only compose file with a throwaway database password"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "compose-hardcoded-secret",
+    "file": "docker-compose.dev-read-replica.yml",
+    "line": 28,
+    "verdict": "fp",
+    "note": "dev-only replication password in a dev compose file"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "compose-hardcoded-secret",
+    "file": "docker-compose.dev-read-replica.yml",
+    "line": 39,
+    "verdict": "fp",
+    "note": "dev-only database password in a dev compose file"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "compose-hardcoded-secret",
+    "file": "docker-compose.dev-read-replica.yml",
+    "line": 44,
+    "verdict": "fp",
+    "note": "dev-only replication password in a dev compose file"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "compose-hardcoded-secret",
+    "file": "docker-compose.dev.yml",
+    "line": 23,
+    "verdict": "fp",
+    "note": "throwaway dev database password"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "dockerfile-runs-as-root",
+    "file": "backend-go/docker-test/Dockerfile",
+    "line": 4,
+    "verdict": "fp",
+    "note": "test-only image for HSM tests under testcontainers"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "dockerfile-runs-as-root",
+    "file": "backend/Dockerfile",
+    "line": 59,
+    "verdict": "tp",
+    "note": "production stage has no USER instruction"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "dockerfile-runs-as-root",
+    "file": "backend/Dockerfile.fips-toolchain",
+    "line": 49,
+    "verdict": "fp",
+    "note": "build toolchain image, not a runtime image"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "backend/src/server/routes/v1/sso-router.ts",
+    "line": 681,
+    "verdict": "fp",
+    "note": "host comes from SITE_URL, only the query varies"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "path-traversal",
+    "file": "backend/src/server/routes/v1/announcement-router.ts",
+    "line": 109,
+    "verdict": "fp",
+    "note": "filename is validated against an allowlist regex first"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "tls-verification-disabled",
+    "file": "backend/src/ee/services/pki-discovery/pki-discovery-fns.ts",
+    "line": 228,
+    "verdict": "fp",
+    "note": "certificate discovery connects without verification on purpose to read the peer certificate"
+  }
+]

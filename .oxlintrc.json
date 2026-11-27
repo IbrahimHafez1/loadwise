@@ -1,0 +1,59 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error"
+  },
+  "env": {
+    "node": true,
+    "browser": false
+  },
+  "ignorePatterns": [
+    "lib/performance/vendor/**",
+    "examples/**",
+    "test/performance/integration/orms/app.ts",
+    "bench/recall/cases/**",
+    "bin/*.js",
+    "lib/**/*.js",
+    "lib/security/examples/*.cjs",
+    "editor/**/*.cjs",
+    "plugin/**/*.js",
+    "polyglot/**/*.js",
+    "scripts/**/*.js",
+    "bench/**/*.js",
+    "test/**/*.js"
+  ],
+  "plugins": ["typescript", "unicorn"],
+  "rules": {
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/consistent-type-assertions": [
+      "error",
+      {
+        "assertionStyle": "never"
+      }
+    ],
+    "typescript/consistent-type-imports": "error",
+    "typescript/no-require-imports": "error",
+    "typescript/no-inferrable-types": "error",
+    "typescript/prefer-as-const": "error",
+    "unicorn/prefer-node-protocol": "error",
+    "unicorn/prefer-string-replace-all": "error",
+    "no-var": "error",
+    "prefer-const": "error",
+    "eqeqeq": [
+      "error",
+      "always",
+      {
+        "null": "ignore"
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["editor/test/extension.test.cts"],
+      "rules": {
+        "typescript/no-require-imports": "off"
+      }
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+# _test.go files are ignored. The 2-result exclusions list functions whose last result is not an error. `defer x.Close()` is never reported by go-error-discarded because it is not an assignment.
+id: go-error-discarded
+language: Go
+severity: warning
+message: This assignment drops the error result with _, so a failure goes unnoticed. Check the error and return or log it.
+ignores: ['**/*_test.go']
+rule:
+  any:
+    # value, _ := call(...): reported only for an allow-list of calls known to return (T, error): selected stdlib packages,
+    # specific http/filepath/url/time/template functions, and commonly (T, error) method names. Comma-ok style calls such as
+    # cache.Get, q.Pop, Load or Lookup* are never in the list, so a bool second result is not reported. The exclusion below
+    # still removes bool-returning functions from the package-wide matches (os.LookupEnv, net.LookupAddr, ...).
+    - all:
+        - any: [{ kind: short_var_declaration }, { kind: assignment_statement }]
+        - has:
+            field: left
+            kind: expression_list
+            all:
+              - has: { nthChild: { position: 1, reverse: true }, kind: identifier, regex: '^_$' }
+              - has: { nthChild: 2 }
+        - has:
+            field: right
+            kind: expression_list
+            has:
+              kind: call_expression
+              has:
+                field: function
+                regex: '^((os|io|ioutil|strconv|json|sql|net|bufio|exec)\.\w+|http\.(NewRequest|NewRequestWithContext|Get|Post|PostForm|Head)|filepath\.(Abs|Rel|Glob|EvalSymlinks)|url\.(Parse|ParseRequestURI|ParseQuery|Unescape)|time\.(Parse|ParseDuration|ParseInLocation|LoadLocation)|template\.(ParseFiles|ParseGlob)|.*\.(Marshal|MarshalIndent|Unmarshal|ReadAll|ReadFile|Open|Create|Atoi|ParseInt|ParseFloat|Parse|Query|Exec|Scan|Write|Read|Do|Dial|Listen|Accept|Decode|Encode))$'
+        - not:
+            has:
+              field: right
+              has:
+                kind: call_expression
+                has:
+                  field: function
+                  regex: '(^|\.)(LookupEnv|Load|LoadAndDelete|Cut|CutPrefix|CutSuffix|LookupPort|LookupAddr|Split|DecodeRune|DecodeRuneInString|DecodeLastRune|DecodeLastRuneInString|SetString|Caller|BinarySearch|BinarySearchFunc|Find|Password|BasicAuth|Modf|Frexp|Deadline|ReadLine)$'
+    # _ = x.Write(...): calls whose only result is an error. A deliberate `_ = x.Close()` is accepted, as errcheck does.
+    - all:
+        - any: [{ kind: short_var_declaration }, { kind: assignment_statement }]
+        - has: { field: left, kind: expression_list, regex: '^_$' }
+        - has:
+            field: right
+            kind: expression_list
+            has:
+              kind: call_expression
+              has:
+                field: function
+                kind: selector_expression
+                has:
+                  field: field
+                  regex: '^(Write|WriteString|Flush|Sync|Encode|Exec|ExecContext|Commit)$'
+
+---
+id: go-defer-before-error-check
+language: Go
+severity: warning
+message: This Close is deferred before err is checked. If the call failed, resp.Body or the sql rows value is nil and the deferred Close panics. Check err first, then defer the Close.
+ignores: ['**/*_test.go']
+# Only resp.Body (any `x, err := call`) and rows from Query/QueryContext are reported. Closing a nil *os.File returns an
+# error instead of panicking, so `defer f.Close()` after os.Open is deliberately not reported.
+rule:
+  any:
+    - all:
+        - pattern: defer $RES.Body.Close()
+        - follows:
+            any:
+              - pattern: $RES, err := $CALL
+              - pattern: $RES, err = $CALL
+    - all:
+        - pattern: defer $RES.Close()
+        - follows:
+            any:
+              - pattern: $RES, err := $DB.Query($$$ARGS)
+              - pattern: $RES, err = $DB.Query($$$ARGS)
+              - pattern: $RES, err := $DB.QueryContext($$$ARGS)
+              - pattern: $RES, err = $DB.QueryContext($$$ARGS)

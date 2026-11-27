@@ -1,0 +1,635 @@
+{
+  "description": "Recall benchmark: a deliberately vulnerable Express/Mongoose/pg app plus minimal pre-fix snippets modelled on public advisories (scanned read-only, never executed). \"source\" names the advisory or states that the pattern is generic.",
+  "cases": [
+    {
+      "id": "dvna-sqli-pg-query",
+      "pillar": "sec",
+      "ruleId": "pg-dynamic-query-text",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 17,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "dvna-nosqli-mongoose-find",
+      "pillar": "sec",
+      "ruleId": "nosql-operator-injection",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 22,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "dvna-cmdi-exec",
+      "pillar": "sec",
+      "ruleId": "command-injection",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 27,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "dvna-codei-eval",
+      "pillar": "sec",
+      "ruleId": "code-injection",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 31,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "dvna-path-traversal",
+      "pillar": "sec",
+      "ruleId": "path-traversal",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 37,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "dvna-open-redirect",
+      "pillar": "sec",
+      "ruleId": "open-redirect",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 41,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "dvna-ssrf-fetch",
+      "pillar": "sec",
+      "ruleId": "ssrf-request-url",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 45,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "dvna-reflected-xss",
+      "pillar": "sec",
+      "ruleId": "reflected-xss-response",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 50,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "dvna-redos-nested-quantifier",
+      "pillar": "sec",
+      "ruleId": "regex-catastrophic-backtracking",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 57,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style): (a+)+ nested quantifier"
+    },
+    {
+      "id": "dvna-redos-overlapping-quantifiers",
+      "pillar": "sec",
+      "ruleId": "regex-catastrophic-backtracking",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 61,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style): s+.*s+ overlapping quantifiers"
+    },
+    {
+      "id": "dvna-plaintext-password",
+      "pillar": "sec",
+      "ruleId": "plaintext-password-storage",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 65,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "perf-mongoose-aggregate-uncast-id",
+      "pillar": "rel",
+      "ruleId": "mongoose-aggregate-uncast-id",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 71,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "perf-mongoose-hydrate-for-to-object",
+      "pillar": "perf",
+      "ruleId": "mongoose-hydrate-for-to-object",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 76,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "perf-heavy-media-sharp",
+      "pillar": "perf",
+      "ruleId": "heavy-media-in-request-handler",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 81,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "perf-express-missing-compression",
+      "pillar": "perf",
+      "ruleId": "express-missing-compression",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 116,
+      "source": "Deliberately vulnerable app (DVNA/NodeGoat style)"
+    },
+    {
+      "id": "advisory-ms-redos",
+      "pillar": "sec",
+      "ruleId": "regex-catastrophic-backtracking",
+      "project": "advisory-ms-redos",
+      "file": "index.js",
+      "line": 6,
+      "source": "CVE-2015-8315 / GHSA-3fx5-fwvr-xrjg (ms), pattern re-created"
+    },
+    {
+      "id": "advisory-trim-redos",
+      "pillar": "sec",
+      "ruleId": "regex-catastrophic-backtracking",
+      "project": "advisory-trim-redos",
+      "file": "index.js",
+      "line": 5,
+      "source": "CVE-2020-7753 / GHSA-w5p7-h5w8-2hfq (trim), pattern re-created"
+    },
+    {
+      "id": "advisory-lodash-defaultsdeep-pollution",
+      "pillar": "sec",
+      "ruleId": "prototype-pollution",
+      "project": "advisory-lodash-defaultsdeep-pollution",
+      "file": "index.js",
+      "line": 11,
+      "source": "CVE-2019-10744 / GHSA-jf85-cpcp-j695 (lodash), shape re-created"
+    },
+    {
+      "id": "advisory-minimist-pollution",
+      "pillar": "sec",
+      "ruleId": "prototype-pollution",
+      "project": "advisory-minimist-pollution",
+      "file": "index.js",
+      "line": 9,
+      "source": "CVE-2020-7598 / GHSA-vh95-rmgr-6w4m (minimist), shape re-created"
+    },
+    {
+      "id": "advisory-adm-zip-slip",
+      "pillar": "sec",
+      "ruleId": "zip-slip-extraction",
+      "project": "advisory-adm-zip-slip",
+      "file": "index.js",
+      "line": 10,
+      "source": "Snyk Zip Slip / CVE-2018-1002204 (adm-zip), shape re-created"
+    },
+    {
+      "id": "advisory-jsonwebtoken-no-algorithms",
+      "pillar": "sec",
+      "ruleId": "jwt-verify-without-algorithms",
+      "project": "advisory-jsonwebtoken-no-algorithms",
+      "file": "index.js",
+      "line": 5,
+      "source": "CVE-2015-9235 / GHSA-c7hr-j4mj-j2w6 (jsonwebtoken)"
+    },
+    {
+      "id": "advisory-node-serialize-rce",
+      "pillar": "sec",
+      "ruleId": "code-injection",
+      "project": "advisory-node-serialize-rce",
+      "file": "index.js",
+      "line": 6,
+      "source": "CVE-2017-5941 (node-serialize), shape re-created"
+    },
+    {
+      "id": "advisory-st-path-traversal",
+      "pillar": "sec",
+      "ruleId": "path-traversal",
+      "project": "advisory-st-path-traversal",
+      "file": "index.js",
+      "line": 11,
+      "source": "CVE-2014-3744 / GHSA-69rr-wvh9-6c4q (st), shape re-created"
+    },
+    {
+      "id": "advisory-ejs-render-rce",
+      "pillar": "sec",
+      "ruleId": "template-injection",
+      "project": "advisory-ejs-render-rce",
+      "file": "index.js",
+      "line": 7,
+      "source": "CVE-2022-29078 / GHSA-phwq-j96m-2c2q (ejs), shape re-created"
+    },
+    {
+      "id": "advisory-mysql-concat-sqli",
+      "pillar": "sec",
+      "ruleId": "mysql-dynamic-query-text",
+      "project": "advisory-mysql-concat-sqli",
+      "file": "index.js",
+      "line": 8,
+      "source": "CWE-89 concatenated mysql2 query (generic pattern, no single advisory)"
+    },
+    {
+      "id": "advisory-tls-verification-disabled",
+      "pillar": "sec",
+      "ruleId": "tls-verification-disabled",
+      "project": "advisory-tls-verification-disabled",
+      "file": "index.js",
+      "line": 5,
+      "source": "CWE-295 generic pattern (no single advisory)"
+    },
+    {
+      "id": "advisory-md5-password-hash",
+      "pillar": "sec",
+      "ruleId": "weak-password-hash",
+      "project": "advisory-md5-password-hash",
+      "file": "index.js",
+      "line": 5,
+      "source": "CWE-916 generic pattern (no single advisory)"
+    },
+    {
+      "id": "perf-n-plus-one-pg-loop",
+      "pillar": "perf",
+      "ruleId": "pg-query-in-loop",
+      "project": "perf-n-plus-one-pg-loop",
+      "file": "index.js",
+      "line": 8,
+      "source": "Generic N+1 fix pattern (no single commit)"
+    },
+    {
+      "id": "perf-sync-fs-in-handler",
+      "pillar": "perf",
+      "ruleId": "node-sync-fs-in-async",
+      "project": "perf-sync-fs-in-handler",
+      "file": "index.js",
+      "line": 7,
+      "source": "Generic sync-fs fix pattern (no single commit)"
+    },
+    {
+      "id": "perf-http-call-without-timeout",
+      "pillar": "rel",
+      "ruleId": "http-call-without-timeout",
+      "project": "perf-http-call-without-timeout",
+      "file": "index.js",
+      "line": 3,
+      "source": "Generic missing-timeout fix pattern (no single commit)"
+    },
+    {
+      "id": "perf-json-roundtrip-clone",
+      "pillar": "perf",
+      "ruleId": "json-roundtrip-clone",
+      "project": "perf-json-roundtrip-clone",
+      "file": "index.js",
+      "line": 6,
+      "source": "Generic structuredClone fix pattern (no single commit)"
+    },
+    {
+      "id": "perf-floating-promise",
+      "pillar": "rel",
+      "ruleId": "floating-promise",
+      "project": "perf-floating-promise",
+      "file": "index.js",
+      "line": 14,
+      "source": "Generic unhandled-rejection fix pattern (no single commit)"
+    },
+    {
+      "id": "perf-array-repeated-membership",
+      "pillar": "perf",
+      "ruleId": "array-repeated-membership",
+      "project": "perf-array-repeated-membership",
+      "file": "index.js",
+      "line": 12,
+      "source": "Generic Set-instead-of-includes fix pattern (no single commit)"
+    },
+    {
+      "id": "perf-reduce-copy-accumulator",
+      "pillar": "perf",
+      "ruleId": "reduce-copy-accumulator",
+      "project": "perf-reduce-copy-accumulator",
+      "file": "index.js",
+      "line": 8,
+      "source": "Generic reduce-spread fix pattern (no single commit)"
+    },
+    {
+      "id": "fe-barrel-import",
+      "pillar": "perf",
+      "ruleId": "frontend-barrel-heavy-import",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 3,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-react-missing-cleanup",
+      "pillar": "perf",
+      "ruleId": "react-missing-cleanup",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 15,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-react-fetch-no-abort",
+      "pillar": "perf",
+      "ruleId": "react-fetch-in-effect-no-abort",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 20,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-react-inline-prop",
+      "pillar": "perf",
+      "ruleId": "react-inline-object-in-jsx-prop",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 25,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-react-dangerously-html",
+      "pillar": "sec",
+      "ruleId": "react-dangerously-set-inner-html",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 26,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-react-index-key",
+      "pillar": "perf",
+      "ruleId": "react-index-as-key",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 28,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-angular-onpush",
+      "pillar": "perf",
+      "ruleId": "angular-default-change-detection",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 34,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-angular-subscribe",
+      "pillar": "perf",
+      "ruleId": "angular-subscribe-without-cleanup",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 38,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-angular-bypass-trust",
+      "pillar": "sec",
+      "ruleId": "angular-bypass-security-trust",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 41,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-vue-mounted-cleanup",
+      "pillar": "perf",
+      "ruleId": "vue-watch-missing-cleanup",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 46,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-vue-v-for-key",
+      "pillar": "perf",
+      "ruleId": "vue-v-for-missing-key",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 49,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-vue-v-html",
+      "pillar": "sec",
+      "ruleId": "vue-v-html-unsanitized",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 50,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-dom-layout-thrash",
+      "pillar": "perf",
+      "ruleId": "dom-layout-thrashing",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 56,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-dom-scroll-passive",
+      "pillar": "perf",
+      "ruleId": "dom-unthrottled-scroll-resize",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 59,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-dom-listener-leak",
+      "pillar": "perf",
+      "ruleId": "dom-listener-without-cleanup",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 59,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-dom-xss-innerhtml",
+      "pillar": "sec",
+      "ruleId": "dom-xss-sink",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 60,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-storage-token",
+      "pillar": "sec",
+      "ruleId": "frontend-storage-secret-token",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 61,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "fe-postmessage-wildcard",
+      "pillar": "sec",
+      "ruleId": "postmessage-missing-origin-check",
+      "project": "frontend-app",
+      "file": "frontend.tsx",
+      "line": 62,
+      "source": "Multi-framework frontend recall fixture (React/Angular/Vue/Vanilla)"
+    },
+    {
+      "id": "be-sql-select-star",
+      "pillar": "perf",
+      "ruleId": "sql-select-star-in-query",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 17,
+      "source": "Backend mastery recall case"
+    },
+    {
+      "id": "be-sequential-http-loop",
+      "pillar": "perf",
+      "ruleId": "sequential-http-in-loop",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 106,
+      "source": "Backend mastery recall case"
+    },
+    {
+      "id": "be-check-then-update-race",
+      "pillar": "rel",
+      "ruleId": "check-then-update-race",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 94,
+      "source": "Backend mastery recall case"
+    },
+    {
+      "id": "be-payment-idempotency",
+      "pillar": "rel",
+      "ruleId": "payment-missing-idempotency-key",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 95,
+      "source": "Backend mastery recall case"
+    },
+    {
+      "id": "be-webhook-idempotency",
+      "pillar": "rel",
+      "ruleId": "webhook-missing-idempotency-check",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 100,
+      "source": "Backend mastery recall case"
+    },
+    {
+      "id": "be-express-helmet",
+      "pillar": "sec",
+      "ruleId": "express-missing-helmet",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 116,
+      "source": "Backend mastery recall case"
+    },
+    {
+      "id": "be-jwt-fallback-secret",
+      "pillar": "sec",
+      "ruleId": "hardcoded-secret",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 110,
+      "source": "Backend mastery recall case"
+    },
+    {
+      "id": "be-array-repeated-find",
+      "pillar": "perf",
+      "ruleId": "array-repeated-find",
+      "project": "vulnerable-app",
+      "file": "server.ts",
+      "line": 113,
+      "source": "Backend mastery recall case"
+    },
+    {
+      "id": "perf-phase5-unbounded-promise-all",
+      "pillar": "rel",
+      "ruleId": "unbounded-promise-all",
+      "project": "perf-phase5-unbounded-promise-all",
+      "file": "index.ts",
+      "line": 5,
+      "source": "Phase 5 performance recall case"
+    },
+    {
+      "id": "perf-phase5-graphql-n-plus-one-resolver",
+      "pillar": "perf",
+      "ruleId": "graphql-n-plus-one-resolver",
+      "project": "perf-phase5-graphql-n-plus-one-resolver",
+      "file": "index.ts",
+      "line": 8,
+      "source": "Phase 5 performance recall case"
+    },
+    {
+      "id": "perf-phase5-node-event-listener-leak",
+      "pillar": "perf",
+      "ruleId": "node-event-listener-leak",
+      "project": "perf-phase5-node-event-listener-leak",
+      "file": "index.ts",
+      "line": 7,
+      "source": "Phase 5 performance recall case"
+    },
+    {
+      "id": "perf-phase5-mongoose-missing-lean",
+      "pillar": "perf",
+      "ruleId": "mongoose-missing-lean",
+      "project": "perf-phase5-mongoose-missing-lean",
+      "file": "index.ts",
+      "line": 6,
+      "source": "Phase 5 performance recall case"
+    },
+    {
+      "id": "sec-phase5-server-action-missing-auth",
+      "pillar": "sec",
+      "ruleId": "server-action-missing-auth",
+      "project": "sec-phase5-server-action-missing-auth",
+      "file": "index.js",
+      "line": 3,
+      "source": "Generic Next.js Server Action missing auth pattern"
+    },
+    {
+      "id": "sec-phase5-ssrf-redirect-bypass",
+      "pillar": "sec",
+      "ruleId": "ssrf-redirect-bypass",
+      "project": "sec-phase5-ssrf-redirect-bypass",
+      "file": "index.js",
+      "line": 2,
+      "source": "Generic SSRF 3xx redirect bypass pattern"
+    },
+    {
+      "id": "sec-phase5-vm-sandbox-escape",
+      "pillar": "sec",
+      "ruleId": "vm-sandbox-escape",
+      "project": "sec-phase5-vm-sandbox-escape",
+      "file": "index.js",
+      "line": 4,
+      "source": "Generic Node vm sandbox escape pattern"
+    },
+    {
+      "id": "sec-phase5-jwt-weak-secret-literal",
+      "pillar": "sec",
+      "ruleId": "jwt-weak-secret-literal",
+      "project": "sec-phase5-jwt-weak-secret-literal",
+      "file": "index.js",
+      "line": 4,
+      "source": "Generic weak JWT secret literal pattern"
+    },
+    {
+      "id": "sec-phase5-graphql-batching-unbounded",
+      "pillar": "sec",
+      "ruleId": "graphql-batching-unbounded",
+      "project": "sec-phase5-graphql-batching-unbounded",
+      "file": "index.js",
+      "line": 3,
+      "source": "Generic unbounded GraphQL batching pattern"
+    },
+    {
+      "id": "sec-phase5-express-cookie-auth-missing-csrf",
+      "pillar": "sec",
+      "ruleId": "express-cookie-auth-missing-csrf",
+      "project": "sec-phase5-express-cookie-auth-missing-csrf",
+      "file": "index.js",
+      "line": 5,
+      "source": "Generic Express cookie auth without CSRF pattern"
+    }
+  ]
+}

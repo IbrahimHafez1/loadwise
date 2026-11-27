@@ -1,0 +1,23 @@
+id: rust-command-shell
+language: Rust
+severity: warning
+message: Spawning a shell with Command::new("sh") or Command::new("bash") risks command injection. Invoke the target executable directly with .arg().
+rule:
+  any:
+    - pattern: Command::new("sh")
+    - pattern: Command::new("bash")
+    - pattern: std::process::Command::new("sh")
+    - pattern: std::process::Command::new("bash")
+
+---
+id: rust-unsafe-raw-pointer-deref
+language: Rust
+severity: warning
+message: Dereferencing a raw pointer inside an unsafe block bypasses Rust memory safety guarantees. Verify pointer validity and alignment or use safe abstractions.
+rule:
+  all:
+    - pattern: '*$PTR'
+    - kind: unary_expression
+    - inside:
+        kind: unsafe_block
+        stopBy: end

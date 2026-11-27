@@ -1,0 +1,66 @@
+[
+  {
+    "pillar": "maint",
+    "ruleId": "large-class",
+    "file": "packages/core/core/src/Strapi.ts",
+    "line": 53,
+    "verdict": "tp",
+    "note": "Strapi class has 69 methods"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/core/core/src/services/auth/index.ts",
+    "line": 80,
+    "verdict": "fp",
+    "note": "find over one to three route strategies"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "floating-promise",
+    "file": "packages/core/core/src/middlewares/body.ts",
+    "line": 92,
+    "verdict": "missed",
+    "note": "fse.remove is not awaited"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "tests-next/shared/src/db/database.ts",
+    "line": 131,
+    "verdict": "fp",
+    "note": "test helper that resets a sqlite file"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "tests-next/shared/test-plugin/lib/sqlite-snapshot.js",
+    "line": 35,
+    "verdict": "fp",
+    "note": "test plugin snapshot helper"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "orm-query-in-loop",
+    "file": "packages/core/core/src/services/document-service/utils/clean-component-join-table.ts",
+    "line": 192,
+    "verdict": "missed",
+    "note": "query per entry inside a loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-module-cache",
+    "file": "packages/core/core/src/services/document-service/utils/populate.ts",
+    "line": 70,
+    "verdict": "fp",
+    "note": "key space is schema uid and fixed option shapes"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "typeorm-dynamic-query-text",
+    "file": "packages/core/database/src/query/helpers/populate/apply.ts",
+    "line": 114,
+    "verdict": "fp",
+    "note": "alias and column come from builder metadata"
+  }
+]

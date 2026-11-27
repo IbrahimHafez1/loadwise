@@ -1,0 +1,28 @@
+id: csharp-process-start
+language: CSharp
+severity: warning
+message: Process.Start launches external processes and risks command injection if arguments or UseShellExecute are untrusted. Validate inputs and use ProcessStartInfo with ArgumentList.
+rule:
+  any:
+    - pattern: Process.Start($$$ARGS)
+    - pattern: System.Diagnostics.Process.Start($$$ARGS)
+
+---
+id: csharp-ef-from-sql-raw
+language: CSharp
+severity: warning
+message: Passing concatenated or interpolated strings to FromSqlRaw or ExecuteSqlRaw risks SQL injection. Use FromSqlInterpolated or parameterized queries instead.
+rule:
+  any:
+    - pattern: $SET.FromSqlRaw($LEFT + $RIGHT)
+    - pattern: $CTX.Database.ExecuteSqlRaw($LEFT + $RIGHT)
+    - all:
+        - pattern: $SET.FromSqlRaw($INTERP)
+        - has:
+            kind: interpolated_string_expression
+            stopBy: end
+    - all:
+        - pattern: $CTX.Database.ExecuteSqlRaw($INTERP)
+        - has:
+            kind: interpolated_string_expression
+            stopBy: end

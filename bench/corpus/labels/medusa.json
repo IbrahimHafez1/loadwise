@@ -1,0 +1,418 @@
+[
+  {
+    "pillar": "maint",
+    "ruleId": "deep-control-flow",
+    "file": "packages/admin/dashboard/src/components/common/sortable-tree/keyboard-coordinates.ts",
+    "line": 61,
+    "verdict": "tp",
+    "note": "switch case with nested ifs four levels deep"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "dependency-cycle",
+    "file": "packages/modules/pricing/integration-tests/__fixtures__/price-rule/data.ts",
+    "line": 3,
+    "verdict": "tp",
+    "note": "data.ts re-exports from ./data, which resolves to itself"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "duplicate-implementation",
+    "file": "packages/admin/dashboard/src/components/common/customer-info/customer-info.tsx",
+    "line": 188,
+    "verdict": "tp",
+    "note": "getOrderCustomer repeated in a sibling helper"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "high-branch-complexity",
+    "file": "packages/admin/dashboard/src/components/layout/settings-layout/settings-layout.tsx",
+    "line": 79,
+    "verdict": "fp",
+    "note": "declarative menu array built from permission flags, not control flow logic"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-class",
+    "file": "packages/core/orchestration/src/transaction/transaction-orchestrator.ts",
+    "line": 74,
+    "verdict": "tp",
+    "note": "TransactionOrchestrator has 49 methods"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "long-parameter-list",
+    "file": "packages/admin/dashboard/scripts/i18n/sync-translations.js",
+    "line": 104,
+    "verdict": "tp",
+    "note": "six positional parameters"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "swallowed-error",
+    "file": "integration-tests/helpers/wait-for-index.ts",
+    "line": 68,
+    "verdict": "fp",
+    "note": "logs inside a polling retry loop that retries until timeout"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "swallowed-error",
+    "file": "packages/core/framework/src/http/audit.ts",
+    "line": 471,
+    "verdict": "fp",
+    "note": "audit recording is best effort and must not fail the request"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "swallowed-error",
+    "file": "packages/core/utils/src/modules-sdk/loaders/load-models.ts",
+    "line": 14,
+    "verdict": "fp",
+    "note": "default-fallback idiom for a missing directory"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/core/core-flows/src/cart/steps/upsert-tax-lines-for-items.ts",
+    "line": 155,
+    "verdict": "tp",
+    "note": "existingTaxLines.find per tax line in a map"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/core/core-flows/src/cart/steps/upsert-tax-lines-for-items.ts",
+    "line": 171,
+    "verdict": "tp",
+    "note": "existingTaxLines.find per shipping tax line in a map"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/modules/product/src/utils/compute-option-link-changes.ts",
+    "line": 34,
+    "verdict": "tp",
+    "note": "originalProducts.find per product in a map"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/core/core-flows/src/fulfillment/steps/set-shipping-options-prices.ts",
+    "line": 191,
+    "verdict": "tp",
+    "note": "data.find per current shipping option price in a map"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/core/core-flows/src/order/steps/cancel-orders.ts",
+    "line": 41,
+    "verdict": "tp",
+    "note": "orders.find per canceled order in a bulk cancel"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/core/core-flows/src/order/steps/complete-orders.ts",
+    "line": 37,
+    "verdict": "tp",
+    "note": "orders.find per completed order in a bulk complete"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/core/core-flows/src/product/helpers/normalize-for-export.ts",
+    "line": 155,
+    "verdict": "fp",
+    "note": "looks up one variant option among the few options of a single product"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/modules/cart/src/services/cart-module.ts",
+    "line": 343,
+    "verdict": "tp",
+    "note": "fullCarts.find per input id to restore order across a bulk list"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/modules/pricing/src/services/pricing-module.ts",
+    "line": 603,
+    "verdict": "tp",
+    "note": "dbPriceSets.find per input price set to restore order"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-find",
+    "file": "packages/modules/tax/src/services/tax-module-service.ts",
+    "line": 614,
+    "verdict": "tp",
+    "note": "parentRegions.find per region to verify in a loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-membership",
+    "file": "packages/core/framework/src/http/utils/field-filtering/field-validator.ts",
+    "line": 48,
+    "verdict": "fp",
+    "note": "short restricted-field lists"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "floating-promise",
+    "file": "packages/admin/dashboard/src/routes/orders/order-detail/components/order-activity-section/order-note-form.tsx",
+    "line": 38,
+    "verdict": "tp",
+    "note": "mutateAsync promise is not awaited or handled"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "http-call-without-timeout",
+    "file": "packages/core/js-sdk/src/admin/product.ts",
+    "line": 125,
+    "verdict": "fp",
+    "note": "client SDK upload helper"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "http-call-without-timeout",
+    "file": "packages/modules/providers/auth-github/src/services/github.ts",
+    "line": 112,
+    "verdict": "tp",
+    "note": "token exchange fetch with no timeout"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "loop-copy-accumulator",
+    "file": "packages/core/query/src/joiner/compile.ts",
+    "line": 364,
+    "verdict": "fp",
+    "note": "concat over a short join path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/cli/create-medusa-app/src/utils/nextjs-utils.ts",
+    "line": 42,
+    "verdict": "fp",
+    "note": "interactive CLI scaffolder"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/cli/create-medusa-app/src/utils/nextjs-utils.ts",
+    "line": 55,
+    "verdict": "fp",
+    "note": "interactive CLI scaffolder"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/cli/create-medusa-app/src/utils/package-manager.ts",
+    "line": 262,
+    "verdict": "fp",
+    "note": "interactive CLI scaffolder"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/cli/medusa-cli/src/codemods/replace-zod-imports.ts",
+    "line": 136,
+    "verdict": "fp",
+    "note": "codemod CLI"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-fs-in-async",
+    "file": "packages/medusa-telemetry/src/util/outbox-store.js",
+    "line": 72,
+    "verdict": "tp",
+    "note": "existsSync in the async telemetry flush of a running server"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-process-in-async",
+    "file": "packages/cli/create-medusa-app/src/utils/execute.ts",
+    "line": 32,
+    "verdict": "fp",
+    "note": "interactive CLI scaffolder"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-process-in-async",
+    "file": "packages/medusa/src/commands/plugin/add.ts",
+    "line": 237,
+    "verdict": "fp",
+    "note": "CLI command, not a server request path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "packages/admin/dashboard/src/components/common/sortable-tree/sortable-tree.tsx",
+    "line": 118,
+    "verdict": "fp",
+    "note": "reduces over the visible tree nodes of an admin widget"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "packages/admin/dashboard/src/components/common/sortable-tree/utils.ts",
+    "line": 89,
+    "verdict": "fp",
+    "note": "flattens the visible tree nodes of an admin widget"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "packages/admin/dashboard/src/lib/form-helpers.ts",
+    "line": 28,
+    "verdict": "fp",
+    "note": "maps the few values of one form"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "packages/admin/dashboard/src/lib/form-helpers.ts",
+    "line": 69,
+    "verdict": "fp",
+    "note": "maps the few values of one form"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "service-query-in-loop",
+    "file": "packages/modules/order/src/services/order-module-service.ts",
+    "line": 1268,
+    "verdict": "missed",
+    "note": "list per update inside a for loop"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "service-query-in-loop",
+    "file": "packages/modules/product/src/repositories/product-category.ts",
+    "line": 310,
+    "verdict": "missed",
+    "note": "findOne per id inside a Promise.all map"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "whole-payload-in-memory",
+    "file": "packages/admin/admin-bundler/src/commands/develop.ts",
+    "line": 67,
+    "verdict": "fp",
+    "note": "dev server reads its own HTML template"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "committed-secret",
+    "file": "www/apps/book/app/learn/configurations/medusa-config/asymmetric-encryption/page.mdx",
+    "line": 180,
+    "verdict": "fp",
+    "note": "truncated example key inside documentation"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "dockerfile-runs-as-root",
+    "file": ".oss-scanner/Dockerfile",
+    "line": 5,
+    "verdict": "fp",
+    "note": "CI scanner image, not a runtime image"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "dockerfile-secret-in-build",
+    "file": ".oss-scanner/Dockerfile",
+    "line": 12,
+    "verdict": "fp",
+    "note": "throwaway test database credentials in a CI scanner image"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "path-traversal",
+    "file": "packages/admin/admin-bundler/src/commands/develop.ts",
+    "line": 67,
+    "verdict": "fp",
+    "note": "dev server reads its own HTML template, not a request-chosen file"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-in-log",
+    "file": "packages/medusa/src/commands/user.ts",
+    "line": 70,
+    "verdict": "fp",
+    "note": "CLI prints the invite token to the operator who asked for it"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-in-log",
+    "file": "packages/medusa/src/commands/user.ts",
+    "line": 71,
+    "verdict": "fp",
+    "note": "CLI prints the invite token to the operator who asked for it"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "tls-verification-disabled",
+    "file": "packages/medusa-test-utils/src/medusa-test-runner-utils/config.ts",
+    "line": 37,
+    "verdict": "fp",
+    "note": "test runner database config"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "filter-for-existence",
+    "file": "packages/admin/dashboard/src/routes/tax-regions/common/components/tax-region-card/tax-region-card.tsx",
+    "line": 80,
+    "verdict": "tp",
+    "note": "filter().length on tax_rates; some() fits"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "json-roundtrip-clone",
+    "file": "packages/core/utils/src/dal/mikro-orm/mikro-orm-repository.ts",
+    "line": 671,
+    "verdict": "tp",
+    "note": "JSON clone per entry in upsert hot path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "json-roundtrip-clone",
+    "file": "packages/modules/link-modules/src/initialize/index.ts",
+    "line": 52,
+    "verdict": "fp",
+    "note": "one-time link module startup, not hot"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-in-url-query",
+    "file": "packages/core/js-sdk/src/admin/invite.ts",
+    "line": 61,
+    "verdict": "tp",
+    "note": "invite token sent in query string of POST"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "tls-verification-disabled",
+    "file": "packages/core/utils/src/modules-sdk/load-module-database-config.ts",
+    "line": 28,
+    "verdict": "tp",
+    "note": "rejectUnauthorized false default for every non-local DB host"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "json-parse-unguarded",
+    "file": "packages/admin/admin-bundler/src/commands/plugin.ts",
+    "line": 17,
+    "verdict": "fp",
+    "note": "build tooling reading own package.json"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "async-callback-unhandled-rejection",
+    "file": "packages/admin/admin-vite-plugin/src/plugin.ts",
+    "line": 171,
+    "verdict": "tp",
+    "note": "handleFileChange awaited in watcher callback with no catch"
+  }
+]

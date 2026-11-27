@@ -1,0 +1,498 @@
+[
+  {
+    "pillar": "maint",
+    "ruleId": "deep-control-flow",
+    "file": "apps/api/v2/src/modules/auth/guards/roles/roles.guard.ts",
+    "line": 139,
+    "verdict": "tp",
+    "note": "if inside else inside loop reaches four nested levels"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "duplicate-implementation",
+    "file": "apps/api/v2/src/lib/services/qualified-hosts.service.ts",
+    "line": 23,
+    "verdict": "tp",
+    "note": "two methods have identical bodies"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "duplicate-implementation",
+    "file": "apps/api/v2/src/modules/webhooks/services/event-type-webhooks.service.ts",
+    "line": 12,
+    "verdict": "tp",
+    "note": "createEventTypeWebhook body matches a sibling service"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "high-branch-complexity",
+    "file": "apps/api/v2/src/modules/auth/guards/roles/roles.guard.ts",
+    "line": 53,
+    "verdict": "tp",
+    "note": "checkUserRoleAccess has branch complexity 18"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-class",
+    "file": "apps/api/v2/src/modules/users/users.repository.ts",
+    "line": 16,
+    "verdict": "fp",
+    "note": "cohesive single-table repository just over the limit"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-module",
+    "file": "apps/api/v2/src/platform/bookings/2024-08-13/services/bookings.service.ts",
+    "line": 1,
+    "verdict": "tp",
+    "note": "1072 lines of code"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "long-parameter-list",
+    "file": "apps/api/v2/src/modules/destination-calendars/destination-calendars.repository.ts",
+    "line": 8,
+    "verdict": "tp",
+    "note": "six positional parameters"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "swallowed-error",
+    "file": "apps/api/v2/src/middleware/request-ids/request-id.interceptor.ts",
+    "line": 32,
+    "verdict": "fp",
+    "note": "body is stringified only for a log line, so continuing after the catch is intended"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "swallowed-error",
+    "file": "apps/web/components/apps/btcpayserver/BtcpayPaymentComponent.tsx",
+    "line": 177,
+    "verdict": "tp",
+    "note": "empty catch hides polling failures"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "apps/api/v2/src/modules/auth/decorators/get-membership/get-membership.decorator.ts",
+    "line": 22,
+    "verdict": "fp",
+    "note": "reduces over the literal key list passed to the decorator"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "reduce-copy-accumulator",
+    "file": "packages/features/bookings/lib/handleNewBooking/loadAndValidateUsers.ts",
+    "line": 175,
+    "verdict": "missed",
+    "note": "reduce spreads the accumulator across all hosts"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "service-query-in-loop",
+    "file": "apps/api/v2/src/modules/teams/event-types/services/output-team-event-types.service.ts",
+    "line": 178,
+    "verdict": "missed",
+    "note": "findById per child inside a for loop"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "apps/api/v2/src/modules/oauth-clients/controllers/oauth-flow/oauth-flow.controller.ts",
+    "line": 80,
+    "verdict": "fp",
+    "note": "redirectUri is checked against the client allowlist before redirecting"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "ssrf-request-url",
+    "file": "apps/api/v2/src/modules/stripe/controllers/stripe.controller.ts",
+    "line": 114,
+    "verdict": "fp",
+    "note": "host is a fixed config origin, only the path is tainted"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "deep-control-flow",
+    "file": "apps/api/v2/src/modules/auth/strategies/api-auth/api-auth.strategy.ts",
+    "line": 99,
+    "verdict": "tp",
+    "note": "try>if>if>try>catch>if nesting in authenticate"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-module",
+    "file": "apps/api/v2/src/platform/bookings/2024-08-13/services/input.service.ts",
+    "line": 1,
+    "verdict": "tp",
+    "note": "764-line input service mixing many booking input transforms"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-class",
+    "file": "apps/api/v2/src/platform/event-types/event-types_2024_06_14/services/input-event-types.service.ts",
+    "line": 56,
+    "verdict": "tp",
+    "note": "32 members, over limit; mixes create/update event-type input transforms"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "high-branch-complexity",
+    "file": "apps/api/v2/src/modules/auth/strategies/api-auth/api-auth.strategy.ts",
+    "line": 55,
+    "verdict": "tp",
+    "note": "authenticate chains many auth-method branches"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "long-parameter-list",
+    "file": "apps/api/v2/src/modules/slots/slots-2024-09-04/slots.repository.ts",
+    "line": 59,
+    "verdict": "tp",
+    "note": "createSlot takes six positional params of mixed types"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "apps/api/v2/src/modules/conferencing/controllers/conferencing.controller.ts",
+    "line": 167,
+    "verdict": "tp",
+    "note": "returns unvalidated decodedCallbackState.onErrorReturnTo redirect URL"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "apps/api/v2/src/modules/conferencing/controllers/conferencing.controller.ts",
+    "line": 170,
+    "verdict": "tp",
+    "note": "returns unvalidated decodedCallbackState.onErrorReturnTo fallback redirect URL"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "apps/api/v2/src/modules/conferencing/controllers/conferencing.controller.ts",
+    "line": 179,
+    "verdict": "tp",
+    "note": "returns unvalidated decodedCallbackState.onErrorReturnTo redirect URL in catch"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "apps/api/v2/src/modules/stripe/controllers/stripe.controller.ts",
+    "line": 116,
+    "verdict": "tp",
+    "note": "returns unvalidated decodedCallbackState.onErrorReturnTo redirect URL"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "apps/api/v2/src/modules/stripe/controllers/stripe.controller.ts",
+    "line": 119,
+    "verdict": "tp",
+    "note": "returns unvalidated decodedCallbackState.onErrorReturnTo fallback redirect URL"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "apps/api/v2/src/modules/stripe/controllers/stripe.controller.ts",
+    "line": 128,
+    "verdict": "tp",
+    "note": "returns unvalidated onErrorReturnTo from query state"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "apps/api/v2/src/modules/stripe/controllers/stripe.controller.ts",
+    "line": 144,
+    "verdict": "tp",
+    "note": "returns unvalidated decodedCallbackState.onErrorReturnTo redirect URL in catch"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-compared-non-constant-time",
+    "file": "apps/api/v2/src/platform/calendars/services/apple-calendar.service.ts",
+    "line": 82,
+    "verdict": "tp",
+    "note": "compares decrypted password with ==="
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-compared-non-constant-time",
+    "file": "apps/web/app/api/cron/bookingReminder/route.ts",
+    "line": 19,
+    "verdict": "tp",
+    "note": "compares CRON_API_KEY with !=="
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-compared-non-constant-time",
+    "file": "apps/web/app/api/cron/changeTimeZone/route.ts",
+    "line": 27,
+    "verdict": "tp",
+    "note": "compares CRON_API_KEY with !=="
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-compared-non-constant-time",
+    "file": "apps/web/app/api/cron/syncAppMeta/route.ts",
+    "line": 23,
+    "verdict": "tp",
+    "note": "compares CRON_API_KEY with !=="
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-compared-non-constant-time",
+    "file": "apps/web/app/api/cron/webhookTriggers/route.ts",
+    "line": 11,
+    "verdict": "tp",
+    "note": "compares CRON_API_KEY with !=="
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-compared-non-constant-time",
+    "file": "apps/web/app/api/sync/helpscout/route.ts",
+    "line": 46,
+    "verdict": "tp",
+    "note": "compares HMAC signature with !== instead of timingSafeEqual"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-in-url-query",
+    "file": "apps/web/app/api/video/recording/route.ts",
+    "line": 8,
+    "verdict": "tp",
+    "note": "reads video token from URL searchParams"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-compared-non-constant-time",
+    "file": "apps/web/app/api/webhook/app-credential/route.ts",
+    "line": 26,
+    "verdict": "tp",
+    "note": "compares CREDENTIAL_SYNC_SECRET with !=="
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "insecure-random-for-secret",
+    "file": "apps/web/components/apps/make/Setup.tsx",
+    "line": 38,
+    "verdict": "tp",
+    "note": "generates apiKey using Math.random()"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-in-url-query",
+    "file": "apps/web/cron-tester.ts",
+    "line": 9,
+    "verdict": "tp",
+    "note": "passes CRON_API_KEY in URL query string"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-compared-non-constant-time",
+    "file": "apps/web/lib/validateCsrfToken.ts",
+    "line": 8,
+    "verdict": "tp",
+    "note": "compares CSRF token with !=="
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-compared-non-constant-time",
+    "file": "example-apps/credential-sync/pages/api/getToken.ts",
+    "line": 13,
+    "verdict": "tp",
+    "note": "compares CALCOM_CREDENTIAL_SYNC_SECRET with !=="
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-in-url-query",
+    "file": "example-apps/credential-sync/pages/api/setTokenInCalCom.ts",
+    "line": 32,
+    "verdict": "tp",
+    "note": "passes CALCOM_ADMIN_API_KEY in URL query string"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "postmessage-missing-origin-check",
+    "file": "packages/embeds/embed-core/src/embed-iframe.ts",
+    "line": 559,
+    "verdict": "tp",
+    "note": "window message listener checks payload originator field without e.origin check"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "postmessage-missing-origin-check",
+    "file": "packages/embeds/embed-core/src/embed.ts",
+    "line": 1569,
+    "verdict": "tp",
+    "note": "window message listener has no e.origin check"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "postmessage-missing-origin-check",
+    "file": "packages/embeds/embed-core/src/preview.ts",
+    "line": 137,
+    "verdict": "tp",
+    "note": "previewWindow message listener checks payload mode without e.origin check"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "dockerfile-runs-as-root",
+    "file": "apps/api/v2/Dockerfile",
+    "line": 1,
+    "verdict": "tp",
+    "note": "Dockerfile has no USER instruction"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "dockerfile-runs-as-root",
+    "file": "Dockerfile",
+    "line": 77,
+    "verdict": "tp",
+    "note": "final runner stage has no USER instruction"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-distinct-in-memory",
+    "file": "apps/api/v2/src/modules/users/users.repository.ts",
+    "line": 358,
+    "verdict": "tp",
+    "note": "Prisma distinct on user.email deduplicates in memory"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-distinct-in-memory",
+    "file": "apps/api/v2/src/modules/users/users.repository.ts",
+    "line": 379,
+    "verdict": "tp",
+    "note": "Prisma distinct on user.email deduplicates in memory"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "list-query-overfetch",
+    "file": "apps/api/v2/src/platform/bookings/2024-08-13/repositories/bookings.repository.ts",
+    "line": 38,
+    "verdict": "tp",
+    "note": "findMany with deep include fetches all columns of booking, attendees, bookingSeat, user, eventType"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "request-number-unvalidated",
+    "file": "apps/api/v2/src/platform/schedules/schedules_2024_04_15/controllers/schedules.controller.ts",
+    "line": 108,
+    "verdict": "tp",
+    "note": "passes Number(scheduleId) directly without ParseIntPipe or NaN validation"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "request-number-unvalidated",
+    "file": "apps/api/v2/src/platform/schedules/schedules_2024_06_11/controllers/schedules.controller.ts",
+    "line": 159,
+    "verdict": "tp",
+    "note": "passes Number(scheduleId) directly without ParseIntPipe or NaN validation"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "find-then-create-race",
+    "file": "apps/web/app/api/webhook/app-credential/route.ts",
+    "line": 90,
+    "verdict": "tp",
+    "note": "read-then-create/update race without upsert or transaction"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "find-then-create-race",
+    "file": "packages/trpc/server/routers/loggedInViewer/addNotificationsSubscription.handler.ts",
+    "line": 60,
+    "verdict": "tp",
+    "note": "findFirst followed by create or update without upsert"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-unusable-pattern",
+    "file": "packages/features/auth/signup/username.ts",
+    "line": 109,
+    "verdict": "tp",
+    "note": "Prisma contains filter emits unindexed substring LIKE"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-unusable-pattern",
+    "file": "packages/lib/server/username.ts",
+    "line": 269,
+    "verdict": "tp",
+    "note": "Prisma contains filter emits unindexed substring LIKE"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-list-query",
+    "file": "packages/trpc/server/routers/viewer/users/_router.ts",
+    "line": 60,
+    "verdict": "tp",
+    "note": "unbounded prisma.user.findMany() with TODO for pagination"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-distinct-in-memory",
+    "file": "apps/api/v2/src/modules/users/users.repository.ts",
+    "line": 409,
+    "verdict": "tp",
+    "note": "Prisma distinct on attendee.email deduplicates in memory"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "prisma-distinct-in-memory",
+    "file": "packages/trpc/server/routers/viewer/availability/team/listTeamAvailability.handler.ts",
+    "line": 36,
+    "verdict": "tp",
+    "note": "Prisma distinct on membership deduplicates in memory"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "list-query-overfetch",
+    "file": "packages/features/bookings/lib/handleConfirmation.ts",
+    "line": 170,
+    "verdict": "tp",
+    "note": "findMany without select fetches full booking rows when only id, status, uid are read"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "list-query-overfetch",
+    "file": "packages/features/membership/repositories/MembershipRepository.ts",
+    "line": 193,
+    "verdict": "tp",
+    "note": "findMany with nested include fetches full membership and team records"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "list-query-overfetch",
+    "file": "packages/features/membership/repositories/MembershipRepository.ts",
+    "line": 318,
+    "verdict": "tp",
+    "note": "findMany with nested include fetches full membership and team records"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-unusable-expression",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "line": 976,
+    "verdict": "tp",
+    "note": "case-insensitive email filter prevents plain btree index lookup"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-list-query",
+    "file": "packages/platform/examples/base/src/pages/api/get-users.ts",
+    "line": 17,
+    "verdict": "tp",
+    "note": "unbounded prisma.user.findMany without take"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "react-fetch-in-effect-no-abort",
+    "file": "apps/web/modules/auth/forgot-password/[id]/forgot-password-single-view.tsx",
+    "line": 80,
+    "verdict": "tp",
+    "note": "fetch in useEffect without AbortController cleanup"
+  }
+]

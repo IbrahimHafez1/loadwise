@@ -1,0 +1,9 @@
+{
+  "name": "loadwise",
+  "version": "0.5.1",
+  "description": "Runs the project's local loadwise checkers on each file Claude edits and sends findings back with their fix commands.",
+  "author": { "name": "Ibrahim Hafez" },
+  "homepage": "https://github.com/IbrahimHafez1/loadwise#readme",
+  "repository": "https://github.com/IbrahimHafez1/loadwise",
+  "keywords": ["performance", "reliability", "maintainability", "security", "accessibility", "static-analysis"]
+}

@@ -1,0 +1,141 @@
+{
+  "name": "loadwise",
+  "displayName": "Loadwise",
+  "description": "See performance, reliability, maintainability and accessibility findings and suggested improvements as you edit.",
+  "publisher": "IbrahimHafez1",
+  "version": "0.1.2",
+  "license": "Apache-2.0",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Linters"
+  ],
+  "main": "./extension.cjs",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "The checkers run local processes and read project configuration."
+    },
+    "virtualWorkspaces": false
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "loadwise.scan",
+        "title": "Loadwise: Scan Workspace"
+      },
+      {
+        "command": "loadwise.showOutput",
+        "title": "Loadwise: Show Output"
+      },
+      {
+        "command": "loadwise.applyAllFixes",
+        "title": "Loadwise: Apply all fixes in this file"
+      },
+      {
+        "command": "loadwise.showDismissed",
+        "title": "Loadwise: Show dismissed findings"
+      },
+      {
+        "command": "loadwise.applyFix",
+        "title": "Loadwise: Apply fix"
+      },
+      {
+        "command": "loadwise.dismiss",
+        "title": "Loadwise: Dismiss finding"
+      },
+      {
+        "command": "loadwise.applyFixAtCursor",
+        "title": "Loadwise: Apply fix on this line"
+      },
+      {
+        "command": "loadwise.dismissAtCursor",
+        "title": "Loadwise: Dismiss finding on this line"
+      }
+    ],
+    "configuration": {
+      "title": "Loadwise",
+      "properties": {
+        "loadwise.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Show diagnostics for this workspace folder."
+        },
+        "loadwise.project": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "TypeScript or JavaScript project config, relative to the workspace folder. Defaults to tsconfig.json or jsconfig.json at its root."
+        },
+        "loadwise.cli": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Optional absolute path to the loadwise CLI script (bin/loadwise.js)."
+        },
+        "loadwise.severity": {
+          "type": "string",
+          "enum": [
+            "default",
+            "error",
+            "warning",
+            "information",
+            "hint"
+          ],
+          "enumDescriptions": [
+            "Warning for suggestions and Error for declared contract violations.",
+            "Show every finding as an error.",
+            "Show every finding as a warning.",
+            "Show every finding as information.",
+            "Show every finding as a hint (faint dots, not listed in Problems)."
+          ],
+          "default": "default",
+          "scope": "resource",
+          "description": "How Loadwise findings appear in the editor and the Problems view."
+        },
+        "loadwise.codeLens": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show Apply fix and Dismiss buttons above each line that has a fix."
+        }
+      }
+    },
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "loadwise.applyFix",
+          "when": "false"
+        },
+        {
+          "command": "loadwise.dismiss",
+          "when": "false"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "loadwise.applyFixAtCursor",
+        "key": "ctrl+alt+.",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "loadwise.applyAllFixes",
+        "key": "ctrl+alt+shift+.",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "loadwise.dismissAtCursor",
+        "key": "ctrl+alt+,",
+        "when": "editorTextFocus"
+      }
+    ]
+  }
+}

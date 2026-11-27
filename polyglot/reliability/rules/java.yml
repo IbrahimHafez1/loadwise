@@ -1,0 +1,41 @@
+# Test sources are ignored. try-with-resources declarations are not local_variable_declaration nodes, so they never match.
+# A declaration is skipped when a later statement in the same block is a try with a finally block, returns the variable, or
+# assigns it to a field or another variable (ownership leaves the method).
+id: java-resource-without-try
+language: Java
+severity: warning
+message: This stream, reader, writer or connection is opened outside try-with-resources, so an exception leaks the handle. Declare it in try (...) so it is always closed.
+ignores: ['**/src/test/**', '**/*Test.java', '**/*Tests.java', '**/*IT.java']
+rule:
+  all:
+    - kind: local_variable_declaration
+    - has:
+        kind: variable_declarator
+        all:
+          - has: { field: name, pattern: $VAR }
+          - has:
+              field: value
+              any:
+                - kind: object_creation_expression
+                  has:
+                    field: type
+                    regex: '^(FileInputStream|FileOutputStream|FileReader|FileWriter|BufferedReader|BufferedWriter|RandomAccessFile)$'
+                - pattern: DriverManager.getConnection($$$ARGS)
+                - kind: method_invocation
+                  regex: '(?i)^(this\.)?(\w*datasource|ds|\w*pool)\.getConnection\('
+    - not:
+        precedes:
+          stopBy: end
+          any:
+            - kind: try_statement
+              has: { kind: finally_clause, has: { stopBy: end, pattern: $VAR } }
+            - kind: try_with_resources_statement
+              has:
+                kind: resource_specification
+                has: { stopBy: end, pattern: $VAR }
+            - kind: return_statement
+              has: { stopBy: end, pattern: $VAR }
+            - has:
+                stopBy: end
+                kind: assignment_expression
+                has: { field: right, pattern: $VAR }

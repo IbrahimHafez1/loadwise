@@ -1,0 +1,73 @@
+{
+  "resourceSpans": [
+    {
+      "resource": { "attributes": [{ "value": { "stringValue": "orders-example" }, "key": "service.name" }] },
+      "scopeSpans": [
+        {
+          "spans": [
+            {
+              "traceId": "00000000000000000000000000000001",
+              "spanId": "0000000000000001",
+              "parentSpanId": "0000000000000010",
+              "name": "find customers",
+              "kind": 3,
+              "attributes": [
+                { "value": { "stringValue": "mongodb" }, "key": "db.system.name" },
+                { "value": { "stringValue": "find" }, "key": "db.operation.name" },
+                { "value": { "stringValue": "customers" }, "key": "db.collection.name" }
+              ]
+            },
+            {
+              "traceId": "00000000000000000000000000000001",
+              "spanId": "0000000000000002",
+              "parentSpanId": "0000000000000010",
+              "name": "find customers",
+              "kind": 3,
+              "attributes": [
+                { "value": { "stringValue": "mongodb" }, "key": "db.system.name" },
+                { "value": { "stringValue": "find" }, "key": "db.operation.name" },
+                { "value": { "stringValue": "customers" }, "key": "db.collection.name" }
+              ]
+            },
+            {
+              "traceId": "00000000000000000000000000000001",
+              "spanId": "0000000000000003",
+              "parentSpanId": "0000000000000010",
+              "name": "find customers",
+              "kind": 3,
+              "attributes": [
+                { "value": { "stringValue": "mongodb" }, "key": "db.system.name" },
+                { "value": { "stringValue": "find" }, "key": "db.operation.name" },
+                { "value": { "stringValue": "customers" }, "key": "db.collection.name" }
+              ]
+            },
+            {
+              "traceId": "00000000000000000000000000000001",
+              "spanId": "0000000000000004",
+              "parentSpanId": "0000000000000010",
+              "name": "find customers",
+              "kind": 3,
+              "attributes": [
+                { "value": { "stringValue": "mongodb" }, "key": "db.system.name" },
+                { "value": { "stringValue": "find" }, "key": "db.operation.name" },
+                { "value": { "stringValue": "customers" }, "key": "db.collection.name" }
+              ]
+            },
+            {
+              "traceId": "00000000000000000000000000000001",
+              "spanId": "0000000000000005",
+              "parentSpanId": "0000000000000010",
+              "name": "find customers",
+              "kind": 3,
+              "attributes": [
+                { "value": { "stringValue": "mongodb" }, "key": "db.system.name" },
+                { "value": { "stringValue": "find" }, "key": "db.operation.name" },
+                { "value": { "stringValue": "customers" }, "key": "db.collection.name" }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

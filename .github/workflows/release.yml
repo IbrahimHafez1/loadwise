@@ -1,0 +1,99 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    # Only the npm OIDC token; the job that runs dependencies and tests cannot write to the repository.
+    permissions:
+      contents: read
+      id-token: write
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+      - name: Check the tag matches package.json
+        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      - run: npm ci
+      - run: npm run check
+      - run: npm run bench:recall
+      # Staged publishing through Trusted Publishing needs npm 11.20 or later, which Node 26 bundles from 26.11 and Node
+      # 24 does not. Switching Node for the publish alone keeps the tests on the version CI runs, and avoids installing
+      # an npm release that is not pinned by hash. The range keeps an older Node 26 cached on the runner from being used.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '^26.11'
+          registry-url: 'https://registry.npmjs.org'
+      # npm Trusted Publishing authenticates this workflow through OIDC (id-token: write), so no token secret is stored.
+      # The trusted publisher may only stage: the version goes live after a maintainer approves it on npmjs.com with
+      # 2FA, so a compromised workflow run cannot release on its own.
+      - name: Stage the npm publish
+        run: |
+          # A re-run, or a version published by hand, skips straight to the release steps.
+          if npm view "loadwise@${GITHUB_REF_NAME#v}" version > /dev/null 2>&1; then
+            echo "loadwise@${GITHUB_REF_NAME#v} is already on npm"
+            exit 0
+          fi
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            npm stage publish . --provenance --access public --tag next
+          else
+            npm stage publish . --provenance --access public
+          fi
+          echo "Approve loadwise@${GITHUB_REF_NAME#v} at https://www.npmjs.com/package/loadwise to make it live." >> "$GITHUB_STEP_SUMMARY"
+
+  # The Action runs this repository's code at the v0 tag, so the GitHub release and the tag wait until the npm version
+  # is approved: a rejected or unapproved stage never reaches either.
+  github-release:
+    name: GitHub release
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Wait for the npm approval
+        run: |
+          until npm view "loadwise@${GITHUB_REF_NAME#v}" version > /dev/null 2>&1; do
+            sleep 30
+          done
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A re-run after a later step failed finds the release already created.
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            echo "The $GITHUB_REF_NAME release already exists"
+          elif [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            gh release create "$GITHUB_REF_NAME" --generate-notes --prerelease
+          else
+            gh release create "$GITHUB_REF_NAME" --generate-notes
+          fi
+      # Workflows pin the Action as `uses: IbrahimHafez1/loadwise@v0`, so a stable 0.x release moves that tag.
+      - name: Move the v0 Action tag
+        if: startsWith(github.ref_name, 'v0.') && !contains(github.ref_name, '-')
+        run: |
+          git fetch --quiet --force --tags origin
+          current=$(git rev-parse --quiet --verify refs/tags/v0 || true)
+          # Approvals, and so these jobs, can finish out of order: a delayed or re-run job for an older version must not
+          # move v0 back, so it moves only when this release is at least as new as the one v0 points to.
+          newest=$({ git tag --list 'v0.*' --points-at "${current:-HEAD}"; echo "$GITHUB_REF_NAME"; } | grep -v -- - | sort -V | tail -n 1)
+          if [ "$newest" != "$GITHUB_REF_NAME" ]; then
+            echo "v0 already points to the newer $newest"
+            exit 0
+          fi
+          git tag -f v0
+          # The lease fails the push if another job moved v0 after the fetch above.
+          git push --force-with-lease="refs/tags/v0:$current" origin refs/tags/v0

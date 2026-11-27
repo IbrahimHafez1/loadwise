@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2024"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "moduleDetection": "force",
+    "types": ["node"],
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "incremental": true,
+    "tsBuildInfoFile": ".tsbuildinfo",
+    "strict": true,
+    "paths": {
+      "vscode": ["./editor/types/vscode-module.d.cts"]
+    }
+  },
+  "include": [
+    "lib/shared/ambient.d.ts",
+    "bin/**/*.ts",
+    "lib/**/*.ts",
+    "lib/**/*.cts",
+    "editor/**/*.cts",
+    "plugin/**/*.ts",
+    "polyglot/**/*.ts",
+    "scripts/**/*.ts",
+    "bench/**/*.ts",
+    "test/**/*.ts",
+    "test/types/fake-vscode.cts"
+  ],
+  "exclude": [
+    "node_modules",
+    "lib/performance/vendor",
+    "bench/recall/cases",
+    "examples",
+    "test/performance/fixtures",
+    "test/performance/integration/orms"
+  ]
+}

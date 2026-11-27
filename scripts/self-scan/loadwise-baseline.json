@@ -1,0 +1,303 @@
+{
+  "version": 1,
+  "pillars": {
+    "maintainability": {
+      "findings": [
+        {
+          "ruleId": "deep-control-flow",
+          "file": "../../lib/performance/projects.ts",
+          "fingerprint": "f92fb0c15929",
+          "count": 1
+        },
+        {
+          "ruleId": "unreferenced-file",
+          "file": "../../lib/shared/types/cli-finding.ts",
+          "fingerprint": "935d8cea16fb",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/maintainability/apply-fix.ts",
+          "fingerprint": "0e722eb34175",
+          "count": 2
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/maintainability/architecture.ts",
+          "fingerprint": "3d770ccb949e",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/maintainability/changed-lines.ts",
+          "fingerprint": "023b44f0a12c",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/maintainability/examples.ts",
+          "fingerprint": "e752b114e668",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/maintainability/polyglot-duplicates.ts",
+          "fingerprint": "0791100352e0",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/performance/db/mongo.ts",
+          "fingerprint": "8668cf4103bb",
+          "count": 2
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/performance/db/redact.ts",
+          "fingerprint": "aa6650edb8bd",
+          "count": 2
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/performance/editor-signal.ts",
+          "fingerprint": "c58e1590e29b",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/performance/finding-text.ts",
+          "fingerprint": "c74a3fe7d6ed",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/performance/literal-awaits.ts",
+          "fingerprint": "4f279466dbba",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/performance/orm-queries.ts",
+          "fingerprint": "56e01737307a",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/performance/parallel-reads.ts",
+          "fingerprint": "428f016e5926",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/performance/password-hashing.ts",
+          "fingerprint": "b13857ef7b2b",
+          "count": 2
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/performance/query-loops.ts",
+          "fingerprint": "f69ebe224f28",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/performance/redundant-indexes.ts",
+          "fingerprint": "474533df79d9",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/performance/request-inputs.ts",
+          "fingerprint": "2c0dab78a16e",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/performance/review-context.ts",
+          "fingerprint": "8d1c8df4033e",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/performance/schema/context.ts",
+          "fingerprint": "2445279f6dcf",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/performance/schema/model.ts",
+          "fingerprint": "6498179403fc",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/performance/schema/prisma-schema.ts",
+          "fingerprint": "bc7da31a14eb",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/performance/site-fix.ts",
+          "fingerprint": "329388fd6c04",
+          "count": 2
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/performance/sql/locations.ts",
+          "fingerprint": "3c48079cec19",
+          "count": 2
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/security/analyze.ts",
+          "fingerprint": "e880e9df3526",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/security/deps/advisory.ts",
+          "fingerprint": "539d5af9677f",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/security/deps/cli.ts",
+          "fingerprint": "8300b414603b",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/security/deps/osv.ts",
+          "fingerprint": "43cb340ef443",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/security/deps/scan.ts",
+          "fingerprint": "20d440c58510",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/security/exposure/cors-origin-regex.ts",
+          "fingerprint": "54123c06ab56",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/security/file-context.ts",
+          "fingerprint": "8030e7c54042",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/security/files/review-directive.ts",
+          "fingerprint": "6c83c1b9721a",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/security/injection/shared.ts",
+          "fingerprint": "aec62530b65d",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/security/request-forgery/open-redirect.ts",
+          "fingerprint": "3d58d6735cbc",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/security/request-forgery/path-traversal.ts",
+          "fingerprint": "f41439afc14f",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/security/request-forgery/ssrf.ts",
+          "fingerprint": "065443a32435",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/security/request-forgery/upload-filename.ts",
+          "fingerprint": "560bf1f198f4",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/security/request-forgery/zip-slip.ts",
+          "fingerprint": "152a27a7caba",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/shared/coverage-notes.ts",
+          "fingerprint": "1430e9fe1343",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/shared/formats/github.ts",
+          "fingerprint": "0a4eeb7e3ce3",
+          "count": 2
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/shared/heap-limit.ts",
+          "fingerprint": "021c1e70939f",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/shared/heap-limit.ts",
+          "fingerprint": "069280db06fb",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/shared/impact-levels.ts",
+          "fingerprint": "3a9e90df211b",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/shared/pillars.ts",
+          "fingerprint": "7d3698f17717",
+          "count": 2
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/shared/polyglot-compatibility.ts",
+          "fingerprint": "0faeeea89db4",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/shared/scan-cache.ts",
+          "fingerprint": "4d1ff2f03bb7",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/shared/types.ts",
+          "fingerprint": "566e87f8ea36",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/shared/types.ts",
+          "fingerprint": "f651d460373c",
+          "count": 1
+        }
+      ]
+    },
+    "performance": {
+      "findings": []
+    },
+    "security": {
+      "findings": []
+    }
+  }
+}

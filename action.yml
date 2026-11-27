@@ -1,0 +1,71 @@
+# The Marketplace listing name; it cannot be plain "loadwise", which an unrelated GitHub organization owns. Workflows
+# still refer to the Action as IbrahimHafez1/loadwise@v0.
+name: Loadwise Check
+description: Check TypeScript and JavaScript projects for performance, reliability, maintainability, security and accessibility problems.
+branding:
+  icon: check-circle
+  color: blue
+
+inputs:
+  checkers:
+    description: Comma-separated checkers passed to --only (perf, rel, maint, sec, a11y). Empty runs all of them.
+    default: ''
+  path:
+    description: Directory to check, relative to the workspace.
+    default: '.'
+  changed-only:
+    description: Set to true to check only lines changed since the pull request base commit.
+    default: 'false'
+  fail-on:
+    description: Passed to --fail-on (contract or all). Empty keeps each checker's own default.
+    default: ''
+  upload-sarif:
+    description: Set to true to upload the findings to GitHub code scanning. The job needs the security-events write permission.
+    default: 'true'
+  annotations:
+    description: Set to true to print findings as workflow annotations on the pull request.
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v7
+      with:
+        node-version: '24'
+        package-manager-cache: false
+
+    - name: Run loadwise
+      id: loadwise
+      shell: bash
+      env:
+        LOADWISE_ACTION_PATH: ${{ github.action_path }}
+        LOADWISE_CHECKERS: ${{ inputs.checkers }}
+        LOADWISE_PATH: ${{ inputs.path }}
+        LOADWISE_CHANGED_ONLY: ${{ inputs.changed-only }}
+        LOADWISE_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        LOADWISE_FAIL_ON: ${{ inputs.fail-on }}
+        LOADWISE_UPLOAD_SARIF: ${{ inputs.upload-sarif }}
+        LOADWISE_ANNOTATIONS: ${{ inputs.annotations }}
+      run: |
+        stage_script="$LOADWISE_ACTION_PATH/scripts/stage-action.js"
+        if [ ! -f "$stage_script" ]; then stage_script="$LOADWISE_ACTION_PATH/scripts/stage-action.ts"; fi
+        runtime=$(node "$stage_script")
+        npm --prefix "$runtime" ci --omit=dev --include=optional --no-audit --no-fund
+        if [ ! -f "$runtime/bin/github-action.js" ]; then
+          node "$runtime/node_modules/typescript/bin/tsc" -p "$runtime/tsconfig.json" --noCheck
+        fi
+        node "$runtime/bin/github-action.js"
+
+    - name: Upload SARIF
+      if: ${{ always() && steps.loadwise.outputs.sarif-file != '' }}
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: ${{ steps.loadwise.outputs.sarif-file }}
+
+    - name: Apply loadwise exit code
+      if: ${{ always() && steps.loadwise.outputs.exit-code != '0' }}
+      shell: bash
+      env:
+        LOADWISE_EXIT_CODE: ${{ steps.loadwise.outputs.exit-code }}
+      run: exit "${LOADWISE_EXIT_CODE:-1}"

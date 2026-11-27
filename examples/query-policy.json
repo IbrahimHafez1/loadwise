@@ -1,0 +1,24 @@
+{
+  "prismaScopes": {
+    "Invoice": {
+      "field": "organizationId",
+      "from": "@app/auth",
+      "export": "requireOrganization"
+    }
+  },
+  "drizzleScopes": {
+    "invoices": {
+      "tableFrom": "@app/schema",
+      "field": "workspace_id",
+      "from": "@app/auth",
+      "export": "currentWorkspace"
+    }
+  },
+  "fireAndForget": ["trackEvent"],
+  "parallelReads": [
+    {
+      "from": "@app/reads",
+      "exports": ["fetchUser", "fetchPosts"]
+    }
+  ]
+}

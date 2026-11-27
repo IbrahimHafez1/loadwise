@@ -1,0 +1,18 @@
+package-lock.json
+lib/performance/vendor/
+examples/*.ts
+test/performance/integration/orms/app.ts
+
+# Compiled outputs from *.ts / *.cts
+bin/*.js
+lib/**/*.js
+lib/security/examples/*.cjs
+editor/**/*.cjs
+plugin/**/*.js
+polyglot/**/*.js
+scripts/**/*.js
+bench/**/*.js
+test/**/*.js
+test/types/fake-vscode.cjs
+!bench/recall/cases/**/*.js
+.tsbuildinfo

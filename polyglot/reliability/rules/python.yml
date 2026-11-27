@@ -1,0 +1,32 @@
+# Production code only: test files (test_*.py, *_test.py, tests/) are ignored.
+# A bare `except: pass` is reported by python-bare-except only; python-swallowed-exception requires a named type.
+# A bare except whose last statement is a bare `raise` only does cleanup and is not reported.
+id: python-bare-except
+language: Python
+severity: warning
+message: A bare except catches SystemExit and KeyboardInterrupt too, hiding real failures and blocking shutdown. Catch the specific exception types you can handle, or Exception at the very least.
+ignores: ['**/test_*.py', '**/*_test.py', '**/tests/**', '**/conftest.py']
+rule:
+  all:
+    - kind: except_clause
+    - regex: '^except\s*:'
+    - not:
+        has:
+          kind: block
+          has: { nthChild: { position: 1, reverse: true }, kind: raise_statement, regex: '^raise$' }
+
+---
+# Only broad catches are reported (Exception, BaseException, or a tuple containing one). Narrow types such as
+# FileNotFoundError, KeyError or OSError with `pass` are idiomatic EAFP and are not reported.
+id: python-swallowed-exception
+language: Python
+severity: warning
+message: This except block only passes, so the failure vanishes without a log or a retry. Log it, re-raise it or handle it, and narrow the exception type if ignoring it is intended.
+ignores: ['**/test_*.py', '**/*_test.py', '**/tests/**', '**/conftest.py']
+rule:
+  all:
+    - kind: except_clause
+    - regex: '^except\s+[^:]*\b(Exception|BaseException)\b[^:]*:'
+    - has:
+        kind: block
+        regex: '^(pass|\.\.\.)$'

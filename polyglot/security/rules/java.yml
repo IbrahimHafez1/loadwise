@@ -1,0 +1,17 @@
+id: java-runtime-exec
+language: Java
+severity: warning
+message: Runtime.getRuntime().exec executes OS commands and risks command injection if arguments are untrusted. Use ProcessBuilder with an explicit argument array.
+rule:
+  pattern: Runtime.getRuntime().exec($$$ARGS)
+
+---
+id: java-sql-string-concat
+language: Java
+severity: warning
+message: Building SQL queries with string concatenation risks SQL injection. Use PreparedStatement with bound parameters instead.
+rule:
+  any:
+    - pattern: $STMT.executeQuery($LEFT + $RIGHT)
+    - pattern: $STMT.executeUpdate($LEFT + $RIGHT)
+    - pattern: $STMT.execute($LEFT + $RIGHT)

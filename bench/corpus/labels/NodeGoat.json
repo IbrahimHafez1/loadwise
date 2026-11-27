@@ -1,0 +1,162 @@
+[
+  {
+    "pillar": "maint",
+    "ruleId": "long-parameter-list",
+    "file": "app/data/profile-dao.js",
+    "line": 42,
+    "verdict": "tp",
+    "note": "nine positional parameters on updateUser"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "service-query-in-loop",
+    "file": "app/data/allocations-dao.js",
+    "line": 94,
+    "verdict": "missed",
+    "note": "getUserById per allocation inside forEach"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "code-injection",
+    "file": "app/routes/contributions.js",
+    "line": 32,
+    "verdict": "tp",
+    "note": "eval(req.body.preTax) on request input"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "code-injection",
+    "file": "app/routes/contributions.js",
+    "line": 33,
+    "verdict": "tp",
+    "note": "eval(req.body.afterTax) on request input"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "code-injection",
+    "file": "app/routes/contributions.js",
+    "line": 34,
+    "verdict": "tp",
+    "note": "eval(req.body.roth) on request input"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "committed-secret",
+    "file": "artifacts/cert/server.key",
+    "line": 1,
+    "verdict": "tp",
+    "note": "RSA private key file tracked"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "hardcoded-secret",
+    "file": "config/env/all.js",
+    "line": 8,
+    "verdict": "missed",
+    "note": "cookieSecret placeholder committed for every environment"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "nosql-operator-injection",
+    "file": "app/data/allocations-dao.js",
+    "line": 78,
+    "verdict": "tp",
+    "note": "req.query interpolated into a $where expression"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "nosql-operator-injection",
+    "file": "app/data/user-dao.js",
+    "line": 92,
+    "verdict": "tp",
+    "note": "login userName from req.body used as findOne filter"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "nosql-operator-injection",
+    "file": "app/data/user-dao.js",
+    "line": 105,
+    "verdict": "tp",
+    "note": "userName from req.body used as the findOne filter"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "open-redirect",
+    "file": "app/routes/index.js",
+    "line": 72,
+    "verdict": "tp",
+    "note": "res.redirect(req.query.url) unvalidated"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "ssrf-request-url",
+    "file": "app/routes/research.js",
+    "line": 16,
+    "verdict": "tp",
+    "note": "needle.get on req.query.url"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "template-autoescape-disabled",
+    "file": "server.js",
+    "line": 137,
+    "verdict": "tp",
+    "note": "swig autoescape false"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "plaintext-password-storage",
+    "file": "app/data/user-dao.js",
+    "line": 25,
+    "verdict": "tp",
+    "note": "NodeGoat stores req.body.password in plaintext"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "auth-route-without-rate-limit",
+    "file": "app/routes/index.js",
+    "line": 34,
+    "verdict": "tp",
+    "note": "login route with no rate limit, no throttling in app"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "regex-catastrophic-backtracking",
+    "file": "app/routes/profile.js",
+    "line": 61,
+    "verdict": "tp",
+    "note": "([0-9]+)+# nested quantifier tested on req.body value"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "large-module",
+    "file": "app/assets/vendor/bootstrap/bootstrap-tour.js",
+    "line": 1,
+    "verdict": "fp",
+    "note": "vendored minified-style bootstrap-tour library"
+  },
+  {
+    "pillar": "maint",
+    "ruleId": "long-parameter-list",
+    "file": "app/data/user-dao.js",
+    "line": 17,
+    "verdict": "tp",
+    "note": "addUser takes six positional params incl. callback"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "loop-copy-accumulator",
+    "file": "app/assets/vendor/chart/raphael-min.js",
+    "line": 10,
+    "verdict": "fp",
+    "note": "vendored minified third-party library"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "session-memory-store",
+    "file": "server.js",
+    "line": 78,
+    "verdict": "tp",
+    "note": "express-session with default MemoryStore in server.js"
+  }
+]

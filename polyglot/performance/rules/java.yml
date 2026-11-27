@@ -1,0 +1,115 @@
+id: java-fixed-regex-in-loop
+language: Java
+severity: warning
+labels:
+  PAT:
+    style: primary
+message: This loop compiles a fixed regex for each iteration. Reuse a compiled Pattern and create matchers as needed.
+rule:
+  all:
+    - any:
+        - pattern: java.util.regex.Pattern.compile($PAT)
+        - all:
+            - pattern: Pattern.compile($PAT)
+            - inside:
+                kind: program
+                stopBy: end
+                has:
+                  pattern: import java.util.regex.Pattern;
+                  stopBy: end
+                not:
+                  has:
+                    stopBy: end
+                    any:
+                      [
+                        { kind: class_declaration },
+                        { kind: interface_declaration },
+                        { kind: record_declaration },
+                        { kind: variable_declarator },
+                        { kind: formal_parameter },
+                        { kind: enhanced_for_statement },
+                      ]
+                    has: { field: name, regex: '^Pattern$' }
+    - inside:
+        any:
+          - kind: for_statement
+          - kind: enhanced_for_statement
+          - kind: while_statement
+          - kind: do_statement
+        field: body
+        stopBy:
+          any:
+            - kind: lambda_expression
+            - kind: class_body
+            - kind: method_declaration
+constraints:
+  PAT:
+    kind: string_literal
+
+---
+id: java-string-concat-in-loop
+language: Java
+severity: warning
+message: Concatenating strings inside a loop allocates intermediate String objects on every iteration. Use StringBuilder instead.
+rule:
+  all:
+    - any:
+        - pattern: $ACC += $VAL
+        - pattern: $ACC = $ACC + $VAL
+    - inside:
+        any:
+          - kind: for_statement
+          - kind: enhanced_for_statement
+          - kind: while_statement
+          - kind: do_statement
+        field: body
+        stopBy:
+          any:
+            - kind: lambda_expression
+            - kind: class_body
+            - kind: method_declaration
+    - any:
+        - all:
+            - pattern: $ACC += $LIT
+            - has:
+                field: right
+                kind: string_literal
+        - all:
+            - pattern: $ACC = $ACC + $LIT
+            - has:
+                field: right
+                has:
+                  kind: string_literal
+                  stopBy: end
+        - inside:
+            kind: method_declaration
+            stopBy: end
+            has:
+              stopBy: end
+              any:
+                - pattern: String $ACC = $INIT;
+                - pattern: String $ACC;
+
+---
+id: java-jdbc-query-in-loop
+language: Java
+severity: warning
+message: JDBC query or update executed inside a loop can cause N+1 database round-trips. Batch statements or use an IN query outside the loop.
+rule:
+  all:
+    - any:
+        - pattern: $STMT.executeQuery($$$ARGS)
+        - pattern: $STMT.executeUpdate($$$ARGS)
+        - pattern: $STMT.execute($$$ARGS)
+    - inside:
+        any:
+          - kind: for_statement
+          - kind: enhanced_for_statement
+          - kind: while_statement
+          - kind: do_statement
+        field: body
+        stopBy:
+          any:
+            - kind: lambda_expression
+            - kind: class_body
+            - kind: method_declaration

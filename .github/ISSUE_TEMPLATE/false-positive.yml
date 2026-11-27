@@ -1,0 +1,32 @@
+name: False positive
+description: Loadwise reported code that is correct.
+labels: [false-positive]
+body:
+  - type: input
+    id: rule
+    attributes:
+      label: Rule id
+      description: The rule id from the report, for example `unused-import` or `a11y-img-missing-alt`.
+    validations:
+      required: true
+  - type: textarea
+    id: code
+    attributes:
+      label: Code that was reported
+      description: The smallest snippet that still reproduces the finding. Remove anything private.
+      render: ts
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why the code is correct
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Loadwise version
+      description: Output of `npx loadwise --version`.
+    validations:
+      required: true

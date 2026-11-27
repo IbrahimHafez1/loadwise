@@ -1,0 +1,370 @@
+[
+  {
+    "pillar": "rel",
+    "ruleId": "swallowed-error",
+    "file": "packages/cli/src/evaluation.ee/evaluation-collections.controller.ee.ts",
+    "line": 47,
+    "verdict": "fp",
+    "note": "feature-flag failure leaves a sentinel that is handled right after"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "swallowed-error",
+    "file": "packages/cli/src/modules/instance-ai/instance-ai-settings.service.ts",
+    "line": 131,
+    "verdict": "fp",
+    "note": "empty catch followed by an unconditional throw"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-membership",
+    "file": "packages/cli/src/utils/compression.util.ts",
+    "line": 210,
+    "verdict": "fp",
+    "note": "constant list of about 25 extensions"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "floating-promise",
+    "file": "packages/@n8n/db/src/migrations/common/1630330987096-UpdateWorkflowCredentials.ts",
+    "line": 27,
+    "verdict": "missed",
+    "note": "forEach(async) inside a batch callback drops the update promises"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "cors-credentials-any-origin",
+    "file": "packages/cli/src/middlewares/cors.ts",
+    "line": 6,
+    "verdict": "fp",
+    "note": "registered only in development"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "hardcoded-secret",
+    "file": "packages/cli/src/modules/agents/integrations/platforms/teams/teams-arm-template.service.ts",
+    "line": 195,
+    "verdict": "fp",
+    "note": "HMAC key is a label used to derive a resource-name suffix"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "filter-for-existence",
+    "file": "packages/@n8n/typeorm/src/driver/postgres/PostgresDriver.ts",
+    "line": 499,
+    "verdict": "tp",
+    "note": "filter().length>0 per entity; some() fits"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "filter-for-existence",
+    "file": "packages/@n8n/typeorm/src/driver/postgres/PostgresDriver.ts",
+    "line": 504,
+    "verdict": "tp",
+    "note": "filter().length>0; some() fits"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "filter-for-existence",
+    "file": "packages/@n8n/typeorm/src/driver/postgres/PostgresDriver.ts",
+    "line": 507,
+    "verdict": "tp",
+    "note": "filter().length>0; some() fits"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-membership",
+    "file": "packages/@n8n/backend-network/src/proxy/no-proxy-patch.ts",
+    "line": 98,
+    "verdict": "fp",
+    "note": "tiny NO_PROXY host list, one-time patch"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-membership",
+    "file": "packages/cli/src/credentials/credentials.service.ts",
+    "line": 2134,
+    "verdict": "tp",
+    "note": "transferee id array scanned per shared credential"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "array-repeated-membership",
+    "file": "packages/cli/src/workflows/workflow.service.ts",
+    "line": 2206,
+    "verdict": "tp",
+    "note": "transferee id array scanned per shared workflow"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "unbounded-module-cache",
+    "file": "packages/@n8n/instance-ai/evaluations/binaryChecks/checks/create-llm-check.ts",
+    "line": 51,
+    "verdict": "fp",
+    "note": "eval tooling cache keyed by few check names"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-process-in-async",
+    "file": "packages/@n8n/instance-ai/evaluations/latency/run.ts",
+    "line": 28,
+    "verdict": "fp",
+    "note": "eval CLI script, single git call"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "node-sync-process-in-async",
+    "file": "packages/@n8n/scan-community-package/src/scanner.ts",
+    "line": 231,
+    "verdict": "fp",
+    "note": "CLI scanner tool, not a server path"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "numeric-sort-for-extreme",
+    "file": "packages/frontend/editor-ui/src/features/agents/composables/useAgentToolRefAdapter.ts",
+    "line": 23,
+    "verdict": "fp",
+    "note": "tiny node version list"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "numeric-sort-for-extreme",
+    "file": "packages/frontend/editor-ui/src/features/agents/composables/useMcpServerAdapter.ts",
+    "line": 14,
+    "verdict": "fp",
+    "note": "tiny node version list"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "dom-layout-thrashing",
+    "file": "packages/frontend/editor-ui/src/features/ai/instanceAi/workflowErrorNudge/workflowErrorNudgePosition.ts",
+    "line": 12,
+    "verdict": "tp",
+    "note": "reads offsetHeight after style write per toast"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "dom-layout-thrashing",
+    "file": "packages/frontend/editor-ui/src/features/ndv/parameters/utils/buttonParameter.utils.ts",
+    "line": 325,
+    "verdict": "fp",
+    "note": "binary search must measure after each write; log n"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "sequential-http-in-loop",
+    "file": "packages/quality/environments/containers/services/tracing.ts",
+    "line": 199,
+    "verdict": "fp",
+    "note": "test-infra Jaeger polling, few services"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "sequential-http-in-loop",
+    "file": "packages/quality/testing/playwright/utils/benchmark/instance-ai-driver.ts",
+    "line": 266,
+    "verdict": "fp",
+    "note": "benchmark driver cleanup tooling"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "regex-catastrophic-backtracking",
+    "file": "packages/cli/src/modules/dynamic-credentials.ee/services/dynamic-credential-web.service.ts",
+    "line": 24,
+    "verdict": "fp",
+    "note": "anchored ^Bearers+(.+)$ matches linearly; header cannot hold newline"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "regex-catastrophic-backtracking",
+    "file": "packages/cli/src/modules/scim/scim-auth.middleware.ts",
+    "line": 46,
+    "verdict": "fp",
+    "note": "anchored Bearer[ \t]+(.+)$ on header, linear in practice"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-in-url-query",
+    "file": "packages/cli/src/modules/dynamic-credentials.ee/dynamic-credentials.controller.ts",
+    "line": 244,
+    "verdict": "fp",
+    "note": "browser GET redirect link; token must be in URL"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "tls-verification-disabled",
+    "file": "packages/@n8n/backend-network/src/http/axios/legacy.ts",
+    "line": 43,
+    "verdict": "fp",
+    "note": "honors explicit user opt-in to ignore SSL issues"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "hardcoded-secret",
+    "file": "packages/@n8n/agents/vitest.integration.setup.ts",
+    "line": 180,
+    "verdict": "fp",
+    "note": "fake replay-mode key in test setup"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "hardcoded-secret",
+    "file": "packages/@n8n/agents/vitest.integration.setup.ts",
+    "line": 181,
+    "verdict": "fp",
+    "note": "fake replay-mode key in test setup"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "hardcoded-secret",
+    "file": "packages/@n8n/instance-ai/evaluations/clients/n8n-client.ts",
+    "line": 313,
+    "verdict": "fp",
+    "note": "default creds for E2E eval tooling, env overridable"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "weak-password-hash",
+    "file": "packages/@n8n/backend-network/src/http/axios/utils.ts",
+    "line": 231,
+    "verdict": "fp",
+    "note": "md5 required by HTTP digest auth protocol"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "weak-password-hash",
+    "file": "packages/core/src/encryption/aes-256-cbc.ts",
+    "line": 30,
+    "verdict": "fp",
+    "note": "md5 EVP_BytesToKey legacy key derivation, not password storage"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "weak-password-hash",
+    "file": "packages/core/src/encryption/aes-256-cbc.ts",
+    "line": 31,
+    "verdict": "fp",
+    "note": "md5 EVP_BytesToKey legacy key derivation, not password storage"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "template-autoescape-disabled",
+    "file": "packages/@n8n/node-cli/src/commands/release.ts",
+    "line": 157,
+    "verdict": "fp",
+    "note": "CLI scaffolds YAML from trusted template, not HTML"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "template-autoescape-disabled",
+    "file": "packages/@n8n/node-cli/src/template/core.ts",
+    "line": 76,
+    "verdict": "fp",
+    "note": "CLI scaffolds project files from trusted templates, not HTML"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "insecure-random-for-secret",
+    "file": "packages/cli/src/modules/mcp/tools/execute-workflow.tool.ts",
+    "line": 304,
+    "verdict": "fp",
+    "note": "correlation message id, not a secret"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "insecure-random-for-secret",
+    "file": "packages/cli/src/modules/mcp/tools/test-workflow.tool.ts",
+    "line": 238,
+    "verdict": "fp",
+    "note": "correlation message id, not a secret"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-in-log",
+    "file": "packages/quality/environments/containers/n8n-start-stack.ts",
+    "line": 379,
+    "verdict": "fp",
+    "note": "dev test-stack CLI printing throwaway test credentials"
+  },
+  {
+    "pillar": "sec",
+    "ruleId": "secret-in-log",
+    "file": "packages/quality/environments/containers/n8n-start-stack.ts",
+    "line": 383,
+    "verdict": "fp",
+    "note": "dev test-stack CLI printing throwaway test credentials"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "json-parse-unguarded",
+    "file": "packages/@n8n/instance-ai/src/workspace/pack-workspace-sdk.ts",
+    "line": 230,
+    "verdict": "fp",
+    "note": "trusted local package.json in SDK packing script"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "promise-return-escapes-catch",
+    "file": "packages/@n8n/typeorm/src/query-builder/SelectQueryBuilder.ts",
+    "line": 1767,
+    "verdict": "tp",
+    "note": "queryRunner.stream returns a promise; rejection skips rollback catch"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "async-callback-unhandled-rejection",
+    "file": "packages/@n8n/backend-services/src/events/relays/event-relay.ts",
+    "line": 17,
+    "verdict": "tp",
+    "note": "async handler wrapper on event emitter drops handler rejections"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "whole-payload-in-memory",
+    "file": "packages/quality/testing/playwright/scripts/sizing-matrix-aggregate.ts",
+    "line": 220,
+    "verdict": "fp",
+    "note": "CI tooling script downloading small report files"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "serial-awaits-in-literal",
+    "file": "packages/@n8n/db/src/repositories/project.repository.ts",
+    "line": 462,
+    "verdict": "tp",
+    "note": "two independent counts awaited serially"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "stream-pipe-unhandled-error",
+    "file": "packages/@n8n/backend-network/src/http/__tests__/binary-buffer.test.ts",
+    "line": 22,
+    "verdict": "fp",
+    "note": "test code"
+  },
+  {
+    "pillar": "rel",
+    "ruleId": "stream-pipe-unhandled-error",
+    "file": "packages/@n8n/backend-network/src/http/__tests__/binary-buffer.test.ts",
+    "line": 30,
+    "verdict": "fp",
+    "note": "test code"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-redundant-prefix",
+    "file": "packages/@n8n/db/src/migrations/common/1750252139167-AddRolesTables.ts",
+    "line": 56,
+    "verdict": "fp",
+    "note": "flagged line sits inside a commented-out block"
+  },
+  {
+    "pillar": "perf",
+    "ruleId": "index-redundant-prefix",
+    "file": "packages/@n8n/db/src/migrations/common/1776150756000-CreateFavoritesTable.ts",
+    "line": 5,
+    "verdict": "tp",
+    "note": "userid index is prefix of unique (userid, resourceid, resourcetype)"
+  }
+]
