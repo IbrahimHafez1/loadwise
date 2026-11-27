@@ -73,7 +73,7 @@ const inProcessCheckers = new Set(['perf', 'rel', 'maint', 'sec', 'a11y']);
 
 function respawnIfHeapTooSmall(commandArgs: readonly string[]): boolean {
   if (!inProcessCheckers.has(commandArgs[0]) || !shouldRespawnWithLargerHeap()) return false;
-  process.exitCode = respawnWithLargerHeap(import.meta.filename, commandArgs);
+  respawnWithLargerHeap(import.meta.filename, commandArgs);
   return true;
 }
 
