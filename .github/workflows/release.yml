@@ -12,9 +12,9 @@ jobs:
   release:
     name: release
     runs-on: ubuntu-latest
-    # Write access only where the release needs it: the GitHub release and v0 tag, and the npm OIDC token.
+    # Only the npm OIDC token; the job that runs dependencies and tests cannot write to the repository.
     permissions:
-      contents: write
+      contents: read
       id-token: write
     timeout-minutes: 30
     steps:
@@ -47,11 +47,31 @@ jobs:
             npm stage publish . --provenance --access public
           fi
           echo "Approve loadwise@${GITHUB_REF_NAME#v} at https://www.npmjs.com/package/loadwise to make it live." >> "$GITHUB_STEP_SUMMARY"
+
+  # The Action runs this repository's code at the v0 tag, so the GitHub release and the tag wait until the npm version
+  # is approved: a rejected or unapproved stage never reaches either.
+  github-release:
+    name: GitHub release
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Wait for the npm approval
+        run: |
+          until npm view "loadwise@${GITHUB_REF_NAME#v}" version > /dev/null 2>&1; do
+            sleep 30
+          done
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+          # A re-run after a later step failed finds the release already created.
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            echo "The $GITHUB_REF_NAME release already exists"
+          elif [[ "$GITHUB_REF_NAME" == *-* ]]; then
             gh release create "$GITHUB_REF_NAME" --generate-notes --prerelease
           else
             gh release create "$GITHUB_REF_NAME" --generate-notes
