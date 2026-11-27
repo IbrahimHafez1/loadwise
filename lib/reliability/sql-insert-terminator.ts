@@ -1,4 +1,4 @@
-import ts from 'typescript';
+import { ts } from '../performance/compiler.js';
 import { walkNodes } from './walk.js';
 import type { SourceFile, Statement, WhileStatement } from 'typescript';
 import type { Finding } from '../shared/types.js';

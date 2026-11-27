@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import ts from 'typescript';
-import { checkSwallowedErrors } from '../../lib/maintainability/swallowed-errors.js';
+import { analyzeSources, reliabilityAnalyzer } from '../../lib/performance/projects.js';
+import { checkSwallowedErrors } from '../../lib/reliability/swallowed-errors.js';
 
 function check(source: string, file = 'src/example.ts') {
   return checkSwallowedErrors(ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true), file);
@@ -65,4 +69,53 @@ test('optional dependency probes and cleanup paths are accepted', () => {
 
 test('test files are not checked', () => {
   assert.deepEqual(check('try { work(); } catch {}', 'src/example.spec.ts'), []);
+});
+
+const emptyCatch = 'function run() {\n  try {\n    work();\n  } catch {}\n}\n';
+
+// Each entry is a file path inside the project; configs lists the tsconfig folders, each including `src`.
+function reportedFiles(files: string[], configFolders: string[] = ['.']): string[] {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-standalone-'));
+  try {
+    fs.mkdirSync(path.join(directory, '.git'));
+    for (const folder of configFolders) {
+      fs.mkdirSync(path.join(directory, folder, 'src'), { recursive: true });
+      fs.writeFileSync(path.join(directory, folder, 'tsconfig.json'), '{"compilerOptions":{},"include":["src"]}');
+    }
+    for (const file of files) {
+      fs.mkdirSync(path.dirname(path.join(directory, file)), { recursive: true });
+      fs.writeFileSync(path.join(directory, file), emptyCatch);
+    }
+    const { findings } = analyzeSources({
+      project: configFolders.map((folder) => path.join(directory, folder, 'tsconfig.json')),
+      files: [],
+      analyzers: [reliabilityAnalyzer],
+    });
+    return findings
+      .filter((finding) => finding.ruleId === 'swallowed-error')
+      .map((finding) => path.relative(directory, path.resolve(finding.file ?? '')).replaceAll('\\', '/'))
+      .sort();
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+test('a JavaScript file outside the tsconfig include is checked once beside the program files', () => {
+  assert.deepEqual(reportedFiles(['src/main.ts', 'scripts/build.js']), ['scripts/build.js', 'src/main.ts']);
+});
+
+test('a script outside two tsconfig programs is reported exactly once', () => {
+  assert.deepEqual(reportedFiles(['a/src/one.ts', 'b/src/two.ts', 'tools/release.js'], ['a', 'b']), [
+    'a/src/one.ts',
+    'b/src/two.ts',
+    'tools/release.js',
+  ]);
+});
+
+test('standalone files with a finding at the same line and column are all reported', () => {
+  assert.deepEqual(reportedFiles(['src/main.ts', 'scripts/one.js', 'scripts/two.js']), [
+    'scripts/one.js',
+    'scripts/two.js',
+    'src/main.ts',
+  ]);
 });

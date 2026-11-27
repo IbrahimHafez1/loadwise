@@ -1,7 +1,7 @@
-import ts from 'typescript';
+import { ts } from '../performance/compiler.js';
 import { walkNodes } from './walk.js';
-import { testSourcePattern } from './snapshot-context.js';
-import { generatedSource } from './duplicates.js';
+import { testSourcePattern } from '../maintainability/snapshot-context.js';
+import { generatedSource } from '../maintainability/duplicates.js';
 import type {
   Block,
   CallExpression,

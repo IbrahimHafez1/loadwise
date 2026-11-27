@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import ts from 'typescript';
-import { checkInsertTerminators } from '../../lib/maintainability/sql-insert-terminator.js';
+import { checkInsertTerminators } from '../../lib/reliability/sql-insert-terminator.js';
 
 const simplePattern = /INSERT\s+INTO\s+orders\s+VALUES\s*([\s\S]*?);/gi;
 const columnPattern = /INSERT\s+INTO\s+"orders"\s+\(([^)]+)\)\s+VALUES\s*([\s\S]*?);/gi;
