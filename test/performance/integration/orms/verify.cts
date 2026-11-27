@@ -6,7 +6,8 @@ import path from 'node:path';
 const packageRoot = path.resolve(__dirname, '../../../..');
 const checker = path.join(packageRoot, 'bin', 'loadwise.js');
 const compiler = require.resolve('typescript/bin/tsc', { paths: [packageRoot] });
-const ruleNames = { loop: 'orm-query-in-loop', count: 'orm-count-materialization' };
+const ruleNames = { loop: 'orm-query-in-loop', count: 'orm-count-materialization', lean: 'mongoose-missing-lean' };
+const markerPrefix = '// expect ';
 
 function run(script, args, expectedExit) {
   const result = spawnSync(process.execPath, [script, ...args], { cwd: __dirname, encoding: 'utf8' });
@@ -18,11 +19,17 @@ function run(script, args, expectedExit) {
 const source = fs.readFileSync(path.join(__dirname, 'app.ts'), 'utf8');
 const expected = [];
 for (const [index, line] of source.split(/\r?\n/).entries()) {
-  const marker = /\/\/ expect (loop|count) (\w+)$/.exec(line);
-  if (!marker) continue;
-  const column = line.slice(0, marker.index).lastIndexOf(marker[2]) + 1;
-  assert.ok(column > 0, `Missing marked token on line ${index + 1}`);
-  expected.push({ file: 'app.ts', line: index + 1, column, ruleId: ruleNames[marker[1]] });
+  // `// expect <kind> <token>`; several findings on one line are separated by `;`, in the order the checker reports them.
+  const markerStart = line.indexOf(markerPrefix);
+  if (markerStart < 0) continue;
+  const code = line.slice(0, markerStart);
+  for (const marker of line.slice(markerStart + markerPrefix.length).split(';')) {
+    const [kind, token] = marker.trim().split(' ');
+    assert.ok(kind in ruleNames, `Unknown marker kind "${kind}" on line ${index + 1}`);
+    const column = code.lastIndexOf(token) + 1;
+    assert.ok(column > 0, `Missing marked token on line ${index + 1}`);
+    expected.push({ file: 'app.ts', line: index + 1, column, ruleId: ruleNames[kind] });
+  }
 }
 assert.ok(expected.length > 0);
 run(compiler, ['-p', 'tsconfig.json'], 0);

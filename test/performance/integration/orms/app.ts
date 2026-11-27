@@ -31,7 +31,7 @@ export async function lookup(ids: number[]) {
     await query.execute(); // expect loop execute
     query.compile(); // clean
   }
-  await Promise.all(ids.map(id => people.findById(id))); // expect loop findById
+  await Promise.all(ids.map(id => people.findById(id))); // expect loop findById; lean people
   return [
     (await repository.findBy({ name: 'a' })).length, // expect count length
     (await repository.find({ where: { name: 'a' } })).length, // expect count length
