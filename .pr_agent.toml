@@ -1,5 +1,6 @@
-# Qodo is the standby reviewer: CodeRabbit and Sourcery review every pull request automatically, and
-# Qodo runs only when someone comments `/agentic_review` (for example when one of the others is down).
+# Qodo is the standby reviewer: CodeRabbit and Sourcery review pull requests automatically (within
+# their own draft and path filters), and Qodo runs only when someone asks with a review command such
+# as `/agentic_review` (for example when one of the others is down).
 # Keep the Qodo portal's "Code review trigger" on "Manual only" to match.
 
 [github_app]
