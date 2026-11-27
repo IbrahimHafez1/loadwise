@@ -1,12 +1,18 @@
 # Loadwise
 
-Loadwise checks a backend project before it ships. One CLI runs three checkers:
+[![npm](https://img.shields.io/npm/v/loadwise)](https://www.npmjs.com/package/loadwise) [![check](https://github.com/IbrahimHafez1/loadwise/actions/workflows/check.yml/badge.svg)](https://github.com/IbrahimHafez1/loadwise/actions/workflows/check.yml) [![license](https://img.shields.io/npm/l/loadwise)](LICENSE)
 
-- **Performance** (`loadwise perf`): repeated database work, ORM and query integrity, blocking calls, collection complexity, migration safety, schema-aware indexes, OpenTelemetry traces, executed query plans and an optional read-only database inspection.
+Loadwise checks a backend project before it ships. One CLI runs five checkers:
+
+- **Performance** (`loadwise perf`): repeated database work, ORM and query integrity, blocking calls, collection complexity, schema-aware indexes, OpenTelemetry traces, executed query plans and an optional read-only database inspection.
+- **Reliability** (`loadwise rel`): unhandled rejections and swallowed errors, races and transaction-client escapes, missing timeouts and idempotency keys, migration safety and breaking API changes.
 - **Maintainability** (`loadwise maint`): deep nesting, branch complexity, duplicate implementations, dependency cycles and the folder, placement and data-access rules a team declares.
-- **Security** (`loadwise sec`) checks request data reaching sensitive operations, authentication and cryptography, exposed credentials, Docker and Compose configuration, declared row scopes, and optionally dependency advisories.
+- **Security** (`loadwise sec`): request data reaching sensitive operations, authentication and cryptography, exposed credentials, Docker and Compose configuration, declared row scopes, and optionally dependency advisories.
+- **Accessibility** (`loadwise a11y`): images without alt text, unlabelled form controls, click handlers on non-interactive elements, invalid ARIA and missing page language in JSX, HTML, Vue, Svelte and Angular templates. Skipped on projects without frontend sources.
 
 Each finding has a stable `#id` for review. Where a checker can generate an edit, it shows the diff and any assumptions to verify. Supported source rules accept a `loadwise-reviewed` comment with a reason for intentional code.
+
+> **Pre-1.0.** Loadwise is under active development. Until 1.0, rule ids, CLI flags, the JSON report and the config schema can change in a minor release. Every such change is listed in the [changelog](CHANGELOG.md), and a moved or renamed rule keeps accepting its old id where possible. False-positive reports are the most useful feedback: [open one](https://github.com/IbrahimHafez1/loadwise/issues/new?template=false-positive.yml).
 
 ## Install
 
@@ -20,7 +26,7 @@ npm install --save-dev loadwise
 npx loadwise --version
 ```
 
-By default `loadwise check` reports actionable findings across Performance, Maintainability, and Security; see the [corpus rule scorecard](bench/corpus/scorecard.md) for measured precision and recall across real-world open-source backends.
+By default `loadwise check` reports actionable findings across Performance, Reliability, Maintainability, Security, and Accessibility; see the [corpus rule scorecard](bench/corpus/scorecard.md) for measured precision and recall across real-world open-source backends.
 
 **Autofix example:** `npx loadwise fix --yes` rewrites eligible issues in place and verifies TypeScript projects with a post-edit typecheck:
 
@@ -32,7 +38,7 @@ By default `loadwise check` reports actionable findings across Performance, Main
 
 **With an AI coding agent**, say **“Run Loadwise”** in your project chat. The agent can run the installed CLI directly. It should check the findings against the code, explain what it would fix or leave alone and why, and let you choose before making edits. [Active-agent workflow and optional MCP setup](#using-loadwise-with-an-active-coding-agent)
 
-**Working manually**, run `npx loadwise check` to see recommendations or `npx loadwise fix --yes` to apply eligible fixes. In VS Code or Cursor, you can also review findings on hover and apply individual fixes inline with the editor extension. [Editor setup and shortcuts](#editor)
+**Working manually**, run `npx loadwise check` to see recommendations or `npx loadwise fix --yes` to apply eligible fixes. In VS Code or Cursor, editor diagnostics show findings on hover. [Editor setup](#editor)
 
 ### Try a finding and a fix
 
@@ -55,17 +61,19 @@ The second scan should report two findings. Remove the disposable copy when fini
 
 ## Commands
 
-| Command                                                              | What it does                                                                                                                        |
-| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `loadwise` or `loadwise check [directory]`                           | Runs every checker on the directory (default: the current folder) and prints Performance, Maintainability, then Security.           |
-| `loadwise check --only perf,maint`                                   | Runs only the listed checkers: a comma-separated list of `perf`, `maint` and `sec`, in any order.                                   |
-| `loadwise check --skip maint`                                        | Runs every checker except the listed ones. `--only` and `--skip` cannot be combined.                                                |
-| `loadwise perf [args...]`                                            | The full performance checker; `loadwise perf --help` lists its commands and flags. See [Performance checker](#performance-checker). |
-| `loadwise maint [args...]`                                           | The full maintainability checker; `loadwise maint --help` lists its flags. See [Maintainability checker](#maintainability-checker). |
-| `loadwise sec [args...]`                                             | The full security checker; `loadwise sec --help` lists its flags. See [Security checker](#security-checker).                        |
-| `loadwise explain <rule-id>`                                         | Shows the default impact, a description and an example change when available. Works offline.                                        |
-| `loadwise fix --yes`                                                 | Scans the current project once and applies eligible edits across the configured checkers.                                           |
-| `loadwise agent init [--mode ask\|auto] [--hook [block\|warn\|off]]` | Writes project instructions for coding agents. Use `--hook` to configure a pre-commit hook.                                         |
+| Command                                                              | What it does                                                                                                                                          |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `loadwise` or `loadwise check [directory]`                           | Runs every checker on the directory (default: the current folder) and prints Performance, Reliability, Maintainability, Security, then Accessibility. |
+| `loadwise check --only perf,rel`                                     | Runs only the listed checkers: a comma-separated list of `perf`, `rel`, `maint`, `sec` and `a11y`, in any order.                                      |
+| `loadwise check --skip maint`                                        | Runs every checker except the listed ones. `--only` and `--skip` cannot be combined.                                                                  |
+| `loadwise perf [args...]`                                            | The full performance checker; `loadwise perf --help` lists its commands and flags. See [Performance checker](#performance-checker).                   |
+| `loadwise rel [args...]`                                             | The full reliability checker; `loadwise rel --help` lists its commands and flags. See [Reliability checker](#reliability-checker).                    |
+| `loadwise maint [args...]`                                           | The full maintainability checker; `loadwise maint --help` lists its flags. See [Maintainability checker](#maintainability-checker).                   |
+| `loadwise sec [args...]`                                             | The full security checker; `loadwise sec --help` lists its flags. See [Security checker](#security-checker).                                          |
+| `loadwise a11y [args...]`                                            | The full accessibility checker; `loadwise a11y --help` lists its flags. See [Accessibility checker](#accessibility-checker).                          |
+| `loadwise explain <rule-id>`                                         | Shows the default impact, a description and an example change when available. Works offline.                                                          |
+| `loadwise fix --yes`                                                 | Scans the current project once and applies eligible edits across the configured checkers.                                                             |
+| `loadwise agent init [--mode ask\|auto] [--hook [block\|warn\|off]]` | Writes project instructions for coding agents. Use `--hook` to configure a pre-commit hook.                                                           |
 
 `loadwise check` reuses the previous result for an unchanged Git project from the `loadwise` folder of the OS cache directory. Any edit to a tracked or untracked (not ignored) file, a package install that rewrites `node_modules`, a different flag or a new Loadwise version runs a fresh scan; `LOADWISE_NO_CACHE=1` always scans afresh. Fixes, `--staged`, `--changed-since`, `--online` and `--write-baseline` runs are never cached.
 
@@ -75,6 +83,8 @@ Choose the checkers by name, separated by spaces. With no names, Loadwise uses t
 npx loadwise fix --all                            # all generated edits, including review suggestions
 npx loadwise fix --all performance                # performance only
 npx loadwise fix --all performance security       # performance and security
+npx loadwise fix --all reliability                # reliability only
+npx loadwise fix --all accessibility              # accessibility only
 npx loadwise fix --yes maintainability            # automatic maintainability edits only
 ```
 
@@ -119,20 +129,20 @@ module.exports = {
 };
 ```
 
-Keys use `perf`, `maint`, or `sec` followed by the rule ID from the report. A handler receives the finding and the source file text. Return exact, whole-line replacements in that file or return `null` to leave the site manual. Loadwise tries recipes only where it has no built-in fix. It validates the proposed edits together before writing. Recipe files execute as local JavaScript, so run only recipes you trust and keep handlers free of side effects.
+Keys use `perf`, `rel`, `maint`, `sec`, or `a11y` followed by the rule ID from the report. A handler receives the finding and the source file text. Return exact, whole-line replacements in that file or return `null` to leave the site manual. Loadwise tries recipes only where it has no built-in fix. It validates the proposed edits together before writing. Recipe files execute as local JavaScript, so run only recipes you trust and keep handlers free of side effects.
 
 To apply automatic fixes across your project, run `npx loadwise fix --yes` from its root. Performance and security share a type-check when both are selected. The command lists manual changes and findings that need individual review by location and ID. A fix that touches lines reserved for review also requires individual review. Loadwise checks the remaining edits together before writing and exits 2 if a selected checker fails or is skipped, source lines have changed, or automatic fixes conflict. A successful application exits 0 even when manual findings remain. Review the diff, run your tests, and use `npx loadwise check` to see what remains.
 
 `check` accepts these flags and passes them to every selected checker:
 
-- `--json` prints one object with a key per selected checker, `{ "performance": report, "maintainability": report, "security": report }`. A checker that was skipped or could not run has `null`.
-- `--format text|json|sarif|github` picks the output; `--json` is `--format json`. `sarif` prints SARIF 2.1.0 with one run per checker for GitHub code scanning, and `github` prints `::warning`/`::error`/`::notice` workflow annotations. `loadwise perf`, `loadwise maint` and `loadwise sec` accept it too. Exit codes do not depend on the format.
+- `--json` prints one object with a key per selected checker, `{ "performance": report, "reliability": report, "maintainability": report, "security": report, "accessibility": report }`. A checker that was skipped or could not run has `null`.
+- `--format text|json|sarif|github` picks the output; `--json` is `--format json`. `sarif` prints SARIF 2.1.0 with one run per checker for GitHub code scanning, and `github` prints `::warning`/`::error`/`::notice` workflow annotations. `loadwise perf`, `loadwise rel`, `loadwise maint`, `loadwise sec` and `loadwise a11y` accept it too. Exit codes do not depend on the format.
 - `--include-contextual` also shows lower-priority findings, each with its reason.
 - `--staged` or `--changed-since <git-ref>` reports only findings on changed lines.
-- `--fail-on contract|all` sets the exit threshold. By default, performance and security fail on displayed findings, and a full maintainability scan fails on contract violations. Changed-line maintainability scans fail on any displayed finding. Configured rule levels can change these defaults.
-- `--write-baseline [file]` records the current findings and `--baseline [file]` reports only findings not recorded. The default file is `loadwise-baseline.json` in the checked directory, with one section per checker; `loadwise perf`, `loadwise maint` and `loadwise sec` take the same flags and read or write only their own section. Entries match on rule, file and flagged code (the finding id), never the line number, with a count per entry so N recorded copies allow N findings. Text output ends with `N baseline findings hidden.` and `--json` adds `baselineHidden`. A full comparison reports the number of unmatched entries in `baselineStale`. A partial comparison, such as a changed-line or single-file scan, reports `null` because unscanned findings may still exist. Refresh the baseline using its original scope and settings. Not combinable with `--fix`, and `--write-baseline` not with `--staged` or `--changed-since`. `loadwise perf migrations` keeps its own per-file baseline.
+- `--fail-on contract|all` sets the exit threshold. By default, performance, reliability, security and accessibility fail on displayed findings, and a full maintainability scan fails on contract violations. Changed-line maintainability scans fail on any displayed finding. Configured rule levels can change these defaults.
+- `--write-baseline [file]` records the current findings and `--baseline [file]` reports only findings not recorded. The default file is `loadwise-baseline.json` in the checked directory, with one section per checker; `loadwise perf`, `loadwise rel`, `loadwise maint`, `loadwise sec` and `loadwise a11y` take the same flags and read or write only their own section. Entries match on rule, file and flagged code (the finding id), never the line number, with a count per entry so N recorded copies allow N findings. Text output ends with `N baseline findings hidden.` and `--json` adds `baselineHidden`. A full comparison reports the number of unmatched entries in `baselineStale`. A partial comparison, such as a changed-line or single-file scan, reports `null` because unscanned findings may still exist. Refresh the baseline using its original scope and settings. Not combinable with `--fix`, and `--write-baseline` not with `--staged` or `--changed-since`. `loadwise rel migrations` keeps its own per-file baseline.
 
-The performance and security checkers use the directory's `tsconfig.json` or `jsconfig.json`; without one, `check` looks for workspace packages (`package.json` `workspaces`, `pnpm-workspace.yaml` or `lerna.json`) and checks each one's config in one report, grouped per package; `--workspace <name|path>` (repeatable) limits every checker to some packages. For a standalone package with a `package.json` and JavaScript sources only, `check` and `fix` infer source files using the project inventory without writing a config. A mixed JavaScript/TypeScript project still needs a source config. For a JavaScript file without a project config, use `npx loadwise perf path/to/file.js` and `npx loadwise sec path/to/file.js`. For Python, Go, Java, C# or Rust performance checks, run `npx loadwise perf polyglot src` explicitly. The security checker can still scan Dockerfiles, Compose files and tracked environment files. When selected together, both checkers share a type-check unless a baseline is being written. Source scans are read-only. When fixes are available, text reports include a `Fix all:` command, such as `npx loadwise perf -p tsconfig.json --fix --only <ids>`, that applies its fixes.
+The performance, reliability, security and accessibility checkers use the directory's `tsconfig.json` or `jsconfig.json`; without one, `check` looks for workspace packages (`package.json` `workspaces`, `pnpm-workspace.yaml` or `lerna.json`) and checks each one's config in one report, grouped per package; `--workspace <name|path>` (repeatable) limits every checker to some packages. For a standalone package with a `package.json` and JavaScript sources only, `check` and `fix` infer source files using the project inventory without writing a config. A mixed JavaScript/TypeScript project still needs a source config. For a JavaScript file without a project config, use `npx loadwise perf path/to/file.js` and `npx loadwise sec path/to/file.js`. For Python, Go, Java, C# or Rust performance checks, run `npx loadwise perf polyglot src` explicitly, and `npx loadwise rel polyglot src` for the reliability patterns. The security checker can still scan Dockerfiles, Compose files and tracked environment files. When performance and reliability are selected together, they share a type-check unless a baseline is being written. Source scans are read-only. When fixes are available, text reports include a `Fix all:` command, such as `npx loadwise perf -p tsconfig.json --fix --only <ids>`, that applies its fixes.
 
 Exit codes: **0** passed, **1** a checker met its exit threshold, **2** invalid input or configuration in any checker, or a scan that skipped a file (see below).
 
@@ -142,12 +152,12 @@ On large projects the checkers run with a larger Node memory limit, 60% of the m
 
 ## Configuration
 
-One optional file, `loadwise.config.json`, sets the defaults for every checker. `loadwise check` looks for it in the checked directory and `loadwise perf` or `loadwise maint` in the project folder; `--config <file>` on `check` (`--loadwise-config <file>` on `perf` and `maint`) names another one. Add `$schema` for editor completion and validation.
+One optional file, `loadwise.config.json`, sets the defaults for every checker. `loadwise check` looks for it in the checked directory and each checker command (`loadwise perf`, `rel`, `maint`, `sec` or `a11y`) in the project folder; `--config <file>` on `check` (`--loadwise-config <file>` on the checker commands) names another one. Add `$schema` for editor completion and validation.
 
 ```json
 {
   "$schema": "./node_modules/loadwise/schema/loadwise.config.schema.json",
-  "checkers": ["perf", "maint"],
+  "checkers": ["perf", "rel", "maint"],
   "ignore": ["generated/**", "scripts/**"],
   "rules": {
     "duplicate-implementation": "warn",
@@ -169,10 +179,10 @@ One optional file, `loadwise.config.json`, sets the defaults for every checker. 
 - `ignore` lists globs, relative to the config file, that no checker scans or reports on; they leave the scan itself, so they cost no time and never count toward duplicates, cycles or architecture. `*` matches within a folder, `**` any depth, `?` one character and `{a,b}` alternatives; naming a folder covers everything below it.
 - `rules` sets each rule to `"off"` (its findings are dropped), `"warn"` (reported, but never changes the exit code) or `"error"` (reported findings always count, even under `--fail-on contract`). A hidden contextual finding is not reported, so it never counts. The object form `{ "level": "warn" }` is accepted for future rule options; no rule has options yet.
 - `overrides` apply `rules` to the files matching `files`; a later override wins over an earlier one and over `rules`.
-- `performance` holds what `backend-perf.policy.json` holds, and `maintainability` what the `maintainability.config.json` policy holds. The old files keep working when the config lacks the section; when both exist the config wins and a note says so. `--policy` and `--config policy.json` still beat the config.
-- `--ignore <rule-id>` (repeatable, on `check`, `perf` and `maint`) adds a rule to `"off"` for one run and beats the config.
+- `performance` holds the query policy (see [Project-defined access policy](#project-defined-access-policy)), and `maintainability` holds the maintainability policy (see [Project rules](#project-rules)). `--policy file.json` and `--config file.json` name a policy file for one run and beat the config sections.
+- `--ignore <rule-id>` (repeatable, on `check`, `perf`, `rel` and `maint`) adds a rule to `"off"` for one run and beats the config.
 
-An unknown key or rule id, a wrong level or a malformed section exits with code 2 and lists each problem. Rule ids come from the registered checkers, so a rule id that no checker has yet is rejected. The config applies to source checks and `perf polyglot`; `perf migrations`, `db`, `traces` and `plan` do not read it.
+An unknown key or rule id, a wrong level or a malformed section exits with code 2 and lists each problem. Rule ids come from the registered checkers, so a rule id that no checker has yet is rejected. The config applies to source checks and the `polyglot` commands; `rel migrations`, `rel contracts`, `perf db`, `perf traces` and `perf plan` do not read it.
 
 ## GitHub Action
 
@@ -199,7 +209,7 @@ jobs:
 
 | Input          | Default         | Meaning                                                                                               |
 | -------------- | --------------- | ----------------------------------------------------------------------------------------------------- |
-| `checkers`     | all             | Passed to `--only`, for example `perf,maint`.                                                         |
+| `checkers`     | all             | Passed to `--only`, for example `perf,rel,a11y`.                                                      |
 | `path`         | `.`             | Directory to check.                                                                                   |
 | `changed-only` | `false`         | `true` passes `--changed-since` with the pull request base commit.                                    |
 | `fail-on`      | checker default | Passed to `--fail-on` (`contract` or `all`).                                                          |
@@ -214,7 +224,7 @@ Ask your coding agent to run Loadwise. On its first check or fix, the CLI gives 
 
 Loadwise recognizes agent shell markers from Codex, Claude Code, Cursor, Gemini CLI and GitHub Copilot, as well as tools that identify themselves with `AI_AGENT`. An integration that supplies no marker can set `LOADWISE_AGENT=1` in its tool subprocess. Set `LOADWISE_AGENT=0` on a command to disable detection. Commands typed in plain Git Bash or an ordinary IDE terminal run normally. A shell opened inside an agent can inherit its markers.
 
-Agent-run CLI fixes save their actual edited hunks locally from the first fix. For earlier fixes and saved review decisions, run `loadwise agent history` from the checked project, optionally with a checker name such as `maintainability`. History stays under the user's local state directory and can include excerpts of project source. For unrecorded edits, including edits made on another machine, use an earlier report or a known diff.
+Agent-run CLI fixes save their actual edited hunks locally from the first fix. For earlier fixes and saved review decisions, run `loadwise agent history` from the checked project, optionally with a checker name such as `maintainability` or `reliability`. History stays under the user's local state directory and can include excerpts of project source. For unrecorded edits, including edits made on another machine, use an earlier report or a known diff.
 
 For persistent project instructions, or to have a future agent review fixes you run manually in a terminal, use the optional setup command. It updates the managed section of `AGENTS.md`, imports it from `CLAUDE.md` and enables history for manual CLI fixes too.
 
@@ -231,7 +241,7 @@ npx loadwise agent verify --save --outcomes outcomes.json before.json history.js
 
 The first command checks coverage. The second also retains successful review decisions for the next session in a recognized agent session or an explicitly initialized checkout. A missing decision or skipped checker is reported as incomplete. A reasoned deferral counts as reviewed and stays visible as deferred. Code review and relevant tests establish whether a change works.
 
-For a standalone JSON scan, pass its checker name, for example `npx loadwise agent verify --checker maint --outcomes outcomes.json maint-scan.json`. Use `perf` for performance, migrations and database reports, `maint` for maintainability, and `sec` for security. Use one checker per invocation for unlabelled standalone reports. Combined scans and history keep their original checker selection.
+For a standalone JSON scan, pass its checker name, for example `npx loadwise agent verify --checker maint --outcomes outcomes.json maint-scan.json`. Use `perf` for performance and database reports, `rel` for reliability, migration and contract reports, `maint` for maintainability, `sec` for security, and `a11y` for accessibility. Use one checker per invocation for unlabelled standalone reports. Combined scans and history keep their original checker selection.
 
 To read or save the same brief yourself, use the same checker names as the fix request:
 
@@ -255,7 +265,7 @@ If you ran a terminal command yourself and want to share it later, use `npx load
 
 ### Using Loadwise without AI
 
-Run `npx loadwise check` to see findings or `npx loadwise fix --yes` to scan and apply automatic fixes. With editor diagnostics enabled, hover over a finding to see its recommendation. The optional editor extension adds inline **Apply fix**, Quick Fix, and **Apply all fixes in this file**. Findings that require judgment remain available for manual review. [Editor setup](#editor)
+Run `npx loadwise check` to see findings or `npx loadwise fix --yes` to scan and apply automatic fixes. With editor diagnostics enabled, hover over a finding to see its recommendation. Findings that require judgment remain available for manual review. [Editor setup](#editor)
 
 ### Claude Code plugin
 
@@ -266,7 +276,7 @@ Run `npx loadwise check` to see findings or `npx loadwise fix --yes` to scan and
 /plugin install loadwise@loadwise
 ```
 
-After every `Edit`, `Write` or `MultiEdit` on a `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts` or `.cts` file, a hook runs the project's locally installed `loadwise` on that file (`perf` and `sec` on the file, `maint` on the uncommitted changes, keeping that file's findings) with a 20 second limit. Findings go back to Claude with their ids and `--fix --only <id>` commands for the corresponding checker; a clean file prints nothing. The hook never downloads anything: without a local install, outside a project, on other file types, on a timeout or on any error it exits silently. The plugin also adds a `/loadwise [args]` command for read-only checks and a `/loadwise fix [checker names]` workflow for agent-reviewed remediation.
+After every `Edit`, `Write` or `MultiEdit` on a `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts` or `.cts` file, or a `.html`, `.htm`, `.vue` or `.svelte` file, a hook runs the project's locally installed `loadwise` on that file (`perf`, `rel` and `sec` on the file, `maint` on the uncommitted changes, keeping that file's findings, and `a11y` on `.tsx`, `.jsx`, `.html`, `.htm`, `.vue` and `.svelte` files) with a 20 second limit. Findings go back to Claude with their ids and `--fix --only <id>` commands for the corresponding checker; a clean file prints nothing. The hook never downloads anything: without a local install, outside a project, on other file types, on a timeout or on any error it exits silently. The plugin also adds a `/loadwise [args]` command for read-only checks and a `/loadwise fix [checker names]` workflow for agent-reviewed remediation.
 
 To turn the hook off, run `/plugin disable loadwise` (or `/plugin uninstall loadwise`).
 
@@ -288,13 +298,13 @@ Set up the editor task once from the project root.
 npx loadwise perf editor init
 ```
 
-Commit the generated `.vscode/tasks.json`. Open the trusted folder in VS Code or Cursor and allow automatic tasks once; the watcher then starts on every folder open (reopen the folder if it was already open during setup). **Tasks: Manage Automatic Tasks** controls the workspace's choice. Findings from both checkers appear in **View > Problems**. This works across supported source languages, including mixed-language projects, and needs Node.js 22+ on PATH and this package under `node_modules`.
+Commit the generated `.vscode/tasks.json`. Open the trusted folder in VS Code or Cursor and allow automatic tasks once; the watcher then starts on every folder open (reopen the folder if it was already open during setup). **Tasks: Manage Automatic Tasks** controls the workspace's choice. Findings from the performance, reliability, maintainability and accessibility checkers appear in **View > Problems**. This works across supported source languages, including mixed-language projects, and needs Node.js 22+ on PATH and this package under `node_modules`.
 
 Saving a file or completing a source scan from the project terminal refreshes the running watcher. The editor uses its configured project and rules even when the terminal command uses different flags, and a running watcher picks up package reinstalls. The default scan uses a root `tsconfig.json` or `jsconfig.json`, or explicit JS/TS files discovered by the watcher; append `-p` and a relative path to the task's arguments (it runs `perf editor watch [-p tsconfig.json]`) to use another config.
 
 Hover over an underline to read the finding. The first line shows a source-based rewrite, an illustrative example or a review action. The hover retains the original finding and, where applicable, the code comparison.
 
-The optional [editor extension](editor/README.md) adds syntax-highlighted hover examples, related-location links and fix actions in VS Code or Cursor:
+The [editor extension](editor/README.md) is not published yet; a language server for every editor is planned. Built from source (`python editor/package-vsix.py`), it adds syntax-highlighted hover examples, related-location links and fix actions in VS Code or Cursor:
 
 - Each fixable line shows **Apply fix** and **Dismiss** CodeLens buttons, the hover has the same two links, and the Quick Fix menu offers the same actions.
 - The shortcuts are the same on every OS: **Ctrl+Alt+.** applies the fix on the cursor line, **Ctrl+Alt+Shift+.** applies all fixes in the file, and **Ctrl+Alt+,** dismisses the finding on the cursor line.
@@ -310,8 +320,8 @@ The optional [editor extension](editor/README.md) adds syntax-highlighted hover 
 | Capability                | Command                                  | Needs a database |
 | ------------------------- | ---------------------------------------- | ---------------- |
 | Source and ORM checks     | `loadwise perf -p tsconfig.json`         | No               |
-| Migration safety          | `loadwise perf migrations`               | No               |
-| API contract safety       | `loadwise perf contracts`                | No               |
+| Migration safety          | `loadwise rel migrations`                | No               |
+| API contract safety       | `loadwise rel contracts`                 | No               |
 | Schema-aware index checks | `loadwise perf --schema snap.json`       | No (snapshot)    |
 | Live database inspection  | `loadwise perf db`                       | Yes, read-only   |
 | Traces and executed plans | `traces trace.json`, `plan explain.json` | No               |
@@ -346,7 +356,7 @@ Use the same one-shot commands in CI. Exit **0** means no displayed finding met 
 
 Source checks summarize contextual findings separately. They include certain one-off blocking calls in CLI startup or unit tests and write advisories in test sources. Use `--include-contextual` to display every candidate and its reason. JSON includes `contextualFindingCount` when any remain after explicit rule exclusions. In the default view this count is additional to the displayed findings. In the expanded view these entries appear in `findings` with a `contextualReason`.
 
-The default `--fail-on all` applies to the displayed findings. For a complete advisory report that only fails CI on a transaction-client or import contract violation, use `npx loadwise perf --include-contextual --fail-on contract`. The enforced contract rule is `pg-transaction-on-pool`.
+The default `--fail-on all` applies to the displayed findings. For a complete advisory report that only fails CI on a transaction-client or import contract violation, use `npx loadwise rel --include-contextual --fail-on contract`. Performance has no contract rules; `loadwise rel --fail-on contract` enforces `pg-transaction-on-pool`.
 
 | Input                                   | Command after `npx loadwise perf`                                  | Coverage                                                                            |
 | --------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
@@ -376,8 +386,6 @@ Run in the directory containing `tsconfig.json` or `jsconfig.json`, pass `-p pat
 | <a id="queue-add-in-loop"></a>`queue-add-in-loop`                                                                                                                                                                                                                              | `queue.add` on a recognized job queue runs once per item, one Redis round trip each. Collect the jobs and call `addBulk`, unless a later job needs the earlier job's result or id.                                                                                                                                                                                                              |
 | <a id="redis-keys-command"></a>`redis-keys-command`                                                                                                                                                                                                                            | `keys()` on a recognized ioredis or node-redis client blocks Redis while it scans the keyspace. Iterate with `SCAN` (`scanStream` or `scanIterator`) after reviewing duplicate keys, iteration order and concurrent writes.                                                                                                                                                                     |
 | <a id="service-query-in-loop"></a>`service-query-in-loop`                                                                                                                                                                                                                      | A call in a loop reaches several database operations through a project function, so the loop pays round trips for every item. Add a batch variant. Test, seed, benchmark and script sources get a softer note.                                                                                                                                                                                  |
-| <a id="http-call-without-timeout"></a>`http-call-without-timeout`                                                                                                                                                                                                              | A `fetch` or axios call has no `signal` or `timeout`, so a hung upstream holds the request. Set a timeout or an abort signal.                                                                                                                                                                                                                                                                   |
-| <a id="upload-without-size-limit"></a>`upload-without-size-limit`                                                                                                                                                                                                              | A multer or Nest upload interceptor has no `limits.fileSize`, so one large upload can exhaust memory. A global `MulterModule.register({ limits })` set elsewhere is not visible to the check.                                                                                                                                                                                                   |
 | <a id="password-hash-pure-js"></a>`password-hash-pure-js`                                                                                                                                                                                                                      | `bcryptjs` hashes in pure JavaScript and costs tens to hundreds of milliseconds of main-thread CPU per call. Use native `bcrypt`, `@node-rs/bcrypt` or `argon2`. Reported once per file; test files are skipped.                                                                                                                                                                                |
 | <a id="external-call-in-transaction"></a>`external-call-in-transaction`                                                                                                                                                                                                        | An external call is awaited inside a database transaction callback, holding the connection and locks until it returns. Move it before the transaction or after commit; side effects cannot roll back.                                                                                                                                                                                           |
 | <a id="unbounded-list-query"></a>`unbounded-list-query`                                                                                                                                                                                                                        | A Prisma, TypeORM, Drizzle or pg list query has no `take` or `limit` and its rows are returned from a request handler. Unique-key lookups are skipped; one-hop service findings require contextual mode. A page size taken straight from request input with no upper cap is reported too.                                                                                                       |
@@ -389,9 +397,7 @@ Run in the directory containing `tsconfig.json` or `jsconfig.json`, pass `-p pat
 | <a id="notification-send-in-loop"></a>`notification-send-in-loop`                                                                                                                                                                                                              | A firebase-admin, SendGrid, Expo, OneSignal or SNS send runs once per loop item where the provider has a batch API. nodemailer, web-push, Twilio and SES sends are contextual because their batch shape depends on the content. Providers are recognised from their types.                                                                                                                      |
 | <a id="session-memory-store"></a>`session-memory-store`                                                                                                                                                                                                                        | `express-session` or `@fastify/session` is set up without a `store`, so sessions live in process memory: they leak, are lost on restart and are not shared across instances. Pass a shared store such as connect-redis or connect-pg-simple.                                                                                                                                                    |
 | <a id="orm-cartesian-include"></a>`orm-cartesian-include`                                                                                                                                                                                                                      | One TypeORM or Sequelize query joins two or more collection relations (`leftJoinAndSelect`, `relations`, `include`), so the rows multiply as the product of their sizes. Load the second collection in its own query (`relationLoadStrategy: 'query'`, Sequelize `separate: true`).                                                                                                             |
-| <a id="retry-without-backoff"></a>`retry-without-backoff`                                                                                                                                                                                                                      | A network call is retried in a loop, or axios-retry is set up, with no wait between attempts. Add exponential backoff with jitter. axios-retry without `retryDelay` is contextual.                                                                                                                                                                                                              |
 | <a id="json-roundtrip-clone"></a>`json-roundtrip-clone`                                                                                                                                                                                                                        | A value is deep-copied with `JSON.parse(JSON.stringify(...))` in a request handler or loop. Use `structuredClone`, or copy only the fields you change.                                                                                                                                                                                                                                          |
-| <a id="mongoose-aggregate-uncast-id"></a>`mongoose-aggregate-uncast-id`                                                                                                                                                                                                        | A Mongoose `aggregate()` `$match` compares `_id` to a plain string. Aggregation does not cast, so the stage matches nothing; wrap the value in `new Types.ObjectId(id)`. Skipped when a schema declares a String `_id`.                                                                                                                                                                         |
 | <a id="mongoose-hydrate-for-to-object"></a>`mongoose-hydrate-for-to-object`                                                                                                                                                                                                    | A Mongoose `find`, `findOne` or `findById` result is only null-checked and converted with `.toObject()` or `.toJSON()`. Append `.lean()` to skip hydration. Skipped when a schema customizes `toObject` or `toJSON`.                                                                                                                                                                            |
 | <a id="express-missing-compression"></a>`express-missing-compression`                                                                                                                                                                                                          | An Express app calls `listen` and no project file imports `compression`. Reported as contextual: a reverse proxy may already compress responses. Test files are skipped.                                                                                                                                                                                                                        |
 | <a id="heavy-media-in-request-handler"></a>`heavy-media-in-request-handler`                                                                                                                                                                                                    | `sharp` image processing, Puppeteer `page.pdf()` or `html-pdf` rendering runs inside a request handler. Move it to a job queue or worker thread. Contextual, because offloading changes the API.                                                                                                                                                                                                |
@@ -409,10 +415,6 @@ Run in the directory containing `tsconfig.json` or `jsconfig.json`, pass `-p pat
 | <a id="frontend-barrel-heavy-import"></a>`frontend-barrel-heavy-import`                                                                                                                                                                                                        | A client module imports the whole of lodash or moment instead of subpaths or a lighter library.                                                                                                                                                                                                                                                                                                 |
 | <a id="sql-select-star-in-query"></a>`sql-select-star-in-query`                                                                                                                                                                                                                | A raw SQL query selects every column with SELECT * instead of the columns it needs.                                                                                                                                                                                                                                                                                                             |
 | <a id="sequential-http-in-loop"></a>`sequential-http-in-loop`                                                                                                                                                                                                                  | Independent HTTP requests are awaited one at a time inside a loop.                                                                                                                                                                                                                                                                                                                              |
-| <a id="check-then-update-race"></a>`check-then-update-race`                                                                                                                                                                                                                    | A Mongoose or Sequelize document's numeric field is read, changed in JavaScript and saved without a transaction, losing concurrent updates.                                                                                                                                                                                                                                                     |
-| <a id="payment-missing-idempotency-key"></a>`payment-missing-idempotency-key`                                                                                                                                                                                                  | A Stripe call that moves money has no idempotency key, so a retry can charge or pay out twice.                                                                                                                                                                                                                                                                                                  |
-| <a id="webhook-missing-idempotency-check"></a>`webhook-missing-idempotency-check`                                                                                                                                                                                              | A webhook route inserts rows without first checking whether the event was already processed.                                                                                                                                                                                                                                                                                                    |
-| <a id="unbounded-promise-all"></a>`unbounded-promise-all`                                                                                                                                                                                                                      | `Promise.all` runs over an unbounded collection without a concurrency limit (`p-limit`, `pMap`, `PromisePool`, or chunking).                                                                                                                                                                                                                                                                    |
 | <a id="mongoose-missing-lean"></a>`mongoose-missing-lean`                                                                                                                                                                                                                      | A Mongoose `.find()`, `.findOne()`, or `.findById()` read query is returned or JSON-serialized without `.lean()`.                                                                                                                                                                                                                                                                               |
 | <a id="graphql-n-plus-one-resolver"></a>`graphql-n-plus-one-resolver`                                                                                                                                                                                                          | A GraphQL field resolver executes a database or HTTP query per parent item without `DataLoader` `.load()` batching.                                                                                                                                                                                                                                                                             |
 | <a id="react-context-value-recreated"></a>`react-context-value-recreated`                                                                                                                                                                                                      | An inline object or array literal in `<*.Provider value={...}>` creates a new reference on every render without `useMemo`.                                                                                                                                                                                                                                                                      |
@@ -452,50 +454,32 @@ The JS/TS checker resolves declarations from installed drivers and generated cli
 
 <a id="drizzle-query-in-loop"></a><a id="orm-query-in-loop"></a><a id="typeorm-transaction-in-loop"></a><a id="orm-count-materialization"></a><a id="typeorm-existence-materialization"></a><a id="typeorm-wide-projection"></a>`orm-query-in-loop`, `drizzle-query-in-loop` and `orm-count-materialization` preserve the distinction between building a lazy statement and executing it. Counts with pagination, grouping, joins, hooks or scopes need particular care. TypeORM checks also identify entity reads used only for existence (`typeorm-existence-materialization`), unused wide columns in a direct DTO projection (`typeorm-wide-projection`), and a loop calling a local private helper that starts a transaction (`typeorm-transaction-in-loop`). Before changing a projection or an existence check, verify entity-load side effects. For per-row transactions, check rollback, ordering and error reporting before batching. The adapters recognize specific typed APIs. Custom methods with the same name, raw queries and wrappers often have different semantics.
 
-| Integrity rule                                                                    | What to review                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| <a id="pg-transaction-on-pool"></a>`pg-transaction-on-pool`                       | A standalone transaction-control statement is sent to a typed pool. Use the same checked-out client for the whole transaction and release it in `finally`.                                                                                                                                                                                                                                                                                  |
-| <a id="prisma-transaction-client-escape"></a>`prisma-transaction-client-escape`   | A direct model operation uses the same outer client that opened an interactive transaction. Verify that the operation belongs inside that transaction.                                                                                                                                                                                                                                                                                      |
-| <a id="typeorm-transaction-client-escape"></a>`typeorm-transaction-client-escape` | An awaited write inside a TypeORM transaction goes through a repository or manager that is not bound to it, so it autocommits on another pooled connection, is not rolled back with the transaction and can block on its locks. Use the transaction's manager (`manager.getRepository(Entity)`).                                                                                                                                            |
-| <a id="prisma-dependent-writes"></a>`prisma-dependent-writes`                     | Adjacent creates pass a value from the first record into the next write. Explicit single-key nested `connect` can use a custom unique field when generated types confirm a relation. Direct scalar assignments currently recognize `parent.id` going into a field ending in `Id` or `_id`. Other scalar foreign-key conventions can be missed. If both writes must succeed together, consider a nested write or an appropriate transaction. |
-| <a id="prisma-read-modify-write"></a>`prisma-read-modify-write`                   | A direct read of one row feeds a numeric update of the same field and key. Review atomic arithmetic, an optimistic version check or serializable execution with retries.                                                                                                                                                                                                                                                                    |
-| <a id="find-then-create-race"></a>`find-then-create-race`                         | A Prisma or TypeORM lookup by one key is followed in the same function by an insert with the same key, and the schema shows no unique constraint on it. Add the constraint and catch the violation (Prisma P2002, Postgres 23505) or use `upsert` / `ON CONFLICT`. Without a readable schema the finding is contextual; serializable transactions, locks and handled duplicates are skipped.                                                |
-| <a id="prisma-distinct-in-memory"></a>`prisma-distinct-in-memory`                 | `findMany({ distinct })` reads every matching row and de-duplicates in Prisma's query engine, not with SQL `DISTINCT`. Use `groupBy` or a raw `SELECT DISTINCT`. Quiet when the `nativeDistinct` preview feature is enabled.                                                                                                                                                                                                                |
-| <a id="prisma-relation-count-in-list"></a>`prisma-relation-count-in-list`         | A paged `findMany` selects `_count` of a relation, which Prisma computes over the whole related table. Fetch the page, then `groupBy` for the page ids and merge the counts.                                                                                                                                                                                                                                                                |
-| <a id="typeorm-load-then-save"></a>`typeorm-load-then-save`                       | A repository entity is loaded only to change a few fields and then `save()`d, costing a SELECT, an UPDATE and a transaction. Use `update()` or `increment()`; entity listeners and subscribers for update will not run.                                                                                                                                                                                                                     |
-| <a id="guard-query-per-request"></a>`guard-query-per-request`                     | A guard or similar per-request hook runs a database query before every handler. Cache the lookup with a short TTL and explicit invalidation, or carry the claims in the token.                                                                                                                                                                                                                                                              |
-| <a id="drizzle-unfiltered-write"></a>`drizzle-unfiltered-write`                   | An executed update/delete has no effective predicate in a recognized direct chain. An intentional whole-table maintenance operation can legitimately match.                                                                                                                                                                                                                                                                                 |
+| Integrity rule                                                            | What to review                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="prisma-distinct-in-memory"></a>`prisma-distinct-in-memory`         | `findMany({ distinct })` reads every matching row and de-duplicates in Prisma's query engine, not with SQL `DISTINCT`. Use `groupBy` or a raw `SELECT DISTINCT`. Quiet when the `nativeDistinct` preview feature is enabled. |
+| <a id="prisma-relation-count-in-list"></a>`prisma-relation-count-in-list` | A paged `findMany` selects `_count` of a relation, which Prisma computes over the whole related table. Fetch the page, then `groupBy` for the page ids and merge the counts.                                                 |
+| <a id="typeorm-load-then-save"></a>`typeorm-load-then-save`               | A repository entity is loaded only to change a few fields and then `save()`d, costing a SELECT, an UPDATE and a transaction. Use `update()` or `increment()`; entity listeners and subscribers for update will not run.      |
+| <a id="guard-query-per-request"></a>`guard-query-per-request`             | A guard or similar per-request hook runs a database query before every handler. Cache the lookup with a short TTL and explicit invalidation, or carry the claims in the token.                                               |
 
 For Prisma, building an array of lazy queries alone is quiet. A sequential `await` inside a loop can trigger the rule. Same-tick `findUnique` callbacks can use Prisma's own batching, so these are left to runtime traces. [Prisma Client reference](https://www.prisma.io/docs/orm/reference/prisma-client-reference#prismapromise-behavior) · [Prisma transactions](https://www.prisma.io/docs/orm/prisma-client/queries/transactions) · [node-postgres transactions](https://node-postgres.com/features/transactions) · [Drizzle conditional filters](https://orm.drizzle.team/docs/guides/conditional-filters-in-query)
 
 ### Project-defined access policy
 
-Place `backend-perf.policy.json` beside the selected project config, or pass `--policy path/to/file.json`. Explicit source-file checks discover the policy in the working directory. A policy can use just the sections the project needs (`prismaScopes`, `drizzleScopes`, `parallelReads`, and `fireAndForget`, a list of helper names that `floating-promise` accepts without an await). Duplicate JSON keys within the same object produce a configuration error. [Example policy](examples/query-policy.json)
+Put the policy in the `performance` section of `loadwise.config.json` beside the selected project config (in the working directory for explicit source files), or pass `--policy path/to/file.json`. A policy can use just the sections the project needs (`prismaScopes`, `drizzleScopes`, `parallelReads`, and `fireAndForget`, a list of helper names that `floating-promise` accepts without an await). Duplicate JSON keys within the same object produce a configuration error. [Example policy](examples/query-policy.json)
 
 ### Async work and sorting
 
-| Rule                                                                                | When it reports                                                                                                                                                                                                                                                                                                                                                                                |
-| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| <a id="promise-combinator-serial-await"></a>`promise-combinator-serial-await`       | A built-in `Promise.all` or `Promise.allSettled` receives an array of two or more already-awaited calls with known promise types. Starting them together changes which calls run after a failure. With `allSettled`, it also changes how rejections are returned.                                                                                                                              |
-| <a id="known-reads-awaited-serially"></a>`known-reads-awaited-serially`             | Two adjacent awaited reads come from a project-configured `parallelReads` group and the second call is independent of the first result in a supported straight-line shape.                                                                                                                                                                                                                     |
-| <a id="numeric-sort-for-extreme"></a>`numeric-sort-for-extreme`                     | A numeric comparison sort on a private copy, or a nonmutating numeric sort, is used only to retrieve its first or last value. A single-pass extreme can use constant extra space. Preserve empty input, NaN, sparse inputs and signed-zero semantics when applicable.                                                                                                                          |
-| <a id="count-then-page-serial"></a>`count-then-page-serial`                         | A `count()` and a page query with the same filter run one after the other (TypeORM query builder or repository, Prisma). Use `getManyAndCount()` or `findAndCount()`, or start both Prisma calls together with `Promise.all` outside an interactive transaction.                                                                                                                               |
-| <a id="typeorm-unused-count"></a>`typeorm-unused-count`                             | A typed TypeORM `findAndCount()`, `findAndCountBy()` or `getManyAndCount()` call returns rows and a count but the awaited destructuring only keeps the rows. Use `find()`, `findBy()` or `getMany()` with the same filters and paging when the count is unnecessary.                                                                                                                           |
-| <a id="prisma-count-for-existence"></a>`prisma-count-for-existence`                 | An awaited numeric Prisma `count()` with no options or only `where` is used solely as a zero-or-nonzero test. Read one row with the same filter and a small projection when only existence matters.                                                                                                                                                                                            |
-| <a id="await-before-early-exit"></a>`await-before-early-exit`                       | An awaited ORM or HTTP read is followed directly by an `if` that returns or throws without using the result, so a request the guard rejects still pays the round trip. Writes, `OrThrow` reads and POSTs are left alone. The fix moves the guard above the await only when it has no calls and reads only parameters and earlier constants.                                                    |
-| <a id="floating-promise"></a>`floating-promise`                                     | A promise-returning call is a bare statement in an async function or request handler, or `array.forEach(async ...)` runs awaits nobody waits for. Returning, awaiting, using `void`, or attaching a rejection callback suppresses the bare-call warning. Omitted or nullish callbacks do not handle rejections. Test files and helpers listed under `fireAndForget` in the policy are skipped. |
-| <a id="discarded-error-result"></a>`discarded-error-result`                         | A call discards a typed `fp-ts` `Either` or `neverthrow` `Result`. This includes async calls, standalone `await` and explicit `void`. Check the failure branch or return the result to a caller that handles it.                                                                                                                                                                               |
-| <a id="promise-return-escapes-catch"></a>`promise-return-escapes-catch`             | An async function returns a typed promise directly from the `try` block of a `try`/`catch`. A rejection can bypass that catch. Use `return await` when the catch owns the failure.                                                                                                                                                                                                             |
-| <a id="return-in-finally"></a>`return-in-finally`                                   | A return in `finally` can replace an earlier return value or suppress a thrown error. Keep cleanup in `finally` and return from `try`, `catch`, or after the statement.                                                                                                                                                                                                                        |
-| <a id="return-newline"></a>`return-newline`                                         | A line break immediately after `return` ends the statement before an apparent object or parenthesized return value. Start the expression on the same line as `return`.                                                                                                                                                                                                                         |
-| <a id="async-route-unhandled-rejection"></a>`async-route-unhandled-rejection`       | An async Express 4 route handler awaits outside a try/catch and takes no `next`, so a rejection skips the error middleware and the request hangs. Silent on Express 5 and with express-async-errors, express-async-handler or a wrapping call; an unknown Express version is contextual. Fix (review): wrap the body in try/catch and pass the error to `next`.                                |
-| <a id="async-callback-unhandled-rejection"></a>`async-callback-unhandled-rejection` | An async callback given to `.on`/`.once`, a timer, `process.nextTick` or `cron.schedule` awaits outside a try/catch; nothing handles its promise, so a rejection crashes Node 15+. Fix (review): wrap the body in try/catch that logs the error.                                                                                                                                               |
-| <a id="stream-pipe-unhandled-error"></a>`stream-pipe-unhandled-error`               | `.pipe()` on a Node stream with no `error` listener and no `pipeline`/`finished` in the function, so a stream error crashes the process or leaks the file and socket. RxJS pipes are skipped; a stream known only by its name is contextual. Fix (review): `await pipeline(...)` from `node:stream/promises`.                                                                                  |
-| <a id="json-parse-unguarded"></a>`json-parse-unguarded`                             | `JSON.parse` of request, queue-message, file, fetch, storage or environment input outside a try/catch. Framework handlers that turn a throw into a 500, and startup parses, are contextual.                                                                                                                                                                                                    |
-| <a id="request-number-unvalidated"></a>`request-number-unvalidated`                 | `Number`, `parseInt`, `parseFloat` or unary `+` of raw request input reaches a query, `slice`/`limit`/`skip`/`take`, an index or kept arithmetic with no NaN or range check. Schema-validated values, Nest DTOs and pipes are skipped. Fix (review): a 400 guard after the declaration.                                                                                                        |
-| <a id="drizzle-write-preflight"></a>`drizzle-write-preflight`                       | An existence check immediately precedes a write on the same key. Review the database constraint or affected-row count alongside the intended error response when requests race.                                                                                                                                                                                                                |
-| <a id="drizzle-last-insert-id"></a>`drizzle-last-insert-id`                         | A MySQL insert is followed by a separate query for the last generated ID. Review using the insert result directly, especially when the database handle uses a connection pool.                                                                                                                                                                                                                 |
-| <a id="repeated-workbook-decode"></a>`repeated-workbook-decode`                     | Sibling awaits pass the same input to ExcelJS workbook decoding directly or through same-file private methods or functions. Share a parsed workbook when its readers can safely use the same state.                                                                                                                                                                                            |
+| Rule                                                                          | When it reports                                                                                                                                                                                                                                                                                                                             |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="promise-combinator-serial-await"></a>`promise-combinator-serial-await` | A built-in `Promise.all` or `Promise.allSettled` receives an array of two or more already-awaited calls with known promise types. Starting them together changes which calls run after a failure. With `allSettled`, it also changes how rejections are returned.                                                                           |
+| <a id="known-reads-awaited-serially"></a>`known-reads-awaited-serially`       | Two adjacent awaited reads come from a project-configured `parallelReads` group and the second call is independent of the first result in a supported straight-line shape.                                                                                                                                                                  |
+| <a id="numeric-sort-for-extreme"></a>`numeric-sort-for-extreme`               | A numeric comparison sort on a private copy, or a nonmutating numeric sort, is used only to retrieve its first or last value. A single-pass extreme can use constant extra space. Preserve empty input, NaN, sparse inputs and signed-zero semantics when applicable.                                                                       |
+| <a id="count-then-page-serial"></a>`count-then-page-serial`                   | A `count()` and a page query with the same filter run one after the other (TypeORM query builder or repository, Prisma). Use `getManyAndCount()` or `findAndCount()`, or start both Prisma calls together with `Promise.all` outside an interactive transaction.                                                                            |
+| <a id="typeorm-unused-count"></a>`typeorm-unused-count`                       | A typed TypeORM `findAndCount()`, `findAndCountBy()` or `getManyAndCount()` call returns rows and a count but the awaited destructuring only keeps the rows. Use `find()`, `findBy()` or `getMany()` with the same filters and paging when the count is unnecessary.                                                                        |
+| <a id="prisma-count-for-existence"></a>`prisma-count-for-existence`           | An awaited numeric Prisma `count()` with no options or only `where` is used solely as a zero-or-nonzero test. Read one row with the same filter and a small projection when only existence matters.                                                                                                                                         |
+| <a id="await-before-early-exit"></a>`await-before-early-exit`                 | An awaited ORM or HTTP read is followed directly by an `if` that returns or throws without using the result, so a request the guard rejects still pays the round trip. Writes, `OrThrow` reads and POSTs are left alone. The fix moves the guard above the await only when it has no calls and reads only parameters and earlier constants. |
+| <a id="drizzle-last-insert-id"></a>`drizzle-last-insert-id`                   | A MySQL insert is followed by a separate query for the last generated ID. Review using the insert result directly, especially when the database handle uses a connection pool.                                                                                                                                                              |
+| <a id="repeated-workbook-decode"></a>`repeated-workbook-decode`               | Sibling awaits pass the same input to ExcelJS workbook decoding directly or through same-file private methods or functions. Share a parsed workbook when its readers can safely use the same state.                                                                                                                                         |
 
 The example policy declares that `fetchUser` and `fetchPosts` from `@app/reads` may start together. Only group operations whose ordering, shared connections, rate limits and failure effects your project has reviewed. With that declaration, the checker can flag the pair below. Ordinary adjacent calls such as `saveSettings()` followed by `reloadSettings()` carry no such contract.
 
@@ -542,63 +526,6 @@ npx loadwise perf -p tsconfig.json --staged --json
 
 Both flags report only findings on changed lines, each with its id, the exact `--fix --only <id>` command when an automatic fix exists, and the `// loadwise-reviewed <rule-id> -- <reason>` comment that dismisses it. `--json` keeps the usual shape, filtered. The exit code is 1 when findings remain. With no changed JavaScript or TypeScript files the command exits 0 before TypeScript loads. Only the changed files are analyzed as roots, and their imports still resolve through the tsconfig; `schema.prisma` findings are not part of this mode. Files that are untracked count as fully changed with `--changed-since`. Analysis reads the working tree, so a file with unstaged edits can report lines that differ from the staged version. The flags cannot be combined with explicit files, `--watch` or `--fix`.
 
-## Migration safety
-
-`npx loadwise perf migrations` reads Prisma, Drizzle, TypeORM, Knex and Sequelize migrations (SQL or code) and flags statements that lock or rewrite a table. It reads files only. `--dialect postgres|mysql` selects the rule set, `--json` for structured output and `--ignore RULE` to skip a rule.
-
-| Rule                                                                                                                                                                                                                                    | What it flags                                                                                                                               |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| <a id="migration-index-not-concurrent"></a><a id="migration-concurrent-in-transaction"></a>`migration-index-not-concurrent`, `migration-concurrent-in-transaction`                                                                      | A PostgreSQL index built without `CONCURRENTLY`, or `CONCURRENTLY` inside a transaction that cannot run it.                                 |
-| <a id="migration-not-null-without-default"></a><a id="migration-volatile-default"></a>`migration-not-null-without-default`, `migration-volatile-default`                                                                                | A NOT NULL column added without a default (fails once rows exist), or a volatile default that rewrites the table.                           |
-| <a id="migration-column-type-rewrite"></a><a id="migration-table-rewrite-command"></a>`migration-column-type-rewrite`, `migration-table-rewrite-command`                                                                                | A column type change or command (`VACUUM FULL`, `CLUSTER`, `REINDEX`) that rewrites the table.                                              |
-| <a id="migration-set-not-null-scan"></a><a id="migration-constraint-not-valid"></a><a id="migration-constraint-without-index"></a>`migration-set-not-null-scan`, `migration-constraint-not-valid`, `migration-constraint-without-index` | Full-table validation scans, constraints that should be added `NOT VALID` first, and constraints that build an index while blocking writes. |
-| <a id="migration-breaking-drop"></a><a id="migration-breaking-rename"></a>`migration-breaking-drop`, `migration-breaking-rename`                                                                                                        | Dropping or renaming a column or table that running application code may still use.                                                         |
-| <a id="migration-missing-lock-timeout"></a>`migration-missing-lock-timeout`                                                                                                                                                             | A locking statement with no `lock_timeout`.                                                                                                 |
-| <a id="migration-mysql-table-copy"></a><a id="migration-mysql-lock-unspecified"></a>`migration-mysql-table-copy`, `migration-mysql-lock-unspecified`                                                                                    | MySQL changes that copy the table or leave the lock level unspecified.                                                                      |
-| <a id="migration-unparsed"></a>`migration-unparsed`                                                                                                                                                                                     | A statement the checker could not read. Review it by hand.                                                                                  |
-
-Only new migrations fail the run. Older migrations are contextual: counted, listed with `--include-contextual`, and never exit 1.
-
-**CI recipe.** Enforce only what the branch adds or changes (files modified since the merge base, plus untracked files). Use a full-history checkout (`fetch-depth: 0`) so the ref resolves.
-
-```sh
-npx loadwise perf migrations --changed-since origin/main
-```
-
-**Baseline workflow.** For a project with existing migrations, accept them once and enforce the rest.
-
-```sh
-npx loadwise perf migrations --write-baseline   # writes backend-perf.migrations-baseline.json
-npx loadwise perf migrations                    # new migrations fail; baselined ones do not
-```
-
-Commit the baseline. `--baseline FILE` reads or writes another path. Exit codes match the source checks: 0 passed, 1 findings in enforced migrations, 2 invalid input.
-
-## API contract safety
-
-`npx loadwise perf contracts [--changed-since REF] [--json]` compares the working tree with the merge base of `REF` (default `HEAD`) and flags changes that break API clients. `loadwise check --changed-since REF` includes the same findings in the performance report. Both commands respect workspace selection, ignored paths and rules, configured rule levels, and minimum impact. Visible breaking changes fail by default. Rules set to warn appear in the report and do not fail the check. Invalid input exits 2. Use a full-history checkout (`fetch-depth: 0`) so the ref resolves.
-
-It compares three kinds of source:
-
-- **OpenAPI and Swagger JSON** (`openapi.json`, `swagger.json`). YAML documents are skipped with a note, because no YAML parser ships with loadwise; commit or check a JSON export instead.
-- **GraphQL SDL** (`*.graphql`, `*.gql`, for example the `schema.gql` a code-first server emits). Query documents are skipped.
-- **NestJS classes** used as `@Body()` types or as controller return types (also `@ApiResponse({ type })`), found in `*.controller.ts` and read from the file that declares them (relative imports only). Only property names, `?`, `@IsOptional()` and the written type text are compared.
-
-| Rule                                                        | What it flags                                                                                                               |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| <a id="api-removed-operation"></a>`api-removed-operation`   | An OpenAPI path and method, or a GraphQL `Query`, `Mutation` or `Subscription` field, that no longer exists.                |
-| <a id="api-removed-field"></a>`api-removed-field`           | A response field, GraphQL type, field, argument or union member, or a DTO property returned to clients, that was removed.   |
-| <a id="api-required-input"></a>`api-required-input`         | A request field, parameter, GraphQL argument or input field that is new and required, or changed from optional to required. |
-| <a id="api-type-changed"></a>`api-type-changed`             | A field or parameter whose type changed, or a GraphQL type that became nullable (output) or non-null (input).               |
-| <a id="api-enum-value-removed"></a>`api-enum-value-removed` | An enum value or string-literal option that requests (or, in GraphQL, any client) can no longer use.                        |
-
-Removals point at the line in the old version (the message says so); every other finding points at the new line. A new version next to the old one (`/v2/users` added while `/v1/users` stays) breaks nothing and is not flagged. A removed request property is flagged only when the project builds a `ValidationPipe` with `forbidNonWhitelisted: true`, because only then do clients that still send it get a 400. Properties inherited from a base class in a relative import count as the class's own.
-
-```sh
-npx loadwise perf contracts --changed-since origin/main
-npx loadwise check --changed-since origin/main
-```
-
 ## Schema-aware index checks
 
 The source checker reads the project's ORM schema (Prisma, Drizzle, TypeORM, Sequelize, Mongoose) and compares declared indexes with the queries it finds.
@@ -618,7 +545,7 @@ Pass `--schema snapshot.json` (written by `db --schema-snapshot`) to refine them
 
 ## Polyglot source checks
 
-`npx loadwise perf polyglot src` accepts directories or individual `.py`, `.go`, `.java`, `.cs` and `.rs` files. It uses the optional ast-grep native binary and its syntax-tree patterns. Language-specific aliases and wrappers can fall outside a pattern. [ast-grep](https://ast-grep.github.io/)
+`npx loadwise perf polyglot src` accepts directories or individual `.py`, `.go`, `.java`, `.cs` and `.rs` files. It uses the optional ast-grep native binary and its syntax-tree patterns. `npx loadwise rel polyglot src` runs the reliability patterns, listed under [Reliability checker](#reliability-checker), on the same files. Language-specific aliases and wrappers can fall outside a pattern. [ast-grep](https://ast-grep.github.io/)
 
 Performance and maintainability scans retry files when the bundled parser rejects a Java marker annotation before varargs or a C# 14 conditional member assignment (`=`) in a simple identifier chain. The retry uses a position-preserving copy in memory and still fails if the parser reports a syntax error.
 
@@ -638,7 +565,6 @@ Performance and maintainability scans retry files when the bundled parser reject
 | <a id="go-string-concat-in-loop"></a>`go-string-concat-in-loop`             | Repeated `+=` string concatenation inside a Go `for` loop instead of `strings.Builder`.                                    |
 | <a id="java-string-concat-in-loop"></a>`java-string-concat-in-loop`         | Repeated `+=` string concatenation inside a Java loop instead of `StringBuilder`.                                          |
 | <a id="java-jdbc-query-in-loop"></a>`java-jdbc-query-in-loop`               | A JDBC query executes inside a Java loop instead of batching.                                                              |
-| <a id="csharp-async-void"></a>`csharp-async-void`                           | An `async void` method cannot be awaited and can crash the process on unhandled exceptions.                                |
 | <a id="csharp-string-concat-in-loop"></a>`csharp-string-concat-in-loop`     | Repeated `+=` string concatenation inside a C# loop instead of `StringBuilder`.                                            |
 | <a id="rust-clone-in-loop"></a>`rust-clone-in-loop`                         | Calling `.clone()` inside a Rust loop adds avoidable heap allocations.                                                     |
 | <a id="rust-format-in-loop"></a>`rust-format-in-loop`                       | Calling `format!` inside a Rust loop allocates a new `String` on every iteration.                                          |
@@ -649,13 +575,12 @@ Supply a local **OTLP/JSON trace export** with `resourceSpans → scopeSpans →
 
 Try `npx loadwise perf traces node_modules/loadwise/examples/repeated-db.otlp.json`. The example reports five similar MongoDB operations under one parent. The trace rules use current and legacy database attributes and deduplicate span IDs.
 
-| Rule                                                        | Evidence and interpretation                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| <a id="repeated-db-span"></a>`repeated-db-span`             | Five similar sibling DB calls by default, grouped by resource, trace, parent and recorded database target. SQL statements, query summaries, operation/collection pairs and recognized DynamoDB `GetItem` events can provide signatures. Namespace-only MongoDB or DynamoDB groups call for inspection of the actual predicates.                                                                                                               |
-| <a id="redis-keys-scan"></a>`redis-keys-scan`               | One Redis or Valkey `KEYS` command can scan the keyspace. For incremental iteration, account for duplicates and keys changing between `SCAN` calls.                                                                                                                                                                                                                                                                                           |
-| <a id="redis-repeated-read"></a>`redis-repeated-read`       | Repeated sibling `GET` or `HGET` calls. Consider compatible multi-key reads or bounded pipelining with appropriate cluster slots, ordering and error handling. Recognized pipeline children are excluded.                                                                                                                                                                                                                                     |
-| <a id="redis-incr-then-expire"></a>`redis-incr-then-expire` | An `incr`, `incrby` or `hincrby` followed by `expire` or `pexpire` on the same key and client takes two round trips and is not atomic: a crash between them leaves the counter without a TTL. Send both in one `multi()` (with `NX` on Redis 7+) or a Lua script.                                                                                                                                                                             |
-| <a id="duplicate-key-read"></a>`duplicate-key-read`         | Two or more reads with the same observable lookup, database target and recorded scalar context under one parent. The comparison accepts application-defined context keys. Supported evidence includes a concrete Redis `GET` key or a narrow SQL equality lookup with its bound parameter. Masked targets, ambiguous context, observed writes, transactions or failed calls suppress the suggestion where identity or freshness is uncertain. |
+| Rule                                                  | Evidence and interpretation                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="repeated-db-span"></a>`repeated-db-span`       | Five similar sibling DB calls by default, grouped by resource, trace, parent and recorded database target. SQL statements, query summaries, operation/collection pairs and recognized DynamoDB `GetItem` events can provide signatures. Namespace-only MongoDB or DynamoDB groups call for inspection of the actual predicates.                                                                                                               |
+| <a id="redis-keys-scan"></a>`redis-keys-scan`         | One Redis or Valkey `KEYS` command can scan the keyspace. For incremental iteration, account for duplicates and keys changing between `SCAN` calls.                                                                                                                                                                                                                                                                                           |
+| <a id="redis-repeated-read"></a>`redis-repeated-read` | Repeated sibling `GET` or `HGET` calls. Consider compatible multi-key reads or bounded pipelining with appropriate cluster slots, ordering and error handling. Recognized pipeline children are excluded.                                                                                                                                                                                                                                     |
+| <a id="duplicate-key-read"></a>`duplicate-key-read`   | Two or more reads with the same observable lookup, database target and recorded scalar context under one parent. The comparison accepts application-defined context keys. Supported evidence includes a concrete Redis `GET` key or a narrow SQL equality lookup with its bound parameter. Masked targets, ambiguous context, observed writes, transactions or failed calls suppress the suggestion where identity or freshness is uncertain. |
 
 Matching keys in two reads are a reason to consider **request-local** reuse when authorization, freshness and ordering allow it. Keep existing telemetry redaction. A redacted key can still support a batching finding. Reports contain span IDs and counts and omit raw SQL, parameters and keys. Check `scannedSpans` and `eligibleDbSpans` when interpreting a clean result. Sampling, missing parents, different literal values and coarse summaries affect grouping. [OpenTelemetry database spans](https://opentelemetry.io/docs/specs/semconv/db/database-spans/) · [OTLP JSON encoding](https://opentelemetry.io/docs/specs/otlp/#json-protobuf-encoding)
 
@@ -715,177 +640,129 @@ Every finding carries an impact level. `--min-impact <low|medium|high|critical>`
 - `medium`: a measurable but local cost, or significant maintainability debt.
 - `low`: a micro-optimization or a readability issue.
 
-| Rule                                  | Impact   |
-| ------------------------------------- | -------- |
-| `api-removed-operation`               | critical |
-| `drizzle-unfiltered-write`            | critical |
-| `migration-breaking-drop`             | critical |
-| `migration-column-type-rewrite`       | critical |
-| `migration-index-not-concurrent`      | critical |
-| `migration-mysql-table-copy`          | critical |
-| `migration-table-rewrite-command`     | critical |
-| `pg-transaction-on-pool`              | critical |
-| `pg-unreleased-checkout`              | critical |
-| `pool-created-per-request-or-item`    | critical |
-| `prisma-read-modify-write`            | critical |
-| `prisma-transaction-client-escape`    | critical |
-| `typeorm-transaction-client-escape`   | critical |
-| `api-enum-value-removed`              | high     |
-| `api-removed-field`                   | high     |
-| `api-required-input`                  | high     |
-| `api-type-changed`                    | high     |
-| `db-missing-index`                    | high     |
-| `db-seq-scan-heavy-table`             | high     |
-| `db-slow-query-plan`                  | high     |
-| `db-unindexed-foreign-key`            | high     |
-| `drizzle-query-in-loop`               | high     |
-| `external-call-in-transaction`        | high     |
-| `find-then-create-race`               | high     |
-| `unbounded-list-query`                | high     |
-| `unbounded-module-cache`              | medium   |
-| `whole-payload-in-memory`             | medium   |
-| `list-query-overfetch`                | medium   |
-| `orm-deep-offset`                     | high     |
-| `list-count-per-request`              | medium   |
-| `notification-send-in-loop`           | high     |
-| `session-memory-store`                | high     |
-| `orm-cartesian-include`               | high     |
-| `retry-without-backoff`               | medium   |
-| `json-roundtrip-clone`                | low      |
-| `mongoose-aggregate-uncast-id`        | high     |
-| `mongoose-hydrate-for-to-object`      | medium   |
-| `express-missing-compression`         | low      |
-| `heavy-media-in-request-handler`      | medium   |
-| `react-index-as-key`                  | low      |
-| `react-fetch-in-effect-no-abort`      | low      |
-| `react-inline-object-in-jsx-prop`     | low      |
-| `angular-default-change-detection`    | low      |
-| `vue-v-for-missing-key`               | low      |
-| `dom-listener-without-cleanup`        | low      |
-| `dom-unthrottled-scroll-resize`       | low      |
-| `frontend-barrel-heavy-import`        | low      |
-| `sql-select-star-in-query`            | low      |
-| `react-missing-cleanup`               | medium   |
-| `angular-subscribe-without-cleanup`   | medium   |
-| `vue-watch-missing-cleanup`           | medium   |
-| `dom-layout-thrashing`                | medium   |
-| `webhook-missing-idempotency-check`   | medium   |
-| `unbounded-promise-all`               | high     |
-| `mongoose-missing-lean`               | medium   |
-| `graphql-n-plus-one-resolver`         | high     |
-| `react-context-value-recreated`       | low      |
-| `node-event-listener-leak`            | high     |
-| `json-stringify-in-loop`              | medium   |
-| `sequential-http-in-loop`             | high     |
-| `check-then-update-race`              | high     |
-| `payment-missing-idempotency-key`     | high     |
-| `async-route-unhandled-rejection`     | high     |
-| `async-callback-unhandled-rejection`  | high     |
-| `stream-pipe-unhandled-error`         | high     |
-| `json-parse-unguarded`                | medium   |
-| `request-number-unvalidated`          | medium   |
-| `index-redundant-prefix`              | low      |
-| `floating-promise`                    | high     |
-| `discarded-error-result`              | high     |
-| `promise-return-escapes-catch`        | high     |
-| `return-in-finally`                   | high     |
-| `return-newline`                      | high     |
-| `drizzle-write-preflight`             | medium   |
-| `drizzle-last-insert-id`              | medium   |
-| `repeated-workbook-decode`            | medium   |
-| `http-call-without-timeout`           | high     |
-| `index-missing-filter`                | high     |
-| `index-missing-foreign-key`           | high     |
-| `index-unusable-expression`           | high     |
-| `index-unusable-pattern`              | high     |
-| `migration-breaking-rename`           | high     |
-| `migration-concurrent-in-transaction` | high     |
-| `migration-constraint-not-valid`      | high     |
-| `migration-constraint-without-index`  | high     |
-| `migration-missing-lock-timeout`      | high     |
-| `migration-mysql-lock-unspecified`    | high     |
-| `migration-not-null-without-default`  | high     |
-| `migration-set-not-null-scan`         | high     |
-| `migration-volatile-default`          | high     |
-| `mongo-collection-scan`               | high     |
-| `mongo-collection-scan-observed`      | high     |
-| `mongo-deep-skip`                     | high     |
-| `node-sync-crypto-in-async`           | high     |
-| `node-sync-process-in-async`          | high     |
-| `orm-query-in-loop`                   | high     |
-| `password-hash-sync-in-async`         | high     |
-| `pg-deep-offset`                      | high     |
-| `pg-query-in-loop`                    | high     |
-| `pg-sequential-scan`                  | high     |
-| `prisma-dependent-writes`             | high     |
-| `prisma-query-in-loop`                | high     |
-| `queue-add-in-loop`                   | high     |
-| `rebuild-lookup-in-loop`              | high     |
-| `redis-command-in-loop`               | high     |
-| `redis-keys-command`                  | high     |
-| `redis-keys-scan`                     | high     |
-| `repeated-db-span`                    | high     |
-| `service-query-in-loop`               | high     |
-| `typeorm-load-then-save`              | high     |
-| `typeorm-transaction-in-loop`         | high     |
-| `upload-without-size-limit`           | high     |
-| `array-repeated-find`                 | medium   |
-| `array-repeated-membership`           | medium   |
-| `await-before-early-exit`             | medium   |
-| `csharp-fixed-regex-in-loop`          | medium   |
-| `duplicate-key-read`                  | medium   |
-| `go-fixed-regexp-in-loop`             | medium   |
-| `guard-query-per-request`             | medium   |
-| `index-missing-order`                 | medium   |
-| `java-fixed-regex-in-loop`            | medium   |
-| `known-reads-awaited-serially`        | medium   |
-| `loop-copy-accumulator`               | medium   |
-| `mongo-disk-sort`                     | medium   |
-| `node-sync-compression-in-async`      | medium   |
-| `node-sync-fs-in-async`               | medium   |
-| `orm-count-materialization`           | medium   |
-| `password-hash-pure-js`               | medium   |
-| `pg-count-materialization`            | medium   |
-| `pg-disk-sort`                        | medium   |
-| `pg-filter-materialization`           | medium   |
-| `pg-first-materialization`            | medium   |
-| `pg-top-k-materialization`            | medium   |
-| `prisma-count-materialization`        | medium   |
-| `prisma-distinct-in-memory`           | medium   |
-| `prisma-filter-materialization`       | medium   |
-| `prisma-first-materialization`        | medium   |
-| `prisma-relation-count-in-list`       | medium   |
-| `prisma-top-k-materialization`        | medium   |
-| `promise-combinator-serial-await`     | medium   |
-| `python-copy-growing-list`            | medium   |
-| `python-sync-requests-in-async`       | high     |
-| `python-blocking-sleep-in-async`      | high     |
-| `python-fixed-regex-in-loop`          | low      |
-| `python-n-plus-one-orm-loop`          | high     |
-| `python-unbounded-comprehension`      | medium   |
-| `go-sql-query-in-loop`                | high     |
-| `go-string-concat-in-loop`            | medium   |
-| `java-string-concat-in-loop`          | medium   |
-| `java-jdbc-query-in-loop`             | high     |
-| `csharp-async-void`                   | high     |
-| `csharp-string-concat-in-loop`        | medium   |
-| `rust-clone-in-loop`                  | low      |
-| `rust-format-in-loop`                 | low      |
-| `redis-incr-then-expire`              | medium   |
-| `redis-repeated-read`                 | medium   |
-| `reduce-copy-accumulator`             | medium   |
-| `rust-fixed-regex-in-loop`            | medium   |
-| `serial-awaits-in-literal`            | medium   |
-| `typeorm-existence-materialization`   | medium   |
-| `count-then-page-serial`              | low      |
-| `typeorm-unused-count`                | medium   |
-| `prisma-count-for-existence`          | medium   |
-| `db-duplicate-index`                  | low      |
-| `db-unused-index`                     | low      |
-| `filter-for-existence`                | low      |
-| `migration-unparsed`                  | low      |
-| `numeric-sort-for-extreme`            | low      |
-| `typeorm-wide-projection`             | low      |
+| Rule                                | Impact   |
+| ----------------------------------- | -------- |
+| `pg-unreleased-checkout`            | critical |
+| `pool-created-per-request-or-item`  | critical |
+| `db-missing-index`                  | high     |
+| `db-seq-scan-heavy-table`           | high     |
+| `db-slow-query-plan`                | high     |
+| `db-unindexed-foreign-key`          | high     |
+| `drizzle-query-in-loop`             | high     |
+| `external-call-in-transaction`      | high     |
+| `unbounded-list-query`              | high     |
+| `unbounded-module-cache`            | medium   |
+| `whole-payload-in-memory`           | medium   |
+| `list-query-overfetch`              | medium   |
+| `orm-deep-offset`                   | high     |
+| `list-count-per-request`            | medium   |
+| `notification-send-in-loop`         | high     |
+| `session-memory-store`              | high     |
+| `orm-cartesian-include`             | high     |
+| `json-roundtrip-clone`              | low      |
+| `mongoose-hydrate-for-to-object`    | medium   |
+| `express-missing-compression`       | low      |
+| `heavy-media-in-request-handler`    | medium   |
+| `react-index-as-key`                | low      |
+| `react-fetch-in-effect-no-abort`    | low      |
+| `react-inline-object-in-jsx-prop`   | low      |
+| `angular-default-change-detection`  | low      |
+| `vue-v-for-missing-key`             | low      |
+| `dom-listener-without-cleanup`      | low      |
+| `dom-unthrottled-scroll-resize`     | low      |
+| `frontend-barrel-heavy-import`      | low      |
+| `sql-select-star-in-query`          | low      |
+| `react-missing-cleanup`             | medium   |
+| `angular-subscribe-without-cleanup` | medium   |
+| `vue-watch-missing-cleanup`         | medium   |
+| `dom-layout-thrashing`              | medium   |
+| `mongoose-missing-lean`             | medium   |
+| `graphql-n-plus-one-resolver`       | high     |
+| `react-context-value-recreated`     | low      |
+| `node-event-listener-leak`          | high     |
+| `json-stringify-in-loop`            | medium   |
+| `sequential-http-in-loop`           | high     |
+| `index-redundant-prefix`            | low      |
+| `drizzle-last-insert-id`            | medium   |
+| `repeated-workbook-decode`          | medium   |
+| `index-missing-filter`              | high     |
+| `index-missing-foreign-key`         | high     |
+| `index-unusable-expression`         | high     |
+| `index-unusable-pattern`            | high     |
+| `mongo-collection-scan`             | high     |
+| `mongo-collection-scan-observed`    | high     |
+| `mongo-deep-skip`                   | high     |
+| `node-sync-crypto-in-async`         | high     |
+| `node-sync-process-in-async`        | high     |
+| `orm-query-in-loop`                 | high     |
+| `password-hash-sync-in-async`       | high     |
+| `pg-deep-offset`                    | high     |
+| `pg-query-in-loop`                  | high     |
+| `pg-sequential-scan`                | high     |
+| `prisma-query-in-loop`              | high     |
+| `queue-add-in-loop`                 | high     |
+| `rebuild-lookup-in-loop`            | high     |
+| `redis-command-in-loop`             | high     |
+| `redis-keys-command`                | high     |
+| `redis-keys-scan`                   | high     |
+| `repeated-db-span`                  | high     |
+| `service-query-in-loop`             | high     |
+| `typeorm-load-then-save`            | high     |
+| `typeorm-transaction-in-loop`       | high     |
+| `array-repeated-find`               | medium   |
+| `array-repeated-membership`         | medium   |
+| `await-before-early-exit`           | medium   |
+| `csharp-fixed-regex-in-loop`        | medium   |
+| `duplicate-key-read`                | medium   |
+| `go-fixed-regexp-in-loop`           | medium   |
+| `guard-query-per-request`           | medium   |
+| `index-missing-order`               | medium   |
+| `java-fixed-regex-in-loop`          | medium   |
+| `known-reads-awaited-serially`      | medium   |
+| `loop-copy-accumulator`             | medium   |
+| `mongo-disk-sort`                   | medium   |
+| `node-sync-compression-in-async`    | medium   |
+| `node-sync-fs-in-async`             | medium   |
+| `orm-count-materialization`         | medium   |
+| `password-hash-pure-js`             | medium   |
+| `pg-count-materialization`          | medium   |
+| `pg-disk-sort`                      | medium   |
+| `pg-filter-materialization`         | medium   |
+| `pg-first-materialization`          | medium   |
+| `pg-top-k-materialization`          | medium   |
+| `prisma-count-materialization`      | medium   |
+| `prisma-distinct-in-memory`         | medium   |
+| `prisma-filter-materialization`     | medium   |
+| `prisma-first-materialization`      | medium   |
+| `prisma-relation-count-in-list`     | medium   |
+| `prisma-top-k-materialization`      | medium   |
+| `promise-combinator-serial-await`   | medium   |
+| `python-copy-growing-list`          | medium   |
+| `python-sync-requests-in-async`     | high     |
+| `python-blocking-sleep-in-async`    | high     |
+| `python-fixed-regex-in-loop`        | low      |
+| `python-n-plus-one-orm-loop`        | high     |
+| `python-unbounded-comprehension`    | medium   |
+| `go-sql-query-in-loop`              | high     |
+| `go-string-concat-in-loop`          | medium   |
+| `java-string-concat-in-loop`        | medium   |
+| `java-jdbc-query-in-loop`           | high     |
+| `csharp-string-concat-in-loop`      | medium   |
+| `rust-clone-in-loop`                | low      |
+| `rust-format-in-loop`               | low      |
+| `redis-repeated-read`               | medium   |
+| `reduce-copy-accumulator`           | medium   |
+| `rust-fixed-regex-in-loop`          | medium   |
+| `serial-awaits-in-literal`          | medium   |
+| `typeorm-existence-materialization` | medium   |
+| `count-then-page-serial`            | low      |
+| `typeorm-unused-count`              | medium   |
+| `prisma-count-for-existence`        | medium   |
+| `db-duplicate-index`                | low      |
+| `db-unused-index`                   | low      |
+| `filter-for-existence`              | low      |
+| `numeric-sort-for-extreme`          | low      |
+| `typeorm-wide-projection`           | low      |
 
 ## Verification and benchmarks
 
@@ -922,8 +799,8 @@ The benchmark commands verify their expected results. The pattern benchmark comp
 To repeat the optional six-package ORM declaration integration from the source checkout, run the commands below. The fixture typechecks the application, compares exact diagnostic locations and checks that clean controls stay quiet.
 
 ```sh
-npm --prefix test/integration/orms install --ignore-scripts --omit=optional --no-audit --no-fund
-npm --prefix test/integration/orms run verify -- --native
+npm --prefix test/performance/integration/orms install --ignore-scripts --omit=optional --no-audit --no-fund
+npm --prefix test/performance/integration/orms run verify -- --native
 ```
 
 The large benchmark checks 3,200 generated source files and verifies expected diagnostics. The performance report also covers a 1,180-file NestJS checkout. [Measurements and methodology](PERFORMANCE.md)
@@ -935,6 +812,195 @@ Prisma documents per-item queries and batching. Node documents the event-loop ef
 Repeated lookups can benefit from a reusable membership index. Repeated growing copies can become quadratic. Biome already includes a lint rule for accumulating spread. [JavaScript Set](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Set) · [Array.reduce](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/reduce#when_to_not_use_reduce) · [Biome rule](https://biomejs.dev/linter/rules/no-accumulating-spread/javascript/)
 
 Sentry also has an N+1 detector that considers sequential spans and their total duration. This package's local trace check groups similar sibling calls, including concurrent calls. [Sentry N+1 detection](https://docs.sentry.io/product/issues/issue-details/performance-issues/n-one-queries/)
+
+# Reliability checker
+
+`loadwise rel` finds code that fails at runtime or under concurrency: unhandled rejections, swallowed errors, races, missing timeouts and idempotency, transactions that escape their client, unsafe migrations and breaking API changes. It shares the source check of `loadwise perf`, so project discovery, policy, config, engines, baselines and fix flags are the same, and `loadwise check` type-checks the project once for both. Run it with `npx loadwise rel -p tsconfig.json`; `npx loadwise rel --help` lists every flag.
+
+## Source rules
+
+The rules from `pg-transaction-on-pool` to `swallowed-error` moved from the performance and maintainability checkers with the same ids, so existing `// loadwise-reviewed` comments, `--ignore` flags and config `rules` entries keep working. Migration and API contract rules are described in [Migration safety](#migration-safety) and [API contract safety](#api-contract-safety). `csharp-async-void` and the `python-`, `go-`, `java-`, `csharp-` and `rust-` rules come from `loadwise rel polyglot`, which needs the optional ast-grep executable.
+
+| Rule                                                                                | What to review                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="pg-transaction-on-pool"></a>`pg-transaction-on-pool`                         | A standalone transaction-control statement is sent to a typed pool. Use the same checked-out client for the whole transaction and release it in `finally`.                                                                                                                                                                                                                                                                                                                                                                                                           |
+| <a id="prisma-transaction-client-escape"></a>`prisma-transaction-client-escape`     | A direct model operation uses the same outer client that opened an interactive transaction. Verify that the operation belongs inside that transaction.                                                                                                                                                                                                                                                                                                                                                                                                               |
+| <a id="typeorm-transaction-client-escape"></a>`typeorm-transaction-client-escape`   | An awaited write inside a TypeORM transaction goes through a repository or manager that is not bound to it, so it autocommits on another pooled connection, is not rolled back with the transaction and can block on its locks. Use the transaction's manager (`manager.getRepository(Entity)`).                                                                                                                                                                                                                                                                     |
+| <a id="prisma-read-modify-write"></a>`prisma-read-modify-write`                     | A direct read of one row feeds a numeric update of the same field and key. Review atomic arithmetic, an optimistic version check or serializable execution with retries.                                                                                                                                                                                                                                                                                                                                                                                             |
+| <a id="drizzle-unfiltered-write"></a>`drizzle-unfiltered-write`                     | An executed update/delete has no effective predicate in a recognized direct chain. An intentional whole-table maintenance operation can legitimately match.                                                                                                                                                                                                                                                                                                                                                                                                          |
+| <a id="prisma-dependent-writes"></a>`prisma-dependent-writes`                       | Adjacent creates pass a value from the first record into the next write. Explicit single-key nested `connect` can use a custom unique field when generated types confirm a relation. Direct scalar assignments currently recognize `parent.id` going into a field ending in `Id` or `_id`. Other scalar foreign-key conventions can be missed. If both writes must succeed together, consider a nested write or an appropriate transaction.                                                                                                                          |
+| <a id="find-then-create-race"></a>`find-then-create-race`                           | A Prisma or TypeORM lookup by one key is followed in the same function by an insert with the same key, and the schema shows no unique constraint on it. Add the constraint and catch the violation (Prisma P2002, Postgres 23505) or use `upsert` / `ON CONFLICT`. Without a readable schema the finding is contextual; serializable transactions, locks and handled duplicates are skipped.                                                                                                                                                                         |
+| <a id="floating-promise"></a>`floating-promise`                                     | A promise-returning call is a bare statement in an async function or request handler, or `array.forEach(async ...)` runs awaits nobody waits for. Returning, awaiting, using `void`, or attaching a rejection callback suppresses the bare-call warning. Omitted or nullish callbacks do not handle rejections. Test files and helpers listed under `fireAndForget` in the policy are skipped.                                                                                                                                                                       |
+| <a id="discarded-error-result"></a>`discarded-error-result`                         | A call discards a typed `fp-ts` `Either` or `neverthrow` `Result`. This includes async calls, standalone `await` and explicit `void`. Check the failure branch or return the result to a caller that handles it.                                                                                                                                                                                                                                                                                                                                                     |
+| <a id="promise-return-escapes-catch"></a>`promise-return-escapes-catch`             | An async function returns a typed promise directly from the `try` block of a `try`/`catch`. A rejection can bypass that catch. Use `return await` when the catch owns the failure.                                                                                                                                                                                                                                                                                                                                                                                   |
+| <a id="return-in-finally"></a>`return-in-finally`                                   | A return in `finally` can replace an earlier return value or suppress a thrown error. Keep cleanup in `finally` and return from `try`, `catch`, or after the statement.                                                                                                                                                                                                                                                                                                                                                                                              |
+| <a id="return-newline"></a>`return-newline`                                         | A line break immediately after `return` ends the statement before an apparent object or parenthesized return value. Start the expression on the same line as `return`.                                                                                                                                                                                                                                                                                                                                                                                               |
+| <a id="drizzle-write-preflight"></a>`drizzle-write-preflight`                       | An existence check immediately precedes a write on the same key. Review the database constraint or affected-row count alongside the intended error response when requests race.                                                                                                                                                                                                                                                                                                                                                                                      |
+| <a id="http-call-without-timeout"></a>`http-call-without-timeout`                   | A `fetch` or axios call has no `signal` or `timeout`, so a hung upstream holds the request. Set a timeout or an abort signal.                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| <a id="upload-without-size-limit"></a>`upload-without-size-limit`                   | A multer or Nest upload interceptor has no `limits.fileSize`, so one large upload can exhaust memory. A global `MulterModule.register({ limits })` set elsewhere is not visible to the check.                                                                                                                                                                                                                                                                                                                                                                        |
+| <a id="mongoose-aggregate-uncast-id"></a>`mongoose-aggregate-uncast-id`             | A Mongoose `aggregate()` `$match` compares `_id` to a plain string. Aggregation does not cast, so the stage matches nothing; wrap the value in `new Types.ObjectId(id)`. Skipped when a schema declares a String `_id`.                                                                                                                                                                                                                                                                                                                                              |
+| <a id="check-then-update-race"></a>`check-then-update-race`                         | A Mongoose or Sequelize document's numeric field is read, changed in JavaScript and saved without a transaction, losing concurrent updates.                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| <a id="payment-missing-idempotency-key"></a>`payment-missing-idempotency-key`       | A Stripe call that moves money has no idempotency key, so a retry can charge or pay out twice.                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| <a id="webhook-missing-idempotency-check"></a>`webhook-missing-idempotency-check`   | A webhook route inserts rows without first checking whether the event was already processed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| <a id="redis-incr-then-expire"></a>`redis-incr-then-expire`                         | An `incr`, `incrby` or `hincrby` followed by `expire` or `pexpire` on the same key and client takes two round trips and is not atomic: a crash between them leaves the counter without a TTL. Send both in one `multi()` (with `NX` on Redis 7+) or a Lua script.                                                                                                                                                                                                                                                                                                    |
+| <a id="retry-without-backoff"></a>`retry-without-backoff`                           | A network call is retried in a loop, or axios-retry is set up, with no wait between attempts. Add exponential backoff with jitter. axios-retry without `retryDelay` is contextual.                                                                                                                                                                                                                                                                                                                                                                                   |
+| <a id="async-route-unhandled-rejection"></a>`async-route-unhandled-rejection`       | An async Express 4 route handler awaits outside a try/catch and takes no `next`, so a rejection skips the error middleware and the request hangs. Silent on Express 5 and with express-async-errors, express-async-handler or a wrapping call; an unknown Express version is contextual. Fix (review): wrap the body in try/catch and pass the error to `next`.                                                                                                                                                                                                      |
+| <a id="async-callback-unhandled-rejection"></a>`async-callback-unhandled-rejection` | An async callback given to `.on`/`.once`, a timer, `process.nextTick` or `cron.schedule` awaits outside a try/catch; nothing handles its promise, so a rejection crashes Node 15+. Fix (review): wrap the body in try/catch that logs the error.                                                                                                                                                                                                                                                                                                                     |
+| <a id="stream-pipe-unhandled-error"></a>`stream-pipe-unhandled-error`               | `.pipe()` on a Node stream with no `error` listener and no `pipeline`/`finished` in the function, so a stream error crashes the process or leaks the file and socket. RxJS pipes are skipped; a stream known only by its name is contextual. Fix (review): `await pipeline(...)` from `node:stream/promises`.                                                                                                                                                                                                                                                        |
+| <a id="json-parse-unguarded"></a>`json-parse-unguarded`                             | `JSON.parse` of request, queue-message, file, fetch, storage or environment input outside a try/catch. Framework handlers that turn a throw into a 500, and startup parses, are contextual.                                                                                                                                                                                                                                                                                                                                                                          |
+| <a id="request-number-unvalidated"></a>`request-number-unvalidated`                 | `Number`, `parseInt`, `parseFloat` or unary `+` of raw request input reaches a query, `slice`/`limit`/`skip`/`take`, an index or kept arithmetic with no NaN or range check. Schema-validated values, Nest DTOs and pipes are skipped. Fix (review): a 400 guard after the declaration.                                                                                                                                                                                                                                                                              |
+| <a id="unbounded-promise-all"></a>`unbounded-promise-all`                           | `Promise.all` runs over an unbounded collection without a concurrency limit (`p-limit`, `pMap`, `PromisePool`, or chunking).                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| <a id="csharp-async-void"></a>`csharp-async-void`                                   | An `async void` method cannot be awaited and can crash the process on unhandled exceptions. Event handlers (`object sender, …EventArgs e`) and `override` methods, which cannot change their return type, are accepted.                                                                                                                                                                                                                                                                                                                                              |
+| <a id="sql-insert-truncated-at-semicolon"></a>`sql-insert-truncated-at-semicolon`   | An INSERT dump parser ends its captured values at the next semicolon, which can occur inside quoted data. Use a parser for the dump dialect and test a quoted semicolon.                                                                                                                                                                                                                                                                                                                                                                                             |
+| <a id="swallowed-error"></a>`swallowed-error`                                       | A JS/TS `catch` block in non-test code is empty, or only calls `console.*`, `logger.*` or `this.logger.*` while the code after the `try` carries on as if it had succeeded. A comment inside the block, an optional `require()` or `import()` probe, a cleanup in a `finally` or `catch` block, and a `try` made only of `close`, `destroy`, `release`-style calls are accepted. A catch that rethrows, returns or records a failure is not reported.                                                                                                                |
+| <a id="unguarded-boundary-access"></a>`unguarded-boundary-access`                   | A nested read such as `req.body.user.email`, `JSON.parse(text).a.b` or `response.data.x.y` on untyped input, or on a `find()` / `Map#get` result in files without `strictNullChecks`, throws a TypeError when the value is missing. Reads under optional chaining, a guard (including `map.has(key)` before `map.get(key)`), an early return, an `assert`/`invariant` call or a `try` are accepted; typed values are left to the compiler. The fix adds optional chaining and is marked for review: add a default or answer with a 400, or validate the input first. |
+| <a id="assignment-in-condition"></a>`assignment-in-condition`                       | A condition uses `=` where `===` was probably meant, so it overwrites the variable and tests the assigned value. Doubled parentheses `if ((match = re.exec(text)))`, ternary conditions, calls and loops that read and assign are accepted.                                                                                                                                                                                                                                                                                                                          |
+| <a id="nan-comparison"></a>`nan-comparison`                                         | A value is compared to `NaN` with `==` or `===`, which is never true. Reported only in JavaScript the compiler does not check, since TypeScript reports it otherwise. The fix uses `Number.isNaN` and is marked for review, since the branch starts to run.                                                                                                                                                                                                                                                                                                          |
+| <a id="invalid-typeof-comparison"></a>`invalid-typeof-comparison`                   | A `typeof` result is compared to a name it never returns, such as `'strnig'`, so the branch never runs. Reported only in JavaScript the compiler does not check; the fix corrects a close misspelling and is marked for review, since the branch starts to run.                                                                                                                                                                                                                                                                                                      |
+| <a id="unreachable-code"></a>`unreachable-code`                                     | Statements after `return`, `throw`, `break` or `continue` in the same block never run. Hoisted function declarations and type declarations are accepted, and the rule stays silent when `allowUnreachableCode` is `false` because the compiler reports it.                                                                                                                                                                                                                                                                                                           |
+| <a id="loop-index-past-length"></a>`loop-index-past-length`                         | A `for` loop starts at `0`, runs `i <= items.length` and reads `items[i]`, so the last pass reads past the end. Loops starting at `1` are accepted. The fix changes `<=` to `<` and is marked for review.                                                                                                                                                                                                                                                                                                                                                            |
+| <a id="file-handle-not-closed"></a>`file-handle-not-closed`                         | A `FileHandle` from `fs/promises` `open()` is not closed in `finally`, so an error before `close()` leaks the file descriptor. Handles that are returned, stored, passed on or turned into a stream are accepted. Confirm nothing else closes it, then close it in `finally` or use `await using`.                                                                                                                                                                                                                                                                   |
+| <a id="query-runner-not-released"></a>`query-runner-not-released`                   | A TypeORM `createQueryRunner()` is not released in `finally`, so an early return or failed transaction keeps the pooled connection. Confirm no caller releases it, then call `release()` in `finally`.                                                                                                                                                                                                                                                                                                                                                               |
+| <a id="browser-not-closed"></a>`browser-not-closed`                                 | A Playwright or Puppeteer browser is launched without a `close()` (or `disconnect()` for `puppeteer.connect`) in `finally`, so a failed run leaves the browser process running. Playwright test files, whose fixtures close the browser, are skipped.                                                                                                                                                                                                                                                                                                                |
+| <a id="interval-not-cleared"></a>`interval-not-cleared`                             | A `setInterval` in a function outside any frontend lifecycle keeps no handle, or its handle never reaches `clearInterval`, so the timer outlives its owner. Startup code, `unref()` timers and React, Vue, Svelte and Angular files (covered by the frontend cleanup rules) are skipped. Decide who owns the timer and clear it when that owner stops.                                                                                                                                                                                                               |
+| <a id="python-bare-except"></a>`python-bare-except`                                 | `except:` with no exception type also catches `SystemExit` and `KeyboardInterrupt`. Name the exceptions the block handles. A block that ends in a bare `raise` is accepted. Reported by `loadwise rel polyglot`.                                                                                                                                                                                                                                                                                                                                                     |
+| <a id="python-swallowed-exception"></a>`python-swallowed-exception`                 | `except Exception` or `except BaseException` (alone or in a tuple) whose body is only `pass` or `...` makes every failure disappear. Narrow types such as `FileNotFoundError` or `KeyError` with `pass` are accepted as deliberate.                                                                                                                                                                                                                                                                                                                                  |
+| <a id="go-error-discarded"></a>`go-error-discarded`                                 | An error result is dropped with `_`: `value, _ := f()` for calls known to return `(T, error)` (the `os`, `io`, `strconv`, `json`, `sql` and `net` packages, `http.Get`, `url.Parse`, `time.Parse`, and methods such as `Marshal`, `ReadAll`, `Atoi`, `Query`, `Decode`), or `_ = w.Write(...)` and similar write, flush, sync, encode, exec and commit calls. Calls whose second result is a bool, such as `os.LookupEnv`, `cache.Get` or `q.Pop()`, and explicit `_ = x.Close()` or `_ = tx.Rollback()` are accepted.                                               |
+| <a id="go-defer-before-error-check"></a>`go-defer-before-error-check`               | `defer resp.Body.Close()`, or `defer rows.Close()` after `Query`/`QueryContext`, runs before `err` is checked, so a failed call defers `Close` on a nil value and panics. `os.Open` files are accepted, since `Close` on a nil `*os.File` returns an error instead.                                                                                                                                                                                                                                                                                                  |
+| <a id="java-resource-without-try"></a>`java-resource-without-try`                   | A stream, reader, writer or JDBC connection is opened outside try-with-resources and not closed by a later `try`/`finally`, returned or stored, so an exception leaks it.                                                                                                                                                                                                                                                                                                                                                                                            |
+| <a id="csharp-disposable-without-using"></a>`csharp-disposable-without-using`       | A stream or database connection is created without `using`, so an exception skips `Dispose()`. Variables that are returned, stored, handed to another object or disposed in a later `finally` are accepted.                                                                                                                                                                                                                                                                                                                                                          |
+| <a id="rust-unwrap-in-production"></a>`rust-unwrap-in-production`                   | `.unwrap()` in non-test code panics on `None` or `Err`. Test modules, `static`/`const` items and lock guards are accepted. Handle the case or use `expect` with the invariant that makes it safe.                                                                                                                                                                                                                                                                                                                                                                    |
+
+## Migration safety
+
+`npx loadwise rel migrations` reads Prisma, Drizzle, TypeORM, Knex and Sequelize migrations (SQL or code) and flags statements that lock or rewrite a table. It reads files only. `--dialect postgres|mysql` selects the rule set, `--json` for structured output and `--ignore RULE` to skip a rule. The older `loadwise perf migrations` and `loadwise perf contracts` still work and print a note pointing to `rel`.
+
+| Rule                                                                                                                                                                                                                                    | What it flags                                                                                                                               |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="migration-index-not-concurrent"></a><a id="migration-concurrent-in-transaction"></a>`migration-index-not-concurrent`, `migration-concurrent-in-transaction`                                                                      | A PostgreSQL index built without `CONCURRENTLY`, or `CONCURRENTLY` inside a transaction that cannot run it.                                 |
+| <a id="migration-not-null-without-default"></a><a id="migration-volatile-default"></a>`migration-not-null-without-default`, `migration-volatile-default`                                                                                | A NOT NULL column added without a default (fails once rows exist), or a volatile default that rewrites the table.                           |
+| <a id="migration-column-type-rewrite"></a><a id="migration-table-rewrite-command"></a>`migration-column-type-rewrite`, `migration-table-rewrite-command`                                                                                | A column type change or command (`VACUUM FULL`, `CLUSTER`, `REINDEX`) that rewrites the table.                                              |
+| <a id="migration-set-not-null-scan"></a><a id="migration-constraint-not-valid"></a><a id="migration-constraint-without-index"></a>`migration-set-not-null-scan`, `migration-constraint-not-valid`, `migration-constraint-without-index` | Full-table validation scans, constraints that should be added `NOT VALID` first, and constraints that build an index while blocking writes. |
+| <a id="migration-breaking-drop"></a><a id="migration-breaking-rename"></a>`migration-breaking-drop`, `migration-breaking-rename`                                                                                                        | Dropping or renaming a column or table that running application code may still use.                                                         |
+| <a id="migration-missing-lock-timeout"></a>`migration-missing-lock-timeout`                                                                                                                                                             | A locking statement with no `lock_timeout`.                                                                                                 |
+| <a id="migration-mysql-table-copy"></a><a id="migration-mysql-lock-unspecified"></a>`migration-mysql-table-copy`, `migration-mysql-lock-unspecified`                                                                                    | MySQL changes that copy the table or leave the lock level unspecified.                                                                      |
+| <a id="migration-unparsed"></a>`migration-unparsed`                                                                                                                                                                                     | A statement the checker could not read. Review it by hand.                                                                                  |
+
+Only new migrations fail the run. Older migrations are contextual: counted, listed with `--include-contextual`, and never exit 1.
+
+**CI recipe.** Enforce only what the branch adds or changes (files modified since the merge base, plus untracked files). Use a full-history checkout (`fetch-depth: 0`) so the ref resolves.
+
+```sh
+npx loadwise rel migrations --changed-since origin/main
+```
+
+**Baseline workflow.** For a project with existing migrations, accept them once and enforce the rest.
+
+```sh
+npx loadwise rel migrations --write-baseline   # writes loadwise.migrations-baseline.json
+npx loadwise rel migrations                    # new migrations fail; baselined ones do not
+```
+
+Commit the baseline. `--baseline FILE` reads or writes another path. Exit codes match the source checks: 0 passed, 1 findings in enforced migrations, 2 invalid input.
+
+## API contract safety
+
+`npx loadwise rel contracts [--changed-since REF] [--json]` compares the working tree with the merge base of `REF` (default `HEAD`) and flags changes that break API clients. `loadwise check --changed-since REF` includes the same findings in the performance report. Both commands respect workspace selection, ignored paths and rules, configured rule levels, and minimum impact. Visible breaking changes fail by default. Rules set to warn appear in the report and do not fail the check. Invalid input exits 2. Use a full-history checkout (`fetch-depth: 0`) so the ref resolves.
+
+It compares three kinds of source:
+
+- **OpenAPI and Swagger JSON** (`openapi.json`, `swagger.json`). YAML documents are skipped with a note, because no YAML parser ships with loadwise; commit or check a JSON export instead.
+- **GraphQL SDL** (`*.graphql`, `*.gql`, for example the `schema.gql` a code-first server emits). Query documents are skipped.
+- **NestJS classes** used as `@Body()` types or as controller return types (also `@ApiResponse({ type })`), found in `*.controller.ts` and read from the file that declares them (relative imports only). Only property names, `?`, `@IsOptional()` and the written type text are compared.
+
+| Rule                                                        | What it flags                                                                                                               |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| <a id="api-removed-operation"></a>`api-removed-operation`   | An OpenAPI path and method, or a GraphQL `Query`, `Mutation` or `Subscription` field, that no longer exists.                |
+| <a id="api-removed-field"></a>`api-removed-field`           | A response field, GraphQL type, field, argument or union member, or a DTO property returned to clients, that was removed.   |
+| <a id="api-required-input"></a>`api-required-input`         | A request field, parameter, GraphQL argument or input field that is new and required, or changed from optional to required. |
+| <a id="api-type-changed"></a>`api-type-changed`             | A field or parameter whose type changed, or a GraphQL type that became nullable (output) or non-null (input).               |
+| <a id="api-enum-value-removed"></a>`api-enum-value-removed` | An enum value or string-literal option that requests (or, in GraphQL, any client) can no longer use.                        |
+
+Removals point at the line in the old version (the message says so); every other finding points at the new line. A new version next to the old one (`/v2/users` added while `/v1/users` stays) breaks nothing and is not flagged. A removed request property is flagged only when the project builds a `ValidationPipe` with `forbidNonWhitelisted: true`, because only then do clients that still send it get a 400. Properties inherited from a base class in a relative import count as the class's own.
+
+```sh
+npx loadwise rel contracts --changed-since origin/main
+npx loadwise check --changed-since origin/main
+```
+
+## Impact levels
+
+The levels and the `--min-impact` flag work as described under the performance checker's impact levels. `loadwise rel` and the reliability section of `loadwise check` use this table.
+
+| Rule                                  | Impact   |
+| ------------------------------------- | -------- |
+| `api-removed-operation`               | critical |
+| `drizzle-unfiltered-write`            | critical |
+| `migration-breaking-drop`             | critical |
+| `migration-column-type-rewrite`       | critical |
+| `migration-index-not-concurrent`      | critical |
+| `migration-mysql-table-copy`          | critical |
+| `migration-table-rewrite-command`     | critical |
+| `pg-transaction-on-pool`              | critical |
+| `prisma-read-modify-write`            | critical |
+| `prisma-transaction-client-escape`    | critical |
+| `query-runner-not-released`           | critical |
+| `typeorm-transaction-client-escape`   | critical |
+| `api-enum-value-removed`              | high     |
+| `api-removed-field`                   | high     |
+| `api-required-input`                  | high     |
+| `api-type-changed`                    | high     |
+| `assignment-in-condition`             | high     |
+| `async-callback-unhandled-rejection`  | high     |
+| `async-route-unhandled-rejection`     | high     |
+| `browser-not-closed`                  | high     |
+| `check-then-update-race`              | high     |
+| `csharp-async-void`                   | high     |
+| `discarded-error-result`              | high     |
+| `file-handle-not-closed`              | high     |
+| `find-then-create-race`               | high     |
+| `floating-promise`                    | high     |
+| `go-defer-before-error-check`         | high     |
+| `go-error-discarded`                  | high     |
+| `http-call-without-timeout`           | high     |
+| `invalid-typeof-comparison`           | high     |
+| `java-resource-without-try`           | high     |
+| `loop-index-past-length`              | high     |
+| `migration-breaking-rename`           | high     |
+| `migration-concurrent-in-transaction` | high     |
+| `migration-constraint-not-valid`      | high     |
+| `migration-constraint-without-index`  | high     |
+| `migration-missing-lock-timeout`      | high     |
+| `migration-mysql-lock-unspecified`    | high     |
+| `migration-not-null-without-default`  | high     |
+| `migration-set-not-null-scan`         | high     |
+| `migration-volatile-default`          | high     |
+| `mongoose-aggregate-uncast-id`        | high     |
+| `nan-comparison`                      | high     |
+| `payment-missing-idempotency-key`     | high     |
+| `prisma-dependent-writes`             | high     |
+| `promise-return-escapes-catch`        | high     |
+| `return-in-finally`                   | high     |
+| `return-newline`                      | high     |
+| `sql-insert-truncated-at-semicolon`   | high     |
+| `stream-pipe-unhandled-error`         | high     |
+| `unbounded-promise-all`               | high     |
+| `upload-without-size-limit`           | high     |
+| `csharp-disposable-without-using`     | medium   |
+| `drizzle-write-preflight`             | medium   |
+| `interval-not-cleared`                | medium   |
+| `json-parse-unguarded`                | medium   |
+| `python-bare-except`                  | medium   |
+| `python-swallowed-exception`          | medium   |
+| `redis-incr-then-expire`              | medium   |
+| `request-number-unvalidated`          | medium   |
+| `retry-without-backoff`               | medium   |
+| `rust-unwrap-in-production`           | medium   |
+| `swallowed-error`                     | medium   |
+| `unguarded-boundary-access`           | medium   |
+| `unreachable-code`                    | medium   |
+| `webhook-missing-idempotency-check`   | medium   |
+| `migration-unparsed`                  | low      |
 
 # Maintainability checker
 
@@ -951,12 +1017,14 @@ Sentry also has an N+1 detector that considers sequential spans and their total 
 | <a id="folder-boundary"></a><a id="file-placement"></a>`folder-boundary` and `file-placement`   | An import crosses a boundary declared by the team, or a filename suffix occurs outside its allowed folders. Both policies are opt-in.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | <a id="data-access-boundary"></a>`data-access-boundary`                                         | A JS/TS file outside the approved paths imports a configured database driver or ORM module at runtime. Static imports, re-exports, `import x = require()`, literal dynamic imports and unshadowed `require()` calls are checked. The policy is opt-in via `dataAccess`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | <a id="query-mutates-state"></a>`query-mutates-state`                                           | A JS/TS class instance method marked `/** @maintainabilityQuery */` writes directly through `this`. Assignments, increments, deletes and destructuring writes are covered. Mutations through aliases or arbitrary helper calls require review.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| <a id="sql-insert-truncated-at-semicolon"></a>`sql-insert-truncated-at-semicolon`               | An INSERT dump parser ends its captured values at the next semicolon, which can occur inside quoted data. Use a parser for the dump dialect and test a quoted semicolon.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| <a id="swallowed-error"></a>`swallowed-error`                                                   | A JS/TS `catch` block in non-test code is empty, or only calls `console.*`, `logger.*` or `this.logger.*` while the code after the `try` carries on as if it had succeeded. A comment inside the block, an optional `require()` or `import()` probe, a cleanup in a `finally` or `catch` block, and a `try` made only of `close`, `destroy`, `release`-style calls are accepted. A catch that rethrows, returns or records a failure is not reported.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | <a id="unused-export"></a><a id="unreferenced-file"></a>`unused-export` and `unreferenced-file` | An export no scanned file imports, and a source file nothing imports that is not an entry point. Static, type-only, `require()`, literal dynamic imports, `export … from` and `export *` count as use. An unshadowed `new Worker(new URL('./worker.ts', import.meta.url))` or `SharedWorker` counts as loading the file. A namespace import or `require()` uses the whole module. Deep imports by package name from sibling workspace members count as use of the names they import. When the scanned folder's own config has no `paths`, the aliases of an ancestor `tsconfig.json` or `jsconfig.json` that covers it resolve imports. Entry points are `package.json` `main`, `module`, `bin`, `exports` and script paths (also from a `package.json` above the scanned folder, mapped onto the scanned source), literal Node commands in GitHub Actions job steps, local script references in HTML, `nest-cli.json` entry files, `project.json` commands, `tsconfig` `files`, tests, scripts, configuration, migrations, entities, seeds, route folders (`pages/`, `routes/`, and `app/` in Next or Remix projects) and `main`/`index` files at a package root. A non-literal `import()` or `require()` makes findings contextual, project-wide when the specifier is unknown and for one folder when it starts with a relative path. Skipped in `--staged` and `--changed-since` runs, which do not see the whole project. When adopting loadwise on an existing codebase, record the current findings once with `loadwise check --write-baseline` and check with `--baseline`, so only new unused exports and files are reported. |
 | <a id="large-module"></a>`large-module`                                                         | A JS/TS file has more than 600 lines of code, not counting comments and blank lines. Generated and test files are skipped. Override with `limits.largeModuleLines`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | <a id="large-class"></a>`large-class`                                                           | A class has more than 30 methods, accessors, constructors or function-valued fields. Plain data properties (entities, DTOs) are not counted. Override with `limits.largeClassMembers`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | <a id="long-parameter-list"></a>`long-parameter-list`                                           | A function with a body takes more than 5 positional parameters. A destructured object counts as one. Constructors with decorators or parameter properties (dependency injection lists) and parameters with decorators (`@Body()`, `@Param()`) are not counted. Override with `limits.longParameterCount`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| <a id="unused-import"></a>`unused-import`                                                       | An imported name is never used in the file. Type positions, `typeof`, re-exports, decorators, JSDoc references and the `React` import under the classic JSX runtime count as use, and side-effect imports are never reported. Skipped when `noUnusedLocals` is on, since the compiler reports it, when an eslint-disable comment names `no-unused-vars` or `@typescript-eslint/no-unused-vars`, and in codemod `*.input` / `*.output` fixtures, fixture folders, docs, examples, vendored code and assets. The fix removes the name; removing a whole declaration is marked for review because the module may have side effects.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| <a id="unused-local-variable"></a>`unused-local-variable`                                       | A `const`, `let` or `var` is declared and never read. Names starting with `_`, destructuring (rest siblings omit keys on purpose), loop and catch variables, exports and files using `eval` or `with` are skipped, as is the whole rule when `noUnusedLocals` is on, a variable under an eslint-disable comment for `no-unused-vars` or `@typescript-eslint/no-unused-vars`, and codemod `*.input` / `*.output` fixtures, fixture folders, docs, examples, vendored code and assets. The fix deletes the declaration only when its initializer has no side effects.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| <a id="stray-console"></a>`stray-console`                                                       | A `console.*` call in server or Node code, as the execution context classifies it, writes unleveled, unstructured output. Browser and frontend files, CLI scripts (a shebang or `process.argv`), vendored or bundled libraries, stories, playgrounds, docs, examples and fixtures, calls under an eslint-disable comment for `no-console`, and a call directly followed by `process.exit` or `throw` are skipped, as are tests, configuration, seeds, migrations, logger implementations, development-only guards, last-resort `uncaughtException` handlers and error boundaries. When the file already has a `logger` (or a Nest `this.logger`), the fix routes the call through it and is marked for review.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| <a id="deprecated-node-api"></a>`deprecated-node-api`                                           | `new Buffer()` (use `Buffer.alloc` or `Buffer.from`), `url.parse()` (use `new URL()`) or `fs.exists()` (use `fs.access` or `existsSync`). The `Buffer` fix applies to literal arguments; the `url.parse` fix is marked for review because relative input throws and the result has no `path`, `auth` or `query`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 JS and TS source checks use the TypeScript parser. The optional ast-grep executable supplies native parsers for Python, Go, Java, C#, Rust, PHP, Ruby, Kotlin, C and C++. The nesting rule recognizes specific grammar constructs. Braceless forms and pattern-matching constructs have different coverage across languages. A `.h` file uses the C grammar. Use a C++ header extension for C++ grammar.
 
@@ -964,7 +1032,7 @@ For any language, filename placement works directly on the inventory and module 
 
 ## Project rules
 
-Save team decisions in `maintainability.config.json` at the project root, or pass `--config path/to/policy.json`.
+Save team decisions in the `maintainability` section of `loadwise.config.json` at the project root, or pass `--config path/to/policy.json`.
 
 ```json
 {
@@ -1014,7 +1082,7 @@ Other rules have no automatic rewrite.
 ```
 
 ```sh
-npx loadwise maint . --graph modules.json --config maintainability.config.json
+npx loadwise maint . --graph modules.json --config policy.json
 ```
 
 List each project-relative module once. Edges use one-based source coordinates. Set `"kind": "deferred"` for an edge that loads lazily. Graph mode operates entirely on the supplied inventory and edges.
@@ -1056,24 +1124,26 @@ Only the changed files are analysed, while imports still resolve through the who
 
 The levels and the `--min-impact` flag work as described under the performance checker's impact levels.
 
-| Rule                                | Impact |
-| ----------------------------------- | ------ |
-| `dependency-cycle`                  | high   |
-| `data-access-boundary`              | medium |
-| `duplicate-implementation`          | medium |
-| `folder-boundary`                   | medium |
-| `high-branch-complexity`            | medium |
-| `query-mutates-state`               | medium |
-| `sql-insert-truncated-at-semicolon` | high   |
-| `swallowed-error`                   | medium |
-| `syntax-error`                      | medium |
-| `deep-control-flow`                 | low    |
-| `file-placement`                    | low    |
-| `large-class`                       | low    |
-| `large-module`                      | low    |
-| `long-parameter-list`               | low    |
-| `unreferenced-file`                 | low    |
-| `unused-export`                     | low    |
+| Rule                       | Impact |
+| -------------------------- | ------ |
+| `dependency-cycle`         | high   |
+| `data-access-boundary`     | medium |
+| `deprecated-node-api`      | medium |
+| `duplicate-implementation` | medium |
+| `folder-boundary`          | medium |
+| `high-branch-complexity`   | medium |
+| `query-mutates-state`      | medium |
+| `syntax-error`             | medium |
+| `deep-control-flow`        | low    |
+| `file-placement`           | low    |
+| `large-class`              | low    |
+| `large-module`             | low    |
+| `long-parameter-list`      | low    |
+| `stray-console`            | low    |
+| `unreferenced-file`        | low    |
+| `unused-export`            | low    |
+| `unused-import`            | low    |
+| `unused-local-variable`    | low    |
 
 # Security checker
 
@@ -1174,6 +1244,24 @@ These rules moved from the performance checker with the same ids, so existing `/
 
 Example: `pool.query('SELECT * FROM orders ORDER BY ' + req.query.sort)` reports `pg-dynamic-query-text`; `pool.query('SELECT * FROM orders WHERE id = $1', [id])` does not.
 
+## Polyglot source checks
+
+`npx loadwise sec polyglot src/` accepts directories or individual `.py`, `.go`, `.java`, `.cs` and `.rs` files. It uses the optional ast-grep native binary and its syntax-tree patterns. These are syntactic patterns without taint tracking, so each finding is a review prompt: confirm that untrusted input can reach the call. They are not `--ignore` rule ids of the TypeScript source checks. [ast-grep](https://ast-grep.github.io/)
+
+| Rule                                                                          | What to review                                                                                                                |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| <a id="csharp-process-start"></a>`csharp-process-start`                       | `Process.Start` launches an external process. Validate inputs and use `ProcessStartInfo` with `ArgumentList`.                 |
+| <a id="csharp-ef-from-sql-raw"></a>`csharp-ef-from-sql-raw`                   | `FromSqlRaw` or `ExecuteSqlRaw` receives a concatenated or interpolated string. Use `FromSqlInterpolated` or bind parameters. |
+| <a id="go-exec-command-shell"></a>`go-exec-command-shell`                     | `exec.Command` invokes a shell. Execute the target binary directly with explicit arguments.                                   |
+| <a id="go-sql-sprintf-injection"></a>`go-sql-sprintf-injection`               | SQL text is formatted with `fmt.Sprintf`. Use parameterized queries with placeholders.                                        |
+| <a id="java-runtime-exec"></a>`java-runtime-exec`                             | `Runtime.getRuntime().exec` runs an OS command. Use `ProcessBuilder` with an explicit argument array.                         |
+| <a id="java-sql-string-concat"></a>`java-sql-string-concat`                   | A SQL query is built by string concatenation. Use `PreparedStatement` with bound parameters.                                  |
+| <a id="python-insecure-deserialization"></a>`python-insecure-deserialization` | `pickle` or `marshal` deserializes data that may be untrusted. Use `json` or a schema-validated format.                       |
+| <a id="python-unsafe-yaml-load"></a>`python-unsafe-yaml-load`                 | `yaml.load` without `SafeLoader` can construct arbitrary objects. Use `yaml.safe_load`.                                       |
+| <a id="python-subprocess-shell-true"></a>`python-subprocess-shell-true`       | `subprocess` with `shell=True` or `os.system` passes input through a shell. Pass an argument list with `shell=False`.         |
+| <a id="rust-command-shell"></a>`rust-command-shell`                           | `Command::new("sh")` or `Command::new("bash")` spawns a shell. Invoke the executable directly with `.arg()`.                  |
+| <a id="rust-unsafe-raw-pointer-deref"></a>`rust-unsafe-raw-pointer-deref`     | A raw pointer is dereferenced in an `unsafe` block. Verify pointer validity and alignment or use safe abstractions.           |
+
 ## Dependency checks
 
 `loadwise sec deps --online [directory]` reads `package-lock.json` (lockfile version 2 or 3), `pnpm-lock.yaml` or `yarn.lock` (version 1 or Berry) from the directory or the nearest parent that has one, and asks the [OSV database](https://osv.dev) (which includes the GitHub Advisory Database) about every pinned package version. It sends package names and versions and nothing else. Answers are cached for 24 hours in the `loadwise` folder of the OS cache directory. It takes `--format text|json` (or `--json`), `--include-contextual`, `--ignore` and `--fail-on`. A network failure exits 2 rather than passing.
@@ -1260,10 +1348,21 @@ The network is opt-in: `loadwise sec --online` and `loadwise check --online` add
 | `jwt-weak-secret-literal`           | high                                        |
 | `graphql-batching-unbounded`        | medium                                      |
 | `express-cookie-auth-missing-csrf`  | high                                        |
+| `csharp-process-start`              | medium                                      |
+| `csharp-ef-from-sql-raw`            | high                                        |
+| `go-exec-command-shell`             | high                                        |
+| `go-sql-sprintf-injection`          | high                                        |
+| `java-runtime-exec`                 | medium                                      |
+| `java-sql-string-concat`            | high                                        |
+| `python-insecure-deserialization`   | high                                        |
+| `python-unsafe-yaml-load`           | high                                        |
+| `python-subprocess-shell-true`      | high                                        |
+| `rust-command-shell`                | high                                        |
+| `rust-unsafe-raw-pointer-deref`     | medium                                      |
 
 ## Project-defined row scopes
 
-Row-scope checks read `prismaScopes` and `drizzleScopes` from `backend-perf.policy.json`, found the same way as for the performance checker (see [Project-defined access policy](#project-defined-access-policy)). Every other rule runs without a scope policy. Row-scope checks start when the project identifies the existing model or table, its scoped property, and the helper that supplies an authorized scalar. Columns such as `tenantId`, `organizationId` and `workspace_id` have no special meaning to the checker on their own. Database mappings can keep the original storage column name. [Prisma database mapping](https://www.prisma.io/docs/orm/prisma-schema/data-model/database-mapping) · [Drizzle schema declarations](https://orm.drizzle.team/docs/sql-schema-declaration)
+Row-scope checks read `prismaScopes` and `drizzleScopes` from the `performance` section of `loadwise.config.json`, found the same way as for the performance checker (see [Project-defined access policy](#project-defined-access-policy)). Every other rule runs without a scope policy. Row-scope checks start when the project identifies the existing model or table, its scoped property, and the helper that supplies an authorized scalar. Columns such as `tenantId`, `organizationId` and `workspace_id` have no special meaning to the checker on their own. Database mappings can keep the original storage column name. [Prisma database mapping](https://www.prisma.io/docs/orm/prisma-schema/data-model/database-mapping) · [Drizzle schema declarations](https://orm.drizzle.team/docs/sql-schema-declaration)
 
 Drizzle also supports configuring quoted properties such as `"org-id"` and accessing them with brackets. In Prisma's generated filters, `AND`, `OR` and `NOT` are logical operators. If a physical column uses one of these names, configure the Prisma property that maps to it.
 
@@ -1271,18 +1370,61 @@ Drizzle also supports configuring quoted properties such as `"org-id"` and acces
 
 `drizzleScopes` names an exported table, its schema module, its scoped property and the trusted helper. For a direct executed query, `.where(eq(invoices.workspace_id, currentWorkspace()))` establishes the configured predicate in the example. Use the property exposed by the ORM. A project with `organizationId: text('org_id')` would configure `"field": "organizationId"`. Each table can use a different convention. A later `.where()` can replace the earlier condition. The rule checks the effective condition and can report `drizzle-scope-unverified` when a protected table appears in a recognized chain and scope, projection or write data needs review. Stored builders, prepared aliases, raw SQL and arbitrary helper-generated statements can fall outside this check.
 
-The import boundary for database modules is a maintainability rule; configure it through the `dataAccess` section of `maintainability.config.json`.
+The import boundary for database modules is a maintainability rule; configure it through the `dataAccess` field of the `maintainability` section in `loadwise.config.json`.
 
 These checks assume the configured helper authenticates the caller and authorizes the returned scope. Middleware, injected or previously obtained clients, raw SQL, unrecognized query shapes and database row-level policies require separate verification. A clean run only describes the covered operations.
 
-## Developing locally
+# Accessibility checker
 
-Use Node.js 22.12+ for the development tools and run `npm ci --include=optional`. Open this repository folder as a trusted workspace in VS Code or Cursor and enable the recommended Prettier extension. Saving a supported file formats it with the repository settings.
+`loadwise a11y` finds markup that people using screen readers, keyboards or zoom cannot use: images without alt text, unlabelled form controls, click handlers on non-interactive elements, invalid ARIA, a missing page language and similar. It reads JSX and inline Angular templates from the TypeScript program, and `.html`, `.htm`, `.vue` and `.svelte` files from the project folders, leaving out ignored folders, build output, minified and vendored files and the config's `ignore` paths. It shares the source check of `loadwise perf`, so project discovery, config, engines, baselines and fix flags are the same, and `loadwise check` type-checks the project once for all of them. A project with no frontend sources (no JSX, HTML, Vue or Svelte files and no frontend package in any `package.json`) is skipped by `loadwise check` with a note; `loadwise a11y` on it reports 0 findings.
+
+```sh
+npx loadwise a11y -p tsconfig.json    # JSX, Angular templates and the project's markup files
+npx loadwise a11y src/index.html      # explicit markup files
+npx loadwise a11y --staged            # only findings on staged lines
+npx loadwise a11y --fix --only <id>   # apply one generated fix
+```
+
+`npx loadwise a11y --help` lists every flag. A `loadwise.config.json` `rules` or `overrides` entry for an accessibility rule applies here, and findings live in the `accessibility` section of the baseline file.
+
+## Rules
+
+| Rule                                                                        | What to review                                                                                                                                                                      | Fix                |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| <a id="a11y-img-missing-alt"></a>`a11y-img-missing-alt`                     | Review whether the image is informative, which needs descriptive alt text, or decorative, which needs `alt=""`.                                                                     | Manual             |
+| <a id="a11y-button-missing-type"></a>`a11y-button-missing-type`             | A button inside a form (or tied to one with `form=`) has no `type`, so it submits. Review whether it should submit (`type="submit"`) or only run a click handler (`type="button"`). | Automatic (review) |
+| <a id="a11y-clickable-non-interactive"></a>`a11y-clickable-non-interactive` | Review whether a `<button>` or `<a>` can replace the element, or whether it needs a role, `tabIndex` and key handler. Handlers that only stop propagation are accepted.             | Manual             |
+| <a id="a11y-invalid-aria"></a>`a11y-invalid-aria`                           | Review the misspelled ARIA attribute or role against the WAI-ARIA names and use the suggested one.                                                                                  | Manual             |
+| <a id="a11y-missing-form-label"></a>`a11y-missing-form-label`               | Review how the control is named: a wrapping `<label>`, a `<label for>` matching its id, or aria-label. A placeholder is not a label.                                                | Manual             |
+| <a id="a11y-html-missing-lang"></a>`a11y-html-missing-lang`                 | Review which language the page is written in and set `lang` to it.                                                                                                                  | Manual             |
+| <a id="a11y-iframe-missing-title"></a>`a11y-iframe-missing-title`           | Review what the embedded content is and give the iframe a `title` that says so.                                                                                                     | Manual             |
+| <a id="a11y-positive-tabindex"></a>`a11y-positive-tabindex`                 | Review whether the focus order can come from the markup order, then use `tabIndex` 0 or -1.                                                                                         | Manual             |
+| <a id="a11y-viewport-zoom-disabled"></a>`a11y-viewport-zoom-disabled`       | Review whether the zoom limit is needed. Remove `user-scalable=no` and keep maximum-scale at 2 or more.                                                                             | Manual             |
+
+## Impact levels
+
+The levels and the `--min-impact` flag work as described under the performance checker's impact levels. `loadwise a11y` and the accessibility section of `loadwise check` use this table.
+
+| Rule                             | Impact |
+| -------------------------------- | ------ |
+| `a11y-clickable-non-interactive` | high   |
+| `a11y-img-missing-alt`           | high   |
+| `a11y-invalid-aria`              | high   |
+| `a11y-missing-form-label`        | high   |
+| `a11y-viewport-zoom-disabled`    | high   |
+| `a11y-button-missing-type`       | medium |
+| `a11y-html-missing-lang`         | medium |
+| `a11y-iframe-missing-title`      | medium |
+| `a11y-positive-tabindex`         | medium |
+
+# Developing locally
+
+Use Node.js 22.13+ for the development tools and run `npm ci --include=optional`. Open this repository folder as a trusted workspace in VS Code or Cursor and enable the recommended Prettier extension. Saving a supported file formats it with the repository settings.
 
 Run `npm run format` to format files, `npm run lint` for correctness checks, or `npm run check` to verify formatting, lint and tests together.
 
 From this checkout, run `node bin/loadwise.js check --config scripts/self-scan/loadwise.config.json` to scan Loadwise itself; that config excludes vendored files, tests, examples, and benchmark workloads so they keep their intended behavior.
 
-## License
+# License
 
 Licensed under the [Apache License 2.0](LICENSE). Copyright © 2026 Ibrahim Hafez.

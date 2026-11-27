@@ -1,6 +1,6 @@
 ---
 description: Check a project or fix its Loadwise findings in this session
-argument-hint: "[directory] [--only perf,maint] [--staged] | fix [--yes|--all|--handoff] [performance maintainability security]"
+argument-hint: "[directory] [--only perf,rel,maint,sec,a11y] [--staged] | fix [--yes|--all|--handoff] [performance reliability maintainability security accessibility]"
 allowed-tools: Bash(npx loadwise:*), Bash(node_modules/.bin/loadwise:*)
 ---
 
@@ -16,7 +16,7 @@ For `fix` or a request to address findings, review them before choosing edits.
 
 1. Record existing working changes and start with a read-only JSON scan. For example, `fix performance security` starts with `loadwise check --only perf,sec --json`. Preserve the selected project, configuration, workspaces and changed-line filters. Restrict work to the named files or ids if provided.
 2. Evaluate both generated and manual findings against the actual code, callers and tests. Inspect proposed diffs and notes and check their assumptions. Use a generated edit only when you can justify that exact change. Adapt a suggestion or implement a manual fix yourself when warranted. Keep intentional behavior and false positives with a reason. Defer unresolved decisions and continue with independent findings.
-3. For each supported edit, apply the confirmed id with the matching `perf`, `maint` or `sec` command and `--fix --only <id>`. Use the scoped report's printed fix command when available. Pass the original project settings, converting the unified `--config` option to the checker's `--loadwise-config`. Review-marked changes require individual approval unless already authorized.
+3. For each supported edit, apply the confirmed id with the matching `perf`, `rel`, `maint`, `sec` or `a11y` command and `--fix --only <id>`. Use the scoped report's printed fix command when available. Pass the original project settings, converting the unified `--config` option to the checker's `--loadwise-config`. Review-marked changes require individual approval unless already authorized.
 4. For changed-line requests, confirm every hunk fits the authorized range. Maintainability accepts `--staged` or `--changed-since` with targeted fixes. For performance and security, use the confirmed ids from the filtered scan without passing those change flags to `--fix`. Leave the Git index untouched.
 5. After any fix, including a command the user already ran, inspect every applied hunk against code, callers and tests. Use the before/after report or original diff/output, and rescan. Review applied, skipped, review-marked and manual findings even when none are manual. Correct only attributable changes in scope. Preserve pre-existing work, thresholds and baselines.
 6. Run the affected tests or typecheck and repeat the scoped check. If an id shifted, match the rule, location and code. Report verified edits and reasons for remaining findings. If earlier evidence is unavailable, verify the current code and state which prior edits cannot be identified. Request the original diff/output only if needed.

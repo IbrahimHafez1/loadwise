@@ -1,12 +1,12 @@
 name: loadwise
-description: Check TypeScript and JavaScript backends for performance, maintainability and security problems.
+description: Check TypeScript and JavaScript projects for performance, reliability, maintainability, security and accessibility problems.
 branding:
   icon: check-circle
   color: blue
 
 inputs:
   checkers:
-    description: Comma-separated checkers passed to --only (perf, maint, sec). Empty runs all of them.
+    description: Comma-separated checkers passed to --only (perf, rel, maint, sec, a11y). Empty runs all of them.
     default: ''
   path:
     description: Directory to check, relative to the workspace.
