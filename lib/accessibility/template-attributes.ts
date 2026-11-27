@@ -29,12 +29,13 @@ function hasInterpolation(dialect: TemplateDialect, value: string): boolean {
 
 // `@click.stop`, `(click)="$event.stopPropagation()"` or `on:click={(e) => e.stopPropagation()}` keeps a click inside
 // a panel from reaching a backdrop; it is not a way to activate the element, so it is left out like a missing handler.
-// Each whitespace run has one place to match, so a long run of spaces cannot make the test backtrack.
+// Each whitespace run has one place to match, so a long run of spaces cannot make the test backtrack. The arrow
+// parameter starts with a name or a parenthesis, never a space, for the same reason.
 const propagationOnlyHandler =
-  /^\s*(?:\(?[\w$]*\)?\s*=>\s*)?(?:\{\s*)?(?:[\w$]+\.(?:stopPropagation|preventDefault)\(\)\s*(?:;\s*)?)+(?:\}\s*)?$/;
+  /^\s*(?:(?:\([\w$]*\)|[\w$]+)\s*=>\s*)?(?:\{\s*)?(?:[\w$]+\.(?:stopPropagation|preventDefault)\(\)\s*(?:;\s*)?)+(?:\}\s*)?$/;
 // `@click="() => {}"` does nothing, so it is no more a way to activate the element than a propagation-only handler. A
 // Svelte `on:click={…}` value keeps its closing brace, hence the optional second one.
-const emptyHandler = /^\s*(?:\(?[\w$]*\)?\s*=>\s*)?\{\s*\}\}?\s*$/;
+const emptyHandler = /^\s*(?:(?:\([\w$]*\)|[\w$]+)\s*=>\s*)?\{\s*\}\}?\s*$/;
 
 function eventAttribute(event: string, rawValue: string | undefined, isBareAllowed: boolean): NormalizedAttribute {
   const isBare = rawValue === undefined || rawValue.trim() === '';
