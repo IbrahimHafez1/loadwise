@@ -252,7 +252,7 @@ async function scanForFixes(checkers?: readonly string[]): Promise<Finding[]> {
     if (!runs[index] && pillar.optional) return [];
     if (!runs[index] && !projectConfig(options.directory)) {
       throw new Error(
-        `No tsconfig.json or jsconfig.json in ${options.directory}, so the ${pillar.title} checker cannot run. Run loadwise fix from the project folder. No fixes applied.`,
+        `No tsconfig.json or jsconfig.json in ${options.directory}, so the ${pillar.title} checker cannot run. Run loadwise fix from the project folder, or add a tsconfig.json or jsconfig.json there. No fixes applied.`,
       );
     }
     const report = parsedReport(runs[index]);
