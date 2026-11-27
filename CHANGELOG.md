@@ -6,8 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-27
+
+### Changed
+
+- The GitHub Action's display name is now `Loadwise Check`, for its GitHub Marketplace listing. Workflows keep using `IbrahimHafez1/loadwise@v0`.
+
 ### Fixed
 
+- `a11y-clickable-non-interactive` no longer slows to seconds on a template event handler with a long run of whitespace; the patterns that accept propagation-only and empty handlers now run in linear time.
 - Stopping `loadwise perf --watch` (or any checker re-spawned with a larger heap) with SIGTERM, SIGINT or SIGHUP now also stops the re-spawned process instead of leaving it running.
 - `loadwise --fix` now points to `loadwise fix --yes` and `loadwise fix --all` instead of printing a raw argument-parser error.
 - `loadwise fix` in a folder without a `tsconfig.json` or `jsconfig.json` now says so and asks to run it from the project folder or add one, instead of "The Performance scan did not complete".
