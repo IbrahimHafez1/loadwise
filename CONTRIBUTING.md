@@ -30,6 +30,8 @@ node --import ./test/manual-session.js --test editor/test/*.test.cjs
 
 ## Before Opening a Pull Request
 
+For a new rule or a large change, open an issue first so we can agree on the approach. Small fixes can go straight to a pull request.
+
 Run the full verification suite from the repository root:
 
 ```sh
