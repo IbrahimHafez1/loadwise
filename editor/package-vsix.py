@@ -25,11 +25,15 @@ def stage_checker(source, stage, package_name, tool_name):
     package, = json.loads(inventory)
     if package["name"] != package_name:
         raise ValueError(f"Expected {package_name} in {source}")
+    stage_resolved = stage.resolve()
     for entry in package["files"]:
         relative = PurePosixPath(entry["path"])
+        if not relative.parts or relative.is_absolute() or ".." in relative.parts:
+            raise ValueError(f"Unsafe pack path {entry['path']!r} in {package_name}")
         editor_module = len(relative.parts) == 2 and relative.parts[0] == "editor" and relative.suffix == ".cjs"
         if relative.parts[0] in {"bin", "lib", "polyglot", "package.json"} or editor_module:
-            target = stage / "tools" / tool_name / relative
+            target = (stage / "tools" / tool_name / relative).resolve()
+            target.relative_to(stage_resolved)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source / relative, target)
 
@@ -76,11 +80,13 @@ def stage_runtime(downloads, stage, lock):
                 relative = path.relative_to("package").as_posix()
                 if not runtime_files(name, relative):
                     continue
-                target = stage / "tools/node_modules" / name / relative
+                target = (stage / "tools/node_modules" / name / relative).resolve()
+                target.relative_to(stage.resolve())
                 if name in variants and relative == "ast-grep":
                     # vsce on Windows drops POSIX executable bits. Append these six
                     # binaries using explicit Unix ZIP metadata after vsce builds the manifest.
-                    target = downloads / (name.split("/")[-1] + "-ast-grep")
+                    target = (downloads / (name.split("/")[-1] + "-ast-grep")).resolve()
+                    target.relative_to(downloads.resolve())
                     executables[f"extension/tools/node_modules/{name}/ast-grep"] = target
                 target.parent.mkdir(parents=True, exist_ok=True)
                 with target.open("wb") as dest:

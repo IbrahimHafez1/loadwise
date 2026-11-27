@@ -280,13 +280,15 @@ function checkWeakPasswordHash(call: CallExpression, context: SecurityRuleContex
 
 // A numeric literal or a const that resolves to one; a conditional on the test environment yields
 // its other branch.
-function literalCost(expression: Expression, checker: CheckerAdapter): number | undefined {
+function literalCost(expression: Expression, checker: CheckerAdapter, seen = new Set<Node>()): number | undefined {
+  if (seen.has(expression) || seen.size > 16) return;
+  seen.add(expression);
   const node = resolveConstant(expression, checker);
   if (ts.isNumericLiteral(node)) return Number(node.text);
   if (!ts.isConditionalExpression(node)) return;
   const condition = node.condition.getText();
-  if (/===?\s*['"]test['"]/.test(condition)) return literalCost(node.whenFalse, checker);
-  if (/!==?\s*['"]test['"]/.test(condition)) return literalCost(node.whenTrue, checker);
+  if (/===?\s*['"]test['"]/.test(condition)) return literalCost(node.whenFalse, checker, seen);
+  if (/!==?\s*['"]test['"]/.test(condition)) return literalCost(node.whenTrue, checker, seen);
 }
 
 function underTestEnvironmentBranch(node: Node) {

@@ -470,7 +470,9 @@ async function execute(argv: string[], dependencies: DbDependencies): Promise<nu
     return await executeWithConnection(options, connection, dependencies);
   } catch (error) {
     const failure: object = Object(error);
-    throw Object.assign(failure, { redact: connection.redact });
+    if (Object.isExtensible(failure)) throw Object.assign(failure, { redact: connection.redact });
+    const wrapped = new Error(error instanceof Error ? error.message : String(error), { cause: error });
+    throw Object.assign(wrapped, { redact: connection.redact });
   }
 }
 

@@ -5,10 +5,16 @@ import type { BinaryExpression, Expression, Node } from 'typescript';
 import type { CheckerAdapter, SecurityRuleContext } from '../../shared/types.js';
 
 const timingSafeStringComparison = Symbol('timingSafeStringComparison');
-const strictComparisons = () =>
-  new Set([ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken]);
-const comparisonOperators = () =>
-  new Set([...strictComparisons(), ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsToken]);
+function isStrictComparison(kind: number): boolean {
+  return kind === ts.SyntaxKind.EqualsEqualsEqualsToken || kind === ts.SyntaxKind.ExclamationEqualsEqualsToken;
+}
+function isComparisonOperator(kind: number): boolean {
+  return (
+    isStrictComparison(kind) ||
+    kind === ts.SyntaxKind.EqualsEqualsToken ||
+    kind === ts.SyntaxKind.ExclamationEqualsToken
+  );
+}
 const secretName = /(?:signature|hmac|digest|secret|apiKey|api_key|token|otp|password|passwordHash|csrf)$/i;
 const message =
   'This compares a secret with `===`, which stops at the first differing character and leaks timing. Compare with `crypto.timingSafeEqual` on equal-length buffers.';
@@ -71,7 +77,7 @@ function isUrlPasswordProperty(node: Expression, checker: CheckerAdapter): boole
 }
 
 function checkSecretComparison(comparison: BinaryExpression, context: SecurityRuleContext) {
-  if (!comparisonOperators().has(comparison.operatorToken.kind)) return;
+  if (!isComparisonOperator(comparison.operatorToken.kind)) return;
   const { left, right } = comparison;
   if (isConstantOperand(left) || isConstantOperand(right)) return;
   if (isUrlPasswordProperty(left, context.checker) || isUrlPasswordProperty(right, context.checker)) return;
@@ -87,7 +93,7 @@ function checkSecretComparison(comparison: BinaryExpression, context: SecurityRu
     const ambiguous = !hashed && lastSegment(secret) === 'token';
     const canFix =
       !ambiguous &&
-      strictComparisons().has(comparison.operatorToken.kind) &&
+      isStrictComparison(comparison.operatorToken.kind) &&
       isStringOperand(left, context.checker) &&
       isStringOperand(right, context.checker);
     return context.report(

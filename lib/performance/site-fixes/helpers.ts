@@ -64,12 +64,14 @@ function enclosingStatement(node: Node): Statement | undefined {
 }
 
 function lineStart(text: string, offset: number): number {
-  return text.lastIndexOf('\n', offset - 1) + 1;
+  return offset <= 0 ? 0 : text.lastIndexOf('\n', offset - 1) + 1;
 }
 
 function indentationAt(text: string, offset: number): string {
   const start = lineStart(text, offset);
-  return (/^[ \t]*/.exec(text.slice(start)) ?? [''])[0];
+  let end = start;
+  while (end < text.length && (text[end] === ' ' || text[end] === '\t')) end++;
+  return text.slice(start, end);
 }
 
 // Inserts whole lines before the line that holds `node`, matching that line's indentation.
@@ -136,16 +138,25 @@ function enclosingIteration(node: Node): Iteration | undefined {
   }
 }
 
+const identifiersByFile = new WeakMap<SourceFile, Set<string>>();
+
+function identifiersIn(sourceFile: SourceFile): Set<string> {
+  let names = identifiersByFile.get(sourceFile);
+  if (names) return names;
+  names = new Set<string>();
+  const collect = (node: Node): void => {
+    if (ts.isIdentifier(node)) names.add(node.text);
+    ts.forEachChild(node, collect);
+  };
+  collect(sourceFile);
+  identifiersByFile.set(sourceFile, names);
+  return names;
+}
+
 // True when `name` is declared anywhere in the file, so a new binding with that name could shadow
 // or clash.
 function nameTaken(sourceFile: SourceFile, name: string): boolean {
-  let taken = false;
-  (function visit(node: Node): void {
-    if (taken) return;
-    if (ts.isIdentifier(node) && node.text === name) taken = true;
-    else ts.forEachChild(node, visit);
-  })(sourceFile);
-  return taken;
+  return identifiersIn(sourceFile).has(name);
 }
 
 function freshName(sourceFile: SourceFile, base: string): string | undefined {
@@ -174,10 +185,15 @@ function addProperty(literal: ObjectLiteralExpression, property: string, text: s
 
 // Appends `{ property }` as a new last argument.
 function addOptionsArgument(call: CallExpression, property: string, text: string): TextEdit {
+  const options = `{ ${property} }`;
   const [last] = call.arguments.slice(-1);
+  if (!last) {
+    const open = text.indexOf('(', call.expression.end);
+    const insertAt = open === -1 ? call.end - 1 : open + 1;
+    return { start: insertAt, end: insertAt, text: options };
+  }
   const trailingComma = call.arguments.hasTrailingComma;
   const commaEnd = trailingComma ? text.indexOf(',', last.end) + 1 : last.end;
-  const options = `{ ${property} }`;
   if (spansLines(text, call.expression.end, last.getStart())) {
     const lineText = `\n${indentationAt(text, last.getStart())}${options}`;
     return { start: commaEnd, end: commaEnd, text: trailingComma ? `${lineText},` : `,${lineText}` };

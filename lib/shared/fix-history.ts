@@ -10,6 +10,7 @@ import type { HistoryStorage, ReviewOutcome } from './types/review-history.js';
 import { findProjectRoot } from './agent-init.js';
 import { realTarget } from './real-target.js';
 import { pillars } from './pillars.js';
+import { isRecord } from './is-record.js';
 
 type OutcomeGroup = 'applied' | 'manual' | 'pendingReview' | 'alreadyApplied' | 'failed';
 
@@ -277,11 +278,14 @@ function checkerHistory(project: string | null, directory: string, checker: stri
 }
 
 function parseReceipt(text: string, file: string): HistoryRecord {
+  let parsed: unknown;
   try {
-    return JSON.parse(text);
+    parsed = JSON.parse(text);
   } catch {
     throw new Error('Invalid Loadwise history file: ' + file);
   }
+  if (!isRecord(parsed)) throw new Error('Invalid Loadwise history file: ' + file);
+  return parsed;
 }
 
 function readReceipt(directory: string, name: string): HistoryRecord {
@@ -334,6 +338,20 @@ function latestReviews(histories: readonly HistoryStorage[]): Map<string, Review
   return entries;
 }
 
+function sameOutcome(previous: ReviewOutcome | undefined, current: ReviewOutcome): boolean {
+  return (
+    previous !== undefined &&
+    previous.id === current.id &&
+    previous.checker === current.checker &&
+    previous.ruleId === current.ruleId &&
+    previous.file === current.file &&
+    previous.line === current.line &&
+    previous.column === current.column &&
+    previous.status === current.status &&
+    previous.evidence === current.evidence
+  );
+}
+
 function saveReviewOutcomes(project: string, outcomes: readonly ReviewOutcome[]): number {
   const histories = readableHistory(project);
   const history = histories[0] ?? (isAgentSession() ? storage(project, true, agentOnlySuffix) : undefined);
@@ -342,7 +360,7 @@ function saveReviewOutcomes(project: string, outcomes: readonly ReviewOutcome[])
   const changed: ReviewOutcome[] = [];
   for (const { id, checker, ruleId, file, line, column, status, evidence } of outcomes) {
     const outcome = { id, checker, ruleId, file, line, column, status, evidence };
-    if (JSON.stringify(previous.get(reviewKey(outcome))) !== JSON.stringify(outcome)) changed.push(outcome);
+    if (!sameOutcome(previous.get(reviewKey(outcome)), outcome)) changed.push(outcome);
   }
   if (changed.length) writeRecord(history.directory, '.review.json', { outcomes: changed });
   return changed.length;

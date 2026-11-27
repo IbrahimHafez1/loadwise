@@ -1,6 +1,6 @@
 // AST helpers shared by the per-item query rewrites: node search, text splicing, what a loop body
 // reads or writes, and object literal properties.
-import { ts, textOf, lineStart } from './helpers.js';
+import { ts, textOf, lineStart, indentationAt } from './helpers.js';
 import type {
   Expression,
   Identifier,
@@ -178,8 +178,7 @@ export function propertyValue(property: PlainProperty): Expression {
 
 export function indentationOf(node: Node): string {
   const sourceFile = node.getSourceFile();
-  const start = lineStart(sourceFile.text, node.getStart(sourceFile));
-  return /^[ \t]*/.exec(sourceFile.text.slice(start))?.[0] ?? '';
+  return indentationAt(sourceFile.text, node.getStart(sourceFile));
 }
 
 export function singleLineLiteral(node: Node): node is StringLiteral | NoSubstitutionTemplateLiteral {

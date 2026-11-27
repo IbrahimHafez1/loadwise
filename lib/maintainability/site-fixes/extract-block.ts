@@ -14,7 +14,7 @@
 // change. In TypeScript every parameter gets the type the checker gives the variable at that spot,
 // and the rewritten file must not type-check worse.
 import { applyEdits } from '../../shared/fix-hunks.js';
-import { originalProgram, typeChecksAsBefore } from './isolated-program.js';
+import { typeChecksAsBefore } from './isolated-program.js';
 import { extractionEdits, extractionPlan } from './extract-block-edits.js';
 import { decisionCount, fitsHunks, measuredEdits, ownStatements } from './extract-block-measure.js';
 import type { SourceFile, Statement } from 'typescript';
@@ -47,4 +47,4 @@ function extractionEdit(
   if (draft?.typeChecks()) return { name: draft.name, edits: draft.edits };
 }
 
-export { extractionDraft, extractionEdit, fitsHunks, measuredEdits, ownStatements, decisionCount, originalProgram };
+export { extractionDraft, extractionEdit, fitsHunks, measuredEdits, ownStatements, decisionCount };

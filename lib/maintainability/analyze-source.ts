@@ -94,9 +94,9 @@ function analyzeSource(
     findings: [
       ...analyzeFunctions(source, file),
       ...accessFindings,
-      ...checkSwallowedErrors(source, file),
+      ...checkSwallowedErrors(source, file, generated),
       ...checkInsertTerminators(source, file),
-      ...checkSizeLimits(source, file, limits),
+      ...checkSizeLimits(source, file, limits, generated),
     ],
     edges: collectEdges(source, file, resolve, compilerOptions),
     constEnums: exportedConstEnums(source),

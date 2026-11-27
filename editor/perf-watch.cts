@@ -49,6 +49,7 @@ function startPerfWatch({ script, project, cwd, env, onFindings, onError, onExit
   }
   child.stdout.setEncoding('utf8');
   child.stdout.on('data', (chunk: string) => {
+    if (child.killed) return;
     if (pending.length + chunk.length > maxPendingBytes) {
       pending = '';
       onError(new Error('Watch mode output exceeded maximum buffer size.'));
@@ -65,6 +66,7 @@ function startPerfWatch({ script, project, cwd, env, onFindings, onError, onExit
   });
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (text: string) => {
+    if (child.killed) return;
     if (text.trim()) onError(new Error(text.trim()));
   });
   function finish(error: Error): void {
@@ -76,6 +78,7 @@ function startPerfWatch({ script, project, cwd, env, onFindings, onError, onExit
   child.on('exit', (code, signal) => finish(new Error('Watch mode exited with ' + (signal ?? 'code ' + code) + '.')));
   return {
     stop() {
+      if (stopped) return;
       stopped = true;
       child.kill();
       const killTimer = setTimeout(() => {

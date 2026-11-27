@@ -67,6 +67,9 @@ function createRedactor({ url, user, password, hosts = [], extra = [] }: Redacto
   ]);
   // Longest first, so a password containing the user name is removed whole.
   const ordered = [...secrets].sort((left, right) => right.length - left.length);
+  const longPatterns = ordered
+    .filter((secret) => secret.length >= minimumSubstringSecretLength)
+    .map((secret) => new RegExp(escapeRegExp(secret), 'gi'));
   // Very short values (user `u`, host `db`) are replaced only as whole tokens: replacing every
   // letter would garble the message and reveal the value by the pattern of the gaps.
   const shortTokens = ordered
@@ -74,11 +77,7 @@ function createRedactor({ url, user, password, hosts = [], extra = [] }: Redacto
     .map((secret) => new RegExp(`(?<![A-Za-z0-9_])${escapeRegExp(secret)}(?![A-Za-z0-9_])`, 'g'));
   return function redact(text: unknown): string {
     let result = String(text ?? '');
-    for (const secret of ordered) {
-      if (secret.length >= minimumSubstringSecretLength) {
-        result = result.replaceAll(new RegExp(escapeRegExp(secret), 'gi'), replacement);
-      }
-    }
+    for (const pattern of longPatterns) result = result.replaceAll(pattern, replacement);
     for (const token of shortTokens) result = result.replace(token, replacement);
     return result
       .replaceAll(socketErrorTarget, `$1 ${replacement}`)
@@ -115,8 +114,13 @@ function parseConnectionUrl(url: string | undefined): ParsedConnectionUrl | unde
   const [, scheme, rest] = match;
   const queryStart = rest.indexOf('?');
   const beforeQuery = queryStart === -1 ? rest : rest.slice(0, queryStart);
-  // The last @ ends the user info, because unencoded passwords may contain @ but host lists cannot.
-  const at = beforeQuery.lastIndexOf('@');
+  // Unencoded passwords may contain `@` or `/`, host lists contain neither, and database paths may
+  // contain `@`. When an `@` comes before the first `/`, the last such `@` ends the user info and
+  // later ones belong to the path; otherwise the `/` sits in the password and the last `@` overall
+  // ends it.
+  const firstSlash = beforeQuery.indexOf('/');
+  const authorityAt = (firstSlash === -1 ? beforeQuery : beforeQuery.slice(0, firstSlash)).lastIndexOf('@');
+  const at = authorityAt === -1 ? beforeQuery.lastIndexOf('@') : authorityAt;
   const userInfo = at === -1 ? '' : beforeQuery.slice(0, at);
   const afterUserInfo = beforeQuery.slice(at + 1);
   const pathStart = afterUserInfo.indexOf('/');

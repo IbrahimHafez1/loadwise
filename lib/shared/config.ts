@@ -302,7 +302,8 @@ function loadSettings({
   ignore?: readonly string[];
 }): LoadwiseSettings {
   const loaded = loadConfig({ directory, explicit });
-  const unknown = ignore.filter((ruleId) => !registeredRuleIds().has(ruleId));
+  const known = ignore.length ? registeredRuleIds() : undefined;
+  const unknown = known ? ignore.filter((ruleId) => !known.has(ruleId)) : [];
   if (unknown.length) throw new Error('Unknown rule id: ' + unknown.join(', '));
   return createSettings(loaded, ignore);
 }

@@ -145,6 +145,7 @@ function expandPattern(root: string, pattern: string): Set<string> {
     .split('/')
     .filter((segment) => segment && segment !== '.');
   const matches = new Set<string>();
+  if (segments.some((segment) => segment === '..' || segment.includes('\0'))) return matches;
   matchSegments(root, segments, matches);
   return matches;
 }
@@ -259,9 +260,13 @@ function workspaceSourceEntry(directory: string, subpath: string): string | unde
       .map((entry) => entry.replace(/^\.\//, '').replace(/(?:\.d)?\.[cm]?[jt]sx?$/, ''));
     stems = [...declared.flatMap((stem) => [stem.replace(builtFolder, 'src/'), stem]), 'src/index', 'index'];
   }
+  const resolvedRoot = path.resolve(directory);
   for (const stem of stems) {
+    if (stem.includes('\0')) continue;
     for (const suffix of [...sourceExtensions, ...sourceExtensions.map((extension) => '/index' + extension)]) {
-      const candidate = path.join(directory, stem + suffix);
+      const candidate = path.resolve(resolvedRoot, stem + suffix);
+      const relative = path.relative(resolvedRoot, candidate);
+      if (!relative || relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) continue;
       if (isFile(candidate)) return candidate;
     }
   }

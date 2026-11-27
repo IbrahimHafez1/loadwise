@@ -70,11 +70,13 @@ function isBaselineDocument(value: unknown): value is BaselineDocument {
   return (
     typeof value === 'object' &&
     value !== null &&
+    !Array.isArray(value) &&
     'version' in value &&
     value.version === BASELINE_VERSION &&
     'pillars' in value &&
     typeof value.pillars === 'object' &&
-    value.pillars !== null
+    value.pillars !== null &&
+    !Array.isArray(value.pillars)
   );
 }
 
@@ -229,7 +231,9 @@ function filterPillarBaseline(
   const document = readDocument(baselineFile);
   if (!document) throw new Error(`Baseline not found: ${baselineFile}. Create it with --write-baseline.`);
   const remaining = new Map<string, number>();
-  for (const entry of document.pillars[pillar]?.findings ?? []) {
+  const recorded = document.pillars[pillar]?.findings;
+  for (const entry of Array.isArray(recorded) ? recorded : []) {
+    if (!Number.isInteger(entry.count) || entry.count <= 0) continue;
     const key = keyText(entry);
     remaining.set(key, (remaining.get(key) ?? 0) + entry.count);
   }

@@ -41,7 +41,7 @@ function sourceSuffix(trace: Trace | undefined) {
 // Two call boundaries leave room for validation the engine did not see (security design section
 // 2.5).
 function hopReason(trace: Trace | undefined) {
-  return trace?.hops === 2 ? secondHopReason : undefined;
+  return trace && trace.hops >= 2 ? secondHopReason : undefined;
 }
 
 // loadwise-reviewed long-parameter-list -- mirrors the positional shape of context.report (node, ruleId, message, reason) plus the trace; every injection rule calls it positionally and the optional reason is the only trailing argument

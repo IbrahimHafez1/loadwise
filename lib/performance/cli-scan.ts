@@ -139,16 +139,22 @@ function resolveScanInputs(
 
 async function watchSource(values: ScanValues, policySource: PolicySource): Promise<number> {
   const { watchProject } = await import('./watch.js');
-  watchProject(values.project ?? '.', {
+  const logError = (error: unknown) => {
+    console.error(typeof error === 'object' && error !== null && 'message' in error ? error.message : error);
+  };
+  const watcher = watchProject(values.project ?? '.', {
     policySource,
     onResult(result) {
       appendPrismaSchemaFindings(result, [values.project ?? '.']);
-      void printResult(result, values);
+      void printResult(result, values).catch(logError);
     },
-    onError(error) {
-      console.error(typeof error === 'object' && error !== null && 'message' in error ? error.message : error);
-    },
+    onError: logError,
   });
+  const closeWatcher = () => {
+    watcher.close();
+  };
+  process.once('SIGINT', closeWatcher);
+  process.once('SIGTERM', closeWatcher);
   return 0;
 }
 

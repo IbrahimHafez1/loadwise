@@ -9,6 +9,7 @@ import type { Finding } from './types.js';
 import type { PillarName } from './types/pillar-name.js';
 import type { ChildRun, PillarDefinition, PillarRunOptions } from './types/checker-run.js';
 import { cachedRun } from './scan-cache.js';
+import { isRecord } from './is-record.js';
 import { knownRules } from '../performance/rule-ids.js';
 import { knownRules as knownRulesRuleIds } from '../maintainability/rule-ids.js';
 import { securityRules } from '../security/rule-ids.js';
@@ -24,10 +25,27 @@ interface FindingsReport {
   [detail: string]: unknown;
 }
 
+function isFindingsReport(value: unknown): value is FindingsReport {
+  return isRecord(value) && Array.isArray(value.findings);
+}
+
 /** What perf and sec print together under `--with sec`. */
 interface SharedEnvelope {
   performance: ChildRun;
   security: ChildRun;
+}
+
+function isChildRun(value: unknown): value is ChildRun {
+  return (
+    isRecord(value) &&
+    typeof value.code === 'number' &&
+    typeof value.stdout === 'string' &&
+    (value.stderr === undefined || typeof value.stderr === 'string')
+  );
+}
+
+function isSharedEnvelope(value: unknown): value is SharedEnvelope {
+  return isRecord(value) && isChildRun(value.performance) && isChildRun(value.security);
 }
 
 const cli = path.resolve(import.meta.dirname, '../../bin/loadwise.js');
@@ -115,8 +133,13 @@ async function withContractChecks(
   let perfReport: FindingsReport;
   let contractReport: FindingsReport;
   try {
-    perfReport = perfRun.stdout.trim() ? JSON.parse(perfRun.stdout) : { findings: [] };
-    contractReport = JSON.parse(contracts.stdout);
+    const parsedPerf: unknown = perfRun.stdout.trim() ? JSON.parse(perfRun.stdout) : { findings: [] };
+    const parsedContract: unknown = JSON.parse(contracts.stdout);
+    if (!isFindingsReport(parsedPerf) || !isFindingsReport(parsedContract)) {
+      throw new Error('Malformed JSON report.');
+    }
+    perfReport = parsedPerf;
+    contractReport = parsedContract;
   } catch {
     return {
       code: invalidInputCode,
@@ -325,7 +348,9 @@ async function runSharedSourceCheck(perfOptions: PillarRunOptions, secOptions: P
   const failed: ChildRun = { code: run.code === 0 ? invalidInputCode : run.code, stdout: '', stderr: run.stderr };
   let envelope: SharedEnvelope;
   try {
-    envelope = JSON.parse(run.stdout);
+    const parsed: unknown = JSON.parse(run.stdout);
+    if (!isSharedEnvelope(parsed)) throw new Error('Malformed shared envelope.');
+    envelope = parsed;
   } catch {
     return { reports: { performance: failed, security: { ...failed, stderr: '' } } };
   }

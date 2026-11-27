@@ -16,3 +16,9 @@ export function bufferChildren(node: Node): number {
   ts.forEachChild(node, bufferChild);
   return childCount;
 }
+
+// Releases retained AST node references after a walk completes so SourceFiles can be collected.
+export function clearChildBuffer(): void {
+  childBuffer.length = 0;
+  childCount = 0;
+}

@@ -41,7 +41,6 @@ import {
 
 export default {
   'prisma-query-in-loop': prismaQueryInLoop,
-  'orm-query-in-loop': ormQueryInLoop,
   'pg-query-in-loop': pgQueryInLoop,
   'redis-command-in-loop': redisCommandInLoop,
   'prisma-count-materialization': prismaCountMaterialization,

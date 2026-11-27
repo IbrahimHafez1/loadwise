@@ -500,8 +500,10 @@ function createEntryPoints(
 
   // Folders that source code reads from by a computed file name or serves statically hold files
   // nothing imports.
-  const runtimeFolders = collectRuntimeFolders(known, root, fileFacts);
-  for (const file of known) if ([...runtimeFolders].some((folder) => isInside(file, folder))) explicit.add(file);
+  const runtimeFolders = [...collectRuntimeFolders(known, root, fileFacts)];
+  if (runtimeFolders.length) {
+    for (const file of known) if (runtimeFolders.some((folder) => isInside(file, folder))) explicit.add(file);
+  }
 
   // Drizzle configs often sit above the scanned folder, at the package or repository root.
   function addPathOrGlob(configFolder: string, entry: string): void {

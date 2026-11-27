@@ -250,8 +250,12 @@ function contractScope(
   if (!selectors.length) return (file) => !settings.isIgnored?.(cwd, file);
   const { packages, withoutConfig } = discoverWorkspaces(cwd);
   const selected = selectWorkspaces([...packages, ...withoutConfig], cwd, selectors, reportRoot);
-  const prefixes = selected.map(({ directory }) => path.relative(cwd, directory).split(path.sep).join('/') + '/');
-  return (file) => prefixes.some((prefix) => file.startsWith(prefix)) && !settings.isIgnored?.(cwd, file);
+  const prefixes = selected.map(({ directory }) => {
+    const relative = path.relative(cwd, directory).split(path.sep).join('/');
+    return relative ? relative + '/' : '';
+  });
+  return (file) =>
+    prefixes.some((prefix) => prefix === '' || file.startsWith(prefix)) && !settings.isIgnored?.(cwd, file);
 }
 
 function printText(result: ContractsResult) {

@@ -105,11 +105,11 @@ function createParser(tokens: Token[]) {
     const token = next();
     if (!token) fail('Unexpected end of file');
     const closers: Record<string, string> = { '[': ']', '{': '}', '(': ')' };
-    if (!closers[token.value]) return;
+    if (!Object.hasOwn(closers, token.value)) return;
     for (let depth = 1; depth > 0;) {
       const inner = next();
       if (!inner) fail('Unbalanced brackets');
-      if (closers[inner.value]) depth++;
+      if (Object.hasOwn(closers, inner.value)) depth++;
       else if (Object.values(closers).includes(inner.value)) depth--;
     }
   };
@@ -208,14 +208,20 @@ function definitionFor(types: Map<string, TypeDefinition>, kind: string, token: 
   return created;
 }
 
+function definitionKeyword(parser: SdlParser): Token {
+  const keyword = parser.next();
+  if (!keyword) throw new OperationDocumentError('Unexpected end of file after "extend"');
+  if (!definitionKeywords.has(keyword.value)) {
+    throw new OperationDocumentError(`"${keyword.value}" at line ${keyword.line} is not a type-system definition`);
+  }
+  return keyword;
+}
+
 function parseDefinition(parser: SdlParser, document: SdlDocument) {
   parser.skipDescription();
   if (!parser.peek()) return;
   parser.accept('extend');
-  const keyword = parser.next();
-  if (!definitionKeywords.has(keyword.value)) {
-    throw new OperationDocumentError(`"${keyword.value}" at line ${keyword.line} is not a type-system definition`);
-  }
+  const keyword = definitionKeyword(parser);
   if (keyword.value === 'schema') {
     parser.skipDirectives();
     parser.expect('{');

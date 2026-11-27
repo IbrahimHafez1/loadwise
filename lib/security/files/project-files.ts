@@ -9,12 +9,14 @@ import type { PathPredicate, ProjectFiles } from '../types/project-files.js';
 
 const skippedDirectories = new Set(['.git', '.next', '.nuxt', '.turbo', '.venv', 'node_modules']);
 const gitListBuffer = 1 << 28;
+const gitTimeoutMs = 60_000;
 
 function git(directory: string, args: readonly string[]) {
   return spawnSync('git', ['-C', directory, ...args], {
     encoding: 'utf8',
     maxBuffer: gitListBuffer,
     windowsHide: true,
+    timeout: gitTimeoutMs,
   });
 }
 
@@ -43,7 +45,13 @@ function isSkippedFolder(root: string, relativeFolder: string) {
 }
 
 function walk(root: string, directory: string, files: string[], isIgnored?: PathPredicate) {
-  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(directory, { withFileTypes: true });
+  } catch {
+    return files;
+  }
+  for (const entry of entries) {
     const absolute = path.join(directory, entry.name);
     if (isIgnored?.(absolute)) continue;
     if (entry.isDirectory()) {

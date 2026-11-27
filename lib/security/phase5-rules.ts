@@ -345,17 +345,15 @@ function checkJwtWeakSecret(call: CallExpression, context: SecurityRuleContext):
   if (!calleeName) return;
 
   let secretExpr: Expression | undefined;
-  if ((calleeName === 'sign' || calleeName === 'verify') && (objName === 'jwt' || !objName)) {
+  if (calleeName === 'jwtVerify' || (calleeName === 'sign' && call.arguments.length === 1)) {
+    secretExpr = call.arguments[1] ?? call.arguments[0];
+  } else if ((calleeName === 'sign' || calleeName === 'verify') && (objName === 'jwt' || !objName)) {
     const second = unwrapExpr(call.arguments[1]);
     if (second && ts.isObjectLiteralExpression(second)) {
       secretExpr = getProperty(second, 'secret');
     } else {
       secretExpr = call.arguments[1];
     }
-  } else if (calleeName === 'jwtVerify' || (calleeName === 'sign' && call.arguments.length === 1)) {
-    secretExpr = call.arguments[1] ?? call.arguments[0];
-  } else if (objName === 'GraphQLModule') {
-    return;
   } else if (objName === 'JwtModule' && (calleeName === 'register' || calleeName === 'forRoot')) {
     const opts = unwrapExpr(call.arguments[0]);
     if (opts && ts.isObjectLiteralExpression(opts)) secretExpr = getProperty(opts, 'secret');

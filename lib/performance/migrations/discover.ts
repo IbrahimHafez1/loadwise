@@ -97,7 +97,13 @@ function isSymlinkedFile(entry: fs.Dirent, target: string) {
 
 function listFilesRecursively(directory: string): string[] {
   const files: string[] = [];
-  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(directory, { withFileTypes: true });
+  } catch {
+    return files;
+  }
+  for (const entry of entries) {
     const target = path.join(directory, entry.name);
     if (entry.isDirectory()) {
       if (!isSkippedDirectory(entry.name)) files.push(...listFilesRecursively(target));
@@ -109,7 +115,13 @@ function listFilesRecursively(directory: string): string[] {
 function findMigrationDirectories(root: string) {
   const found: string[] = [];
   const walk = (directory: string) => {
-    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
       if (!entry.isDirectory() || isSkippedDirectory(entry.name)) continue;
       const target = path.join(directory, entry.name);
       if (entry.name.toLowerCase() === 'migrations') found.push(target);
@@ -148,7 +160,8 @@ function collectStrings(node: Node): string[] {
 }
 
 function normalizeDialect(name: unknown): MigrationDialect | null {
-  return DIALECT_NAMES[String(name ?? '').toLowerCase()] ?? null;
+  const key = String(name ?? '').toLowerCase();
+  return Object.hasOwn(DIALECT_NAMES, key) ? DIALECT_NAMES[key] : null;
 }
 
 function prismaProvider(migrationsDirectory: string) {

@@ -27,8 +27,8 @@ async function savePendingReview(directory: string, document: string): Promise<s
     // Readers can enumerate the inbox while another terminal is writing the same project's report.
     await fs.rename(temporary, receipt);
   } catch (error) {
-    await fs.rm(temporary, { force: true });
-    await fs.rmdir(envelope);
+    await fs.rm(temporary, { force: true }).catch(() => {});
+    await fs.rmdir(envelope).catch(() => {});
     throw error;
   }
   return receipt;

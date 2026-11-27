@@ -14,6 +14,7 @@ const wholeFile: LineRange[] = [[1, Infinity]];
 // A file-level finding has no line of its own, so any change to the file counts.
 const fileLevelRules = new Set(['file-placement']);
 const maximumDiffBytes = 256 * 1024 * 1024;
+const gitTimeoutMs = 60_000;
 
 function runGit(root: string, args: readonly string[]): string {
   const result = spawnSync('git', args, {
@@ -21,9 +22,13 @@ function runGit(root: string, args: readonly string[]): string {
     encoding: 'utf8',
     windowsHide: true,
     maxBuffer: maximumDiffBytes,
+    timeout: gitTimeoutMs,
   });
-  if (result.error && 'code' in result.error && result.error.code === 'ENOENT')
-    throw new Error('git is required for --staged and --changed-since.');
+  if (result.error) {
+    if ('code' in result.error && result.error.code === 'ENOENT')
+      throw new Error('git is required for --staged and --changed-since.');
+    throw new Error('git diff failed: ' + result.error.message);
+  }
   if (result.status !== 0) throw new Error('git diff failed: ' + (result.stderr.trim() || 'exit ' + result.status));
   return result.stdout;
 }
@@ -60,7 +65,11 @@ function parseChangedRanges(diffText: string): ChangedRanges {
       const start = Number(match[1]);
       const count = match[2] === undefined ? 1 : Number(match[2]);
       // A zero-length hunk only deleted lines; nothing on the new side changed.
-      if (count > 0) changes.set(currentFile, [...(changes.get(currentFile) ?? []), [start, start + count - 1]]);
+      if (count === 0) continue;
+      const range: LineRange = [start, start + count - 1];
+      const list = changes.get(currentFile);
+      if (list) list.push(range);
+      else changes.set(currentFile, [range]);
     }
   }
   return changes;
@@ -100,10 +109,12 @@ function overlaps(ranges: readonly LineRange[], firstLine: number, lastLine: num
 // A function-level finding covers its whole function, so an edit anywhere inside it keeps the
 // finding.
 function findingLines(finding: Finding): [number, number] {
-  const line = finding.line ?? 0;
-  const { rangeStartLine, rangeEndLine } = finding;
-  const firstLine = Math.min(line, typeof rangeStartLine === 'number' ? rangeStartLine : line);
-  const lastLine = Math.max(line, typeof rangeEndLine === 'number' ? rangeEndLine : line);
+  const { line, rangeStartLine, rangeEndLine } = finding;
+  const start = typeof rangeStartLine === 'number' ? rangeStartLine : undefined;
+  const end = typeof rangeEndLine === 'number' ? rangeEndLine : undefined;
+  const fallback = typeof line === 'number' ? line : (start ?? end ?? 0);
+  const firstLine = Math.min(fallback, start ?? fallback);
+  const lastLine = Math.max(fallback, end ?? fallback);
   return [firstLine, lastLine];
 }
 

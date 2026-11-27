@@ -60,7 +60,7 @@ function changeDetectionImportEdits(sourceFile: SourceFile): TextEdit[] | undefi
   });
   if (bindsEnumTypeOnly(sourceFile)) return;
   const existing = named.find((element) => (element.propertyName ?? element.name).text === CHANGE_DETECTION_ENUM);
-  if (existing) return existing.propertyName ? undefined : [];
+  if (existing) return existing.propertyName || existing.isTypeOnly ? undefined : [];
   const last = named.at(-1);
   return last ? [{ start: last.end, end: last.end, text: `, ${CHANGE_DETECTION_ENUM}` }] : undefined;
 }
@@ -86,7 +86,7 @@ function angularOnPushFix({ node }: SiteFixInput): FixResult | undefined {
 function reactFetchAbortFix({ node, sourceFile, text }: SiteFixInput): FixResult | undefined {
   if (!node || !sourceFile || text === undefined) return;
   const fetchCall = calleeCall(node);
-  if (!fetchCall || fetchCall.arguments.length > 2) return;
+  if (!fetchCall || fetchCall.arguments.length === 0 || fetchCall.arguments.length > 2) return;
   const effectCall = ts.findAncestor(
     fetchCall,
     (candidate): candidate is CallExpression =>
@@ -176,9 +176,10 @@ function barrelHeavyImportFix({ node, sourceFile }: SiteFixInput): FixResult | u
   const [spec] = named.elements;
   const imported = (spec.propertyName ?? spec.name).text;
   const local = spec.name.text;
+  const dateFnsSpecifier = imported === local ? local : `${imported} as ${local}`;
   const replacement =
     pkg === 'date-fns'
-      ? `import { ${local} } from '${pkg}/${imported}';`
+      ? `import { ${dateFnsSpecifier} } from '${pkg}/${imported}';`
       : `import ${local} from '${pkg}/${imported}';`;
   return {
     edits: [replaceNode(decl, replacement)],

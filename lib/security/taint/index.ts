@@ -170,10 +170,22 @@ function createTaint(program: ProgramAdapter): TaintApi {
     }
   }
 
+  const summaryFnIds = new WeakMap<Node, number>();
+  let nextSummaryFnId = 1;
+  function summaryFnId(fn: Node | undefined): string {
+    if (!fn) return '';
+    let id = summaryFnIds.get(fn);
+    if (id === undefined) {
+      id = nextSummaryFnId++;
+      summaryFnIds.set(fn, id);
+    }
+    return String(id);
+  }
+
   function resolve(node: Expression | undefined, state: TaintState): TaintResult | undefined {
     const expression = strip(node);
     if (!expression) return;
-    const key = `${state.sinkKind}:${state.hops}:${state.summary?.index ?? ''}`;
+    const key = `${state.sinkKind}:${state.hops}:${summaryFnId(state.summary?.fn)}:${state.summary?.index ?? ''}`;
     let byKey = results.get(expression);
     if (!byKey) results.set(expression, (byKey = new Map<string, TaintResult | undefined>()));
     if (byKey.has(key)) return byKey.get(key);

@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { childBuffer, bufferChildren } from './child-buffer.js';
 import { nestingAdvice, sectionAdvice, loopGuardComparison } from './branch-advice.js';
 import { traversalLeaf } from './traversal-context.js';
 import { checklistContext } from './checklist-context.js';
@@ -28,21 +29,6 @@ interface FindingSite {
   node: Node;
   ruleId: string;
   message: string;
-}
-
-// One reused buffer with a static callback avoids allocating per node. Callers copy the children
-// out before visiting anything else.
-const childBuffer: Node[] = [];
-let childCount = 0;
-function bufferChild(child: Node): void {
-  childBuffer[childCount++] = child;
-}
-
-// Buffers the node's children in forEachChild order and returns how many there are.
-function bufferChildren(node: Node): number {
-  childCount = 0;
-  ts.forEachChild(node, bufferChild);
-  return childCount;
 }
 
 const nestingLimit = 4;

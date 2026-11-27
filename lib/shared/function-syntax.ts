@@ -96,7 +96,7 @@ export function whenTrueSink(condition: Expression): Statement {
 }
 
 // A statement that exists only at `position`, so the recognisers can ask what guards that point.
-export function standIn(statement: Statement, parent: Node, position: number): Statement {
+function standIn(statement: Statement, parent: Node, position: number): Statement {
   return Object.assign(statement, {
     parent,
     pos: position,

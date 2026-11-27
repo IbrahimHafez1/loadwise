@@ -103,6 +103,7 @@ function severityLevel(vulnerability: OsvVulnerability): ImpactLevel {
 const severityRank: Record<ImpactLevel, number> = { critical: 3, high: 2, medium: 1, low: 0 };
 
 function highestSeverity(levels: ImpactLevel[]): ImpactLevel {
+  if (!levels.length) return unknownSeverity;
   return levels.reduce((highest, level) => (severityRank[level] > severityRank[highest] ? level : highest));
 }
 
@@ -140,7 +141,7 @@ function lowestFixedVersionOf(vulnerability: OsvVulnerability, name: string, ver
 function fixedVersion(vulnerabilities: OsvVulnerability[], name: string, version: string): string | undefined {
   const fixes = vulnerabilities.map((vulnerability) => lowestFixedVersionOf(vulnerability, name, version));
   const known = fixes.filter((fix): fix is string => fix !== undefined);
-  if (known.length < fixes.length) return undefined;
+  if (!known.length || known.length < fixes.length) return undefined;
   return known.reduce((highest, fix) => (compareVersions(fix, highest) > 0 ? fix : highest));
 }
 

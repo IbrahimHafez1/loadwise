@@ -74,13 +74,19 @@ const scriptKinds: Record<string, number> = {
 // Loads project-relative files once. Findings and fix changes name files relative to the scanned
 // root.
 function createFileCache(root: string): ProjectLoad {
+  const resolvedRoot = path.resolve(root);
   const files = new Map<string, LoadedFile | null>();
   function load(filename: string): LoadedFile | null {
     const cached = files.get(filename);
     if (cached !== undefined) return cached;
     let entry: LoadedFile | null = null;
     try {
-      const absolute = path.resolve(root, filename);
+      if (filename.includes('\0')) throw new Error('Invalid path');
+      const absolute = path.resolve(resolvedRoot, filename);
+      const relative = path.relative(resolvedRoot, absolute);
+      if (!relative || relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) {
+        throw new Error('Path outside project root');
+      }
       // The scanner strips a byte order mark before reporting positions, so offsets here must
       // match.
       const text = fs.readFileSync(absolute, 'utf8').replace(/^\uFEFF/, '');
@@ -96,7 +102,7 @@ function createFileCache(root: string): ProjectLoad {
     files.set(filename, entry);
     return entry;
   }
-  load.projectRoot = path.resolve(root);
+  load.projectRoot = resolvedRoot;
   // Modules that fixes built in this scan create, so two fixes never claim one new path.
   load.createdModules = new Set<string>();
   return load;

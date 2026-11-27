@@ -1,4 +1,4 @@
-import { requireReview, ts, ancestor, hasMultilineTemplate } from './helpers.js';
+import { requireReview, ts, ancestor, hasMultilineTemplate, lineStart, indentationAt } from './helpers.js';
 import type { ArrowFunction, FunctionExpression, Node, SourceFile } from 'typescript';
 import type { FixResult, SiteFixInput, TextEdit } from '../../shared/types.js';
 
@@ -7,14 +7,6 @@ const loggerNamesByFile = new WeakMap<SourceFile, boolean>();
 
 function lineOf(sourceFile: SourceFile, offset: number): number {
   return sourceFile.getLineAndCharacterOfPosition(offset).line;
-}
-
-function lineStart(text: string, offset: number): number {
-  return text.lastIndexOf('\n', offset - 1) + 1;
-}
-
-function indentationAt(text: string, offset: number): string {
-  return (/^[ \t]*/.exec(text.slice(lineStart(text, offset))) ?? [''])[0];
 }
 
 // The flagged async arrow or function expression; the finding points at its first token.

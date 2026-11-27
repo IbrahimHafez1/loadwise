@@ -289,12 +289,17 @@ function workspaceFix(rootPath: string, fix: FindingFix | undefined): WorkspaceF
   if (!fix || !Array.isArray(fix.changes) || !fix.changes.length) return;
   const changes: WorkspaceChange[] = [];
   for (const change of fix.changes) {
-    if (typeof change?.file !== 'string' || typeof change.before !== 'string' || typeof change.after !== 'string')
+    if (
+      typeof change?.file !== 'string' ||
+      change.file.includes('\0') ||
+      typeof change.before !== 'string' ||
+      typeof change.after !== 'string'
+    )
       return;
     if (!Number.isSafeInteger(change.line) || change.line < 1) return;
     const filename = path.resolve(rootPath, change.file);
     const relative = path.relative(rootPath, filename);
-    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return;
+    if (!relative || relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) return;
     changes.push({ ...change, filename });
   }
   return {
@@ -429,12 +434,17 @@ async function planFix(vscode: EditorApi, fix: WorkspaceFix, openDocument: Docum
       // Never overwrite: the file may hold work written since the scan. The same content means it
       // is already applied.
       if (existing === undefined) operations.push({ uri, key, create: true, text: change.after });
-      else if (existing !== change.after)
+      else if (existing.replaceAll('\r\n', '\n') !== change.after.replaceAll('\r\n', '\n'))
         return { error: change.file + ' already exists, so the fix was not applied.' };
       else alreadyApplied++;
       continue;
     }
-    const document = await openDocument(uri);
+    let document: EditorDocument;
+    try {
+      document = await openDocument(uri);
+    } catch {
+      return { error: staleFixMessage };
+    }
     const lines = document.getText().split(/\r?\n/);
     const row = locateChange(lines, change);
     // The code moved or changed since the scan; applying the stored rewrite could clobber the new
@@ -444,10 +454,10 @@ async function planFix(vscode: EditorApi, fix: WorkspaceFix, openDocument: Docum
       alreadyApplied++;
       continue;
     }
-    const lastRow = row + change.before.split('\n').length - 1;
+    const lastRow = row + change.before.split(/\r?\n/).length - 1;
     const eol = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
     const range = new vscode.Range(row, 0, lastRow, lines[lastRow].length);
-    operations.push({ uri, key, firstRow: row, lastRow, range, text: change.after.split('\n').join(eol) });
+    operations.push({ uri, key, firstRow: row, lastRow, range, text: change.after.split(/\r?\n/).join(eol) });
   }
   if (!operations.length && alreadyApplied) return { error: 'This fix is already applied.' };
   return { operations };
@@ -557,7 +567,8 @@ function registerQuickFixes(
       vscode.window.showWarningMessage(result.error);
       return;
     }
-    await vscode.workspace.applyEdit(result.edit);
+    const ok = await vscode.workspace.applyEdit(result.edit);
+    if (!ok) vscode.window.showWarningMessage('Loadwise could not apply the fix.');
   });
   const applyAll = vscode.commands.registerCommand(applyAllCommand, async (uri?: EditorUri) => {
     const target = uri ?? vscode.window.activeTextEditor?.document.uri;
@@ -567,7 +578,13 @@ function registerQuickFixes(
       return;
     }
     const { edit, applied, skipped } = await fixAllEdit(vscode, eligible);
-    if (applied) await vscode.workspace.applyEdit(edit);
+    if (applied) {
+      const ok = await vscode.workspace.applyEdit(edit);
+      if (!ok) {
+        vscode.window.showWarningMessage('Loadwise could not apply the selected fixes.');
+        return;
+      }
+    }
     const summary = 'Loadwise applied ' + applied + ' fix(es)';
     const reviewNote = reviewCount ? ' ' + reviewCount + ' fix(es) require individual review.' : '';
     if (!skipped) vscode.window.showInformationMessage(summary + '.' + reviewNote);
@@ -725,7 +742,10 @@ function registerCodeLenses(
 }
 
 function commandLink(title: string, command: string, argument: WorkspaceFix | DismissalEntry): string {
-  return '[' + title + '](command:' + command + '?' + encodeURIComponent(JSON.stringify([argument])) + ')';
+  const encoded = encodeURIComponent(JSON.stringify([argument]))
+    .replaceAll('(', '%28')
+    .replaceAll(')', '%29');
+  return '[' + title + '](command:' + command + '?' + encoded + ')';
 }
 
 function registerExamples(vscode: EditorApi, diagnosticsFor: DiagnosticsLookup): EditorDisposable {

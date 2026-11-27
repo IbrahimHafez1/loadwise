@@ -23,16 +23,26 @@ const byteOrderMark = '\uFEFF';
 // Fix changes name project-relative files. A byte order mark is kept out of the matched text and
 // written back.
 function projectFiles(root: string): FileAccessors {
+  const resolvedRoot = path.resolve(root);
   const marked = new Set<string>();
+  function resolveSafe(file: string): string {
+    if (file.includes('\0')) throw new Error('Invalid file path outside project root: ' + file);
+    const absolute = path.resolve(resolvedRoot, file);
+    const relative = path.relative(resolvedRoot, absolute);
+    if (!relative || relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) {
+      throw new Error('Refusing to access file outside project root: ' + file);
+    }
+    return absolute;
+  }
   return {
     readFile(file) {
-      const text = fs.readFileSync(path.resolve(root, file), 'utf8');
+      const text = fs.readFileSync(resolveSafe(file), 'utf8');
       if (!text.startsWith(byteOrderMark)) return text;
       marked.add(file);
       return text.slice(1);
     },
     writeFile(file, text) {
-      fs.writeFileSync(path.resolve(root, file), (marked.has(file) ? byteOrderMark : '') + text);
+      fs.writeFileSync(resolveSafe(file), (marked.has(file) ? byteOrderMark : '') + text);
     },
   };
 }

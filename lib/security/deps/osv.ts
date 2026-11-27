@@ -23,7 +23,13 @@ const cacheFileName = 'osv-npm-v1.json';
 function configuredOrigin() {
   const configured = process.env.LOADWISE_OSV_URL;
   if (!configured) return osvOrigin;
-  const { protocol, hostname, origin } = new URL(configured);
+  let parsed: URL;
+  try {
+    parsed = new URL(configured);
+  } catch {
+    throw new Error('LOADWISE_OSV_URL needs a local HTTP or HTTPS URL.');
+  }
+  const { protocol, hostname, origin } = parsed;
   if (!['http:', 'https:'].includes(protocol) || !['127.0.0.1', '[::1]', 'localhost'].includes(hostname)) {
     throw new Error('LOADWISE_OSV_URL needs a local HTTP or HTTPS URL.');
   }
@@ -71,7 +77,7 @@ interface OsvBatchResult {
 }
 
 function readCache(cacheDirectory: string | undefined, now: number): OsvCache {
-  const empty: OsvCache = { queries: {}, vulnerabilities: {} };
+  const empty: OsvCache = { queries: Object.create(null), vulnerabilities: Object.create(null) };
   if (!cacheDirectory) return empty;
   let cache: Partial<OsvCache> | null;
   try {
@@ -83,11 +89,24 @@ function readCache(cacheDirectory: string | undefined, now: number): OsvCache {
   if (!cache || typeof cache !== 'object') return empty;
   const isFresh = (entry: { at: number } | undefined) =>
     entry && typeof entry.at === 'number' && now - entry.at < cacheLifetimeMs;
-  const freshEntries = <Entry extends { at: number }>(bucket: Record<string, Entry> | undefined) =>
-    bucket && typeof bucket === 'object'
-      ? Object.fromEntries(Object.entries(bucket).filter(([, entry]) => isFresh(entry)))
-      : {};
-  return { ...cache, queries: freshEntries(cache.queries), vulnerabilities: freshEntries(cache.vulnerabilities) };
+  const freshEntries = <Entry extends { at: number }>(
+    bucket: Record<string, Entry> | undefined,
+    isValid: (entry: Entry) => boolean,
+  ): Record<string, Entry> => {
+    const result: Record<string, Entry> = Object.create(null);
+    if (!bucket || typeof bucket !== 'object' || Array.isArray(bucket)) return result;
+    for (const [key, entry] of Object.entries(bucket)) {
+      if (isFresh(entry) && isValid(entry)) result[key] = entry;
+    }
+    return result;
+  };
+  return {
+    queries: freshEntries(cache.queries, (entry) => Array.isArray(entry.ids)),
+    vulnerabilities: freshEntries(
+      cache.vulnerabilities,
+      (entry) => typeof entry.vulnerability === 'object' && entry.vulnerability !== null,
+    ),
+  };
 }
 
 // A cache that cannot be written only costs speed, so failures here must not fail the check.

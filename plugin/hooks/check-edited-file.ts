@@ -152,4 +152,4 @@ try {
 } catch {
   // Swallowed on purpose: a checker problem must not interrupt the session.
 }
-process.exit(0);
+process.exitCode = 0;

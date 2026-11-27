@@ -71,3 +71,19 @@ test('very short values are redacted as whole tokens, not inside other words', (
     'password authentication failed for user "[redacted]" at [redacted]:5432 during production',
   );
 });
+
+test('an @ inside the database path does not bypass host or password redaction', () => {
+  const parsed = parseConnectionUrl('postgres://admin:topsecret@db.internal.example:5432/app@staging');
+  assert.equal(parsed?.user, 'admin');
+  assert.equal(parsed?.password, 'topsecret');
+  assert.deepEqual(parsed?.hosts, ['db.internal.example']);
+  assert.equal(parsed?.database, 'app@staging');
+});
+
+test('a / inside an unencoded password still ends the user info at the last @', () => {
+  const parsed = parseConnectionUrl('postgres://admin:top/secret@db.internal.example:5432/app');
+  assert.equal(parsed?.user, 'admin');
+  assert.equal(parsed?.password, 'top/secret');
+  assert.deepEqual(parsed?.hosts, ['db.internal.example']);
+  assert.equal(parsed?.database, 'app');
+});

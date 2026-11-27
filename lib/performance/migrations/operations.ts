@@ -28,8 +28,6 @@ const MIGRATION_RULES = [
   'migration-mysql-lock-unspecified',
 ];
 
-const FRAMEWORKS = ['prisma', 'drizzle', 'typeorm', 'knex', 'sequelize', 'mikro-orm', 'sql'];
-
 const OPERATION_KINDS = new Set<OperationKind>([
   'create-table',
   'create-index',
@@ -179,7 +177,6 @@ function createFinding(
 
 export {
   MIGRATION_RULES,
-  FRAMEWORKS,
   OPERATION_KINDS,
   DYNAMIC_PLACEHOLDER_PREFIX,
   createOperation,

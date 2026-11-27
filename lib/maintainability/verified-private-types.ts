@@ -75,9 +75,24 @@ function inspectCandidate(
 ): PrivateTypeCandidate | undefined {
   if (finding.file === undefined || finding.line === undefined) return;
   const absolute = path.resolve(directory, finding.file);
-  const relative = path.relative(directory, fs.realpathSync(absolute));
+  let realDirectory: string;
+  let realAbsolute: string;
+  try {
+    realDirectory = fs.realpathSync(directory);
+    realAbsolute = fs.realpathSync(absolute);
+  } catch {
+    return;
+  }
+  const relative = path.relative(realDirectory, realAbsolute);
   const file = fileKey(absolute);
-  if (!relative || path.isAbsolute(relative) || relative.startsWith('..' + path.sep) || !rootFiles.has(file)) return;
+  if (
+    !relative ||
+    relative === '..' ||
+    path.isAbsolute(relative) ||
+    relative.startsWith('..' + path.sep) ||
+    !rootFiles.has(file)
+  )
+    return;
   if (!sources.has(file)) sources.set(file, fs.readFileSync(absolute, 'utf8').split('\n'));
   const index = finding.line - 1;
   const before = sources.get(file)?.[index]?.replace(/\r$/, '');

@@ -471,10 +471,11 @@ function collectModuleUsage(sourceFile: SourceFile, file: string, resolve: Speci
     const clause = statement.importClause;
     const names: string[] = [];
     const bindings = clause?.namedBindings;
+    let isNamespace = false;
     if (clause?.name) names.push('default');
-    if (bindings && ts.isNamespaceImport(bindings)) names.push('all');
+    if (bindings && ts.isNamespaceImport(bindings)) isNamespace = true;
     else if (bindings) for (const item of bindings.elements) names.push((item.propertyName ?? item.name).text);
-    addImport(literal, names.includes('all') ? 'all' : names, true);
+    addImport(literal, isNamespace ? 'all' : names, true);
   }
 
   function recordStatement(statement: Statement): void {

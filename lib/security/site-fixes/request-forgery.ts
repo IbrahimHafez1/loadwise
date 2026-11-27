@@ -77,7 +77,7 @@ function openRedirectFix({ node, sourceFile }: SiteFixInput): FixResult | undefi
     edits: [
       replaceNode(
         target,
-        `(typeof ${expr} === 'string' && ${expr}.startsWith('/') && !${expr}.startsWith('//') ? ${expr} : '/')`,
+        `(typeof ${expr} === 'string' && ${expr}.startsWith('/') && !${expr}.startsWith('//') && !/[\\\\\\t\\r\\n]/.test(${expr}) ? ${expr} : '/')`,
       ),
     ],
     note: 'Restricts the redirect to a relative path starting with `/` (not `//`), falling back to `/`.',

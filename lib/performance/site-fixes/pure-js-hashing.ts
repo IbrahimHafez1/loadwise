@@ -1,8 +1,7 @@
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import ts from 'typescript';
-import { replaceNode } from './helpers.js';
+import { replaceNode, ts } from './helpers.js';
 import type { ImportClause, ImportDeclaration, Statement } from 'typescript';
 import type { FixResult, SiteFixInput } from '../../shared/types.js';
 

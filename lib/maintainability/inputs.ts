@@ -158,12 +158,12 @@ function createResolver(
   const extendedConfigs = new Map<string, ExtendedConfigCacheEntry>();
   // Many files probe the same candidate paths, such as one package.json per dependency lookup.
   function memoized<Result>(probe: (value: string) => Result): (value: string) => Result {
-    const known = new Map<string, Result>();
+    const known = new Map<string, { value: Result }>();
     return (value) => {
       const cached = known.get(value);
-      if (cached !== undefined) return cached;
+      if (cached !== undefined) return cached.value;
       const result = probe(value);
-      known.set(value, result);
+      known.set(value, { value: result });
       return result;
     };
   }
@@ -185,7 +185,8 @@ function createResolver(
   function settings(folder: string): ResolutionSettings {
     const known = settingsByFolder.get(folder);
     if (known) return known;
-    const isRoot = canonical(folder) === canonical(directory);
+    const parent = path.dirname(folder);
+    const isRoot = canonical(folder) === canonical(directory) || parent === folder;
     // A scanned folder inside a package resolves its aliases with the ancestor config that covers
     // it.
     const config =

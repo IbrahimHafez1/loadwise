@@ -19,7 +19,7 @@ const {
 type ReportEntries = readonly ReportEntry[];
 
 function requiredEnvironment(value: string | undefined, name: string): string {
-  if (value === undefined) throw new TypeError(`${name} is not set`);
+  if (!value) throw new TypeError(`${name} is not set`);
   return value;
 }
 
@@ -53,6 +53,7 @@ async function run(): Promise<number> {
       path.join(requiredEnvironment(RUNNER_TEMP, 'RUNNER_TEMP'), 'loadwise-report-'),
     );
     const sarifFile = path.join(directory, 'loadwise.sarif');
+    if (/[\r\n]/.test(sarifFile)) throw new Error('RUNNER_TEMP must not contain newlines.');
     await fs.promises.writeFile(sarifFile, renderReports('sarif', reportsForUpload));
     await fs.promises.appendFile(requiredEnvironment(GITHUB_OUTPUT, 'GITHUB_OUTPUT'), `sarif-file=${sarifFile}\n`);
   }

@@ -104,7 +104,7 @@ function typeOnlyNamedItems(
 // loads.
 function runtimeLiterals(sourceFile: SourceFile, verbatimModuleSyntax: boolean): StringLiteralLike[] {
   const literals: (Expression | undefined)[] = [];
-  const shadowScopes = requireShadowScopes(sourceFile);
+  const shadowScopes = sourceFile.text.includes('require') ? requireShadowScopes(sourceFile) : undefined;
   const pending: Node[] = [sourceFile];
   for (let node = pending.pop(); node; node = pending.pop()) {
     ts.forEachChild(node, (child) => {
@@ -135,7 +135,7 @@ function runtimeLiterals(sourceFile: SourceFile, verbatimModuleSyntax: boolean):
         ts.isIdentifier(node.expression) &&
         node.expression.text === 'require' &&
         node.arguments.length === 1 &&
-        !isShadowed(shadowScopes, node.expression)
+        (!shadowScopes || !isShadowed(shadowScopes, node.expression))
       )
         literals.push(node.arguments[0]);
     }

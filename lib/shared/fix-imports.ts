@@ -96,19 +96,31 @@ export function applyImportEdits(text: string, edits: readonly ImportEdit[], fil
   const mergedNew = new Map<string, ParsedImportLine>();
 
   for (const edit of edits) {
-    const match = existingImports.find(
-      (decl) =>
-        ts.isStringLiteral(decl.moduleSpecifier) &&
-        decl.moduleSpecifier.text === edit.moduleSpecifier &&
-        Boolean(decl.importClause?.isTypeOnly) === Boolean(edit.isTypeOnly),
-    );
+    const wantsNamed = Boolean(edit.named?.length);
+    const wantsNamespace = Boolean(edit.namespaceName);
+    const match = existingImports.find((decl) => {
+      if (
+        !ts.isStringLiteral(decl.moduleSpecifier) ||
+        decl.moduleSpecifier.text !== edit.moduleSpecifier ||
+        Boolean(decl.importClause?.isTypeOnly) !== Boolean(edit.isTypeOnly)
+      ) {
+        return false;
+      }
+      const bindings = decl.importClause?.namedBindings;
+      const hasNamespace = Boolean(bindings && ts.isNamespaceImport(bindings));
+      const hasNamed = Boolean(bindings && ts.isNamedImports(bindings));
+      // JS/TS forbids combining `* as ns` and `{ named }` in one import declaration.
+      if (wantsNamed && hasNamespace) return false;
+      if (wantsNamespace && hasNamed) return false;
+      return true;
+    });
     const parsed = match ? (matchedReplacements.get(match) ?? parseImportStatement(match)) : undefined;
     if (match && parsed) {
       mergeEditIntoParsed(parsed, edit);
       matchedReplacements.set(match, parsed);
       continue;
     }
-    const key = `${edit.isTypeOnly ? 'type:' : ''}${edit.moduleSpecifier}`;
+    const key = `${edit.isTypeOnly ? 'type:' : ''}${wantsNamespace ? 'ns:' : ''}${edit.moduleSpecifier}`;
     const current = mergedNew.get(key) ?? {
       moduleSpecifier: edit.moduleSpecifier,
       named: [],

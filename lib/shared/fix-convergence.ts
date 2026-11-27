@@ -14,7 +14,7 @@ import type { Declaration, Node } from 'typescript';
 import type { Finding, FixChange } from './types.js';
 import type { FileUpdate, FixableFinding, UpdateHunk } from './types/fix-run.js';
 
-export const MAX_FIX_PASSES = 4;
+const MAX_FIX_PASSES = 4;
 
 interface StagedUpdate extends FileUpdate {
   temporary: string;

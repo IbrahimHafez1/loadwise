@@ -62,8 +62,13 @@ function callerSuppliedParameters(node: SignatureDeclaration): ParameterDeclarat
   );
 }
 
-function checkSizeLimits(sourceFile: SourceFile, file: string, limits: SizeLimits = defaultLimits): LocatedFinding[] {
-  if (testSourcePattern.test(file) || generatedSource(sourceFile, file)) return [];
+function checkSizeLimits(
+  sourceFile: SourceFile,
+  file: string,
+  limits: SizeLimits = defaultLimits,
+  isGenerated?: boolean,
+): LocatedFinding[] {
+  if (testSourcePattern.test(file) || (isGenerated ?? Boolean(generatedSource(sourceFile, file)))) return [];
   const findings: LocatedFinding[] = [];
   function report(node: Node, ruleId: string, message: string): void {
     const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));

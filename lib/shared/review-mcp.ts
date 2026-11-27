@@ -286,22 +286,26 @@ async function runReviewMcp(
 ): Promise<number> {
   const lines = createInterface({ input, crlfDelay: Infinity });
   const session: McpSession = {};
-  for await (const line of lines) {
-    // Clients may separate messages with blank lines; they carry no request to answer.
-    if (!line.trim()) continue;
-    if (Buffer.byteLength(line, 'utf8') > MAX_MCP_LINE_BYTES) {
-      await writeResponse(output, rpcError(null, -32700, 'Message exceeds maximum allowed size.'));
-      continue;
+  try {
+    for await (const line of lines) {
+      // Clients may separate messages with blank lines; they carry no request to answer.
+      if (!line.trim()) continue;
+      if (Buffer.byteLength(line, 'utf8') > MAX_MCP_LINE_BYTES) {
+        await writeResponse(output, rpcError(null, -32700, 'Message exceeds maximum allowed size.'));
+        continue;
+      }
+      let request: unknown;
+      try {
+        request = JSON.parse(line);
+      } catch {
+        await writeResponse(output, rpcError(null, -32700, 'Invalid JSON.'));
+        continue;
+      }
+      const response = await handleMessage(request, directory, session);
+      if (response) await writeResponse(output, response);
     }
-    let request: unknown;
-    try {
-      request = JSON.parse(line);
-    } catch {
-      await writeResponse(output, rpcError(null, -32700, 'Invalid JSON.'));
-      continue;
-    }
-    const response = await handleMessage(request, directory, session);
-    if (response) await writeResponse(output, response);
+  } finally {
+    lines.close();
   }
   return 0;
 }

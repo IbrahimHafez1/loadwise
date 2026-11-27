@@ -11,12 +11,21 @@ function keyOf({ file, ruleId, lineText }: DismissalEntry): string {
 
 function createDismissals(memento: Memento): Dismissals {
   let keys: Set<string> | undefined;
+  let pendingWrite: Promise<void> = Promise.resolve();
   function entries(): DismissalEntry[] {
-    return memento.get<DismissalEntry[]>(stateKey, []);
+    const stored = memento.get<DismissalEntry[]>(stateKey, []);
+    return Array.isArray(stored) ? stored : [];
   }
-  function save(next: DismissalEntry[]): PromiseLike<void> {
-    keys = undefined;
-    return memento.update(stateKey, next);
+  function update(transform: (current: DismissalEntry[]) => DismissalEntry[]): Promise<void> {
+    const next = pendingWrite
+      .catch(() => {})
+      .then(async () => {
+        keys = undefined;
+        await memento.update(stateKey, transform(entries()));
+        keys = undefined;
+      });
+    pendingWrite = next;
+    return next;
   }
   return {
     entries,
@@ -26,11 +35,11 @@ function createDismissals(memento: Memento): Dismissals {
     },
     add(entry: DismissalEntry) {
       const key = keyOf(entry);
-      return save([...entries().filter((existing) => keyOf(existing) !== key), entry]);
+      return update((current) => [...current.filter((existing) => keyOf(existing) !== key), entry]);
     },
     remove(removed: readonly DismissalEntry[]) {
       const gone = new Set(removed.map(keyOf));
-      return save(entries().filter((entry) => !gone.has(keyOf(entry))));
+      return update((current) => current.filter((entry) => !gone.has(keyOf(entry))));
     },
   };
 }

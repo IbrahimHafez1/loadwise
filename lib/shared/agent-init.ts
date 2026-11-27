@@ -236,4 +236,4 @@ async function runPending(args: string[]): Promise<number> {
   return 0;
 }
 
-export { initAgent, agentBlock, findProjectRoot, runAgentCommand };
+export { initAgent, findProjectRoot, runAgentCommand };

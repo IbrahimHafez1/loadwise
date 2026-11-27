@@ -73,6 +73,12 @@ test('fix-imports: coalesces same-module imports in 1 pass without line-1 collis
   ]);
   assert.match(direct, /import \{ x, y \} from 'mod';/);
   assert.match(direct, /import other from 'other';/);
+
+  // Named imports must not merge into an existing namespace import (`import * as ns, { foo }` is illegal syntax).
+  const namespaceMerge = applyImportEdits("import * as ns from 'mod';\n", [{ moduleSpecifier: 'mod', named: ['foo'] }]);
+  assert.doesNotMatch(namespaceMerge, /\* as ns,\s*\{/);
+  assert.match(namespaceMerge, /import \* as ns from 'mod';/);
+  assert.match(namespaceMerge, /import \{ foo \} from 'mod';/);
 });
 
 test('fix convergence: multi-pass loop converges overlapping-range fixes in one transaction', (context) => {

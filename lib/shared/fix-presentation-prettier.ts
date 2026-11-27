@@ -162,8 +162,11 @@ function formattedSiblings(
     holder = children[index];
   }
   const reformatted = parse(formatted);
-  let formattedHolder: Node = reformatted;
-  for (const index of indices) formattedHolder = childrenOf(formattedHolder)[index];
+  let formattedHolder: Node | undefined = reformatted;
+  for (const index of indices) {
+    formattedHolder = childrenOf(formattedHolder)[index];
+    if (!formattedHolder) break;
+  }
   const sides: FormatSide[] = [
     { source: original, text, children: childrenOf(holder) },
     { source: reformatted, text: formatted, children: formattedHolder ? childrenOf(formattedHolder) : [] },

@@ -317,11 +317,11 @@ function parsesInput(tryBlock: Block): boolean {
 const advice =
   ' The failure is hidden from the caller, so the code carries on as if it had succeeded. Rethrow, return an error value, record a failure status, or add a comment saying why ignoring the error is safe.';
 
-function checkSwallowedErrors(sourceFile: SourceFile, file: string): Finding[] {
+function checkSwallowedErrors(sourceFile: SourceFile, file: string, isGenerated?: boolean): Finding[] {
   if (
     testSourcePattern.test(file) ||
     vendoredFolder.test(file.replaceAll('\\', '/')) ||
-    generatedSource(sourceFile, file)
+    (isGenerated ?? Boolean(generatedSource(sourceFile, file)))
   )
     return [];
   const findings: Finding[] = [];

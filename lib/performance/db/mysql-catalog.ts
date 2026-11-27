@@ -61,17 +61,4 @@ function validateExplain(sql: string) {
   if (first?.upper !== 'SELECT') throw new MysqlExplainRefusal('Only SELECT statements are explained on MySQL.');
 }
 
-function quoteIdent(identifier: string) {
-  return '`' + String(identifier).replaceAll('`', '``') + '`';
-}
-
-export {
-  statements,
-  control,
-  sessionSetup,
-  unitSetup,
-  explainPrefix,
-  validateExplain,
-  MysqlExplainRefusal,
-  quoteIdent,
-};
+export { statements, control, sessionSetup, unitSetup, explainPrefix, validateExplain, MysqlExplainRefusal };

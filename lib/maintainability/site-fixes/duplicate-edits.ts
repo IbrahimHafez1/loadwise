@@ -140,7 +140,7 @@ export function moduleImports(sourceFile: SourceFile): StringLiteralImport[] {
 }
 
 // The import bindings (default clause, namespace or named element) used only inside `removed`.
-export function strandedImports(sourceFile: SourceFile, removed: Node): StrandedImport[] {
+function strandedImports(sourceFile: SourceFile, removed: Node): StrandedImport[] {
   const imports = moduleImports(sourceFile);
   const importNodes: readonly Node[] = imports;
   const bound: StrandedImport[] = [];
@@ -284,7 +284,7 @@ export function importEdit(
 // Deletes whole lines from `start`, a line start, through the line holding `last`. A line-based fix
 // cannot replace lines with nothing, since an empty replacement leaves one blank line, so the edit
 // also spans a neighbouring line and keeps its text.
-export function lineDeletion(text: string, start: number, last: number): TextEdit {
+function lineDeletion(text: string, start: number, last: number): TextEdit {
   const end = lineEnd(text, last);
   if (start > 0) return { start: start - (text[start - 2] === '\r' ? 2 : 1), end, text: '' };
   const next = nextLineStart(text, end);

@@ -188,12 +188,20 @@ function requestedChange(finding: Finding): IndexChange | undefined {
   const mongoDrop = MONGO_DROP_INDEX.exec(suggestion);
   if (mongoDrop) {
     const key = MONGO_INDEX_KEY.exec(finding.message ?? '')?.[1];
+    let parsedKey: unknown;
+    if (key) {
+      try {
+        parsedKey = JSON.parse(key);
+      } catch {
+        parsedKey = undefined;
+      }
+    }
     return {
       engine: 'mongo',
       action: 'drop',
       indexName: String(JSON.parse(mongoDrop[2])),
       collection: String(JSON.parse(mongoDrop[1])),
-      key: key ? JSON.parse(key) : undefined,
+      key: parsedKey,
     };
   }
 }
@@ -225,6 +233,11 @@ function readText(file: string): string {
   }
 }
 
+function isWithinRoot(root: string, target: string): boolean {
+  const relative = path.relative(path.resolve(root), path.resolve(root, target));
+  return relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative);
+}
+
 function prismaDirectory(root: string): string | undefined {
   const packageJson = readText(path.join(root, 'package.json'));
   let schema: unknown;
@@ -234,7 +247,10 @@ function prismaDirectory(root: string): string | undefined {
     schema = undefined;
   }
   const candidates = [path.join('prisma', 'migrations')];
-  if (typeof schema === 'string') candidates.unshift(path.join(path.dirname(schema), 'migrations'));
+  if (typeof schema === 'string') {
+    const candidate = path.join(path.dirname(schema), 'migrations');
+    if (isWithinRoot(root, candidate)) candidates.unshift(candidate);
+  }
   return candidates.find((directory) => exists(path.join(root, directory, 'migration_lock.toml')));
 }
 
@@ -247,6 +263,7 @@ function configuredDirectory(
     const file = path.join(root, config);
     if (!exists(file)) continue;
     const value = readConfigStrings(file, [property])[property]?.[0];
+    if (value && !isWithinRoot(root, value)) continue;
     return { config, directory: value ? path.relative(root, path.resolve(root, value)) : 'migrations' };
   }
 }

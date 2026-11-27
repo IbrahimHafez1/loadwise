@@ -351,7 +351,7 @@ export function shareConfigCallbacks(sites: readonly ArrowSite[], load: ProjectL
   const original = fn.body.getText(sourceFile);
   // Reindent only simple single-line strings; whitespace inside a template literal can be
   // observable.
-  if (original.includes('`') || /\[\r\n]/.test(original)) return;
+  if (original.includes('`') || /\\\r?\n/.test(original)) return;
   const newline = newlineOf(text);
   const indentation = indentationAt(text, property.getStart(sourceFile));
   const body = original

@@ -49,13 +49,16 @@ function applyFix(
     byFile.set(change.file, changesOfFile);
   }
   const updates: [string, string][] = [];
+  const captured: FixChange[] = [];
+  const collect: CaptureChange | undefined = capture ? (change) => captured.push(change) : undefined;
   for (const [file, changes] of byFile) {
-    const result = applyChangesToText(readFile(file), changes, capture);
+    const result = applyChangesToText(readFile(file), changes, collect);
     if (result.error !== undefined) return { error: `${file}: ${result.error}` };
     updates.push([file, result.text]);
   }
   // Every file is checked before any is written, so a stale fix never leaves a half-applied change.
   for (const [file, text] of updates) writeFile(file, text);
+  if (capture) for (const change of captured) capture(change);
   return { files: updates.map(([file]) => file) };
 }
 

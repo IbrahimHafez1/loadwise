@@ -295,7 +295,14 @@ function createParser(source: string, flags: string): () => PatternNode {
       if (escape.code === undefined) throw new Unsupported();
       return charNode([[escape.code, escape.code]]);
     }
-    if ('*+?)'.includes(character) || /^\{\d+(,\d*)?\}/.test(source.slice(position))) throw new Unsupported();
+    if (
+      character === '*' ||
+      character === '+' ||
+      character === '?' ||
+      character === ')' ||
+      (character === '{' && /^\{\d+(,\d*)?\}/.test(source.slice(position)))
+    )
+      throw new Unsupported();
     const code = codePointAt();
     return charNode([[code, code]]);
   }
@@ -307,13 +314,13 @@ function createParser(source: string, flags: string): () => PatternNode {
     if (character === '*') bounds = { min: 0, max: Infinity, length: 1 };
     else if (character === '+') bounds = { min: 1, max: Infinity, length: 1 };
     else if (character === '?') bounds = { min: 0, max: 1, length: 1 };
-    else {
+    else if (character === '{') {
       const braces = /^\{(\d+)(,(\d*))?\}/.exec(source.slice(position));
       if (!braces) return;
       const min = Number(braces[1]);
       const max = braces[2] === undefined ? min : braces[3] === '' ? Infinity : Number(braces[3]);
       bounds = { min, max, length: braces[0].length };
-    }
+    } else return;
     position += bounds.length;
     if (peek() === '?') position++;
     return bounds;
