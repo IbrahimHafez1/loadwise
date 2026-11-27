@@ -8,8 +8,10 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request cancels its superseded run, but every commit merged to main gets its own group so
+# each one finishes with a result.
 concurrency:
-  group: check-${{ github.ref }}
+  group: check-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: true
 
 jobs:
