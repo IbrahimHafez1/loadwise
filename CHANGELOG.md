@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Stopping `loadwise perf --watch` (or any checker re-spawned with a larger heap) with SIGTERM, SIGINT or SIGHUP now also stops the re-spawned process instead of leaving it running.
+
 ## [0.5.0] - 2026-11-27
 
 Initial public open-source release of `loadwise` under the Apache-2.0 license.
