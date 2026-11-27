@@ -110,7 +110,7 @@ test('synchronous fs in a startup hook is contextual, in a request method it is 
   ]);
 });
 
-test('synchronous calls in test sources and operator tooling are contextual unless repeated', () => {
+test('synchronous calls in test sources and operator tooling are contextual, even when repeated', () => {
   const direct =
     "import { writeFileSync } from 'node:fs';\nexport async function save(file: string) {\n  writeFileSync(file, '');\n}";
   const repeated =
@@ -125,7 +125,8 @@ test('synchronous calls in test sources and operator tooling are contextual unle
   ]) {
     assert.deepEqual(summary(lintAs(fileName, direct), 'node-sync-fs-in-async'), [[3, true]], fileName);
   }
-  assert.deepEqual(summary(lintAs('scripts/save.ts', repeated), 'node-sync-fs-in-async'), [[3, false]]);
+  // A CLI serves no concurrent requests, so even a loop of blocking calls only delays the script itself.
+  assert.deepEqual(summary(lintAs('scripts/save.ts', repeated), 'node-sync-fs-in-async'), [[3, true]]);
   assert.deepEqual(summary(lintAs('src/files.spec.ts', repeated), 'node-sync-fs-in-async'), [[3, true]]);
   const crypto =
     "import { generateKeyPairSync } from 'node:crypto';\nexport async function make() {\n  return generateKeyPairSync('rsa', { modulusLength: 2048 });\n}";

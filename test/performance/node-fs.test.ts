@@ -341,7 +341,7 @@ const projectHandler = [
   '}',
 ].join('\n');
 
-function scanProject(directory: string, file: string) {
+function scanProject(directory: string, file: string, content = projectHandler) {
   fs.mkdirSync(path.dirname(path.join(directory, file)), { recursive: true });
   fs.writeFileSync(path.join(directory, 'package.json'), '{"private":true}');
   fs.writeFileSync(
@@ -351,14 +351,16 @@ function scanProject(directory: string, file: string) {
       include: ['src', 'scripts'],
     }),
   );
-  fs.writeFileSync(path.join(directory, file), projectHandler);
+  fs.writeFileSync(path.join(directory, file), content);
   const bin = path.resolve(import.meta.dirname, '../../bin/loadwise.js');
-  const run = spawnSync(process.execPath, [bin, 'perf', file, '--json', '--include-contextual'], {
-    cwd: directory,
-    encoding: 'utf8',
-    timeout: 120000,
+  return ['perf', 'rel'].flatMap((checker) => {
+    const run = spawnSync(process.execPath, [bin, checker, file, '--json', '--include-contextual'], {
+      cwd: directory,
+      encoding: 'utf8',
+      timeout: 120000,
+    });
+    return JSON.parse(run.stdout).findings;
   });
-  return JSON.parse(run.stdout).findings;
 }
 
 test('a project that itself sits under a folder named scripts or tools keeps request-path findings at default level', (context) => {
@@ -388,4 +390,22 @@ test('a project nested under a test folder of a larger git repository keeps requ
   const request = scanProject(path.join(root, 'test', 'app'), 'src/handler.ts');
   assert.equal(request.length, 2);
   assert.ok(request.every((finding: Finding) => finding.contextualReason === undefined));
+});
+
+test('sequential sync process calls in a one-off CLI build script stay contextual even inside a loop', (context) => {
+  const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
+  fs.mkdirSync(base, { recursive: true });
+  const root = fs.mkdtempSync(path.join(base, 'loadwise-cli-loop-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const source = [
+    "import { execSync } from 'node:child_process';",
+    'async function main() {',
+    "  for (const target of ['a', 'b']) execSync(`pnpm build ${target}`);",
+    '}',
+    'void main();',
+  ].join('\n');
+  const findings = scanProject(path.join(root, 'app'), 'scripts/build.ts', source).filter(
+    (finding: Finding) => finding.ruleId === 'node-sync-process-in-async',
+  );
+  assert.ok(findings.length > 0 && findings.every((finding: Finding) => finding.contextualReason));
 });

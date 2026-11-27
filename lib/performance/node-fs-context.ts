@@ -451,8 +451,7 @@ function contextualReason(
   if (pathReason) return pathReason;
   const runtime = classifyExecutionContext(call.getSourceFile(), context.program).runtime;
   if (runtime === 'test-fixture') return 'Synchronous call in a test or fixture source rather than a request path.';
-  if (runtime === 'cli-tooling' && !context.isRepeated(call))
-    return 'Synchronous call in CLI or dev tooling rather than a request path.';
+  if (runtime === 'cli-tooling') return 'Synchronous call in CLI or dev tooling rather than a request path.';
   return owner ? ownerContext(call, context, moduleName, owner) : undefined;
 }
 
