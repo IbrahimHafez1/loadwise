@@ -14,19 +14,13 @@ concurrency:
 
 jobs:
   check:
-    name: check (${{ matrix.os }}, node ${{ matrix.node }})
-    runs-on: ${{ matrix.os }}
+    name: check (ubuntu-latest, node ${{ matrix.node }})
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
         node: [22, 24]
-        # Windows is the slowest runner and Node-version differences already show on Ubuntu, so it runs the newest
-        # Node only.
-        exclude:
-          - os: windows-latest
-            node: 22
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -35,6 +29,26 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+
+  # Windows is the slowest runner, so its tests are split across three jobs. It runs the newest Node only; Node-version
+  # differences already show on Ubuntu, which also runs the formatting and lint checks.
+  windows:
+    name: tests (windows-latest, node 24, shard ${{ matrix.shard }}/3)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node scripts/run-tests.js --test-shard=${{ matrix.shard }}/3
 
   native-engine:
     name: performance tests on the native engine
@@ -51,3 +65,14 @@ jobs:
       - run: node --import ./test/manual-session.js --test --test-concurrency=2 test/performance/*.test.js
         env:
           PERF_CHECK_TEST_NATIVE: '1'
+
+  # The one check the main branch requires, so jobs can be added, split or renamed without editing the ruleset.
+  passed:
+    name: CI passed
+    if: always()
+    needs: [check, windows, native-engine]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        run: exit 1
