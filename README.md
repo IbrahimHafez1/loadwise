@@ -1,6 +1,6 @@
 # Loadwise
 
-[![npm](https://img.shields.io/npm/v/loadwise)](https://www.npmjs.com/package/loadwise) [![check](https://github.com/IbrahimHafez1/loadwise/actions/workflows/check.yml/badge.svg)](https://github.com/IbrahimHafez1/loadwise/actions/workflows/check.yml) [![license](https://img.shields.io/npm/l/loadwise)](LICENSE)
+[![npm](https://img.shields.io/npm/v/loadwise)](https://www.npmjs.com/package/loadwise) [![check](https://github.com/IbrahimHafez1/loadwise/actions/workflows/check.yml/badge.svg)](https://github.com/IbrahimHafez1/loadwise/actions/workflows/check.yml) [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/IbrahimHafez1/loadwise/badge)](https://scorecard.dev/viewer/?uri=github.com/IbrahimHafez1/loadwise) [![license](https://img.shields.io/npm/l/loadwise)](LICENSE)
 
 Loadwise checks a backend project before it ships. One CLI runs five checkers:
 
