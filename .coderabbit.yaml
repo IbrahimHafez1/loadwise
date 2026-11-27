@@ -10,11 +10,16 @@ reviews:
   auto_review:
     enabled: true
     drafts: false
+    # Review PRs into any branch, as Sourcery does; review-only PRs target throwaway bases.
+    base_branches:
+      - '.*'
   path_filters:
     # Deliberately vulnerable apps that Loadwise must detect, and generated benchmark output.
     - '!bench/recall/cases/**'
     - '!bench/corpus/scores.json'
     - '!package-lock.json'
+    # Third-party code vendored as is.
+    - '!lib/performance/vendor/**'
   path_instructions:
     - path: '**/*.{ts,cts}'
       instructions: >-
