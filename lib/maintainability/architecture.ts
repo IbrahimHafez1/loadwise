@@ -2,6 +2,7 @@ import ts from 'typescript';
 import { checkGraph } from './graph.js';
 import { nestForwardReferences } from './architecture-nest.js';
 import { childBuffer, bufferChildren } from './child-buffer.js';
+import { hasModifier } from './modifiers.js';
 import type {
   CallExpression,
   CompilerOptions,
@@ -15,7 +16,6 @@ import type {
   SourceFile,
   Statement,
   StringLiteralLike,
-  SyntaxKind,
   TypeNode,
 } from 'typescript';
 import type { ImportKind, LocatedFinding, ModuleEdge, FolderBoundary } from './types/module-graph.js';
@@ -220,10 +220,7 @@ function alwaysEvaluatedChild(node: Node, child: Node): boolean {
   )
     return child === node.expression;
   if (ts.isPropertyDeclaration(node))
-    return (
-      child !== node.initializer ||
-      Boolean(ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword))
-    );
+    return child !== node.initializer || hasModifier(node, ts.SyntaxKind.StaticKeyword);
   if (ts.isFunctionLike(node)) return ts.isDecorator(child);
   if (ts.isForStatement(node)) return child === node.initializer || child === node.condition;
   if (ts.isConditionalExpression(node)) return child === node.condition;
@@ -418,8 +415,7 @@ function collectEdges(
       ts.isInterfaceDeclaration(node) ||
       ts.isTypeAliasDeclaration(node) ||
       ts.isModuleDeclaration(node) ||
-      (ts.canHaveModifiers(node) &&
-        ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword))
+      hasModifier(node, ts.SyntaxKind.DeclareKeyword)
     )
       return;
     if (ts.isCallExpression(node)) collectLoaderCall(node, deferred, references, requires);
@@ -507,12 +503,6 @@ const constEnumModifiers = new Set([
   ts.SyntaxKind.ExportKeyword,
   ts.SyntaxKind.DeclareKeyword,
 ]);
-
-function hasModifier(statement: Statement, kind: SyntaxKind): boolean {
-  return Boolean(
-    ts.canHaveModifiers(statement) && ts.getModifiers(statement)?.some((modifier) => modifier.kind === kind),
-  );
-}
 
 // Top-level names a statement gives a runtime value (or an alias that may hold one).
 function valueNames(statement: Statement): string[] {

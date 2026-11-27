@@ -7,7 +7,9 @@ import test from 'node:test';
 import type { TestContext } from 'node:test';
 
 const cli = path.join(import.meta.dirname, '..', '..', 'bin', 'loadwise.js');
-const emptyCatchSource = 'export function save() {\n  try {\n    write();\n  } catch {}\n}\n';
+// Eight positional parameters exceed the default long-parameter-list limit.
+const longParametersSource =
+  'export function save(a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) {\n  return a + b + c + d + e + f + g + h;\n}\n';
 
 function project(context: TestContext, tsconfig: string) {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
@@ -16,7 +18,7 @@ function project(context: TestContext, tsconfig: string) {
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.writeFileSync(path.join(root, 'tsconfig.json'), tsconfig);
   fs.mkdirSync(path.join(root, 'src'));
-  fs.writeFileSync(path.join(root, 'src', 'save.ts'), emptyCatchSource);
+  fs.writeFileSync(path.join(root, 'src', 'save.ts'), longParametersSource);
   return root;
 }
 
@@ -30,7 +32,7 @@ test('a tsconfig extending an uninstalled package scans with a note and still re
   assert.notEqual(result.status, 2, result.stderr);
   assert.match(result.stderr, /Note: .*@internal\/cfg-typescript\/esm\.json.*Checked with this config's own settings/);
   assert.equal(result.stderr.match(/Note: /g)?.length, 1);
-  assert.match(result.stdout, /swallowed-error/);
+  assert.match(result.stdout, /long-parameter-list/);
 });
 
 test('a tsconfig extending a missing relative base still fails', (context) => {

@@ -18,6 +18,9 @@ import parameters from './site-fixes/parameters.js';
 import duplicates from './site-fixes/duplicates.js';
 import cycles from './site-fixes/cycles.js';
 import exportsFix from './site-fixes/exports.js';
+import unusedBindings from './site-fixes/unused-bindings.js';
+import strayConsole from './site-fixes/stray-console.js';
+import deprecatedApis from './site-fixes/deprecated-apis.js';
 import type { Finding, FindingFix, FixChange, LoadedFile, SiteFixBuilder } from '../shared/types.js';
 import type { ModuleCreatingFix } from './types/created-module.js';
 import type { JumpRemovingEdit } from './types/site-fix-edits.js';
@@ -43,6 +46,9 @@ const builderRegistries: readonly Record<string, SiteFixBuilder>[] = [
   duplicates,
   cycles,
   exportsFix,
+  unusedBindings,
+  strayConsole,
+  deprecatedApis,
 ];
 // Hunks longer than this stop being a readable inline fix; the rule example is shown instead.
 const maxHunkLines = 14;

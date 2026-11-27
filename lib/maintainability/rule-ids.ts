@@ -12,10 +12,12 @@ const knownRules = new Set<string>([
   'large-module',
   'long-parameter-list',
   'query-mutates-state',
-  'sql-insert-truncated-at-semicolon',
-  'swallowed-error',
   'unreferenced-file',
   'unused-export',
+  'unused-import',
+  'unused-local-variable',
+  'stray-console',
+  'deprecated-node-api',
 ]);
 
 // Impact levels (see lib/shared/impact-levels.cjs) for every rule id a maintainability finding can
@@ -24,14 +26,12 @@ const knownRules = new Set<string>([
 // debt, low readability.
 const impactByRule: Record<string, ImpactLevel> = {
   'dependency-cycle': 'high',
-  'sql-insert-truncated-at-semicolon': 'high',
   'duplicate-implementation': 'medium',
   'high-branch-complexity': 'medium',
   'folder-boundary': 'medium',
   'data-access-boundary': 'medium',
   'query-mutates-state': 'medium',
   'syntax-error': 'medium',
-  'swallowed-error': 'medium',
   'large-module': 'low',
   'large-class': 'low',
   'deep-control-flow': 'low',
@@ -39,6 +39,10 @@ const impactByRule: Record<string, ImpactLevel> = {
   'long-parameter-list': 'low',
   'unused-export': 'low',
   'unreferenced-file': 'low',
+  'unused-import': 'low',
+  'unused-local-variable': 'low',
+  'stray-console': 'low',
+  'deprecated-node-api': 'medium',
 };
 
 // One-line summaries of every rule above, used where a rule needs a fixed name (SARIF
@@ -56,11 +60,13 @@ const descriptionByRule: Record<string, string> = {
   'large-module': 'A file has more than 600 lines of code.',
   'long-parameter-list': 'A function takes more than 5 positional parameters.',
   'query-mutates-state': 'A method marked @maintainabilityQuery writes through this.',
-  'sql-insert-truncated-at-semicolon': 'A SQL dump parser ends INSERT values at a semicolon inside quoted text.',
-  'swallowed-error': 'A catch block drops the error and the code after the try carries on as if it succeeded.',
   'syntax-error': 'A native parser could not read the file, so it is skipped and listed and the scan exits 2.',
   'unreferenced-file': 'A source file that nothing imports and that is not an entry point.',
   'unused-export': 'An export that no scanned file imports.',
+  'unused-import': 'An imported name is never used in the file.',
+  'unused-local-variable': 'A local variable is assigned but never read.',
+  'stray-console': 'A console call in production code bypasses the logger, so its output has no level or structure.',
+  'deprecated-node-api': 'A deprecated Node.js API is used: new Buffer(), url.parse() or fs.exists().',
 };
 
 export { knownRules, impactByRule, descriptionByRule };

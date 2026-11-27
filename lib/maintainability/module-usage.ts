@@ -3,6 +3,7 @@ import { isBuiltin } from 'node:module';
 import ts from 'typescript';
 import { declaredName } from './architecture.js';
 import { walkNodes } from './walk.js';
+import { hasModifier } from './modifiers.js';
 import {
   bindingNames,
   isShadowed,
@@ -32,7 +33,6 @@ import type {
   SourceFile,
   Statement,
   StringLiteralLike,
-  SyntaxKind,
 } from 'typescript';
 import type { FixChange } from '../shared/types.js';
 import type { SpecifierResolver } from './types/module-resolver.js';
@@ -51,10 +51,6 @@ const nodeShebang = /^#![ \t]*(?:\/[^\s]*\/env[ \t]+(?:-S[ \t]+)?node|\/(?:[^/\s
 // What one file exports, and which names of which resolved project files it uses. Plain data, so a
 // worker thread can send it back. `names: 'all'` means the whole module is used, as with a
 // namespace import or require().
-function hasModifier(node: Node, kind: SyntaxKind): boolean {
-  return Boolean(ts.canHaveModifiers(node) && ts.getModifiers(node)?.some((modifier) => modifier.kind === kind));
-}
-
 // A declared export: its exported name and the node that names it.
 interface DeclaredExport {
   name: string;

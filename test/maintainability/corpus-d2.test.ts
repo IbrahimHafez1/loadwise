@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import ts from 'typescript';
-import { checkSwallowedErrors } from '../../lib/maintainability/swallowed-errors.js';
+import { checkSwallowedErrors } from '../../lib/reliability/swallowed-errors.js';
 
 function check(source: string, file = 'src/example.ts') {
   return checkSwallowedErrors(ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true), file);

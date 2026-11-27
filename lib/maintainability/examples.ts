@@ -6,6 +6,31 @@ interface RuleExample {
 }
 
 const examples: Record<string, RuleExample> = {
+  'unused-import': {
+    before: ["import { readFile, writeFile } from 'node:fs/promises';", 'await writeFile(path, text);'],
+    after: ["import { writeFile } from 'node:fs/promises';", 'await writeFile(path, text);'],
+  },
+  'unused-local-variable': {
+    before: [
+      'function total(items) {',
+      "  const label = 'sum';",
+      '  return items.reduce((sum, item) => sum + item, 0);',
+      '}',
+    ],
+    after: ['function total(items) {', '  return items.reduce((sum, item) => sum + item, 0);', '}'],
+  },
+  'stray-console': {
+    before: ['export function placeOrder(order: Order) {', "  console.log('placing', order.id);", '}'],
+    after: [
+      'export function placeOrder(order: Order) {',
+      "  logger.info({ orderId: order.id }, 'placing order');",
+      '}',
+    ],
+  },
+  'deprecated-node-api': {
+    before: ['const zeroed = new Buffer(16);', "const copy = new Buffer('hi', 'utf8');"],
+    after: ['const zeroed = Buffer.alloc(16);', "const copy = Buffer.from('hi', 'utf8');"],
+  },
   'dependency-cycle': {
     before: ['// a.ts: import { total } from "./b";', '// b.ts: import { total } from "./a";'],
     after: [
@@ -83,30 +108,6 @@ const examples: Record<string, RuleExample> = {
       '  // ...',
       '}',
       'send({ to: a, from: b, subject: c, body: d });',
-    ],
-  },
-  'sql-insert-truncated-at-semicolon': {
-    before: [
-      'const inserts = /INSERT INTO orders VALUES ([\\s\\S]*?);/gi;',
-      'while ((match = inserts.exec(dump)) !== null) {',
-      '  const values = match[1]; // stops inside a quoted semicolon',
-      '}',
-    ],
-    after: [
-      '// Use your SQL dialect parser to read complete statements and literal values.',
-      'for (const insert of readInsertStatements(dump)) {',
-      '  importRows(insert.rows);',
-      '}',
-    ],
-  },
-  'swallowed-error': {
-    before: ['try {', '  await saveOrder(order);', '} catch {}', 'notifyCustomer(order);'],
-    after: [
-      'try {',
-      '  await saveOrder(order);',
-      '} catch (error) {',
-      '  throw new OrderNotSavedError(order.id, { cause: error });',
-      '}',
     ],
   },
   'unreferenced-file': {

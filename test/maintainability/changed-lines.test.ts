@@ -266,7 +266,7 @@ test('many changed files fall back to the full scan, which keeps cross-file rule
   const root = tempRepo(context);
   fs.writeFileSync(path.join(root, 'one.js'), deepFunction + '\n');
   fs.writeFileSync(path.join(root, 'two.js'), deepFunction + '\n');
-  const policy = loadPolicy(root);
+  const policy = loadPolicy();
   const files = ['one.js', 'two.js'];
   const perFile = await scanChangedFiles(root, policy, files, { parallelFrom: 3 });
   const fullScan = await scanChangedFiles(root, policy, files, { parallelFrom: 2 });

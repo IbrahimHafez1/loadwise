@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { askChoice, labelledLines } from '../shared/fix-terminal.js';
 import { applyFix } from './apply-fix.js';
+import type { WrittenByFile } from './apply-fix.js';
 import { applyFixSafely } from '../shared/fix-safety.js';
 import { diffLines } from './fix-text.js';
 import { createWriteTracker, withoutWhyComment } from '../shared/fix-presentation.js';
@@ -88,13 +89,16 @@ interface ApplyContext {
   readonly files: FileAccessors;
   readonly tracker: WriteTracker;
   readonly capture: ChangeCapture;
+  // Changes this run already wrote, so a fix sharing one rewrite reports "already applied".
+  readonly written: WrittenByFile;
 }
 
 // Applies the finding's fix where earlier fixes of this run have moved its lines.
 function applyFinding(finding: Finding, findingFix: FindingFix, context: ApplyContext): { error?: string } {
-  const { root, files, tracker, capture } = context;
+  const { root, files, tracker, capture, written } = context;
   const fix = tracker.rebase(findingFix, (file) => path.resolve(root, file));
-  if (!fix.changes.some((change: FixChange) => change.create)) return applyFixSafely(applyFix, fix, files, capture);
+  if (!fix.changes.some((change: FixChange) => change.create))
+    return applyFixSafely(applyFix, fix, files, capture, written);
   // An extraction must publish the new module and rewrite its consumers together.
   try {
     const { refused } = applyBulkFixes([{ ...finding, fix }], root, {
@@ -135,6 +139,7 @@ function applyChosenFixes(
   const files = projectFiles(root);
   withoutComments(findings, comments);
   const tracker = createWriteTracker();
+  const written: WrittenByFile = new Map();
   const applied: string[] = [];
   const alreadyApplied: string[] = [];
   const failed: { id: string; reason: string }[] = [];
@@ -142,7 +147,7 @@ function applyChosenFixes(
     const finding = findingsById.get(id);
     if (finding?.fix && !json) printFix(finding, finding.fix, index + 1, ids.length);
     const capture = captureFor(tracker, root, history);
-    const error = chosenFixError(finding, { root, files, tracker, capture });
+    const error = chosenFixError(finding, { root, files, tracker, capture, written });
     if (finding && !error) {
       applied.push(id);
       capture.commit();
@@ -239,6 +244,7 @@ async function applyFixes(
   const files = projectFiles(root);
   withoutComments(findings, comments);
   const tracker = createWriteTracker();
+  const written: WrittenByFile = new Map();
   let applyRest = all;
   const tally: FixTally = { applied: 0, alreadyApplied: [], failed: [] };
   for (const [index, finding] of fixable.entries()) {
@@ -250,7 +256,7 @@ async function applyFixes(
       if (decision === 'all') applyRest = true;
     }
     const capture = captureFor(tracker, root, history);
-    const result = applyFinding(finding, finding.fix, { root, files, tracker, capture });
+    const result = applyFinding(finding, finding.fix, { root, files, tracker, capture, written });
     recordOutcome(finding, result, tally, { capture, history });
   }
   if (format !== false && tally.applied) tracker.format(root);

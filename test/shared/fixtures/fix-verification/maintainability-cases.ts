@@ -1,4 +1,5 @@
 // One minimal sample per maintainability fix builder, taken from the rule's own tests.
+import { nodeModules } from './package-stubs.js';
 import type { MaintainabilityVerificationCase } from '../../../types/fix-verification.js';
 import type { FileMap } from '../../../types/project-files.js';
 
@@ -89,6 +90,43 @@ const largeRecord = [
   '',
 ].join('\n');
 
+const unusedImport = [
+  "import { helperA } from './helpers.js';",
+  "import { helperB } from './helpers.js';",
+  '',
+  'export const result = helperB(1);',
+  '',
+].join('\n');
+
+const unusedLocal = [
+  'export function total(values: number[]) {',
+  '  const unusedLimit = 10;',
+  '  return values.reduce((sum, value) => sum + value, 0);',
+  '}',
+  '',
+].join('\n');
+
+// A server file (it imports a node: module) that already has a logger in scope.
+const strayConsole = [
+  "import { readFileSync } from 'node:fs';",
+  '',
+  'const logger = { info: (message: string) => message };',
+  '',
+  'export function load(file: string) {',
+  "  console.log('loading ' + file);",
+  '  return readFileSync(file);',
+  '}',
+  '',
+].join('\n');
+
+const deprecatedBuffer = [
+  "import { readFileSync } from 'node:fs';",
+  '',
+  "export const greeting = new Buffer('hello');",
+  'export const read = readFileSync;',
+  '',
+].join('\n');
+
 const maintainabilityCases: MaintainabilityVerificationCase[] = [
   sample('deep-control-flow', { 'collect.js': nestedLoops }),
   sample('high-branch-complexity', { 'score.js': branchyScore }),
@@ -110,6 +148,13 @@ const maintainabilityCases: MaintainabilityVerificationCase[] = [
   }),
   sample('long-parameter-list', { 'render.ts': longParameterList }),
   sample('large-module', { 'api.ts': largeRecord }),
+  sample('unused-import', {
+    'helpers.ts': 'export const helperA = 1;\nexport const helperB = (value: number) => value;\n',
+    'main.ts': unusedImport,
+  }),
+  sample('unused-local-variable', { 'total.ts': unusedLocal }),
+  sample('stray-console', { 'load.ts': strayConsole, ...nodeModules }),
+  sample('deprecated-node-api', { 'buffer.ts': deprecatedBuffer, ...nodeModules }),
 ];
 
 export { maintainabilityCases };

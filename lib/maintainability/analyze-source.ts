@@ -5,11 +5,12 @@ import { extractImplementations, generatedSource } from './duplicates.js';
 import { analyzeFunctions } from './functions.js';
 import { collectEdges, exportedConstEnums } from './architecture.js';
 import { checkDataAccess } from './data-access.js';
-import { checkSwallowedErrors } from './swallowed-errors.js';
-import { checkInsertTerminators } from './sql-insert-terminator.js';
 import { checkSizeLimits } from './size-limits.js';
 import { collectModuleUsage } from './module-usage.js';
 import { sourceFacts } from './source-facts.js';
+import { checkUnusedBindings } from './unused-bindings.js';
+import { checkStrayConsole } from './stray-console.js';
+import { checkDeprecatedApis } from './deprecated-apis.js';
 import type {
   DiskFacts,
   AnalysisOptions,
@@ -94,9 +95,10 @@ function analyzeSource(
     findings: [
       ...analyzeFunctions(source, file),
       ...accessFindings,
-      ...checkSwallowedErrors(source, file, generated),
-      ...checkInsertTerminators(source, file),
       ...checkSizeLimits(source, file, limits, generated),
+      ...checkUnusedBindings(source, file, compilerOptions ?? {}),
+      ...checkStrayConsole(source, file, compilerOptions ?? {}),
+      ...checkDeprecatedApis(source, file),
     ],
     edges: collectEdges(source, file, resolve, compilerOptions),
     constEnums: exportedConstEnums(source),

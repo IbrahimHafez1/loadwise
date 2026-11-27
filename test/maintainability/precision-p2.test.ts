@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import ts from 'typescript';
-import { checkSwallowedErrors } from '../../lib/maintainability/swallowed-errors.js';
+import { checkSwallowedErrors } from '../../lib/reliability/swallowed-errors.js';
 import { createEntryPoints } from '../../lib/maintainability/entry-points.js';
 
 function check(source: string, file = 'src/example.ts') {
