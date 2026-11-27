@@ -256,8 +256,32 @@ test("JavaScript left out without allowJs keeps the config's exclude and the ign
     'loadwise.config.json': JSON.stringify({ ignore: ['ignored.js'] }),
     'app.ts': 'export const app = 1;\n',
     'report.js': syncRead,
+    // A wildcard keeps one of two same-named files, which is not an exclusion.
+    'report.jsx': syncRead,
     'legacy.js': syncRead,
     'ignored.js': syncRead,
+  });
+  for (const engine of ['js', 'native']) {
+    const result = run(['--engine', engine, '--json'], directory);
+    assert.equal(result.status, 1, result.stderr);
+    assert.deepEqual(
+      parseReport(result.stdout)
+        .findings.map((finding) => finding.file)
+        .sort(),
+      ['report.js', 'report.jsx'],
+    );
+    assert.match(result.stderr, /so 2 JavaScript file\(s\) \(report\.js, report\.jsx\) were checked/);
+  }
+});
+
+test('a companion jsconfig decides which JavaScript is checked on both engines', (context) => {
+  const syncRead = 'const { readFileSync } = require("node:fs");\nmodule.exports = async () => readFileSync("demo");\n';
+  const directory = fixture(context, {
+    'tsconfig.json': JSON.stringify({ compilerOptions: { types: [] }, include: ['app.ts'] }),
+    'jsconfig.json': JSON.stringify({ compilerOptions: { types: [] }, files: ['report.js'] }),
+    'app.ts': 'export const app = 1;\n',
+    'report.js': syncRead,
+    'task.js': syncRead,
   });
   for (const engine of ['js', 'native']) {
     const result = run(['--engine', engine, '--json'], directory);
@@ -266,7 +290,7 @@ test("JavaScript left out without allowJs keeps the config's exclude and the ign
       parseReport(result.stdout).findings.map((finding) => finding.file),
       ['report.js'],
     );
-    assert.match(result.stderr, /so 1 JavaScript file\(s\) \(report\.js\) were checked/);
+    assert.doesNotMatch(result.stderr, /allowJs/);
   }
 });
 
