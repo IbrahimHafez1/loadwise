@@ -180,6 +180,16 @@ async function until(predicate: () => unknown, what: string) {
   }
 }
 
+// Windows keeps the folder locked until the killed watcher process exits, which a slow CI runner can stretch past
+// every retry. A leftover temporary folder is harmless, so only that lock is tolerated.
+function removeTemporaryRoot(root: string): void {
+  try {
+    fs.rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+  } catch (error) {
+    if (!(error instanceof Error && 'code' in error && error.code === 'EBUSY')) throw error;
+  }
+}
+
 function startExtension(performanceCliSource: string) {
   if (!hasModuleLoader(Module)) throw new Error('Module._load is unavailable');
   const moduleLoader = Module;
@@ -215,8 +225,7 @@ function startExtension(performanceCliSource: string) {
       file: path.join(root, 'a.ts'),
       stop() {
         for (const item of context.subscriptions) item.dispose();
-        // Windows keeps the folder locked while the killed watcher exits.
-        fs.rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+        removeTemporaryRoot(root);
       },
     };
   } finally {
