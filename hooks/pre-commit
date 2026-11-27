@@ -4,4 +4,4 @@ files=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(cts|ts|js
 [ -z "$files" ] && exit 0
 echo "$files" | xargs npx prettier --write --ignore-unknown || exit 1
 echo "$files" | xargs git add
-echo "$files" | grep -E '\.(cts|ts)$' | xargs --no-run-if-empty npx oxlint --deny-warnings
+echo "$files" | grep -E '\.(cts|ts)$' | xargs --no-run-if-empty npx oxlint --deny-warnings --no-error-on-unmatched-pattern
