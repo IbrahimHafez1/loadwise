@@ -7,7 +7,7 @@
   "dependencies": {
     "@sequelize/core": "7.0.0-alpha.48",
     "knex": "3.3.0",
-    "kysely": "0.28.17",
+    "kysely": "0.29.9",
     "mongoose": "9.13.0",
     "sequelize": "6.37.8",
     "typeorm": "1.1.3"
