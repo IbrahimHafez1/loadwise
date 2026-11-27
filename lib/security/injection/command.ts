@@ -7,7 +7,7 @@ import { importedFrom } from '../bindings.js';
 import { analyzeFragment } from '../../performance/pg-fragments.js';
 import { operandsOf } from '../pg-identifier-guards.js';
 import { reportTraced, calledExport, initializerOf } from './shared.js';
-import type { CallExpression, Expression, PropertyAssignment } from 'typescript';
+import type { CallExpression, Expression, ObjectLiteralExpression } from 'typescript';
 import type { SecurityRuleContext } from '../../shared/types.js';
 
 const ruleId = 'command-injection';
@@ -21,6 +21,7 @@ const allCommandMethods = new Set([...shellCommands, ...spawnCommands, ...execaC
 const shellPrograms =
   /^(?:(?:\/usr)?\/bin\/)?(?:sh|bash|zsh|dash|ksh)$|^(?:cmd|cmd\.exe|powershell|powershell\.exe|pwsh)$/i;
 const commandFlags = new Set(['-c', '/c', '/C', '-Command', '-command']);
+const maxOptionsDepth = 3;
 
 function message(label: string) {
   return `\`${label}\` reaches a shell command line, so shell metacharacters in it run as commands. Call \`execFile\`/\`spawn\` without \`shell\` and pass the value as an array element.`;
@@ -49,24 +50,44 @@ function childProcessExport(call: CallExpression, context: SecurityRuleContext):
   return binding?.module === 'child_process' ? binding.exported : undefined;
 }
 
-function optionsOf(call: CallExpression) {
+// An options object written inline or held in a `const`.
+function objectLiteralOf(expression: Expression, context: SecurityRuleContext) {
+  const value = ts.skipOuterExpressions(expression);
+  if (ts.isObjectLiteralExpression(value)) return value;
+  const initializer = ts.isIdentifier(value) ? initializerOf(value, context.checker) : undefined;
+  return initializer && ts.isObjectLiteralExpression(initializer) ? initializer : undefined;
+}
+
+function optionsOf(call: CallExpression, context: SecurityRuleContext) {
   for (let index = call.arguments.length - 1; index >= 1; index -= 1) {
-    const arg = ts.skipOuterExpressions(call.arguments[index]);
-    if (ts.isObjectLiteralExpression(arg)) return arg;
+    const options = objectLiteralOf(call.arguments[index], context);
+    if (options) return options;
   }
   return undefined;
 }
 
-// `{ shell: true }` or `{ shell: '/bin/bash' }`.
-function usesShell(call: CallExpression) {
-  const shell = optionsOf(call)?.properties.find(
-    (property): property is PropertyAssignment =>
-      ts.isPropertyAssignment(property) &&
-      (ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name)) &&
-      property.name.text === 'shell',
-  );
-  const value = shell && ts.skipOuterExpressions(shell.initializer);
-  return value !== undefined && (value.kind === ts.SyntaxKind.TrueKeyword || ts.isStringLiteralLike(value));
+// `{ shell: true }` or `{ shell: '/bin/bash' }`, written in the options or spread into them. A later
+// property overrides an earlier one, so the last `shell` wins.
+function enablesShell(options: ObjectLiteralExpression, context: SecurityRuleContext, depth = 0): boolean {
+  let enabled = false;
+  for (const property of options.properties) {
+    if (ts.isSpreadAssignment(property)) {
+      const spread = depth < maxOptionsDepth ? objectLiteralOf(property.expression, context) : undefined;
+      if (spread) enabled = enablesShell(spread, context, depth + 1) || enabled;
+      continue;
+    }
+    if (!ts.isPropertyAssignment(property)) continue;
+    if (!(ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name)) || property.name.text !== 'shell')
+      continue;
+    const value = ts.skipOuterExpressions(property.initializer);
+    enabled = value.kind === ts.SyntaxKind.TrueKeyword || ts.isStringLiteralLike(value);
+  }
+  return enabled;
+}
+
+function usesShell(call: CallExpression, context: SecurityRuleContext) {
+  const options = optionsOf(call, context);
+  return options !== undefined && enablesShell(options, context);
 }
 
 function argumentList(call: CallExpression) {
@@ -100,7 +121,7 @@ function shellInputs(call: CallExpression, context: SecurityRuleContext): (Expre
   const spawns =
     (module === 'child_process' && spawnCommands.has(name)) || (module === 'execa' && execaSpawns.has(name));
   if (!spawns) return [];
-  if (usesShell(call)) {
+  if (usesShell(call, context)) {
     const list = argumentList(call);
     return [call.arguments[0], ...(list ? list.elements : [call.arguments[1]])];
   }
@@ -120,8 +141,10 @@ function untracedPart(input: Expression, context: SecurityRuleContext) {
 }
 
 function check(call: CallExpression, context: SecurityRuleContext) {
-  for (const input of shellInputs(call, context)) {
-    if (!input || ts.isSpreadElement(input)) continue;
+  for (const argument of shellInputs(call, context)) {
+    // `exec(...[command])` runs whatever the spread supplies.
+    const input = argument && ts.isSpreadElement(argument) ? argument.expression : argument;
+    if (!input) continue;
     const trace = context.taint.trace(input, 'shell');
     if (trace) {
       reportTraced(context, input, ruleId, message(trace.label), trace);

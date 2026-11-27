@@ -170,6 +170,8 @@ function createTaint(program: ProgramAdapter): TaintApi {
     }
   }
 
+  const pending: { byKey: Map<string, TaintResult | undefined>; key: string }[] = [];
+  let lowestPendingHit = Infinity;
   const summaryFnIds = new WeakMap<Node, number>();
   let nextSummaryFnId = 1;
   function summaryFnId(fn: Node | undefined): string {
@@ -188,12 +190,30 @@ function createTaint(program: ProgramAdapter): TaintApi {
     const key = `${state.sinkKind}:${state.hops}:${summaryFnId(state.summary?.fn)}:${state.summary?.index ?? ''}`;
     let byKey = results.get(expression);
     if (!byKey) results.set(expression, (byKey = new Map<string, TaintResult | undefined>()));
-    if (byKey.has(key)) return byKey.get(key);
+    if (byKey.has(key)) {
+      const cached = byKey.get(key);
+      if (!cached) lowestPendingHit = Math.min(lowestPendingHit, pendingIndex(byKey, key));
+      return cached;
+    }
     // A cycle (`let a = b; b = a`) resolves to clean.
     byKey.set(key, undefined);
+    const depth = pending.push({ byKey, key }) - 1;
+    const outerLowestHit = lowestPendingHit;
+    lowestPendingHit = Infinity;
     const result = isPrunedType(expression, checker) ? undefined : resolveExpression(expression, state);
-    byKey.set(key, result);
+    pending.pop();
+    // A miss that leaned on a node still being resolved above this one is not final: the outer
+    // query may still find a source there, so a later query must re-resolve instead of reusing it.
+    if (!result && lowestPendingHit < depth) byKey.delete(key);
+    else byKey.set(key, result);
+    lowestPendingHit = Math.min(outerLowestHit, lowestPendingHit);
     return result;
+  }
+
+  // The depth of an in-progress resolution, or Infinity when the cached miss is a completed one.
+  function pendingIndex(byKey: Map<string, TaintResult | undefined>, key: string): number {
+    const index = pending.findIndex((entry) => entry.byKey === byKey && entry.key === key);
+    return index < 0 ? Infinity : index;
   }
 
   function resolveExpression(expression: Expression, state: TaintState): TaintResult | undefined {
@@ -304,7 +324,11 @@ function createTaint(program: ProgramAdapter): TaintApi {
     for (const property of expression.properties) {
       if (ts.isSpreadAssignment(property)) {
         const spread = partOf(next(property.expression), true);
-        if (spread) return spread;
+        if (!spread) continue;
+        // A spread with unknown fields taints every field, so later properties add nothing.
+        if (!spread.objectFields) return spread;
+        whole ??= { ...spread, objectFields: undefined };
+        for (const [name, field] of spread.objectFields) fields.set(name, field);
         continue;
       }
       const value = ts.isPropertyAssignment(property)
@@ -313,9 +337,13 @@ function createTaint(program: ProgramAdapter): TaintApi {
           ? property.name
           : undefined;
       const result = value && partOf(next(value), true);
-      if (!result) continue;
-      whole ??= partOf(result);
       const name = propertyKey(property.name);
+      if (!result) {
+        // A clean later property overrides the same field of an earlier spread.
+        if (name !== undefined) fields.delete(name);
+        continue;
+      }
+      whole ??= partOf(result);
       if (name === undefined) return whole;
       fields.set(name, result);
     }
@@ -368,7 +396,7 @@ function createTaint(program: ProgramAdapter): TaintApi {
     for (const call of summaries.callSites(fn)) {
       const argument = call.arguments[index];
       const result = argument && resolve(argument, { ...state, hops: state.hops + 1 });
-      if (result?.taint || result?.sourceKind === 'archive-entry')
+      if (result?.taint || result?.container || result?.sourceKind === 'archive-entry')
         return { ...result, steps: [...result.steps, step(call), step(parameter)] };
     }
   }
@@ -442,7 +470,9 @@ function createTaint(program: ProgramAdapter): TaintApi {
       if (loop || declaration.parent.flags & ts.NodeFlags.Const) return withStep(loop, declaration);
     } else {
       const initial = resolve(declaration.initializer, state);
-      if (initial || declaration.parent.flags & ts.NodeFlags.Const) return withStep(initial, declaration);
+      if (declaration.parent.flags & ts.NodeFlags.Const) return withStep(initial, declaration);
+      if (initial?.objectFields) return withStep(withLaterFields(initial, declaration, identifier, state), declaration);
+      if (initial) return withStep(initial, declaration);
     }
     // `let` and `var`: any write in the same function can taint the variable.
     const scope = ts.findAncestor(declaration, (node: Node) => ts.isFunctionLike(node) || ts.isSourceFile(node));
@@ -454,8 +484,27 @@ function createTaint(program: ProgramAdapter): TaintApi {
     }
   }
 
+  // A `let` object literal that is later reassigned another literal: a field is tainted when any
+  // write that can reach the use taints it.
+  function withLaterFields(
+    initial: TaintResult,
+    declaration: VariableDeclaration,
+    identifier: Identifier,
+    state: TaintState,
+  ): TaintResult {
+    const scope = ts.findAncestor(declaration, (node: Node) => ts.isFunctionLike(node) || ts.isSourceFile(node));
+    if (!scope || !initial.objectFields) return initial;
+    const fields = new Map(initial.objectFields);
+    for (const assignment of assignmentsTo(declaration, scope, checker)) {
+      if (assignment.left === identifier) continue;
+      const assigned = resolve(assignment.right, state);
+      for (const [name, field] of assigned?.objectFields ?? []) if (!fields.has(name)) fields.set(name, field);
+    }
+    return { ...initial, objectFields: fields };
+  }
+
   function resolveCall(call: CallExpression, state: TaintState): TaintResult | undefined {
-    if (isNumericCall(call)) return;
+    if (isNumericCall(call, checker)) return;
     if (state.sinkKind === 'regex' && isRegexEscape(call, checker)) return;
     const callee = strip(call.expression);
     if (ts.isPropertyAccessExpression(callee)) {

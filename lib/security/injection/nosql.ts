@@ -143,11 +143,18 @@ function isMongoReceiver(call: CallExpression, context: SecurityRuleContext, met
   );
 }
 
-function filterArguments(call: CallExpression, method: string): (Expression | undefined)[] {
+// An identifier initialized from a literal (`const pipeline = [...]`) stands for that literal.
+function resolveLocalLiteral(node: Expression, checker: CheckerAdapter): Expression {
+  const value = ts.skipOuterExpressions(node);
+  const initializer = ts.isIdentifier(value) ? initializerOf(value, checker) : undefined;
+  return initializer ? ts.skipOuterExpressions(initializer) : value;
+}
+
+function filterArguments(call: CallExpression, method: string, checker: CheckerAdapter): (Expression | undefined)[] {
   if (filterFirstMethods.has(method)) return [call.arguments[0]];
   if (method === 'distinct') return [call.arguments[1]];
   if (method !== 'aggregate') return [];
-  const pipeline = call.arguments[0] && ts.skipOuterExpressions(call.arguments[0]);
+  const pipeline = call.arguments[0] && resolveLocalLiteral(call.arguments[0], checker);
   if (!pipeline || !ts.isArrayLiteralExpression(pipeline)) return [];
   return pipeline.elements.flatMap((stage) => {
     const value = ts.skipOuterExpressions(stage);
@@ -221,10 +228,21 @@ function checkFilterObject(filter: ObjectLiteralExpression, context: SecurityRul
       checkLogicalFilterBranches(value, context, contextualReason);
       continue;
     }
-    // A nested object is an operator expression (`{ $eq: value }`) or an exact sub-document match.
-    if (key?.startsWith('$') || ts.isObjectLiteralExpression(value)) continue;
+    // A nested object is an operator expression (`{ $eq: value }`) or an exact sub-document match, so
+    // only a spread request object, whose keys become operators, is reported inside it.
+    if (ts.isObjectLiteralExpression(value)) {
+      reportNestedSpreads(value, context, contextualReason);
+      continue;
+    }
+    // `{ $or: req.body.branches }`: a value the request supplies under an operator key is as
+    // attacker-shaped as a top-level one.
     reportValue(value, context, contextualReason);
   }
+}
+
+function reportNestedSpreads(nested: ObjectLiteralExpression, context: SecurityRuleContext, contextualReason?: string) {
+  for (const property of nested.properties)
+    if (ts.isSpreadAssignment(property)) reportWhole(property.expression, context, contextualReason);
 }
 
 function checkLogicalFilterBranches(
@@ -235,6 +253,7 @@ function checkLogicalFilterBranches(
   for (const element of value.elements) {
     const branch = ts.skipOuterExpressions(element);
     if (ts.isObjectLiteralExpression(branch)) checkFilterObject(branch, context, contextualReason);
+    else reportWhole(branch, context, contextualReason);
   }
 }
 
@@ -243,6 +262,9 @@ function checkFilter(filter: Expression, context: SecurityRuleContext) {
   const reason = sanitizerReason(context);
   const value = ts.skipOuterExpressions(filter);
   if (ts.isObjectLiteralExpression(value)) return checkFilterObject(value, context, reason);
+  const local = ts.isIdentifier(value) ? initializerOf(value, context.checker) : undefined;
+  const localFilter = local && ts.skipOuterExpressions(local);
+  if (localFilter && ts.isObjectLiteralExpression(localFilter)) checkFilterObject(localFilter, context, reason);
   for (const built of builtFilters(value, context)) checkFilterObject(built, context, reason);
   reportWhole(value, context, reason);
 }
@@ -285,10 +307,16 @@ function reportWhole(node: Expression, context: SecurityRuleContext, contextualR
 function check(call: CallExpression, context: SecurityRuleContext) {
   const method = methodName(call);
   if (!method) return;
-  const filters = filterArguments(call, method).filter((filter): filter is Expression => filter !== undefined);
+  const filters = filterArguments(call, method, context.checker).filter(
+    (filter): filter is Expression => filter !== undefined,
+  );
   if (!filters.length) return;
   if (!isMongoReceiver(call, context, method)) return filters.forEach((filter) => checkWhereOnly(filter, context));
   for (const filter of filters) checkFilter(filter, context);
+  // Mongoose `where(path, value)`: the second argument is the path's condition.
+  const [, condition] = call.arguments;
+  if (method === 'where' && call.arguments.length === 2 && condition)
+    reportValue(condition, context, sanitizerReason(context));
 }
 
 export { check, ruleId };

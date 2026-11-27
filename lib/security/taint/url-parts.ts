@@ -110,14 +110,16 @@ function singleBlockAssignment(
   let assigned: Expression | undefined;
   let count = 0;
   (function visit(node: Node): void {
+    // A compound write (`target += x`) also changes the value, so it rules out the shortcut.
     if (
       ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
       ts.isIdentifier(node.left) &&
       node.end < usage.pos &&
       checker.getSymbolAtLocation(node.left) === symbol
     ) {
-      assigned = node.right;
+      if (node.operatorToken.kind === ts.SyntaxKind.EqualsToken) assigned = node.right;
       count++;
     }
     ts.forEachChild(node, visit);
@@ -130,10 +132,15 @@ function stripEmpty(node: Expression): string | undefined {
   return ts.isStringLiteralLike(value) ? value.text : undefined;
 }
 
-// The text a list of pieces starts with, when it starts with literal text.
+// The text a list of pieces starts with, when it starts with literal text: adjacent literal pieces
+// read as one string, as they would in the source.
 function leadingText(pieces: UrlPiece[] | undefined): string | undefined {
-  const first = pieces?.[0];
-  return first && 'text' in first ? first.text : undefined;
+  let text: string | undefined;
+  for (const piece of pieces ?? []) {
+    if (!('text' in piece)) break;
+    text = (text ?? '') + piece.text;
+  }
+  return text;
 }
 
 function isUrlConstructor(callee: Node, checker: CheckerAdapter): boolean {

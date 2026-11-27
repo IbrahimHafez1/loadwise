@@ -32,6 +32,7 @@ const safePatterns = [
   String.raw`(\d|[a-z])+`,
   String.raw`(a+){2,5}`,
   String.raw`(?:\d{3}-)+`,
+  String.raw`^(?:ab|ac)+$`,
   String.raw`^(\s*\w+\s*,)*$`,
   String.raw`(([a-z\-])+\.)+`,
   String.raw`[(a+)+]`,
@@ -239,4 +240,13 @@ test('a polynomial pattern run on a function parameter is contextual, other untr
   );
   assert.equal(findingsFor(String.raw`export function trim(str) { return str.replace(/^\s+|\s+$/g, ''); }`).length, 1);
   assert.equal(findingsFor(String.raw`export function trim(str) { return str.replace(/^[a-z]+$/, ''); }`).length, 0);
+});
+
+test('a huge or negative cut does not count as a length cap', () => {
+  const source = route(
+    'emailPattern.test(req.body.email.slice(0, 1e9));',
+    'emailPattern.test(req.body.email.slice(0, -1));',
+    'emailPattern.test(req.body.email.slice(0, 254));',
+  );
+  assert.deepEqual(redosLines(source), [5, 6]);
 });

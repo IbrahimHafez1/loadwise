@@ -51,7 +51,8 @@ const globalFunctions = new Set(['String', 'decodeURI', 'decodeURIComponent', 'e
 // Module or global namespaces: exported function -> 'first' (argument 0), 'any' (any argument), or
 // 'keep' (argument 0 with its `whole` flag kept, for copies of the whole object).
 const namespaceFunctions: Record<string, Record<string, PropagationSource>> = {
-  JSON: { parse: 'first', stringify: 'first' },
+  // Parsing a whole body yields a whole object, which a Mongo filter can take as operators.
+  JSON: { parse: 'keep', stringify: 'first' },
   Buffer: { from: 'first' },
   Promise: { resolve: 'keep', all: 'first', allSettled: 'first', race: 'first' },
   Array: { from: 'first' },
@@ -70,17 +71,19 @@ function isGlobal(identifier: Identifier, checker: CheckerAdapter) {
 }
 
 // `ids.map(() => '?')` or `ids.map((_, i) => '$' + (i + 1))`: the result is built without reading
-// the element. Any identifier with the element's name counts as a read, shadowed or not, so the
-// answer errs towards propagating.
+// the element. The third parameter is the whole array, so reading it reads the elements too. Any
+// identifier with such a name counts as a read, shadowed or not, so the answer errs towards
+// propagating.
 function ignoresElement(callback: Expression | undefined): boolean {
   const fn = callback && ts.skipOuterExpressions(callback);
   if (!fn || !(ts.isArrowFunction(fn) || ts.isFunctionExpression(fn))) return false;
-  const [element] = fn.parameters;
+  const [element, , array] = fn.parameters;
   if (!element) return true;
-  if (!ts.isIdentifier(element.name)) return false;
-  const name = element.name.text;
+  const elementNames = [element, array].filter((parameter) => parameter !== undefined);
+  if (!elementNames.every((parameter) => ts.isIdentifier(parameter.name))) return false;
+  const names = new Set(elementNames.map((parameter) => parameter.name.getText()));
   return !(function reads(node: Node): boolean | undefined {
-    return (ts.isIdentifier(node) && node.text === name) || ts.forEachChild(node, reads);
+    return (ts.isIdentifier(node) && names.has(node.text)) || ts.forEachChild(node, reads);
   })(fn.body);
 }
 
