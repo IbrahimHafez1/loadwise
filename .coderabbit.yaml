@@ -16,5 +16,6 @@ reviews:
   path_instructions:
     - path: '**/*.{ts,cts}'
       instructions: >-
-        Follow CONTRIBUTING.md: no `any`, no non-null `!`, no `as` except `as const`, `.js` extensions on relative
-        imports, descriptive names. A rule or autofix change needs positive and negative tests and matching README docs.
+        Follow CONTRIBUTING.md: no `any`, no non-null `!`, no `as` type assertions except `as const` (import and
+        export aliases such as `import * as vscode` are fine), relative imports use the emitted file's extension
+        (`.js` from `.ts`, `.cjs` from `.cts`), descriptive names. A rule or autofix change needs positive and negative tests and matching README docs.
