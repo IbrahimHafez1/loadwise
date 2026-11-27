@@ -19,7 +19,7 @@ import type { Finding, RulePolicy, ScanResult, SkippedFile } from '../shared/typ
 import type { NativeApi, NativeBinding, NativeDiagnostic, NativeProgram } from './types/native-typescript.js';
 import type { SourceAnalyzer } from './types/source-analyzer.js';
 import type { ProgramAdapter } from '../shared/types.js';
-import { noteUnscannedJavaScript } from './unscanned-javascript.js';
+import { unscannedJavaScript } from './unscanned-javascript.js';
 import nativeSyntax from './native-syntax.js';
 import * as nativeChecker from './native-checker.js';
 import * as performanceAnalyze from './analyze.js';
@@ -169,8 +169,8 @@ function analyzeNative({
   // Chosen once the native syntax is selected, because the default analyzer loads its rules lazily.
   let selectedAnalyzers: SourceAnalyzer[] = [];
   const visitedConfigs = new Set<string>();
-  // Folders scanned with a config that leaves JavaScript out.
-  const scopesWithoutJs = new Set<string>();
+  // Folders scanned with a config that leaves JavaScript out, each with whether that JavaScript is still checked.
+  const scopesWithoutJs = new Map<string, boolean>();
   // Folders whose files no program may have analyzed, listed once the programs are done.
   const standaloneRoots = new Set<string>();
   const scanned = new Set<string>();
@@ -296,7 +296,13 @@ function analyzeNative({
   }
 
   // Collects every config with source inputs, in scan order, after validating its options.
-  function visitConfig(filename: string, projects: ScanProject[], scope?: string, companion?: boolean): void {
+  function visitConfig(
+    filename: string,
+    projects: ScanProject[],
+    scope?: string,
+    companion?: boolean,
+    explicit?: boolean,
+  ): void {
     // realpath resolves the reference even before the native API initializes.
     const key = fs.realpathSync.native(filename);
     if (visitedConfigs.has(key)) return;
@@ -308,9 +314,10 @@ function analyzeNative({
       path.dirname(filename),
     );
     for (const reference of parsed.projectReferences ?? []) {
-      visitConfig(resolveConfig(reference.path), projects, scope);
+      visitConfig(resolveConfig(reference.path), projects, scope, false, explicit);
     }
-    if (!parsed.options.allowJs && !onlyFiles) scopesWithoutJs.add(scope ?? path.dirname(filename));
+    const jsScope = scope ?? path.dirname(filename);
+    if (!parsed.options.allowJs && !onlyFiles && !scopesWithoutJs.has(jsScope)) scopesWithoutJs.set(jsScope, !explicit);
     standaloneRoots.add(scope ?? repositoryRoot(path.dirname(filename)));
     const rootFiles = onlyFiles ? parsed.fileNames.filter(onlyFiles) : parsed.fileNames;
     if (!rootFiles.some((filename: string) => isSourceInput(filename) && isInScope(scope, filename))) return;
@@ -335,6 +342,17 @@ function analyzeNative({
 
   try {
     const projects: ScanProject[] = [];
+    // Explicit files, and JavaScript a config without `allowJs` leaves out, have no config of their own.
+    const { ScriptTarget } = requireNative('typescript/ast');
+    const standaloneOptions: CompilerOptions = {
+      target: ScriptTarget.ES2022,
+      module: binding.ModuleKind.NodeNext,
+      allowJs: true,
+      checkJs: false,
+      skipLibCheck: true,
+      jsx: binding.JsxEmit.Preserve,
+      ...(policy && { strictNullChecks: true }),
+    };
     if (files.length) {
       const roots = files.map((filename) => {
         if (!isSourceInput(filename) || !fs.statSync(filename, { throwIfNoEntry: false })?.isFile()) {
@@ -342,27 +360,16 @@ function analyzeNative({
         }
         return path.resolve(filename);
       });
-      const { ScriptTarget } = requireNative('typescript/ast');
-      projects.push([
-        roots,
-        {
-          target: ScriptTarget.ES2022,
-          module: binding.ModuleKind.NodeNext,
-          allowJs: true,
-          checkJs: false,
-          skipLibCheck: true,
-          jsx: binding.JsxEmit.Preserve,
-          ...(policy && { strictNullChecks: true }),
-        },
-        () => true,
-      ]);
+      projects.push([roots, standaloneOptions, () => true]);
     } else {
-      for (const { config, scope, companion } of scanEntries(project)) {
-        visitConfig(config, projects, scope, companion);
+      for (const { config, scope, companion, explicit } of scanEntries(project)) {
+        visitConfig(config, projects, scope, companion, explicit);
       }
     }
     selectSyntax();
     for (const [roots, options, analyzes] of projects) scan(roots, options, analyzes);
+    const leftOut = unscannedJavaScript(scopesWithoutJs, (filename: string) => scanned.has(canonical(filename)));
+    scan(leftOut, standaloneOptions, () => true);
     if (!scanned.size && !onlyFiles && !skippedFiles.length)
       throw new Error('No JavaScript or TypeScript source files to check.');
     if (!files.length && !onlyFiles && selectedAnalyzers.some((analyzer) => analyzer.pillar === 'reliability')) {
@@ -377,7 +384,6 @@ function analyzeNative({
         );
       }
     }
-    noteUnscannedJavaScript([...scopesWithoutJs], (filename: string) => scanned.has(canonical(filename)));
     return {
       scannedFiles: scanned.size,
       findings: [...findings.values()].sort(compareFindings),

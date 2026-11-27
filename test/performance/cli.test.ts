@@ -213,18 +213,35 @@ test('plan CLI recognizes both engines and rejects estimates', (context) => {
   assert.equal(run(['plan', 'estimate.json'], directory).status, 2);
 });
 
-test('JavaScript a tsconfig leaves out without allowJs is named in a note on both engines', (context) => {
+test('JavaScript a tsconfig leaves out without allowJs is still checked on both engines', (context) => {
+  const syncRead = 'const { readFileSync } = require("node:fs");\nmodule.exports = async () => readFileSync("demo");\n';
   const directory = fixture(context, {
     'tsconfig.json': JSON.stringify({ compilerOptions: { types: [] } }),
     'app.ts': 'export const app = 1;\n',
-    'report.js': 'module.exports = {};\n',
-    'eslint.config.js': 'module.exports = [];\n',
+    'report.js': syncRead,
+    'eslint.config.js': syncRead,
   });
   for (const engine of ['js', 'native']) {
     const result = run(['--engine', engine, '--json'], directory);
-    assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stderr, /skip 1 JavaScript file\(s\) in \. \(report\.js\) because .*"allowJs"/);
+    assert.equal(result.status, 1, result.stderr);
+    const report = parseReport(result.stdout);
+    assert.equal(report.scannedFiles, 2);
+    assert.deepEqual(
+      report.findings.map((finding) => [finding.file, finding.ruleId]),
+      [['report.js', 'node-sync-fs-in-async']],
+    );
+    assert.match(result.stderr, /does not set "allowJs", so 1 JavaScript file\(s\) \(report\.js\) were checked/);
   }
+  // A config named with -p is scanned exactly as it lists its files.
+  const explicit = run(['-p', 'tsconfig.json', '--json'], directory);
+  assert.equal(parseReport(explicit.stdout).findings.length, 0, explicit.stderr);
+  assert.match(explicit.stderr, /skip 1 JavaScript file\(s\) \(report\.js\) in \. because .*"allowJs"/);
+  // A jsconfig beside the tsconfig carries the project's own settings, so it checks the JavaScript instead.
+  fs.writeFileSync(path.join(directory, 'jsconfig.json'), JSON.stringify({ compilerOptions: { types: [] } }));
+  const withJsconfig = run(['--json'], directory);
+  fs.unlinkSync(path.join(directory, 'jsconfig.json'));
+  assert.equal(parseReport(withJsconfig.stdout).findings.length, 1, withJsconfig.stderr);
+  assert.doesNotMatch(withJsconfig.stderr, /allowJs/);
   fs.writeFileSync(
     path.join(directory, 'tsconfig.json'),
     JSON.stringify({ compilerOptions: { types: [], allowJs: true } }),
