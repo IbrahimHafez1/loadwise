@@ -22,6 +22,11 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         node: [22, 24]
+        # Windows is the slowest runner and Node-version differences already show on Ubuntu, so it runs the newest
+        # Node only.
+        exclude:
+          - os: windows-latest
+            node: 22
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
