@@ -29,6 +29,11 @@ jobs:
       # npm Trusted Publishing authenticates this workflow through OIDC (id-token: write), so no token secret is stored.
       - name: Publish to npm
         run: |
+          # A re-run, or a version published by hand, skips straight to the release steps.
+          if npm view "loadwise@${GITHUB_REF_NAME#v}" version > /dev/null 2>&1; then
+            echo "loadwise@${GITHUB_REF_NAME#v} is already on npm"
+            exit 0
+          fi
           if [[ "$GITHUB_REF_NAME" == *-* ]]; then
             npm publish --provenance --access public --tag next
           else
