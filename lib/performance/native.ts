@@ -307,7 +307,11 @@ function analyzeNative({
   ): void {
     // realpath resolves the reference even before the native API initializes.
     const key = fs.realpathSync.native(filename);
-    if (visitedConfigs.has(key)) return;
+    // A companion already visited as a reference still sets its folder's JavaScript boundary.
+    if (visitedConfigs.has(key)) {
+      if (companion) scopesWithoutJs.delete(scope ?? path.dirname(filename));
+      return;
+    }
     visitedConfigs.add(key);
     const parsed = api.parseConfigFile(filename);
     // `checkJs` turns JavaScript on when `allowJs` is unset. A discovered config that lists no inputs because it

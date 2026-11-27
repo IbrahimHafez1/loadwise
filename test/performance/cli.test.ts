@@ -292,6 +292,19 @@ test('a companion jsconfig decides which JavaScript is checked on both engines',
     );
     assert.doesNotMatch(result.stderr, /allowJs/);
   }
+  // The tsconfig may reference the companion, which then is visited before its companion entry.
+  fs.writeFileSync(
+    path.join(directory, 'tsconfig.json'),
+    JSON.stringify({ compilerOptions: { types: [] }, include: ['app.ts'], references: [{ path: './jsconfig.json' }] }),
+  );
+  for (const engine of ['js', 'native']) {
+    const result = run(['--engine', engine, '--json'], directory);
+    assert.equal(result.status, 1, result.stderr);
+    assert.deepEqual(
+      parseReport(result.stdout).findings.map((finding) => finding.file),
+      ['report.js'],
+    );
+  }
 });
 
 test('an empty tsconfig beside only JavaScript is checked, and checkJs counts as allowJs', (context) => {
