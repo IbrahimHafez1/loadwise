@@ -72,18 +72,21 @@ test('bulk fix requires explicit consent, applies source fixes and lists individ
 });
 
 test('a skipped or failed checker stops the batch before any source edit', (context) => {
-  const brokenConfigs: FileMap[] = [
+  const brokenConfigs: { files: FileMap; reason: RegExp }[] = [
     {
-      'tsconfig.json': '{"files":["slow.ts"]}',
-      'loadwise.config.json': JSON.stringify({ maintainability: { exclude: 'generated' } }),
+      files: {
+        'tsconfig.json': '{"files":["slow.ts"]}',
+        'loadwise.config.json': JSON.stringify({ maintainability: { exclude: 'generated' } }),
+      },
+      reason: /did not complete/,
     },
-    {},
+    { files: {}, reason: /No tsconfig.json or jsconfig.json in .*No fixes applied/ },
   ];
-  for (const config of brokenConfigs) {
-    const { run, read } = project(context, { ...config, 'slow.ts': example });
+  for (const { files, reason } of brokenConfigs) {
+    const { run, read } = project(context, { ...files, 'slow.ts': example });
     const fixed = run('fix', '--yes');
     assert.equal(fixed.status, 2, fixed.stdout + fixed.stderr);
-    assert.match(fixed.stderr, /did not complete/);
+    assert.match(fixed.stderr, reason);
     assert.equal(read('slow.ts'), example);
   }
 });
