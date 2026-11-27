@@ -99,7 +99,7 @@ test('--fix on check points to the fix command', (context) => {
   for (const args of [['--fix'], ['check', '--fix']]) {
     const run = loadwise(quietProject(context), args);
     assert.equal(run.code, 2);
-    assert.match(run.stderr, /Run `loadwise fix --yes`/);
+    assert.match(run.stderr, /From the project folder, run `loadwise fix --yes`/);
   }
 });
 
