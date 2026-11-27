@@ -8,7 +8,7 @@
     "@sequelize/core": "7.0.0-alpha.47",
     "knex": "3.1.0",
     "kysely": "0.28.17",
-    "mongoose": "8.24.7",
+    "mongoose": "9.13.0",
     "sequelize": "6.37.8",
     "typeorm": "0.3.31"
   }
