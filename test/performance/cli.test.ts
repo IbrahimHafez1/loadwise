@@ -249,6 +249,56 @@ test('JavaScript a tsconfig leaves out without allowJs is still checked on both 
   assert.doesNotMatch(run(['--json'], directory).stderr, /allowJs/);
 });
 
+test("JavaScript left out without allowJs keeps the config's exclude and the ignore patterns on both engines", (context) => {
+  const syncRead = 'const { readFileSync } = require("node:fs");\nmodule.exports = async () => readFileSync("demo");\n';
+  const directory = fixture(context, {
+    'tsconfig.json': JSON.stringify({ compilerOptions: { types: [] }, exclude: ['legacy.js'] }),
+    'loadwise.config.json': JSON.stringify({ ignore: ['ignored.js'] }),
+    'app.ts': 'export const app = 1;\n',
+    'report.js': syncRead,
+    'legacy.js': syncRead,
+    'ignored.js': syncRead,
+  });
+  for (const engine of ['js', 'native']) {
+    const result = run(['--engine', engine, '--json'], directory);
+    assert.equal(result.status, 1, result.stderr);
+    assert.deepEqual(
+      parseReport(result.stdout).findings.map((finding) => finding.file),
+      ['report.js'],
+    );
+    assert.match(result.stderr, /so 1 JavaScript file\(s\) \(report\.js\) were checked/);
+  }
+});
+
+test('an empty tsconfig beside only JavaScript is checked, and checkJs counts as allowJs', (context) => {
+  const syncRead = 'const { readFileSync } = require("node:fs");\nmodule.exports = async () => readFileSync("demo");\n';
+  const directory = fixture(context, { 'tsconfig.json': '{}', 'report.js': syncRead });
+  for (const engine of ['js', 'native']) {
+    const result = run(['--engine', engine, '--json'], directory);
+    assert.equal(result.status, 1, result.stderr);
+    assert.deepEqual(
+      parseReport(result.stdout).findings.map((finding) => finding.file),
+      ['report.js'],
+    );
+  }
+  // A config named with -p is checked exactly, so its lack of inputs stays an error.
+  const explicit = run(['-p', 'tsconfig.json', '--json'], directory);
+  assert.equal(explicit.status, 2, explicit.stdout);
+  assert.match(explicit.stderr, /No inputs were found/);
+  // checkJs turns JavaScript on, so the config's include decides which JavaScript it checks.
+  fs.writeFileSync(
+    path.join(directory, 'tsconfig.json'),
+    JSON.stringify({ compilerOptions: { types: [], checkJs: true }, files: ['other.ts'] }),
+  );
+  fs.writeFileSync(path.join(directory, 'other.ts'), 'export const other = 1;\n');
+  const withCheckJs = ['js', 'native'].map((engine) => run(['--engine', engine, '--json'], directory));
+  fs.unlinkSync(path.join(directory, 'other.ts'));
+  for (const result of withCheckJs) {
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stderr, /allowJs/);
+  }
+});
+
 test('an uninstalled Mongoose loaded with require() is recognised like an import', (context) => {
   const loop =
     'export async function load(ids: string[]) {\n  const out = [];\n  for (const id of ids) out.push(await User.findById(id));\n  return out;\n}\n';

@@ -39,7 +39,7 @@ import type { Finding, ProgramAdapter, ScanResult, SkippedFile } from '../shared
 import type { PerformancePolicy } from './types/performance-policy.js';
 import type { ProgramScanOptions } from './types/program-scan.js';
 import type { SourceAnalyzer } from './types/source-analyzer.js';
-import { unscannedJavaScript } from './unscanned-javascript.js';
+import { unscannedJavaScript, type LeftOutScope } from './unscanned-javascript.js';
 
 // The file-system probes a scan caches; they replace the compiler host's own.
 interface HostProbes {
@@ -71,6 +71,7 @@ const compilerLibDirectory = path.dirname(fileURLToPath(import.meta.resolve('typ
 const bundledLibPattern = /^lib(?:\.[\w.-]+)?\.d\.ts$/;
 const docMode = ts.JSDocParsingMode.ParseForTypeErrors;
 const canonicalFileName = ts.createCompilerHost({}).getCanonicalFileName;
+const noInputsCode = 18003;
 
 // Limit filesystem probe reuse to a single one-shot run. Watch uses TypeScript's live host.
 function cachePathTest(test: (filename: string) => boolean) {
@@ -411,8 +412,8 @@ function analyzeSources({ project, files, policy, onlyFiles, analyzers, preRead 
   const scanned = new Set<string>();
   const configs = new Set<string>();
   const notedBases = new Set<string>();
-  // Folders scanned with a config that leaves JavaScript out, each with whether that JavaScript is still checked.
-  const scopesWithoutJs = new Map<string, boolean>();
+  // Folders scanned with a config that leaves JavaScript out.
+  const scopesWithoutJs = new Map<string, LeftOutScope>();
   // Folders whose files no program may have analyzed, listed once the programs are done.
   const standaloneRoots = new Set<string>();
   const referenceFindings = new Map<string, Finding>();
@@ -487,7 +488,13 @@ function analyzeSources({ project, files, policy, onlyFiles, analyzers, preRead 
     );
     if (!parsed) throw new Error('Unable to read project: ' + filename);
     const missingBases = uninstalledBaseConfigs(parsed);
-    const configErrors = parsed.errors.filter((diagnostic) => !missingBases.includes(diagnostic));
+    // `checkJs` turns JavaScript on when `allowJs` is unset. A discovered config that lists no inputs because it
+    // leaves the JavaScript out still has that JavaScript checked, so TS18003 waits for the final source count.
+    const allowsJs = parsed.options.allowJs ?? parsed.options.checkJs;
+    const configErrors = parsed.errors.filter(
+      (diagnostic) =>
+        !missingBases.includes(diagnostic) && !(diagnostic.code === noInputsCode && !allowsJs && !explicit),
+    );
     if (configErrors.length) throw new Error(configErrors.map(diagnosticText).join('\n'));
     for (const diagnostic of missingBases) {
       // Referenced projects usually share their bases, so each missing base is noted once.
@@ -505,8 +512,12 @@ function analyzeSources({ project, files, policy, onlyFiles, analyzers, preRead 
     for (const reference of parsed.projectReferences ?? []) {
       visitConfig(resolveConfig(ts.resolveProjectReferencePath(reference)), scope, false, explicit);
     }
-    const jsScope = scope ?? path.dirname(filename);
-    if (!parsed.options.allowJs && !onlyFiles && !scopesWithoutJs.has(jsScope)) scopesWithoutJs.set(jsScope, !explicit);
+    if (!allowsJs) {
+      const jsScope = scope ?? path.dirname(filename);
+      const leftOut = scopesWithoutJs.get(jsScope) ?? { configs: [], checksLeftOut: !explicit };
+      leftOut.configs.push(filename);
+      scopesWithoutJs.set(jsScope, leftOut);
+    }
     standaloneRoots.add(scope ?? repositoryRoot(path.dirname(filename)));
     // The companion jsconfig only adds what the tsconfig left out.
     const isNew = (filename: string) => !companion || !scanned.has(canonicalFileName(path.resolve(filename)));
@@ -537,10 +548,13 @@ function analyzeSources({ project, files, policy, onlyFiles, analyzers, preRead 
     scan(paths, standaloneOptions);
   } else {
     for (const { config, scope, companion, explicit } of entries) visitConfig(config, scope, companion, explicit);
-    scan(
-      unscannedJavaScript(scopesWithoutJs, (filename: string) => scanned.has(canonicalFileName(filename))),
-      standaloneOptions,
+    const leftOut = unscannedJavaScript(
+      scopesWithoutJs,
+      (filename: string) => scanned.has(canonicalFileName(filename)),
+      onlyFiles,
     );
+    scan(leftOut.files, standaloneOptions);
+    leftOut.note();
   }
   if (!scanned.size && !onlyFiles && !skippedFiles.length)
     throw new Error('No JavaScript or TypeScript source files to check.');

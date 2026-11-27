@@ -19,7 +19,7 @@ import type { Finding, RulePolicy, ScanResult, SkippedFile } from '../shared/typ
 import type { NativeApi, NativeBinding, NativeDiagnostic, NativeProgram } from './types/native-typescript.js';
 import type { SourceAnalyzer } from './types/source-analyzer.js';
 import type { ProgramAdapter } from '../shared/types.js';
-import { unscannedJavaScript } from './unscanned-javascript.js';
+import { unscannedJavaScript, type LeftOutScope } from './unscanned-javascript.js';
 import nativeSyntax from './native-syntax.js';
 import * as nativeChecker from './native-checker.js';
 import * as performanceAnalyze from './analyze.js';
@@ -29,6 +29,8 @@ import * as schemaTooling from './schema-tooling.js';
 
 // What a caller passes: one config or several, or explicit files; `onlyFiles` keeps just the
 // changed ones.
+const noInputsCode = 18003;
+
 interface NativeAnalysisOptions {
   project?: string | string[];
   files?: string[];
@@ -169,8 +171,8 @@ function analyzeNative({
   // Chosen once the native syntax is selected, because the default analyzer loads its rules lazily.
   let selectedAnalyzers: SourceAnalyzer[] = [];
   const visitedConfigs = new Set<string>();
-  // Folders scanned with a config that leaves JavaScript out, each with whether that JavaScript is still checked.
-  const scopesWithoutJs = new Map<string, boolean>();
+  // Folders scanned with a config that leaves JavaScript out.
+  const scopesWithoutJs = new Map<string, LeftOutScope>();
   // Folders whose files no program may have analyzed, listed once the programs are done.
   const standaloneRoots = new Set<string>();
   const scanned = new Set<string>();
@@ -308,7 +310,15 @@ function analyzeNative({
     if (visitedConfigs.has(key)) return;
     visitedConfigs.add(key);
     const parsed = api.parseConfigFile(filename);
-    checkConfig(parsed.errors?.filter((diagnostic) => !isIgnorableUnknownOption(diagnostic)));
+    // `checkJs` turns JavaScript on when `allowJs` is unset. A discovered config that lists no inputs because it
+    // leaves the JavaScript out still has that JavaScript checked, so TS18003 waits for the final source count.
+    const allowsJs = parsed.options.allowJs ?? parsed.options.checkJs;
+    checkConfig(
+      parsed.errors?.filter(
+        (diagnostic) =>
+          !isIgnorableUnknownOption(diagnostic) && !(diagnostic.code === noInputsCode && !allowsJs && !explicit),
+      ),
+    );
     const options = withWorkspaceSources(
       withoutRemovedOptions(withoutBaseUrl(withoutEmitOptions(parsed.options)), binding),
       path.dirname(filename),
@@ -316,8 +326,12 @@ function analyzeNative({
     for (const reference of parsed.projectReferences ?? []) {
       visitConfig(resolveConfig(reference.path), projects, scope, false, explicit);
     }
-    const jsScope = scope ?? path.dirname(filename);
-    if (!parsed.options.allowJs && !onlyFiles && !scopesWithoutJs.has(jsScope)) scopesWithoutJs.set(jsScope, !explicit);
+    if (!allowsJs) {
+      const jsScope = scope ?? path.dirname(filename);
+      const leftOut = scopesWithoutJs.get(jsScope) ?? { configs: [], checksLeftOut: !explicit };
+      leftOut.configs.push(filename);
+      scopesWithoutJs.set(jsScope, leftOut);
+    }
     standaloneRoots.add(scope ?? repositoryRoot(path.dirname(filename)));
     const rootFiles = onlyFiles ? parsed.fileNames.filter(onlyFiles) : parsed.fileNames;
     if (!rootFiles.some((filename: string) => isSourceInput(filename) && isInScope(scope, filename))) return;
@@ -368,8 +382,13 @@ function analyzeNative({
     }
     selectSyntax();
     for (const [roots, options, analyzes] of projects) scan(roots, options, analyzes);
-    const leftOut = unscannedJavaScript(scopesWithoutJs, (filename: string) => scanned.has(canonical(filename)));
-    scan(leftOut, standaloneOptions, () => true);
+    const leftOut = unscannedJavaScript(
+      scopesWithoutJs,
+      (filename: string) => scanned.has(canonical(filename)),
+      onlyFiles,
+    );
+    scan(leftOut.files, standaloneOptions, () => true);
+    leftOut.note();
     if (!scanned.size && !onlyFiles && !skippedFiles.length)
       throw new Error('No JavaScript or TypeScript source files to check.');
     if (!files.length && !onlyFiles && selectedAnalyzers.some((analyzer) => analyzer.pillar === 'reliability')) {
