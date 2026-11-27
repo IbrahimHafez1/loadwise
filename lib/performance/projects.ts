@@ -473,7 +473,11 @@ function analyzeSources({ project, files, policy, onlyFiles, analyzers, preRead 
 
   function visitConfig(filename: string, scope?: string, companion?: boolean, explicit?: boolean): void {
     const canonical = fs.realpathSync(filename);
-    if (configs.has(canonical)) return;
+    // A companion already visited as a reference still sets its folder's JavaScript boundary.
+    if (configs.has(canonical)) {
+      if (companion) scopesWithoutJs.delete(scope ?? path.dirname(filename));
+      return;
+    }
     configs.add(canonical);
     const parsed = ts.getParsedCommandLineOfConfigFile(
       filename,
