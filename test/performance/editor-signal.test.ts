@@ -40,7 +40,8 @@ test('a successful terminal source scan refreshes all listeners, re-arms, and le
   const controller = new AbortController();
   // Production has the source watcher as a live handle. Keep this isolated sender test alive while
   // events arrive.
-  const deadline = setTimeout(() => controller.abort(), 10000);
+  // Shared CI runners run eight test files at once, so the terminal scan can take several times longer there.
+  const deadline = setTimeout(() => controller.abort(), process.env.CI ? 60000 : 10000);
   try {
     assert.equal(fs.readdirSync(directory).length, 2);
     const silent = spawnSync(process.execPath, [cli, 'perf', 'sample.ts', '--json'], {
