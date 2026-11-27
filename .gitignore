@@ -18,3 +18,5 @@ test/types/fake-vscode.cjs
 *.tgz
 *.vsix
 .claude/
+# Test fixtures that must share the checkout's drive (see test/performance/index-coverage-migrations.test.ts)
+.test-tmp/

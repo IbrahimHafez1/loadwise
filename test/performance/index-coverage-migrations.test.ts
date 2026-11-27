@@ -59,12 +59,13 @@ const migrations = {
 };
 
 // The fixture imports the project through a path relative to virtualRoot, which cannot cross drives. GitHub's Windows
-// runners check out on D: with TEMP on C:, so the project then goes under the checkout's ignored node_modules/.cache.
+// runners check out on D: with TEMP on C:, so the project then goes under the checkout's ignored .test-tmp. Not under
+// node_modules: the schema lookup takes the project root from the first node_modules segment of the client's path.
 function temporaryParent(): string {
   if (path.parse(os.tmpdir()).root === path.parse(virtualRoot).root) return os.tmpdir();
-  const cacheDirectory = path.resolve(import.meta.dirname, '..', '..', 'node_modules', '.cache');
-  fs.mkdirSync(cacheDirectory, { recursive: true });
-  return cacheDirectory;
+  const checkoutTemporaryDirectory = path.resolve(import.meta.dirname, '..', '..', '.test-tmp');
+  fs.mkdirSync(checkoutTemporaryDirectory, { recursive: true });
+  return checkoutTemporaryDirectory;
 }
 
 function createProject(context: TestContext) {
