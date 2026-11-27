@@ -116,19 +116,66 @@ test('explicit workspace selectors report an error when no typed workspace can r
   }
 });
 
-test('a package without a config is noted and skipped', (context) => {
+const syncReadSource =
+  'const { readFileSync } = require("node:fs");\nmodule.exports = async () => readFileSync("demo");\n';
+const findingFiles = (findings: Finding[]) => findings.map(({ file, ruleId }) => `${file} ${ruleId}`);
+
+test('a package without a config is checked with the standalone defaults on both engines', (context) => {
   const root = monorepo(context, {
     'package.json': { workspaces: ['packages/*'] },
     ...packageFiles('packages/typed', 'typed'),
+    'packages/plain/package.json': { name: 'plain' },
+    'packages/plain/index.js': syncReadSource,
     'packages/bare/package.json': { name: 'bare' },
   });
   assert.deepEqual(
     discoverWorkspaces(root).withoutConfig.map(({ name }) => name),
-    ['bare'],
+    ['bare', 'plain'],
   );
-  const run = loadwise(root, 'perf', '-p', '.');
+  for (const engine of ['js', 'native']) {
+    const run = loadwise(root, 'perf', '-p', '.', '--engine', engine, '--json');
+    assert.equal(run.code, 1, run.stderr);
+    const report = JSON.parse(run.stdout);
+    assert.deepEqual(findingFiles(report.findings), ['packages/plain/index.js node-sync-fs-in-async']);
+    assert.deepEqual(report.packages.map(({ name }: { name: string }) => name).sort(), ['plain', 'typed']);
+    // A package with no sources has nothing to check, so it is not reported as skipped.
+    assert.doesNotMatch(run.stderr, /workspace bare/);
+  }
+  const selected = loadwise(root, 'check', '--only', 'perf,sec', '--workspace', 'plain', '--json');
+  assert.equal(selected.code, 1, selected.stderr);
+  assert.deepEqual(findingFiles(JSON.parse(selected.stdout).performance.findings), [
+    'packages/plain/index.js node-sync-fs-in-async',
+  ]);
+});
+
+test('a monorepo of packages without configs is checked', (context) => {
+  const root = monorepo(context, {
+    'package.json': { workspaces: ['packages/*'] },
+    'packages/plain/package.json': { name: 'plain' },
+    'packages/plain/index.js': syncReadSource,
+  });
+  const run = loadwise(root, 'check', '--only', 'perf,sec,rel', '--json');
+  assert.equal(run.code, 1, run.stderr);
+  assert.doesNotMatch(run.stderr, /no tsconfig\.json or jsconfig\.json/);
+  assert.deepEqual(findingFiles(JSON.parse(run.stdout).performance.findings), [
+    'packages/plain/index.js node-sync-fs-in-async',
+  ]);
+});
+
+test("a package whose TypeScript sits under a sub-folder's own tsconfig is noted, skipped and blocks fixes", (context) => {
+  const root = monorepo(context, {
+    'package.json': { workspaces: ['packages/*'] },
+    ...packageFiles('packages/typed', 'typed'),
+    'packages/nested/package.json': { name: 'nested' },
+    'packages/nested/src/tsconfig.json': tsconfig,
+    'packages/nested/src/index.ts': slowSource,
+  });
+  const run = loadwise(root, 'perf', '-p', '.', '--json');
   assert.equal(run.code, 0, run.stderr);
-  assert.match(run.stderr, /workspace bare has no tsconfig\.json or jsconfig\.json/);
+  assert.match(run.stderr, /workspace nested has no tsconfig\.json or jsconfig\.json, and a sub-folder's own/);
+  const fix = loadwise(root, 'fix', '--yes', '--only', 'perf');
+  assert.equal(fix.code, 2, fix.stderr);
+  assert.match(fix.stderr, /missing a source config: nested\. No fixes applied\./);
 });
 
 test('check analyses every package once, groups findings per package and keeps cwd-relative paths', (context) => {

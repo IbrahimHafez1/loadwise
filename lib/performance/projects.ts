@@ -61,6 +61,8 @@ type WorkspaceEntryFinder = (directory: string, subpath: string) => string | und
 interface SourceScanOptions {
   project?: string | string[];
   files: string[];
+  /** Sources of workspace packages without a config, checked with the standalone defaults beside the configs. */
+  standaloneFiles?: readonly string[];
   policy?: PerformancePolicy;
   onlyFiles?: (filename: string) => boolean;
   analyzers?: SourceAnalyzer[];
@@ -407,7 +409,15 @@ function standaloneReliabilityFindings(
 
 // `project` is one config or an array of them. `onlyFiles` limits the roots of each config to the changed files;
 // imports still resolve through the config.
-function analyzeSources({ project, files, policy, onlyFiles, analyzers, preRead }: SourceScanOptions): ScanResult {
+function analyzeSources({
+  project,
+  files,
+  standaloneFiles = [],
+  policy,
+  onlyFiles,
+  analyzers,
+  preRead,
+}: SourceScanOptions): ScanResult {
   const findings: Finding[] = [];
   const scanned = new Set<string>();
   const configs = new Set<string>();
@@ -554,12 +564,12 @@ function analyzeSources({ project, files, policy, onlyFiles, analyzers, preRead 
     scan(paths, standaloneOptions);
   } else {
     for (const { config, scope, companion, explicit } of entries) visitConfig(config, scope, companion, explicit);
-    const leftOut = unscannedJavaScript(
-      scopesWithoutJs,
-      (filename: string) => scanned.has(canonicalFileName(filename)),
-      onlyFiles,
+    const isScanned = (filename: string) => scanned.has(canonicalFileName(filename));
+    const leftOut = unscannedJavaScript(scopesWithoutJs, isScanned, onlyFiles);
+    const configless = standaloneFiles.filter(
+      (filename) => !isScanned(filename) && (!onlyFiles || onlyFiles(filename)),
     );
-    scan(leftOut.files, standaloneOptions);
+    scan([...leftOut.files, ...configless], standaloneOptions);
     leftOut.note();
   }
   if (!scanned.size && !onlyFiles && !skippedFiles.length)

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import { allowedHeapMegabytes, childHeapFlags, isHeapExhaustion } from './heap-limit.js';
-import { coveringConfig, discoverWorkspaces, projectConfig, plainJavaScriptSources } from './workspaces.js';
+import { configlessSources, coveringConfig, hasWorkspaceSources, projectConfig } from './workspaces.js';
 import type { Finding } from './types.js';
 import type { PillarName } from './types/pillar-name.js';
 import type { ChildRun, PillarDefinition, PillarRunOptions } from './types/checker-run.js';
@@ -178,8 +178,8 @@ function runSourceChecker(
   // own files.
   if (
     workspaces.length ||
-    discoverWorkspaces(directory).packages.length ||
-    plainJavaScriptSources(directory) ||
+    hasWorkspaceSources(directory) ||
+    configlessSources(directory) ||
     coveringConfig(directory)
   ) {
     return runChecker([command, '-p', relative(directory), ...workspaceFlags, ...flags]);
@@ -274,8 +274,8 @@ const pillars: PillarDefinition[] = [
       if (config && !workspaces.length) return runChecker(['sec', '-p', relative(config), ...flags, ...onlineFlags]);
       if (
         workspaces.length ||
-        discoverWorkspaces(directory).packages.length ||
-        plainJavaScriptSources(directory) ||
+        hasWorkspaceSources(directory) ||
+        configlessSources(directory) ||
         coveringConfig(directory)
       ) {
         const workspaceFlags = workspaces.flatMap((selector: string) => ['--workspace', selector]);
@@ -388,8 +388,8 @@ async function runSharedSourceCheck(
   if (
     !workspaces.length &&
     !config &&
-    !discoverWorkspaces(directory).packages.length &&
-    !plainJavaScriptSources(directory) &&
+    !hasWorkspaceSources(directory) &&
+    !configlessSources(directory) &&
     !coveringConfig(directory)
   ) {
     return runWithoutSourceConfig(shared, options, directory);

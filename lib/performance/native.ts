@@ -34,6 +34,8 @@ const noInputsCode = 18003;
 interface NativeAnalysisOptions {
   project?: string | string[];
   files?: string[];
+  /** Sources of workspace packages without a config, checked with the standalone defaults beside the configs. */
+  standaloneFiles?: readonly string[];
   policy?: RulePolicy;
   fallback?: boolean;
   onlyFiles?: (filename: string) => boolean;
@@ -153,6 +155,7 @@ function withoutRemovedOptions(
 function analyzeNative({
   project,
   files = [],
+  standaloneFiles = [],
   policy,
   fallback = false,
   onlyFiles,
@@ -388,12 +391,12 @@ function analyzeNative({
     }
     selectSyntax();
     for (const [roots, options, analyzes] of projects) scan(roots, options, analyzes);
-    const leftOut = unscannedJavaScript(
-      scopesWithoutJs,
-      (filename: string) => scanned.has(canonical(filename)),
-      onlyFiles,
+    const isScanned = (filename: string) => scanned.has(canonical(filename));
+    const leftOut = unscannedJavaScript(scopesWithoutJs, isScanned, onlyFiles);
+    const configless = standaloneFiles.filter(
+      (filename) => !isScanned(filename) && (!onlyFiles || onlyFiles(filename)),
     );
-    scan(leftOut.files, standaloneOptions, () => true);
+    scan([...leftOut.files, ...configless], standaloneOptions, () => true);
     leftOut.note();
     if (!scanned.size && !onlyFiles && !skippedFiles.length)
       throw new Error('No JavaScript or TypeScript source files to check.');

@@ -19,7 +19,7 @@ import type { VulnerabilityLookupOptions } from './types/osv-vulnerability.js';
 import { knownRules } from '../performance/rule-ids.js';
 import { collectProjectChangedLines, fileKey } from '../performance/changed-lines.js';
 import { sourcePolicy, workspaceTarget, projectDirectory, scanFilter, relativeToCwd } from '../performance/cli.js';
-import { coveringConfig, projectConfig, plainJavaScriptSources, isProjectDirectory } from '../shared/workspaces.js';
+import { coveringConfig, projectConfig, configlessSources, isProjectDirectory } from '../shared/workspaces.js';
 import { enableCompileCache } from 'node:module';
 import { noteOffline, main as mainCli } from './deps/cli.js';
 import { scanDependencies } from './deps/scan.js';
@@ -192,7 +192,8 @@ function scanFiles(
   if (positionals.length) return { scannedFiles: 0, findings: [] };
   const project = path.resolve(values.project ?? '.');
   const root = fs.statSync(project).isDirectory() ? project : path.dirname(project);
-  const roots = workspace && values.workspace.length ? workspace.configs.map((config) => path.dirname(config)) : [root];
+  const roots =
+    workspace && values.workspace.length ? workspace.packages.map(({ directory }) => path.resolve(directory)) : [root];
   const isIgnored = values.settings?.isIgnored;
   return scanProjectFiles(roots, isChangedFile, isIgnored && ((file) => isIgnored(process.cwd(), file)));
 }
@@ -223,7 +224,7 @@ async function scanProjectSources(
   const directory = filesOnly ? input : (workspace?.directory ?? projectDirectory(values.project, positionals));
   values.settings = loadSettings({ directory, explicit: values['loadwise-config'] });
   enableCompileCache?.();
-  const inferredFiles = filesOnly ? plainJavaScriptSources(input) : undefined;
+  const inferredFiles = filesOnly ? configlessSources(input) : undefined;
   const result: SourceScan['result'] =
     filesOnly && !inferredFiles
       ? { scannedFiles: 0, findings: [] }
@@ -231,6 +232,7 @@ async function scanProjectSources(
           {
             project: workspace?.configs ?? values.project,
             files: inferredFiles ?? positionals,
+            standaloneFiles: workspace?.standaloneFiles,
             policy: sourcePolicy(values.policy, values.settings).read(),
             onlyFiles: scanFilter(values.settings, scope),
             analyzers: [analyzer],

@@ -56,12 +56,20 @@ test('standalone JavaScript packages share inferred sources and respect staged-o
   assert.deepEqual(JSON.parse(staged.stdout).security.findings, []);
 });
 
-test('adding a TypeScript implementation file keeps a configless mixed project out of inferred JS bulk mode', (context) => {
+test('a configless mixed project infers its JavaScript and TypeScript, unless a sub-folder config holds the TypeScript', (context) => {
   const root = project(context, { 'package.json': '{}', 'index.js': 'module.exports = {};', 'impl.ts': 'export {};' });
   const fix = loadwise(root, 'fix', '--all');
-  assert.equal(fix.code, 2, fix.stdout + fix.stderr);
+  assert.equal(fix.code, 0, fix.stdout + fix.stderr);
+  assert.equal(fs.existsSync(path.join(root, 'jsconfig.json')), false);
+  assert.equal(JSON.parse(loadwise(root, 'check', '--only', 'perf', '--json').stdout).performance.scannedFiles, 2);
+  // That config's settings would be missed, so the scan is incomplete and cannot authorize fixes.
+  fs.mkdirSync(path.join(root, 'src'));
+  fs.writeFileSync(path.join(root, 'src', 'tsconfig.json'), tsconfig);
+  fs.renameSync(path.join(root, 'impl.ts'), path.join(root, 'src', 'impl.ts'));
+  const nested = loadwise(root, 'fix', '--all');
+  assert.equal(nested.code, 2, nested.stdout + nested.stderr);
   assert.match(
-    fix.stderr,
+    nested.stderr,
     /No tsconfig\.json or jsconfig\.json in .+ Run loadwise fix from the project folder, or add a tsconfig\.json or jsconfig\.json there\./,
   );
 });

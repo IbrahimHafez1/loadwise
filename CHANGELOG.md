@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A monorepo package without a `tsconfig.json` or `jsconfig.json` is now checked by the performance, reliability and security checkers with the standalone defaults (ES2022, NodeNext), instead of being skipped with a note. A monorepo made only of such packages is checked too, `--workspace` can select them, and `loadwise fix` no longer refuses to run because of them.
+- A package without a config that mixes JavaScript and TypeScript is now checked the same way, instead of skipping the performance, reliability and security checkers. A package whose TypeScript sits under a sub-folder's own `tsconfig.json` is still skipped with a note.
+
 - The performance and security checks no longer skip a project's JavaScript when its `tsconfig.json` does not set `allowJs`. Loadwise now checks those files with the standalone defaults (ES2022, NodeNext) instead of only naming them in a note, so a JavaScript-heavy project no longer reports 0 findings. A `jsconfig.json` beside the `tsconfig.json`, or `"allowJs": true`, still checks them with the project's own settings.
 
 ## [0.5.1] - 2026-11-27
