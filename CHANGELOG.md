@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- The performance and security checks no longer skip a project's JavaScript when its `tsconfig.json` does not set `allowJs`. Loadwise now checks those files with the standalone defaults (ES2022, NodeNext) instead of only naming them in a note, so a JavaScript-heavy project no longer reports 0 findings. A `jsconfig.json` beside the `tsconfig.json`, or `"allowJs": true`, still checks them with the project's own settings.
+
 ## [0.5.1] - 2026-11-27
 
 ### Changed

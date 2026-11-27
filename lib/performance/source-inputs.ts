@@ -11,6 +11,8 @@ interface ScanEntry {
   config: string;
   scope?: string;
   companion?: boolean;
+  // A config file named on the command line is scanned exactly as it lists its files.
+  explicit?: boolean;
 }
 
 function isSourceInput(filename: string): boolean {
@@ -60,7 +62,7 @@ function projectConfigs(input: string): ScanEntry[] {
   const config = resolveConfig(input);
   const isFolder = fs.statSync(path.resolve(input)).isDirectory();
   const scope = isFolder ? path.resolve(input) : path.dirname(config);
-  const configs: ScanEntry[] = [{ config, scope }];
+  const configs: ScanEntry[] = [{ config, scope, ...(!isFolder && { explicit: true }) }];
   const jsconfig = path.join(path.dirname(config), 'jsconfig.json');
   if (isFolder && path.basename(config) === 'tsconfig.json' && fs.existsSync(jsconfig)) {
     configs.push({ config: jsconfig, scope, companion: true });

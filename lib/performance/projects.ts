@@ -39,7 +39,7 @@ import type { Finding, ProgramAdapter, ScanResult, SkippedFile } from '../shared
 import type { PerformancePolicy } from './types/performance-policy.js';
 import type { ProgramScanOptions } from './types/program-scan.js';
 import type { SourceAnalyzer } from './types/source-analyzer.js';
-import { noteUnscannedJavaScript } from './unscanned-javascript.js';
+import { unscannedJavaScript } from './unscanned-javascript.js';
 
 // The file-system probes a scan caches; they replace the compiler host's own.
 interface HostProbes {
@@ -411,8 +411,8 @@ function analyzeSources({ project, files, policy, onlyFiles, analyzers, preRead 
   const scanned = new Set<string>();
   const configs = new Set<string>();
   const notedBases = new Set<string>();
-  // Folders scanned with a config that leaves JavaScript out.
-  const scopesWithoutJs = new Set<string>();
+  // Folders scanned with a config that leaves JavaScript out, each with whether that JavaScript is still checked.
+  const scopesWithoutJs = new Map<string, boolean>();
   // Folders whose files no program may have analyzed, listed once the programs are done.
   const standaloneRoots = new Set<string>();
   const referenceFindings = new Map<string, Finding>();
@@ -470,7 +470,7 @@ function analyzeSources({ project, files, policy, onlyFiles, analyzers, preRead 
     }
   }
 
-  function visitConfig(filename: string, scope?: string, companion?: boolean): void {
+  function visitConfig(filename: string, scope?: string, companion?: boolean, explicit?: boolean): void {
     const canonical = fs.realpathSync(filename);
     if (configs.has(canonical)) return;
     configs.add(canonical);
@@ -503,9 +503,10 @@ function analyzeSources({ project, files, policy, onlyFiles, analyzers, preRead 
       sharedLibs ??= createSharedLibs();
     }
     for (const reference of parsed.projectReferences ?? []) {
-      visitConfig(resolveConfig(ts.resolveProjectReferencePath(reference)), scope);
+      visitConfig(resolveConfig(ts.resolveProjectReferencePath(reference)), scope, false, explicit);
     }
-    if (!parsed.options.allowJs && !onlyFiles) scopesWithoutJs.add(scope ?? path.dirname(filename));
+    const jsScope = scope ?? path.dirname(filename);
+    if (!parsed.options.allowJs && !onlyFiles && !scopesWithoutJs.has(jsScope)) scopesWithoutJs.set(jsScope, !explicit);
     standaloneRoots.add(scope ?? repositoryRoot(path.dirname(filename)));
     // The companion jsconfig only adds what the tsconfig left out.
     const isNew = (filename: string) => !companion || !scanned.has(canonicalFileName(path.resolve(filename)));
@@ -516,6 +517,16 @@ function analyzeSources({ project, files, policy, onlyFiles, analyzers, preRead 
     );
   }
 
+  // Explicit files, and JavaScript a config without `allowJs` leaves out, have no config of their own.
+  const standaloneOptions: CompilerOptions = {
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.NodeNext,
+    allowJs: true,
+    checkJs: false,
+    skipLibCheck: true,
+    jsx: ts.JsxEmit.Preserve,
+    ...(policy && { strictNullChecks: true }),
+  };
   if (files.length) {
     const paths = files.map((filename: string) => {
       if (!ts.sys.fileExists(filename) || !isSourceInput(filename)) {
@@ -523,21 +534,16 @@ function analyzeSources({ project, files, policy, onlyFiles, analyzers, preRead 
       }
       return path.resolve(filename);
     });
-    scan(paths, {
-      target: ts.ScriptTarget.ES2022,
-      module: ts.ModuleKind.NodeNext,
-      allowJs: true,
-      checkJs: false,
-      skipLibCheck: true,
-      jsx: ts.JsxEmit.Preserve,
-      ...(policy && { strictNullChecks: true }),
-    });
+    scan(paths, standaloneOptions);
   } else {
-    for (const { config, scope, companion } of entries) visitConfig(config, scope, companion);
+    for (const { config, scope, companion, explicit } of entries) visitConfig(config, scope, companion, explicit);
+    scan(
+      unscannedJavaScript(scopesWithoutJs, (filename: string) => scanned.has(canonicalFileName(filename))),
+      standaloneOptions,
+    );
   }
   if (!scanned.size && !onlyFiles && !skippedFiles.length)
     throw new Error('No JavaScript or TypeScript source files to check.');
-  noteUnscannedJavaScript([...scopesWithoutJs], (filename: string) => scanned.has(canonicalFileName(filename)));
   for (const packageName of unresolvedPackages) console.error(formatMissingPackagesNote(packageName));
   const uninstalled = new Set<string>();
   for (const scope of new Set(entries.map(({ config, scope }) => scope ?? path.dirname(config)))) {
