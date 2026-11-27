@@ -44,7 +44,7 @@ function parseCheckArgs(args: readonly string[]) {
   // Each checker takes --fix, so `loadwise --fix` is a natural guess; point it to the fix command instead of a parser error.
   if (args.includes('--fix')) {
     throw new Error(
-      'check never changes files. Run `loadwise fix --yes` for automatic edits, or `loadwise fix --all` to also apply edits marked for review.',
+      'check never changes files. From the project folder, run `loadwise fix --yes` for automatic edits or `loadwise fix --all` to also apply edits marked for review; add checker names to limit either, as in `loadwise fix --all performance`.',
     );
   }
   const { args: checkArgs, ...baselineOptions } = extractBaselineFlags(args);
