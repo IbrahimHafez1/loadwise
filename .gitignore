@@ -13,6 +13,8 @@ scripts/**/*.js
 bench/**/*.js
 test/**/*.js
 test/types/fake-vscode.cjs
+# Built by the ORM fixture's `npm run verify`
+test/performance/integration/orms/verify.cjs
 !bench/recall/cases/**/*.js
 .tsbuildinfo
 *.tgz

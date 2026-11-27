@@ -2,7 +2,7 @@
   "name": "loadwise-orm-fixture",
   "private": true,
   "scripts": {
-    "verify": "node verify.cjs"
+    "verify": "tsc verify.cts --ignoreConfig --module commonjs --target es2022 --types node --skipLibCheck --strict false --outDir . && node verify.cjs"
   },
   "dependencies": {
     "@sequelize/core": "7.0.0-alpha.47",
