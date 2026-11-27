@@ -3,7 +3,8 @@ import { Model } from 'sequelize';
 import { Model as Model7 } from '@sequelize/core';
 import { model, Schema } from 'mongoose';
 import type { Knex } from 'knex';
-import type { Kysely } from 'kysely';
+// kysely is ESM-only from 0.29, so this CommonJS fixture imports its types in import mode.
+import type { Kysely } from 'kysely' with { 'resolution-mode': 'import' };
 
 type Person = { id: number; name: string };
 class Person6 extends Model {}
