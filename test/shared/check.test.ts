@@ -60,7 +60,10 @@ test('adding a TypeScript implementation file keeps a configless mixed project o
   const root = project(context, { 'package.json': '{}', 'index.js': 'module.exports = {};', 'impl.ts': 'export {};' });
   const fix = loadwise(root, 'fix', '--all');
   assert.equal(fix.code, 2, fix.stdout + fix.stderr);
-  assert.match(fix.stderr, /No tsconfig\.json or jsconfig\.json in .+ Run loadwise fix from the project folder\./);
+  assert.match(
+    fix.stderr,
+    /No tsconfig\.json or jsconfig\.json in .+ Run loadwise fix from the project folder, or add a tsconfig\.json or jsconfig\.json there\./,
+  );
 });
 
 test('plain loadwise checks the current folder with every checker in titled sections', (context) => {
