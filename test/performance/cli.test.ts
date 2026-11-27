@@ -307,6 +307,36 @@ test('a companion jsconfig decides which JavaScript is checked on both engines',
   }
 });
 
+test("a workspace package's companion jsconfig decides which JavaScript is checked on both engines", (context) => {
+  const syncRead = 'const { readFileSync } = require("node:fs");\nmodule.exports = async () => readFileSync("demo");\n';
+  // The fixture helper writes flat folders, so this monorepo cleans up its own package folders.
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-cli-workspace-'));
+  context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(directory, 'package.json'), JSON.stringify({ private: true, workspaces: ['packages/*'] }));
+  const packageDirectory = path.join(directory, 'packages', 'api');
+  fs.mkdirSync(packageDirectory, { recursive: true });
+  const packageFiles: Record<string, string> = {
+    'package.json': JSON.stringify({ name: 'api' }),
+    'tsconfig.json': JSON.stringify({ compilerOptions: { types: [] }, include: ['app.ts'] }),
+    'jsconfig.json': JSON.stringify({ compilerOptions: { types: [] }, files: ['report.js'] }),
+    'app.ts': 'export const app = 1;\n',
+    'report.js': syncRead,
+    'task.js': syncRead,
+  };
+  for (const [name, contents] of Object.entries(packageFiles)) {
+    fs.writeFileSync(path.join(packageDirectory, name), contents);
+  }
+  for (const engine of ['js', 'native']) {
+    const result = run(['--engine', engine, '--json'], directory);
+    assert.equal(result.status, 1, result.stderr);
+    assert.deepEqual(
+      parseReport(result.stdout).findings.map((finding) => finding.file),
+      ['packages/api/report.js'],
+    );
+    assert.doesNotMatch(result.stderr, /allowJs/);
+  }
+});
+
 test('an empty tsconfig beside only JavaScript is checked, and checkJs counts as allowJs', (context) => {
   const syncRead = 'const { readFileSync } = require("node:fs");\nmodule.exports = async () => readFileSync("demo");\n';
   const directory = fixture(context, { 'tsconfig.json': '{}', 'report.js': syncRead });

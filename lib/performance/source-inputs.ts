@@ -63,11 +63,24 @@ function projectConfigs(input: string): ScanEntry[] {
   const isFolder = fs.statSync(path.resolve(input)).isDirectory();
   const scope = isFolder ? path.resolve(input) : path.dirname(config);
   const configs: ScanEntry[] = [{ config, scope, ...(!isFolder && { explicit: true }) }];
-  const jsconfig = path.join(path.dirname(config), 'jsconfig.json');
-  if (isFolder && path.basename(config) === 'tsconfig.json' && fs.existsSync(jsconfig)) {
-    configs.push({ config: jsconfig, scope, companion: true });
-  }
+  const companion = companionOf(config);
+  if (isFolder && companion) configs.push({ config: companion, scope, companion: true });
   return configs;
+}
+
+function companionOf(config: string): string | undefined {
+  const jsconfig = path.join(path.dirname(config), 'jsconfig.json');
+  return path.basename(config) === 'tsconfig.json' && fs.existsSync(jsconfig) ? jsconfig : undefined;
+}
+
+// A workspace package's tsconfig gets its sibling jsconfig as a companion too, keeping the
+// workspace's cross-package scope.
+function workspaceEntries(configs: string[]): ScanEntry[] {
+  return configs.flatMap((input) => {
+    const config = resolveConfig(input);
+    const companion = companionOf(config);
+    return companion ? [{ config }, { config: companion, companion: true }] : [{ config }];
+  });
 }
 
 // `project` is one `-p` input, or the configs of the selected packages of a monorepo. Those report
@@ -75,7 +88,7 @@ function projectConfigs(input: string): ScanEntry[] {
 // include: the workspace root that was scanned contains them, and a file shared by two packages
 // reports once.
 function scanEntries(project: string | string[] | undefined): ScanEntry[] {
-  if (Array.isArray(project)) return project.map((config) => ({ config: resolveConfig(config) }));
+  if (Array.isArray(project)) return workspaceEntries(project);
   return projectConfigs(project ?? '.');
 }
 
