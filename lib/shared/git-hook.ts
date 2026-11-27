@@ -23,14 +23,9 @@ interface HookInstallResult {
 }
 
 const toolName = 'loadwise';
-// Earlier releases installed one block per checker under these names; they are upgraded or removed
-// like ours.
-const legacyToolNames = ['warden-backend', 'warden-maint', 'backend-perf-check', 'maintainability-check'];
-const markerPairs = [toolName, ...legacyToolNames].map((name): MarkerPair => [
-  `# >>> ${name} pre-commit (managed by \`${name} agent init --hook\`)`,
-  `# <<< ${name} pre-commit`,
-]);
-const [[blockStart, blockEnd]] = markerPairs;
+const blockStart = `# >>> ${toolName} pre-commit (managed by \`${toolName} agent init --hook\`)`;
+const blockEnd = `# <<< ${toolName} pre-commit`;
+const markerPairs: MarkerPair[] = [[blockStart, blockEnd]];
 const hookModes: readonly HookMode[] = ['block', 'warn', 'off'];
 const lefthookFiles = ['lefthook.yml', 'lefthook.yaml', '.lefthook.yml'];
 const executableMode = 0o755;
@@ -100,8 +95,7 @@ function insertHookBlock(existing: string, block: string): string {
 }
 
 // Returns { text, unreachable }: unreachable when an exit the block cannot be placed before still
-// precedes it. A block that sits after an exit, as earlier releases appended it, is moved before a
-// trailing exit.
+// precedes it. A block that sits after an exit is moved before a trailing exit.
 function withHookBlock(existing: string | undefined, block: string): HookText {
   if (existing === undefined || existing.trim() === '') return { text: '#!/bin/sh\n\n' + block + '\n' };
   const inPlace = replaceBlocks(existing, markerPairs, block);

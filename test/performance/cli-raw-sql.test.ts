@@ -9,7 +9,7 @@ import { parseReport } from '../types/cli-report.js';
 const bin = path.join(import.meta.dirname, '../../bin/loadwise.js');
 
 test('a one-shot scan loads the SQL parser, so raw SQL index rules report', (context) => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-raw-sql-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-raw-sql-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const files = {
     'node_modules/pg/package.json': '{ "name": "pg", "types": "index.d.ts" }',

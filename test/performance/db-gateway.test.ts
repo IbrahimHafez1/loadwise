@@ -147,7 +147,7 @@ test('a measure transaction builds the index, turns read-only, and always rolls 
       schema: 'public',
       table: 'orders',
       columns: ['customer_id'],
-      name: 'backend_perf_check_1',
+      name: 'loadwise_measure_1',
     });
     await transaction.readOnly();
     await transaction.explainAnalyze('SELECT * FROM orders WHERE customer_id = 7');
@@ -157,7 +157,7 @@ test('a measure transaction builds the index, turns read-only, and always rolls 
     measureControl.begin,
     measureControl.localLockTimeout,
     measureControl.localStatementTimeout,
-    'CREATE INDEX "backend_perf_check_1" ON "public"."orders" ("customer_id")',
+    'CREATE INDEX "loadwise_measure_1" ON "public"."orders" ("customer_id")',
     measureControl.readOnly,
     'EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT * FROM orders WHERE customer_id = 7',
     measureControl.rollback,

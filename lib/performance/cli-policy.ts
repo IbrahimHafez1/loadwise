@@ -6,17 +6,15 @@ import type { ScanSettings } from './types/source-scan-values.js';
 import { resolveConfig } from './source-inputs.js';
 import { validateQueryPolicy, loadQueryPolicy } from './query-policy.js';
 import { discoverWorkspaces, projectConfig, selectWorkspaces } from '../shared/workspaces.js';
-import { errorCode, errorMessage } from './cli-arguments.js';
+import { errorMessage } from './cli-arguments.js';
 import type { PolicySource, WorkspaceTarget } from './cli-types.js';
 
-// The folder holding backend-perf.policy.json and loadwise.config.json: the project, or the working
-// directory for files.
+// The folder holding loadwise.config.json: the project, or the working directory for files.
 export function projectDirectory(config: string | undefined, files: readonly string[]): string {
   return files.length ? process.cwd() : path.dirname(resolveConfig(config ?? '.'));
 }
 
-// The "performance" section of loadwise.config.json holds the same policy as
-// backend-perf.policy.json.
+// The "performance" section of loadwise.config.json holds the query policy.
 function configPolicySource(filename: string): PolicySource {
   return {
     filename,
@@ -30,27 +28,19 @@ function configPolicySource(filename: string): PolicySource {
   };
 }
 
-export function sourcePolicy(explicit: string | undefined, directory: string, settings: ScanSettings): PolicySource {
-  const filename = explicit !== undefined ? path.resolve(explicit) : path.join(directory, 'backend-perf.policy.json');
+// The explicit --policy file wins, then the "performance" section of loadwise.config.json.
+export function sourcePolicy(explicit: string | undefined, settings: ScanSettings): PolicySource {
   if (explicit === undefined && settings.performance && settings.filename !== undefined) {
-    if (fs.existsSync(filename)) {
-      console.error(`Note: ${settings.filename} has a "performance" section; ignoring ${filename}.`);
-    }
     return configPolicySource(settings.filename);
   }
-  let required = explicit !== undefined;
+  const filename = explicit === undefined ? undefined : path.resolve(explicit);
   return {
     filename,
     read() {
+      if (filename === undefined) return;
       try {
-        const policy = loadQueryPolicy(filename);
-        required = true;
-        return policy;
+        return loadQueryPolicy(filename);
       } catch (error) {
-        if (errorCode(error) === 'ENOENT' && !required) return;
-        // Once discovered, a broken or removed policy must not silently disable enforcement in
-        // watch mode.
-        required = true;
         throw new Error('Cannot load query policy ' + filename + ': ' + errorMessage(error));
       }
     },

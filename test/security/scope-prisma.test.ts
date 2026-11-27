@@ -184,7 +184,7 @@ test('checks all write branches, scoped updates and each item in a bulk create',
 
 test('requires an explicit policy and rejects ambiguous configurations', () => {
   assert.deepEqual(flagged(['db.invoice.findMany();'], {}), []);
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-policy-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-policy-'));
   const filename = path.join(directory, 'policy.json');
   try {
     fs.writeFileSync(filename, JSON.stringify(policy));

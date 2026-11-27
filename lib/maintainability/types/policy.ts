@@ -1,7 +1,7 @@
 import type { FolderBoundary } from './module-graph.js';
 
 /**
- * Thresholds for the size rules; maintainability.config.json can override each one under "limits".
+ * Thresholds for the size rules; the "maintainability" config section can override each one under "limits".
  */
 export interface SizeLimits {
   largeModuleLines: number;

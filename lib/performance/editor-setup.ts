@@ -3,7 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import ts from 'typescript';
-import type { ArrayLiteralExpression, Expression, JsonSourceFile, ObjectLiteralExpression } from 'typescript';
+import type { Expression, JsonSourceFile, ObjectLiteralExpression } from 'typescript';
 
 /** One entry of a parsed tasks.json `tasks` array. */
 interface ConfiguredTask {
@@ -41,7 +41,7 @@ const watchTask = {
     fileLocation: ['relative', '${workspaceFolder}'],
     pattern: {
       regexp:
-        '^BACKEND_CHECKER \\| (.+?) \\| (\\d+) \\| (\\d+) \\| (\\d+) \\| (error|warning) \\| ([a-z0-9-]+) \\| ([\\s\\S]+)$',
+        '^LOADWISE \\| (.+?) \\| (\\d+) \\| (\\d+) \\| (\\d+) \\| (error|warning) \\| ([a-z0-9-]+) \\| ([\\s\\S]+)$',
       file: 1,
       line: 2,
       column: 3,
@@ -57,75 +57,6 @@ const watchTask = {
     },
   },
 };
-
-const legacyLabel = 'Backend Checkers: Watch';
-const legacyBin = '${workspaceFolder}/node_modules/backend-perf-check/bin/backend-perf-check.cjs';
-const legacyTask = {
-  ...watchTask,
-  label: legacyLabel,
-  args: [legacyBin, 'editor', 'watch'],
-  problemMatcher: {
-    ...watchTask.problemMatcher,
-    owner: 'backend-checkers',
-    source: 'Backend Checkers',
-    background: {
-      activeOnStart: false,
-      beginsPattern: '^Backend Checkers: scan started$',
-      endsPattern: '^Backend Checkers: scan finished$',
-    },
-  },
-};
-
-// Edit only tokens belonging to a generated task so inline JSONC comments survive the upgrade.
-function migrateLegacyTask(
-  source: JsonSourceFile,
-  array: ArrayLiteralExpression,
-  index: number,
-  hasCurrent: boolean,
-): string {
-  const node = array.elements[index];
-  const start = node.getStart(source);
-  const scanner = ts.createScanner(ts.ScriptTarget.Latest, true, ts.LanguageVariant.Standard, source.text);
-  scanner.setTextPos(start);
-  const replacements = new Map<string, string>([
-    [legacyLabel, watchTask.label],
-    [legacyBin, watchTask.args[0]],
-    [legacyTask.problemMatcher.owner, watchTask.problemMatcher.owner],
-    [legacyTask.problemMatcher.source, watchTask.problemMatcher.source],
-    [legacyTask.problemMatcher.background.beginsPattern, watchTask.problemMatcher.background.beginsPattern],
-    [legacyTask.problemMatcher.background.endsPattern, watchTask.problemMatcher.background.endsPattern],
-  ]);
-  let previous = start;
-  let replacement = '';
-  while (previous < node.end) {
-    const kind = scanner.scan();
-    replacement += source.text.slice(previous, scanner.getTokenPos());
-    if (!hasCurrent) {
-      const value = kind === ts.SyntaxKind.StringLiteral ? scanner.getTokenValue() : undefined;
-      if (value === 'editor') replacement += '"perf", ';
-      replacement +=
-        value !== undefined && replacements.has(value)
-          ? JSON.stringify(replacements.get(value))
-          : scanner.getTokenText();
-    }
-    previous = scanner.getTextPos();
-  }
-  const before = source.text.slice(0, start);
-  const after = source.text.slice(node.end);
-  if (!hasCurrent) return before + replacement + after;
-  // Retain comments from a redundant generated task; omit empty whitespace otherwise.
-  const comments = replacement.trim() ? replacement : '';
-  if (scanner.scan() === ts.SyntaxKind.CommaToken)
-    return (
-      before + comments + source.text.slice(node.end, scanner.getTokenPos()) + source.text.slice(scanner.getTextPos())
-    );
-  // Last task in a strict JSON array: remove its preceding comma, retaining adjacent comments.
-  scanner.setTextPos(array.elements[index - 1].end);
-  scanner.scan();
-  return (
-    source.text.slice(0, scanner.getTokenPos()) + source.text.slice(scanner.getTextPos(), start) + comments + after
-  );
-}
 
 // Insert immediately after the opening bracket. Everything the user wrote, including comments,
 // stays in place.
@@ -201,12 +132,6 @@ function updatedTasks(filename: string, text: string | undefined): string {
   } else {
     if (!ts.isArrayLiteralExpression(tasks)) throw new Error(filename + ' must have an array for tasks.');
     const matches = existingWatchTasks(filename, config);
-    const legacyIndex = config.tasks.findIndex(
-      (task) => task?.label === legacyLabel && isDeepStrictEqual(task, legacyTask),
-    );
-    if (legacyIndex !== -1) {
-      return updatedTasks(filename, migrateLegacyTask(source, tasks, legacyIndex, matches.length > 0));
-    }
     if (!matches.length)
       text = prependItems(text, tasks.getStart(source), JSON.stringify(watchTask, null, 2), tasks.elements.length > 0);
   }
@@ -258,7 +183,7 @@ function setupEditor(root: string): { filename: string; changed: boolean } {
   const text = updatedTasks(filename, existing?.text);
   if (text === existing?.text) return { filename, changed: false };
 
-  const temporary = path.join(folder, '.backend-checkers-' + randomUUID() + '.tmp');
+  const temporary = path.join(folder, '.loadwise-' + randomUUID() + '.tmp');
   try {
     fs.writeFileSync(temporary, text, { flag: 'wx', mode: existing?.mode });
     const current = readExisting(filename);

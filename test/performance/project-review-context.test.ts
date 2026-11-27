@@ -12,7 +12,7 @@ import * as nativeRuntime from '../../lib/performance/native-runtime.js';
 test('overlapping projects retain the visible advisory in either reference order', async (context) => {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
-  const root = fs.mkdtempSync(path.join(base, 'backend-perf-review-context-'));
+  const root = fs.mkdtempSync(path.join(base, 'loadwise-review-context-'));
   const callback = 'declare function it(name: string, work: () => Promise<void>): void;';
   const jestDeclaration = 'node_modules/@types/jest/index.d.ts';
   const leaf = (declaration: string) =>

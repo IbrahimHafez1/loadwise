@@ -35,13 +35,11 @@ test('formats a full-word marker with a site-specific replacement and escapes un
     line: 1,
     column,
     ruleId: 'array-repeated-membership',
-    message: 'Repeated search.\r\nBACKEND_CHECKER\tforged\u2028line\u001b[31m',
+    message: 'Repeated search.\r\nLOADWISE\tforged\u2028line\u001b[31m',
   });
   assert.ok(
     report.startsWith(
-      ['BACKEND_CHECKER', file, 1, column, column + 'includes'.length, 'warning', 'array-repeated-membership'].join(
-        ' | ',
-      ),
+      ['LOADWISE', file, 1, column, column + 'includes'.length, 'warning', 'array-repeated-membership'].join(' | '),
     ),
   );
   assert.doesNotMatch(report, /\p{Cc}/u);
@@ -65,7 +63,7 @@ test('keeps Python example indentation, converts parser columns and reads each f
   };
   const report = requireReport(root, 'loadwise maint', finding, cache);
   const column = source.indexOf('eligible') + 1;
-  assert.ok(report.startsWith(['BACKEND_CHECKER', file, 1, column, column + 'eligible'.length].join(' | ')));
+  assert.ok(report.startsWith(['LOADWISE', file, 1, column, column + 'eligible'.length].join(' | ')));
   assert.match(report, /\u2028    if not /);
   assert.ok(report.includes('Flagged line:\u2028' + source + '\u2028Illustrative alternative:'));
   fs.writeFileSync(path.join(root, file), '');

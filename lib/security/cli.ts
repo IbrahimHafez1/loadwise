@@ -39,7 +39,7 @@ const usage = `Usage:
   loadwise sec [-p tsconfig.json] (--staged | --changed-since git-ref) [--json] [--include-contextual] [--ignore rule-id]
 
 With no arguments, check tsconfig.json or jsconfig.json in the current directory. File checks can run without either.
-Security checks read prismaScopes and drizzleScopes from backend-perf.policy.json beside the selected config, or in the working directory for explicit files.
+Security checks read prismaScopes and drizzleScopes from the "performance" section of loadwise.config.json, or from the file named by --policy.
 Source checks use TypeScript 6 (--engine auto and js). --engine native (alias --native) uses the TypeScript 7 native compiler, which is faster but finds less: cross-file taint through JavaScript constructor functions and rate-limit detection are reduced. Rules that need a package's types stay silent until it is installed; rules that recognise libraries by their imports work without node_modules.
 --fix shows each available code fix and asks before applying it; --fix --yes skips the ValidationPipe whitelist change.
 --fix --only id1,id2 applies exactly those findings' fixes without asking; with --json it prints { applied, alreadyApplied, failed }.
@@ -231,7 +231,7 @@ async function scanProjectSources(
           {
             project: workspace?.configs ?? values.project,
             files: inferredFiles ?? positionals,
-            policy: sourcePolicy(values.policy, directory, values.settings).read(),
+            policy: sourcePolicy(values.policy, values.settings).read(),
             onlyFiles: scanFilter(values.settings, scope),
             analyzers: [analyzer],
           },

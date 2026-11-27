@@ -94,7 +94,7 @@ const help = `Usage:
   loadwise maint [directory] (--staged | --changed-since <git-ref>) [--json] [--fix --only id,...]
   loadwise maint [directory] --graph modules.json [--config policy.json] [--json]
 
-A loadwise.config.json in the directory also applies: its "maintainability" section replaces maintainability.config.json (--config still wins), and its ignore, rules and overrides filter the findings; --loadwise-config names another file. --ignore drops a rule's findings.
+A loadwise.config.json in the directory also applies: its "maintainability" section holds the policy (--config names a policy file instead), and its ignore, rules and overrides filter the findings; --loadwise-config names another file. --ignore drops a rule's findings.
 The default directory is the current folder. Source mode discovers supported files.
 Graph mode accepts project-relative files and dependency edges from any language.
 Findings with a safe rewrite carry it as a diff, and as "fix" in --json output.
@@ -105,7 +105,7 @@ If a selected fix can no longer be applied, the command exits 2. Rerun the scan 
 Every finding has a stable id (shown as #id); a failed --only id exits 2.
 Changed-lines mode: --staged reports only findings on lines added or changed in the git index; --changed-since <git-ref> does the same against that ref.
 Only changed files are analysed there (duplicate-implementation and cycles through unchanged files are skipped unless many files changed, which runs the full scan), and --fail-on defaults to all.
-agent init writes one block of instructions for AI coding agents, covering all three checkers, into AGENTS.md and imports it from CLAUDE.md.
+agent init writes one block of instructions for AI coding agents, covering every checker, into AGENTS.md and imports it from CLAUDE.md.
 agent init --hook installs one git pre-commit hook that runs \`loadwise check --staged\`: block fails the commit on findings, warn only prints them, off removes the hook. --hook alone means warn.
 --write-baseline records the current findings in loadwise-baseline.json at the project root (or the given file); --baseline hides them so only new findings are reported and reports how many were hidden.
 The baseline file has one section per checker, shared with loadwise perf and loadwise check; entries are matched by rule, file and flagged code, not line number.
@@ -247,7 +247,7 @@ async function scanProject(
   enableCompileCache?.();
   const { loadPolicy, checkImportedGraph } = await import('./project.js');
   const settings = loadSettings({ directory: root, explicit: values['loadwise-config'], ignore: values.ignore });
-  const policy = loadPolicy(root, values.config, settings.maintainability);
+  const policy = loadPolicy(values.config, settings.maintainability);
   // Ignored files leave file discovery, so duplicates, cycles and boundaries never see them.
   const { isIgnored } = settings;
   if (isIgnored) policy.isIgnored = (file) => isIgnored(root, file);

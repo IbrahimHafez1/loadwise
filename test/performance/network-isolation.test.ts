@@ -9,7 +9,7 @@ const root = path.resolve(import.meta.dirname, '../..');
 const bin = path.join(root, 'bin/loadwise.js');
 const guard = pathToFileURL(path.join(import.meta.dirname, 'network-guard.js')).href;
 const sentinel = 'postgres://sentinel-user:sentinel-pass@sentinel-host.invalid:5432/sentinel';
-const environment = { ...process.env, DATABASE_URL: sentinel, BACKEND_CHECKERS_EDITOR_SCAN: '1' };
+const environment = { ...process.env, DATABASE_URL: sentinel, LOADWISE_EDITOR_SCAN: '1' };
 const watchTimeoutMs = 60000;
 
 function runGuarded(args: readonly string[]) {

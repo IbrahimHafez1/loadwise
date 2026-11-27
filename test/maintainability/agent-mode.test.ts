@@ -130,18 +130,6 @@ test('a loadwise-reviewed comment makes a finding contextual, but not inside a s
   assert.ok(scan().every((row) => !String(row.contextualReason).startsWith('Reviewed in source')));
 });
 
-test('old warden-reviewed, maintainability-reviewed and backend-perf-reviewed comments still dismiss findings', (context) => {
-  for (const alias of ['warden-reviewed', 'maintainability-reviewed', 'backend-perf-reviewed']) {
-    const { root, scan } = project(context);
-    const [finding] = scan();
-    assert.ok(finding?.line);
-    const lines = source.split('\n');
-    lines.splice(finding.line - 1, 0, `// ${alias} ${finding.ruleId} -- legacy reason`);
-    fs.writeFileSync(path.join(root, 'pick.js'), lines.join('\n'));
-    assert.equal(scan()[0].contextualReason, 'Reviewed in source: legacy reason');
-  }
-});
-
 test('a finding about a whole file is dismissed by a reviewed comment on line 1', (context) => {
   const root = tempRoot(context);
   const reason = 'one cohesive table of rules';
@@ -158,12 +146,10 @@ test('a finding about a whole file is dismissed by a reviewed comment on line 1'
   assert.equal(findings[2].contextualReason, undefined);
 });
 
-test('contract rules stay non-dismissable under every review comment spelling', (context) => {
+test('contract rules stay non-dismissable by a review comment', (context) => {
   const root = tempRoot(context);
-  for (const alias of ['loadwise-reviewed', 'warden-reviewed', 'maintainability-reviewed', 'backend-perf-reviewed']) {
-    fs.writeFileSync(path.join(root, 'a.js'), `// ${alias} file-placement -- nope\nconst value = 1;\n`);
-    const findings: Finding[] = [{ ruleId: 'file-placement', message: 'placement', file: 'a.js', line: 2 }];
-    applyReviewDirectives(findings, root);
-    assert.equal(findings[0].contextualReason, undefined);
-  }
+  fs.writeFileSync(path.join(root, 'a.js'), '// loadwise-reviewed file-placement -- nope\nconst value = 1;\n');
+  const findings: Finding[] = [{ ruleId: 'file-placement', message: 'placement', file: 'a.js', line: 2 }];
+  applyReviewDirectives(findings, root);
+  assert.equal(findings[0].contextualReason, undefined);
 });

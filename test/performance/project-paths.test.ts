@@ -30,7 +30,7 @@ test('the same logical source passed twice is counted and analyzed once', () => 
 test('one-shot probes see newly installed declarations on the next run', (context) => {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
-  const root = fs.mkdtempSync(path.join(base, 'backend-perf-probes-'));
+  const root = fs.mkdtempSync(path.join(base, 'loadwise-probes-'));
   const source = path.join(root, 'query.ts');
   const modules = path.join(root, 'node_modules');
   const driver = path.join(modules, 'pg');
@@ -53,7 +53,7 @@ test('one-shot probes see newly installed declarations on the next run', (contex
 test('linked entry paths resolve their imports independently', (context) => {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
-  const root = fs.mkdtempSync(path.join(base, 'backend-perf-paths-'));
+  const root = fs.mkdtempSync(path.join(base, 'loadwise-paths-'));
   const files = {
     'shared/check.ts':
       "import {pool} from '../database'; export function check(ids: number[]) { for (const id of ids) pool.query(String(id)); }",

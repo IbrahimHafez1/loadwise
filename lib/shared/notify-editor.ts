@@ -9,7 +9,7 @@ function signalDirectory(root: string) {
   if (process.platform === 'win32') canonical = canonical.toLowerCase();
   const user = String(process.getuid?.() ?? os.homedir());
   const key = createHash('sha256').update(user).update('\0').update(canonical).digest('hex');
-  return path.join(fs.realpathSync.native(os.tmpdir()), 'backend-checkers-' + key);
+  return path.join(fs.realpathSync.native(os.tmpdir()), 'loadwise-' + key);
 }
 
 function isPrivateDirectory(directory: string) {
@@ -31,7 +31,7 @@ function requestRefresh(root: string) {
 }
 
 function notifyEditor(input: string) {
-  if (process.env.BACKEND_CHECKERS_EDITOR_SCAN === '1') return;
+  if (process.env.LOADWISE_EDITOR_SCAN === '1') return;
   try {
     const canonical = fs.realpathSync.native(input);
     const root = fs.statSync(canonical).isDirectory() ? canonical : path.dirname(canonical);

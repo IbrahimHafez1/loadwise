@@ -28,12 +28,12 @@ test('config folders accept a trailing slash', (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'maintainability-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.writeFileSync(
-    path.join(root, 'maintainability.config.json'),
+    path.join(root, 'policy.json'),
     JSON.stringify({ exclude: ['generated/'], boundaries: [{ from: 'src/domain/', disallow: ['src/http/'] }] }),
   );
-  const policy = loadPolicy(root);
+  const policy = loadPolicy(path.join(root, 'policy.json'));
   assert.deepEqual(policy.exclude, ['generated']);
   assert.deepEqual(policy.boundaries, [{ from: 'src/domain', disallow: ['src/http'] }]);
-  fs.writeFileSync(path.join(root, 'maintainability.config.json'), JSON.stringify({ exclude: ['/'] }));
-  assert.throws(() => loadPolicy(root), /project-relative/);
+  fs.writeFileSync(path.join(root, 'policy.json'), JSON.stringify({ exclude: ['/'] }));
+  assert.throws(() => loadPolicy(path.join(root, 'policy.json')), /project-relative/);
 });

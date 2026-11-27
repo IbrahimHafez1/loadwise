@@ -235,7 +235,7 @@ test('the why-comment is added once, and a review directive or JSDoc above the s
     ].join('\n'),
   );
   // The comment is not a review directive, so a rescan still reports the site.
-  assert.doesNotMatch(comment, /^\/\/\s+(?:loadwise|warden|maintainability|backend-perf)-reviewed\b/);
+  assert.doesNotMatch(comment, /^\/\/\s+loadwise-reviewed\b/);
 });
 
 test('code inserted at the statement, such as a helper, takes the why-comment above it', () => {

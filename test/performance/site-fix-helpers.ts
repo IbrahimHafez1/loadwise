@@ -33,7 +33,7 @@ function scanWithFixes(
 ): { root: string; findings: Finding[] } {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
-  const root = fs.mkdtempSync(path.join(base, 'backend-perf-fix-'));
+  const root = fs.mkdtempSync(path.join(base, 'loadwise-fix-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   for (const [name, contents] of Object.entries(files)) {
     const filename = path.join(root, name);

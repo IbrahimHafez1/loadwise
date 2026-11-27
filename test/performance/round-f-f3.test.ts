@@ -26,7 +26,7 @@ model TeamMember {
 // A cloned monorepo without node_modules: the schema lives in a database package named by
 // prisma.config.ts.
 function ungeneratedMonorepo(context: TestContext, source: string) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-ungenerated-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-ungenerated-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const write = (relative: string, content: string) => {
     fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });

@@ -23,7 +23,7 @@ test('successful source scans consume only active editor registrations, with ide
     assert.equal(fs.existsSync(directory), false);
     fs.mkdirSync(directory, { mode: 0o700 });
     fs.writeFileSync(registration, '');
-    const internal = scan({ ...process.env, BACKEND_CHECKERS_EDITOR_SCAN: '1' });
+    const internal = scan({ ...process.env, LOADWISE_EDITOR_SCAN: '1' });
     assert.equal(internal.stdout, baseline.stdout);
     assert.ok(fs.existsSync(registration));
     const ordinary = scan();

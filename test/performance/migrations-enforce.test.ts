@@ -18,7 +18,7 @@ import {
 import type { MigrationFinding } from '../../lib/performance/types/migration-operations.js';
 
 function temporaryDirectory(context: TestContext) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-enforce-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-enforce-'));
   context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   return directory;
 }
@@ -51,7 +51,7 @@ describe('migration baseline', () => {
 
   test('round trip: listed unchanged files are not enforced, edited and new files are', (context) => {
     const root = temporaryDirectory(context);
-    const baselineFile = path.join(root, 'backend-perf.migrations-baseline.json');
+    const baselineFile = path.join(root, 'loadwise.migrations-baseline.json');
     const old = {
       path: write(root, 'migrations/001.sql', 'CREATE INDEX i ON t (a);'),
       text: 'CREATE INDEX i ON t (a);',
@@ -83,7 +83,7 @@ describe('migration baseline', () => {
 describe('review comments', () => {
   test('a directive on the line before the finding makes it contextual', () => {
     const sql =
-      '-- backend-perf-reviewed migration-breaking-drop -- No release reads it since 2.4.\nDROP TABLE old;\nDROP TABLE other;';
+      '-- loadwise-reviewed migration-breaking-drop -- No release reads it since 2.4.\nDROP TABLE old;\nDROP TABLE other;';
     const findings = applyReviewComments(
       [reviewableFinding(2, 'migration-breaking-drop'), reviewableFinding(3, 'migration-breaking-drop')],
       sql,
@@ -93,7 +93,7 @@ describe('review comments', () => {
     assert.equal(findings[1].contextualReason, undefined);
   });
 
-  test('the loadwise-reviewed and warden-reviewed directives are accepted in SQL and code files', () => {
+  test('the loadwise-reviewed directive is accepted in SQL and code files', () => {
     const [sql] = applyReviewComments(
       [reviewableFinding(2, 'migration-breaking-drop')],
       '-- loadwise-reviewed migration-breaking-drop -- Unused.\nDROP TABLE old;',
@@ -102,7 +102,7 @@ describe('review comments', () => {
     assert.equal(sql.contextualReason, 'Reviewed in source: Unused.');
     const [code] = applyReviewComments(
       [reviewableFinding(2, 'migration-breaking-drop')],
-      '// warden-reviewed migration-breaking-drop -- Unused.\nawait queryRunner.query(`DROP TABLE old`);',
+      '// loadwise-reviewed migration-breaking-drop -- Unused.\nawait queryRunner.query(`DROP TABLE old`);',
       false,
     );
     assert.equal(code.contextualReason, 'Reviewed in source: Unused.');
@@ -111,13 +111,13 @@ describe('review comments', () => {
   test('the directive must name the exact rule; code files also accept // comments', () => {
     const [other] = applyReviewComments(
       [reviewableFinding(2, 'migration-breaking-rename')],
-      '-- backend-perf-reviewed migration-breaking-drop -- reason\nALTER TABLE t RENAME TO u;',
+      '-- loadwise-reviewed migration-breaking-drop -- reason\nALTER TABLE t RENAME TO u;',
       true,
     );
     assert.equal(other.contextualReason, undefined);
     const [code] = applyReviewComments(
       [reviewableFinding(2, 'migration-breaking-drop')],
-      '    // backend-perf-reviewed migration-breaking-drop -- Unused since 2.4.\n    await queryRunner.query(`DROP TABLE old`);',
+      '    // loadwise-reviewed migration-breaking-drop -- Unused since 2.4.\n    await queryRunner.query(`DROP TABLE old`);',
       false,
     );
     assert.equal(code.contextualReason, 'Reviewed in source: Unused since 2.4.');

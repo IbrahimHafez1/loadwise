@@ -1,4 +1,4 @@
-// `prisma-scope-unverified`: a Prisma delegate call on a model that backend-perf.policy.json
+// `prisma-scope-unverified`: a Prisma delegate call on a model that the performance policy
 // protects must prove its scope with the configured field and trusted authorization function. Needs
 // resolved Prisma client types.
 import { ts } from '../../performance/compiler.js';

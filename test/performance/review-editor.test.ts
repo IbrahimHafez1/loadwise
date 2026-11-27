@@ -247,11 +247,11 @@ test('editor watch aborts the stale scan child on change and runs one follow-up 
   let refresh: (() => void) | undefined;
   const originalSend = process.send;
   const originalDisconnect = process.disconnect;
-  const originalWorker = process.env.BACKEND_CHECKERS_EDITOR_WORKER;
+  const originalWorker = process.env.LOADWISE_EDITOR_WORKER;
   const originalConnected = Object.getOwnPropertyDescriptor(process, 'connected');
   process.send = () => true;
   process.disconnect = () => {};
-  process.env.BACKEND_CHECKERS_EDITOR_WORKER = '1';
+  process.env.LOADWISE_EDITOR_WORKER = '1';
   Object.defineProperty(process, 'connected', { value: true, configurable: true, writable: true });
   const logged: string[] = [];
   context.mock.method(console, 'log', (line: string) => logged.push(line));
@@ -260,8 +260,8 @@ test('editor watch aborts the stale scan child on change and runs one follow-up 
     process.emit('SIGINT');
     process.send = originalSend;
     process.disconnect = originalDisconnect;
-    if (originalWorker === undefined) delete process.env.BACKEND_CHECKERS_EDITOR_WORKER;
-    else process.env.BACKEND_CHECKERS_EDITOR_WORKER = originalWorker;
+    if (originalWorker === undefined) delete process.env.LOADWISE_EDITOR_WORKER;
+    else process.env.LOADWISE_EDITOR_WORKER = originalWorker;
     if (originalConnected) Object.defineProperty(process, 'connected', originalConnected);
     else Reflect.deleteProperty(process, 'connected');
     fs.rmSync(root, { recursive: true, force: true });

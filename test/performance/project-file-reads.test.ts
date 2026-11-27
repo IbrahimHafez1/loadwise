@@ -9,7 +9,7 @@ import { analyzeSources } from '../../lib/performance/projects.js';
 test('a file loaded by several configs is read from disk once per run', (context) => {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
-  const root = fs.mkdtempSync(path.join(base, 'backend-perf-reads-'));
+  const root = fs.mkdtempSync(path.join(base, 'loadwise-reads-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const compilerOptions = { target: 'ES2022', module: 'NodeNext', skipLibCheck: true, types: [] };
   const files = {

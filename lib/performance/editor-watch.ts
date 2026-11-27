@@ -76,7 +76,7 @@ function watchEditor(
   cli = loadwiseCli,
   hooks: { watchTree?: typeof watchTree; listenForEditorRefresh?: typeof listenForEditorRefresh } = {},
 ): void {
-  if (!process.send || process.env.BACKEND_CHECKERS_EDITOR_WORKER !== '1') {
+  if (!process.send || process.env.LOADWISE_EDITOR_WORKER !== '1') {
     return superviseEditor(root, explicitConfig);
   }
   const jsFiles = new Set<string>();
@@ -127,13 +127,7 @@ function watchEditor(
           return migrationsCli.checkProjectMigrations({ root });
         });
       }
-      if (
-        !scanSignal.aborted &&
-        (jsFiles.size ||
-          polyglotFiles.size ||
-          otherSources.size ||
-          (await exists(path.join(root, 'maintainability.config.json'))))
-      ) {
+      if (!scanSignal.aborted && (jsFiles.size || polyglotFiles.size || otherSources.size)) {
         await report('loadwise maint', () => maintainability(cli, root, scanSignal));
       }
     } finally {

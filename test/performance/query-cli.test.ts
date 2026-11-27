@@ -14,10 +14,12 @@ import type { CliReport } from '../types/cli-report.js';
 import * as nativeRuntime from '../../lib/performance/native-runtime.js';
 
 const bin = path.resolve(import.meta.dirname, '../../bin/loadwise.js');
-const policyName = 'backend-perf.policy.json';
+const policyName = 'loadwise.config.json';
+const rawPolicyName = 'scope.json';
 const scopeRule = 'prisma-scope-unverified';
 const requirement = { field: 'tenantId', from: '@app/auth', export: 'requireAuthorizedTenantId' };
-const policyFor = (model: string) => JSON.stringify({ prismaScopes: { [model]: requirement } });
+const rawPolicyFor = (model: string) => JSON.stringify({ prismaScopes: { [model]: requirement } });
+const policyFor = (model: string) => JSON.stringify({ performance: { prismaScopes: { [model]: requirement } } });
 const config = JSON.stringify({
   compilerOptions: { target: 'ES2022', module: 'NodeNext', strict: true, types: [] },
   files: ['reads.ts', 'perf.ts'],
@@ -26,7 +28,7 @@ const config = JSON.stringify({
 function project(context: TestContext) {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
-  const root = fs.mkdtempSync(path.join(base, 'backend-perf-query-'));
+  const root = fs.mkdtempSync(path.join(base, 'loadwise-query-'));
   const files = new Set<string>();
   const folders = new Set<string>();
   function write(name: string, contents: string) {
@@ -97,18 +99,19 @@ test('query policy discovery follows project configuration or the explicit-file 
   const { root, write } = project(context);
   write('app/' + policyName, policyFor('Invoice'));
   write(policyName, policyFor('Ledger'));
+  write('app/' + rawPolicyName, rawPolicyFor('Invoice'));
+  write(rawPolicyName, rawPolicyFor('Ledger'));
   assert.deepEqual(locations(checked(root, ['-p', 'app/tsconfig.json'], 1)), [expectedProject[0]]);
   assert.deepEqual(locations(checked(root, ['-p', 'app/tsconfig.json'], 1, 'sec')), [expectedProject[1]]);
   assert.deepEqual(checked(root, ['app/reads.ts'], 0, 'sec').findings, []);
-  const explicitFile = checked(root, ['app/reads.ts', '--policy', 'app/' + policyName], 1, 'sec');
+  const explicitFile = checked(root, ['app/reads.ts', '--policy', 'app/' + rawPolicyName], 1, 'sec');
   assert.deepEqual(locations(explicitFile), [expectedProject[1]]);
-  assert.deepEqual(checked(root, ['-p', 'app', '--policy', policyName], 0, 'sec').findings, []);
+  assert.deepEqual(checked(root, ['-p', 'app', '--policy', rawPolicyName], 0, 'sec').findings, []);
 });
 
 test('opting out preserves existing performance checks and malformed policy files stop analysis', (context) => {
   const { root, write } = project(context);
   assert.deepEqual(locations(checked(root, ['-p', 'app'], 1)), [expectedProject[0]]);
-  write('app/' + policyName, policyFor('Invoice'));
   write('broken.json', '{');
   write('wrong-shape.json', JSON.stringify({ prismaScopes: [] }));
   for (const filename of ['missing.json', 'broken.json', 'wrong-shape.json']) {
@@ -146,8 +149,9 @@ test('the native CLI agrees with the default engine on opted-in scope findings',
 
 async function exerciseWatch(context: TestContext, explicit: boolean) {
   const { root, write } = project(context);
-  const filename = explicit ? 'scope.json' : 'app/' + policyName;
-  if (explicit) write(filename, policyFor('Ledger'));
+  const filename = explicit ? rawPolicyName : 'app/' + policyName;
+  const contentsFor = explicit ? rawPolicyFor : policyFor;
+  write(filename, contentsFor('Ledger'));
   const args = [bin, 'perf', '--watch', '--json', '-p', 'app'];
   if (explicit) args.push('--policy', filename);
   const child = spawn(process.execPath, args, { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
@@ -182,17 +186,17 @@ async function exerciseWatch(context: TestContext, explicit: boolean) {
   }
   try {
     await expectSnapshot([expectedProject[0]], 'initial startup');
-    write(filename, policyFor('Invoice'));
+    write(filename, contentsFor('Invoice'));
     await expectSnapshot([expectedProject[0]], 'enabling the Invoice policy');
     write(filename, '{');
     const invalid = await nextLine('invalid JSON');
     assert.ok(invalid.trim() && !invalid.startsWith('{'), invalid);
-    write(filename, policyFor('Ledger'));
+    write(filename, contentsFor('Ledger'));
     await expectSnapshot([expectedProject[0]], 'recovering the Ledger policy');
     fs.unlinkSync(path.join(root, filename));
     const deleted = await nextLine('deleting the existing policy');
     assert.ok(deleted.trim() && !deleted.startsWith('{'), deleted);
-    write(filename, policyFor('Invoice'));
+    write(filename, contentsFor('Invoice'));
     await expectSnapshot([expectedProject[0]], 'restoring the deleted policy');
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill();

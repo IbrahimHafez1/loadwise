@@ -46,7 +46,7 @@ test('an active editor task picks up same-version package replacements', { timeo
   child.on('close', () => events.emit('failed'));
   createInterface({ input: child.stdout }).on('line', (line) => {
     if (line === 'Loadwise: scan started') results = [];
-    if (line.startsWith('BACKEND_CHECKER | ')) results.push(line);
+    if (line.startsWith('LOADWISE | ')) results.push(line);
     if (line === 'Loadwise: scan finished') events.emit('snapshot', results);
   });
   function until(predicate: (snapshot: string[]) => boolean): Promise<string[]> {

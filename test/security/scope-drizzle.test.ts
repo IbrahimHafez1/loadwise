@@ -192,7 +192,7 @@ test('checks direct async returns and routes a protected union for review', () =
 });
 
 test('validates the configured table and trusted module specifiers', () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-drizzle-policy-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-drizzle-policy-'));
   const filename = path.join(directory, 'policy.json');
   const scope = policy.drizzleScopes.invoices;
   try {

@@ -149,11 +149,13 @@ test('the CLI loads dataAccess from the config file and fails the default contra
   );
   fs.writeFileSync(path.join(root, 'data', 'db.ts'), "import { Pool } from 'pg';\nexport const pool = Pool;\n");
   fs.writeFileSync(
-    path.join(root, 'maintainability.config.json'),
+    path.join(root, 'policy.json'),
     JSON.stringify({ dataAccess: { modules: ['pg'], allowIn: ['data'] } }),
   );
   const cli = path.join(import.meta.dirname, '..', '..', 'bin', 'loadwise.js');
-  const run = spawnSync(process.execPath, [cli, 'maint', root, '--json'], { encoding: 'utf8' });
+  const run = spawnSync(process.execPath, [cli, 'maint', root, '--config', path.join(root, 'policy.json'), '--json'], {
+    encoding: 'utf8',
+  });
   assert.equal(run.status, 1, run.stderr);
   assert.deepEqual(
     JSON.parse(run.stdout).findings.map((finding: Finding) => [finding.file, finding.ruleId]),

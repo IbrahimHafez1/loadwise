@@ -40,11 +40,11 @@ async function scanAfterSave(context: TestContext, root: string, savedFile: stri
   const watcher = Object.assign(new EventEmitter(), { close: async () => {} });
   const originalSend = process.send;
   const originalDisconnect = process.disconnect;
-  const originalWorker = process.env.BACKEND_CHECKERS_EDITOR_WORKER;
+  const originalWorker = process.env.LOADWISE_EDITOR_WORKER;
   const originalConnected = Object.getOwnPropertyDescriptor(process, 'connected');
   process.send = () => true;
   process.disconnect = () => {};
-  process.env.BACKEND_CHECKERS_EDITOR_WORKER = '1';
+  process.env.LOADWISE_EDITOR_WORKER = '1';
   Object.defineProperty(process, 'connected', { value: true, configurable: true, writable: true });
   const logged: string[] = [];
   context.mock.method(console, 'log', (line: string) => logged.push(line));
@@ -52,8 +52,8 @@ async function scanAfterSave(context: TestContext, root: string, savedFile: stri
     process.emit('SIGINT');
     process.send = originalSend;
     process.disconnect = originalDisconnect;
-    if (originalWorker === undefined) delete process.env.BACKEND_CHECKERS_EDITOR_WORKER;
-    else process.env.BACKEND_CHECKERS_EDITOR_WORKER = originalWorker;
+    if (originalWorker === undefined) delete process.env.LOADWISE_EDITOR_WORKER;
+    else process.env.LOADWISE_EDITOR_WORKER = originalWorker;
     if (originalConnected) Object.defineProperty(process, 'connected', originalConnected);
     else Reflect.deleteProperty(process, 'connected');
   });
@@ -82,19 +82,19 @@ async function waitForFinishedScans(logged: readonly string[], count: number): P
 test('editor rescans on .sql saves and reports migration findings on the statement line', async (context) => {
   const root = migrationProject(context);
   const logged = await scanAfterSave(context, root, MIGRATION);
-  const markers = logged.filter((line) => line.startsWith('BACKEND_CHECKER | ' + path.normalize(MIGRATION)));
+  const markers = logged.filter((line) => line.startsWith('LOADWISE | ' + path.normalize(MIGRATION)));
   assert.ok(markers.length >= 2, 'one marker per scan');
-  assert.match(markers[0], /^BACKEND_CHECKER \| [^|]+ \| 2 \| /, 'points at the ALTER TABLE statement line');
+  assert.match(markers[0], /^LOADWISE \| [^|]+ \| 2 \| /, 'points at the ALTER TABLE statement line');
   assert.ok(logged.filter((line) => line === 'Loadwise: scan started').length >= 2);
 });
 
 test('editor ignores baselined migrations', async (context) => {
   const root = migrationProject(context);
-  writeBaseline(path.join(root, 'backend-perf.migrations-baseline.json'), [
+  writeBaseline(path.join(root, 'loadwise.migrations-baseline.json'), [
     { path: path.join(root, MIGRATION), text: fs.readFileSync(path.join(root, MIGRATION), 'utf8') },
   ]);
   const logged = await scanAfterSave(context, root, 'prisma/schema.prisma');
-  assert.equal(logged.filter((line) => line.startsWith('BACKEND_CHECKER')).length, 0);
+  assert.equal(logged.filter((line) => line.startsWith('LOADWISE')).length, 0);
 });
 
 test('editor report formats .sql and .prisma findings', (context) => {
@@ -108,7 +108,7 @@ test('editor report formats .sql and .prisma findings', (context) => {
       ruleId: 'pg-drop-column',
       message: 'Dropping a column.',
     });
-    assert.match(report, /^BACKEND_CHECKER \| [^|]+ \| 1 \| 1 \| \d+ \| warning \| pg-drop-column \|/);
+    assert.match(report, /^LOADWISE \| [^|]+ \| 1 \| 1 \| \d+ \| warning \| pg-drop-column \|/);
   }
 });
 

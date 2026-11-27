@@ -94,7 +94,7 @@ function median(samples: readonly number[]): number {
 function benchmarkCli(): void {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
-  const root = fs.mkdtempSync(path.join(base, 'backend-perf-bench-'));
+  const root = fs.mkdtempSync(path.join(base, 'loadwise-bench-'));
   const bin = path.resolve(import.meta.dirname, '../bin/loadwise.js');
   const artifacts: Record<string, string> = { ...files };
   const jsLine = "  for (const id of ids) await pool.query('select id from people where id = $1', [id]);";

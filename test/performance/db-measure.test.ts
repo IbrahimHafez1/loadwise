@@ -121,7 +121,7 @@ test('measures medians before and after an index built and rolled back in one tr
     sql: 'SELECT * FROM orders WHERE customer_id = 7',
     candidate,
     runs: 3,
-    indexName: 'backend_perf_check_42_1',
+    indexName: 'loadwise_measure_42_1',
   });
   assert.deepEqual(result.impact, {
     kind: 'measured',
@@ -140,7 +140,7 @@ test('measures medians before and after an index built and rolled back in one tr
     measureControl.begin,
     measureControl.localLockTimeout,
     measureControl.localStatementTimeout,
-    'CREATE INDEX "backend_perf_check_42_1" ON "public"."orders" ("customer_id")',
+    'CREATE INDEX "loadwise_measure_42_1" ON "public"."orders" ("customer_id")',
     measureControl.readOnly,
   ]);
   assert.equal(texts.at(-1), measureControl.rollback);
@@ -160,14 +160,14 @@ test('after the run, an index this process named that still exists is an error',
     },
   });
   const gateway = createGateway(adapter, { signals: createSignals() });
-  await assertNoIndexesLeft(gateway, ['backend_perf_check_1_1']);
+  await assertNoIndexesLeft(gateway, ['loadwise_measure_1_1']);
   await assert.rejects(assertNoIndexesLeft(gateway, ['a', 'b']), MeasureRefusal);
   assert.ok(adapter.sent.some(({ text }) => text === statements.indexesNamed));
 });
 
 test('index names are unique per process and match the guarded prefix', () => {
   const next = createIndexNamer(77);
-  assert.equal(next(), 'backend_perf_check_77_1');
-  assert.equal(next(), 'backend_perf_check_77_2');
+  assert.equal(next(), 'loadwise_measure_77_1');
+  assert.equal(next(), 'loadwise_measure_77_2');
   assert.equal(median([3, 1, 2, 10]), 2.5);
 });

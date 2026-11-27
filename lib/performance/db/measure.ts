@@ -36,7 +36,7 @@ interface MeasureRequest {
 const maxMeasureRows = 5_000_000;
 const productionPattern = /prod/i;
 const confirmationFlag = '--i-understand-this-locks-tables';
-const indexNamePrefix = 'backend_perf_check_';
+const indexNamePrefix = 'loadwise_measure_';
 
 class MeasureRefusal extends Error {}
 

@@ -1,8 +1,6 @@
 // `// loadwise-reviewed <rule-id> -- <reason>` on the line above a finding records a human review:
 // the finding becomes contextual with that reason. A finding about a whole file is reported on line
-// 1, so there the comment is line 1 itself. Declared contracts cannot be dismissed this way. The
-// older `warden-reviewed`, `maintainability-reviewed` and `backend-perf-reviewed` spellings stay
-// accepted so existing comments keep working.
+// 1, so there the comment is line 1 itself. Declared contracts cannot be dismissed this way.
 import fs from 'node:fs';
 import path from 'node:path';
 import { noteUnreadable } from '../shared/coverage-notes.js';
@@ -10,8 +8,7 @@ import * as ts from 'typescript';
 import type { Node, ScriptKind, SourceFile } from 'typescript';
 import type { Finding } from '../shared/types.js';
 
-const directive =
-  /^[\t ]*\/\/[\t ]+(?:loadwise|warden|maintainability|backend-perf)-reviewed[\t ]+([a-z][a-z0-9-]*)[\t ]+--[\t ]+(\S[^\r\n]*?)[\t ]*$/;
+const directive = /^[\t ]*\/\/[\t ]+loadwise-reviewed[\t ]+([a-z][a-z0-9-]*)[\t ]+--[\t ]+(\S[^\r\n]*?)[\t ]*$/;
 const protectedRules = new Set(['file-placement', 'folder-boundary', 'data-access-boundary', 'query-mutates-state']);
 const scriptKinds: Record<string, ScriptKind> = {
   '.ts': 3,

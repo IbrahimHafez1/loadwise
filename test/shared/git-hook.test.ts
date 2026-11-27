@@ -160,35 +160,3 @@ test('the hook skips quietly when the checker is not installed', { skip: !hasSh 
   assert.equal(result.status, 0);
   assert.match(result.stdout, /loadwise: not installed here, skipped/);
 });
-
-function legacyBlock(name: string) {
-  return [
-    `# >>> ${name} pre-commit (managed by \`${name} agent init --hook\`)`,
-    `node_modules/.bin/${name} --staged || true`,
-    `# <<< ${name} pre-commit`,
-  ].join('\n');
-}
-
-test('rerunning init upgrades blocks written under every earlier name to one loadwise block', (context) => {
-  const { installHook, hookFile } = repository(context);
-  fs.mkdirSync(path.dirname(hookFile), { recursive: true });
-  const earlierBlocks = ['warden-backend', 'warden-maint', 'backend-perf-check', 'maintainability-check'].map(
-    legacyBlock,
-  );
-  fs.writeFileSync(hookFile, `#!/bin/sh\necho other tool\n\n${earlierBlocks.join('\n\n')}\n\necho after\n`);
-  assert.equal(installHook('--hook', 'block').status, 0);
-  const text = fs.readFileSync(hookFile, 'utf8');
-  assert.ok(text.startsWith(`#!/bin/sh\necho other tool\n\n${blockMarker}`));
-  assert.ok(text.endsWith('# <<< loadwise pre-commit\n\necho after\n'));
-  assert.equal(text.split(blockMarker).length, 2);
-  assert.doesNotMatch(text, /warden-backend|warden-maint|backend-perf-check|maintainability-check/);
-});
-
-test('--hook off removes blocks written under earlier names', (context) => {
-  const { installHook, hookFile } = repository(context);
-  const original = '#!/bin/sh\necho other tool\n';
-  fs.mkdirSync(path.dirname(hookFile), { recursive: true });
-  fs.writeFileSync(hookFile, `${original}\n${legacyBlock('backend-perf-check')}\n\n${legacyBlock('warden-maint')}\n`);
-  assert.equal(installHook('--hook', 'off').status, 0);
-  assert.equal(fs.readFileSync(hookFile, 'utf8'), original);
-});

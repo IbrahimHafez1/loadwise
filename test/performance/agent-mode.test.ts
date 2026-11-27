@@ -22,7 +22,7 @@ const example = fs.readFileSync(path.resolve(import.meta.dirname, '../../example
 function tempRoot(context: TestContext) {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
-  const root = fs.mkdtempSync(path.join(base, 'backend-perf-agent-'));
+  const root = fs.mkdtempSync(path.join(base, 'loadwise-agent-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   // A package.json makes this folder the project root that ids are relative to.
   fs.writeFileSync(path.join(root, 'package.json'), '{}');

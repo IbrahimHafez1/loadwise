@@ -24,7 +24,7 @@ function run(args: string[], cwd = root) {
 function fixture(context: TestContext, files: FileMap) {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
-  const directory = fs.mkdtempSync(path.join(base, 'backend-perf-cli-'));
+  const directory = fs.mkdtempSync(path.join(base, 'loadwise-cli-'));
   for (const [name, contents] of Object.entries(files)) fs.writeFileSync(path.join(directory, name), contents);
   context.after(() => {
     for (const name of Object.keys(files)) fs.unlinkSync(path.join(directory, name));
@@ -113,7 +113,7 @@ test('contextual findings are counted by default and retrievable at their origin
     'service.js': [
       "const { readFileSync } = require('node:fs');",
       'exports.handle = async function () {',
-      '  // backend-perf-reviewed node-sync-fs-in-async -- Read a one-time fixture.',
+      '  // loadwise-reviewed node-sync-fs-in-async -- Read a one-time fixture.',
       "  readFileSync('fixture');",
       '};',
     ].join('\n'),

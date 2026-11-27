@@ -26,7 +26,7 @@ function findingsFor(
 ) {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
-  const root = fs.mkdtempSync(path.join(base, 'backend-perf-integrity-'));
+  const root = fs.mkdtempSync(path.join(base, 'loadwise-integrity-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   for (const [name, contents] of Object.entries({ 'src.ts': source, ...stubs })) {
     fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });

@@ -45,7 +45,7 @@ test('a successful terminal source scan refreshes all listeners, re-arms, and le
     assert.equal(fs.readdirSync(directory).length, 2);
     const silent = spawnSync(process.execPath, [cli, 'perf', 'sample.ts', '--json'], {
       cwd: root,
-      env: { ...process.env, BACKEND_CHECKERS_EDITOR_SCAN: '1' },
+      env: { ...process.env, LOADWISE_EDITOR_SCAN: '1' },
       encoding: 'utf8',
     });
     assert.equal(silent.stdout, baseline.stdout);

@@ -85,17 +85,10 @@ function validateLimits(limits: unknown = {}): SizeLimits {
   return { ...defaultLimits, ...limits };
 }
 
-// The explicit --config file wins, then the "maintainability" section of loadwise.config.json, then
-// the default file.
-function loadPolicy(root: string, explicit?: string, configSection?: unknown): MaintainabilityPolicy {
-  const filename = explicit ? path.resolve(explicit) : path.join(root, 'maintainability.config.json');
-  if (!explicit && configSection) {
-    if (fs.existsSync(filename)) {
-      console.error(`Note: loadwise.config.json has a "maintainability" section; ignoring ${filename}.`);
-    }
-    return policyFromConfig(configSection);
-  }
-  return policyFromConfig(!explicit && !fs.existsSync(filename) ? {} : readJson(filename));
+// The explicit --config file wins, then the "maintainability" section of loadwise.config.json.
+function loadPolicy(explicit?: string, configSection?: unknown): MaintainabilityPolicy {
+  if (explicit) return policyFromConfig(readJson(path.resolve(explicit)));
+  return policyFromConfig(configSection ?? {});
 }
 
 function policyFromConfig(config: unknown): MaintainabilityPolicy {

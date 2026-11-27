@@ -620,7 +620,7 @@ test('known reads awaited one after another merge into one Promise.all', (contex
     process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir(),
   );
   fs.mkdirSync(base, { recursive: true });
-  const root = fs.mkdtempSync(path.join(base, 'backend-perf-fix-'));
+  const root = fs.mkdtempSync(path.join(base, 'loadwise-fix-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.mkdirSync(path.join(root, 'node_modules/@app/reads'), { recursive: true });
   fs.writeFileSync(

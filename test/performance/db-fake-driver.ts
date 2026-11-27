@@ -80,7 +80,7 @@ async function disallowedPostgresStatements(
     .map(({ text }) => text)
     .filter((text: string) => {
       if (fixed.has(text)) return false;
-      if (allowMeasure && /^CREATE INDEX "backend_perf_check_\w+" ON "[^"]+"\."[^"]+" \(.+\)$/.test(text)) return false;
+      if (allowMeasure && /^CREATE INDEX "loadwise_measure_\w+" ON "[^"]+"\."[^"]+" \(.+\)$/.test(text)) return false;
       const prefix = explainPrefixes.find((candidate) => text.startsWith(candidate));
       if (!prefix) return true;
       const parsed = parseExplainCandidate(text.slice(prefix.length));

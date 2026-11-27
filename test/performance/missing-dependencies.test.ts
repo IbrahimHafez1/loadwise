@@ -11,7 +11,7 @@ const bin = path.resolve(import.meta.dirname, '../../bin/loadwise.js');
 
 // A project as cloned: sources and config only, no node_modules.
 function uninstalledProject(context: TestContext, tsconfig: FixtureTsconfig) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-uninstalled-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-uninstalled-'));
   context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   fs.writeFileSync(path.join(directory, 'tsconfig.json'), JSON.stringify(tsconfig));
   fs.writeFileSync(

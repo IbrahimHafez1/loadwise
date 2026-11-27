@@ -12,7 +12,7 @@ const example = fs.readFileSync(path.resolve(import.meta.dirname, '../../example
 function project(context: TestContext) {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
-  const root = fs.mkdtempSync(path.join(base, 'backend-perf-fix-cli-'));
+  const root = fs.mkdtempSync(path.join(base, 'loadwise-fix-cli-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.writeFileSync(path.join(root, 'slow.ts'), example);
   return (args: string[]) => spawnSync(process.execPath, [bin, 'perf', ...args], { cwd: root, encoding: 'utf8' });

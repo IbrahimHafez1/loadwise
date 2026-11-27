@@ -72,7 +72,7 @@ test('diff headers for names with spaces exclude the Git tab separator', () => {
 function gitRepository(context: TestContext) {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
-  const root = fs.mkdtempSync(path.join(base, 'backend-perf-changed-'));
+  const root = fs.mkdtempSync(path.join(base, 'loadwise-changed-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const git = (...args: string[]) =>
     spawnSync('git', ['-c', 'user.email=t@example.com', '-c', 'user.name=t', ...args], { cwd: root, encoding: 'utf8' });

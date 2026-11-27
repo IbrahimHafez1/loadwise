@@ -15,7 +15,7 @@ test(
   async (context) => {
     const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
     fs.mkdirSync(base, { recursive: true });
-    const directory = fs.mkdtempSync(path.join(base, 'backend-perf-watch-'));
+    const directory = fs.mkdtempSync(path.join(base, 'loadwise-watch-'));
     const config = path.join(directory, 'tsconfig.json');
     const route = path.join(directory, 'route.ts');
     const model = path.join(directory, 'model.ts');

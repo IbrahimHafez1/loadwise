@@ -9,12 +9,11 @@ import type { BaselineDocument, MigrationPolicy, MigrationSource } from '../type
 import type { MigrationFinding } from '../types/migration-operations.js';
 
 const BASELINE_VERSION = 1;
-const DEFAULT_BASELINE_NAME = 'backend-perf.migrations-baseline.json';
+const DEFAULT_BASELINE_NAME = 'loadwise.migrations-baseline.json';
 const GIT_OUTPUT_LIMIT = 64 * 1024 * 1024;
-const SQL_DIRECTIVE =
-  /^[\t ]*--[\t ]+(?:loadwise|warden|backend-perf)-reviewed[\t ]+([a-z][a-z0-9-]*)[\t ]+--[\t ]+(\S[^\r\n]*?)[\t ]*$/;
+const SQL_DIRECTIVE = /^[\t ]*--[\t ]+loadwise-reviewed[\t ]+([a-z][a-z0-9-]*)[\t ]+--[\t ]+(\S[^\r\n]*?)[\t ]*$/;
 const CODE_DIRECTIVE =
-  /^[\t ]*(?:\/\/|--)[\t ]+(?:loadwise|warden|backend-perf)-reviewed[\t ]+([a-z][a-z0-9-]*)[\t ]+--[\t ]+(\S[^\r\n]*?)[\t ]*$/;
+  /^[\t ]*(?:\/\/|--)[\t ]+loadwise-reviewed[\t ]+([a-z][a-z0-9-]*)[\t ]+--[\t ]+(\S[^\r\n]*?)[\t ]*$/;
 const BASELINE_REASON = 'Migration predates the baseline.';
 
 // Line endings and a byte order mark do not change a migration, so a Windows checkout matches CI.

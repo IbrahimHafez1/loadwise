@@ -136,7 +136,7 @@ function benchmarkLarge(args: readonly string[]): void {
   const reuse = args.indexOf('--reuse');
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
-  const root = reuse === -1 ? fs.mkdtempSync(path.join(base, 'backend-perf-3200-')) : path.resolve(args[reuse + 1]);
+  const root = reuse === -1 ? fs.mkdtempSync(path.join(base, 'loadwise-3200-')) : path.resolve(args[reuse + 1]);
   const written: string[] = [];
   const created = new Set<string>();
   try {

@@ -26,7 +26,7 @@ function superviseEditor(root: string, explicitConfig: string | undefined): void
     restarting = false;
     worker = fork(cli, ['perf', 'editor', 'watch', ...(explicitConfig ? ['-p', explicitConfig] : [])], {
       cwd: root,
-      env: { ...process.env, BACKEND_CHECKERS_EDITOR_SCAN: '1', BACKEND_CHECKERS_EDITOR_WORKER: '1' },
+      env: { ...process.env, LOADWISE_EDITOR_SCAN: '1', LOADWISE_EDITOR_WORKER: '1' },
       execArgv: [],
       windowsHide: true,
       stdio: ['ignore', 'inherit', 'inherit', 'ipc'],

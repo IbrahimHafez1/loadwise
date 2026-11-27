@@ -1,4 +1,4 @@
-// Docker integration for `loadwise perf db`. Skipped unless BACKEND_PERF_DOCKER=1. Drivers come
+// Docker integration for `loadwise perf db`. Skipped unless LOADWISE_DOCKER_TESTS=1. Drivers come
 // from ./fixture-project (installed there, never in this package), as they would from a user's
 // project.
 import assert from 'node:assert/strict';
@@ -13,7 +13,7 @@ import { run } from '../../../../lib/performance/db/cli.js';
 import { loadSnapshot } from '../../../../lib/performance/schema/context.js';
 import type { Finding } from '../../../../lib/shared/types.js';
 
-const enabled = process.env.BACKEND_PERF_DOCKER === '1';
+const enabled = process.env.LOADWISE_DOCKER_TESTS === '1';
 const fixtureProject = path.join(import.meta.dirname, 'fixture-project');
 const repositoryRoot = path.join(import.meta.dirname, '..', '..', '..', '..');
 const projectRequire = createRequire(path.join(fixtureProject, 'package.json'));
@@ -94,7 +94,7 @@ function assertNoSecrets(texts: readonly string[], secrets: readonly string[]) {
   }
 }
 
-test('PostgreSQL 18', { skip: !enabled && 'set BACKEND_PERF_DOCKER=1', timeout: suiteTimeoutMs }, async (t) => {
+test('PostgreSQL 18', { skip: !enabled && 'set LOADWISE_DOCKER_TESTS=1', timeout: suiteTimeoutMs }, async (t) => {
   const { Client } = projectRequire('pg');
   const name = `bpc-it-pg-${process.pid}`;
   const port = startContainer(name, 'postgres:18-alpine', { POSTGRES_PASSWORD: password, POSTGRES_DB: 'shop' }, 5432, [
@@ -206,7 +206,7 @@ test('PostgreSQL 18', { skip: !enabled && 'set BACKEND_PERF_DOCKER=1', timeout: 
   await t.test('4.6: SET TRANSACTION READ ONLY after DDL blocks writes in the same transaction', async () => {
     await admin.query('BEGIN');
     try {
-      await admin.query('CREATE INDEX "backend_perf_check_probe" ON orders (total)');
+      await admin.query('CREATE INDEX "loadwise_measure_probe" ON orders (total)');
       await admin.query('SET TRANSACTION READ ONLY');
       await assert.rejects(admin.query("INSERT INTO events (kind) VALUES ('x')"), { code: '25006' });
     } finally {
@@ -261,7 +261,7 @@ test('PostgreSQL 18', { skip: !enabled && 'set BACKEND_PERF_DOCKER=1', timeout: 
   });
 });
 
-test('MySQL 8.4', { skip: !enabled && 'set BACKEND_PERF_DOCKER=1', timeout: suiteTimeoutMs }, async (t) => {
+test('MySQL 8.4', { skip: !enabled && 'set LOADWISE_DOCKER_TESTS=1', timeout: suiteTimeoutMs }, async (t) => {
   const mysql = projectRequire('mysql2/promise');
   const name = `bpc-it-mysql-${process.pid}`;
   const port = startContainer(name, 'mysql:8.4', { MYSQL_ROOT_PASSWORD: password, MYSQL_DATABASE: 'school' }, 3306);
@@ -308,7 +308,7 @@ test('MySQL 8.4', { skip: !enabled && 'set BACKEND_PERF_DOCKER=1', timeout: suit
   assertNoSecrets([wrong.stderr], ['Wrong_Sentinel_Pw', '127.0.0.1']);
 });
 
-test('MongoDB 8', { skip: !enabled && 'set BACKEND_PERF_DOCKER=1', timeout: suiteTimeoutMs }, async (t) => {
+test('MongoDB 8', { skip: !enabled && 'set LOADWISE_DOCKER_TESTS=1', timeout: suiteTimeoutMs }, async (t) => {
   const { MongoClient } = projectRequire('mongodb');
   const name = `bpc-it-mongo-${process.pid}`;
   const port = startContainer(name, 'mongo:8', {}, 27017);

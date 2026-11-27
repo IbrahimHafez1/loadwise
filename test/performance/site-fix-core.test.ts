@@ -32,7 +32,7 @@ await loadBuilders();
 function tempDir(context: TestContext) {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
-  const root = fs.mkdtempSync(path.join(base, 'backend-perf-core-'));
+  const root = fs.mkdtempSync(path.join(base, 'loadwise-core-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }

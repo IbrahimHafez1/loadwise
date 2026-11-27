@@ -10,7 +10,7 @@ import type { FileMap } from '../types/project-files.js';
 import type { MigrationFile } from '../../lib/performance/types/migration-files.js';
 
 function project(context: TestContext, files: FileMap) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-migrations-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-migrations-'));
   for (const [name, contents] of Object.entries(files)) {
     fs.mkdirSync(path.dirname(path.join(directory, name)), { recursive: true });
     fs.writeFileSync(path.join(directory, name), contents);

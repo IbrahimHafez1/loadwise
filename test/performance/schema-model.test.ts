@@ -108,7 +108,7 @@ test('fixFor quotes schema-qualified names and bounds the generated index name',
 });
 
 function writeSnapshot(context: TestContext, contents: string | object) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-snapshot-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-snapshot-'));
   context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const filename = path.join(directory, 'snapshot.json');
   fs.writeFileSync(filename, typeof contents === 'string' ? contents : JSON.stringify(contents));
@@ -149,7 +149,7 @@ test('findProjectRoot walks up to the nearest package.json', () => {
 });
 
 test('findProjectRoot does not climb out of the temp folder into a package.json above it', (context) => {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-root-'));
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-root-'));
   context.after(() => fs.rmSync(project, { recursive: true, force: true }));
   assert.equal(findProjectRoot(project), project);
 });

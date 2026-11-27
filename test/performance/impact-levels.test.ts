@@ -41,7 +41,6 @@ const unignorableRules = [
   'go-string-concat-in-loop',
   'java-string-concat-in-loop',
   'java-jdbc-query-in-loop',
-  'csharp-async-void',
   'csharp-string-concat-in-loop',
   'rust-clone-in-loop',
   'rust-format-in-loop',
@@ -71,7 +70,7 @@ test('the README lists the impact level of every performance rule', () => {
 function project(context: TestContext) {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
-  const directory = fs.mkdtempSync(path.join(base, 'backend-perf-impact-'));
+  const directory = fs.mkdtempSync(path.join(base, 'loadwise-impact-'));
   context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   fs.mkdirSync(path.join(directory, 'node_modules', 'pg'), { recursive: true });
   const files = {
@@ -80,12 +79,11 @@ function project(context: TestContext) {
     'service.ts': [
       "import { Pool } from 'pg';",
       "import { readFileSync } from 'node:fs';",
-      'const pool = new Pool();',
       'export async function read() {',
       "  readFileSync('example');",
       '}',
-      'export async function handle() {',
-      "  await pool.query('BEGIN');",
+      'export function handle() {',
+      '  for (const id of [1, 2]) new Pool();',
       '}',
     ].join('\n'),
   };
@@ -100,14 +98,14 @@ test('JSON findings carry impactLevel and text output shows it, most severe firs
   assert.deepEqual(
     json.findings.map(({ ruleId, impactLevel }: ImpactReportFinding) => [ruleId, impactLevel]),
     [
-      ['pg-transaction-on-pool', 'critical'],
+      ['pool-created-per-request-or-item', 'critical'],
       ['node-sync-fs-in-async', 'medium'],
     ],
   );
   const labelled = run()
     .stdout.split('\n')
     .filter((line) => /\[[a-z-]+ #[0-9a-f]+\]/.test(line));
-  assert.match(labelled[0], /\[pg-transaction-on-pool #[0-9a-f]+\] critical: /);
+  assert.match(labelled[0], /\[pool-created-per-request-or-item #[0-9a-f]+\] critical: /);
   assert.match(labelled[1], /\[node-sync-fs-in-async #[0-9a-f]+\] medium: /);
 });
 
@@ -116,11 +114,11 @@ test('--min-impact drops lower findings from output and from the exit code', (co
   const critical = JSON.parse(run('--json', '--min-impact', 'critical').stdout);
   assert.deepEqual(
     critical.findings.map(({ ruleId }: ImpactReportFinding) => ruleId),
-    ['pg-transaction-on-pool'],
+    ['pool-created-per-request-or-item'],
   );
   assert.equal(run('--min-impact', 'critical').status, 1);
-  assert.equal(run('--ignore', 'pg-transaction-on-pool', '--min-impact', 'high').status, 0);
-  assert.equal(run('--ignore', 'pg-transaction-on-pool', '--min-impact', 'medium').status, 1);
+  assert.equal(run('--ignore', 'pool-created-per-request-or-item', '--min-impact', 'high').status, 0);
+  assert.equal(run('--ignore', 'pool-created-per-request-or-item', '--min-impact', 'medium').status, 1);
 });
 
 test('an invalid --min-impact level exits 2', (context) => {

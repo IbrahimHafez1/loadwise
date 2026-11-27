@@ -9,11 +9,8 @@ import { loopReviewReason } from './sequential-loops.js';
 import type { ForOfStatement, ForStatement, Node, SourceFile, Statement } from 'typescript';
 import type { CheckerAdapter } from '../shared/types.js';
 
-// `warden-reviewed` and `backend-perf-reviewed` are earlier names of the directive and stay
-// accepted.
-const reviewMarkers = ['loadwise-reviewed', 'warden-reviewed', 'backend-perf-reviewed'];
-const directive =
-  /^[\t ]*\/\/[\t ]+(?:loadwise|warden|backend-perf)-reviewed[\t ]+([a-z][a-z0-9-]*)[\t ]+--[\t ]+(\S[^\r\n]*?)[\t ]*$/;
+const reviewMarkers = ['loadwise-reviewed'];
+const directive = /^[\t ]*\/\/[\t ]+loadwise-reviewed[\t ]+([a-z][a-z0-9-]*)[\t ]+--[\t ]+(\S[^\r\n]*?)[\t ]*$/;
 const protectedRules = new Set([
   'pg-transaction-on-pool',
   'prisma-scope-unverified',

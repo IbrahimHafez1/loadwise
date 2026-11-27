@@ -63,17 +63,17 @@ test('test files are not checked', () => {
   assert.deepEqual(check('function send(a, b, c, d, e, f) {}', undefined, 'src/example.spec.ts'), []);
 });
 
-test('thresholds are configurable and validated in maintainability.config.json', () => {
+test('thresholds are configurable and validated in a policy file', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'maint-limits-'));
-  const configure = (text: string) => fs.writeFileSync(path.join(root, 'maintainability.config.json'), text);
+  const configure = (text: string) => fs.writeFileSync(path.join(root, 'policy.json'), text);
   try {
-    assert.deepEqual(loadPolicy(root).limits, limitsOf());
+    assert.deepEqual(loadPolicy().limits, limitsOf());
     configure('{"limits":{"longParameterCount":3}}');
-    assert.equal(loadPolicy(root).limits.longParameterCount, 3);
+    assert.equal(loadPolicy(path.join(root, 'policy.json')).limits.longParameterCount, 3);
     configure('{"limits":{"longParameterCount":0}}');
-    assert.throws(() => loadPolicy(root), /positive integer/);
+    assert.throws(() => loadPolicy(path.join(root, 'policy.json')), /positive integer/);
     configure('{"limits":{"unknown":3}}');
-    assert.throws(() => loadPolicy(root), /Allowed keys/);
+    assert.throws(() => loadPolicy(path.join(root, 'policy.json')), /Allowed keys/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

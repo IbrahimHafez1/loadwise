@@ -1,5 +1,5 @@
-// `drizzle-scope-unverified`: an executed Drizzle query over a table that backend-perf.policy.json
-// protects must constrain the configured column to the trusted authorization function. Needs
+// `drizzle-scope-unverified`: an executed Drizzle query over a table that the performance
+// policy protects must constrain the configured column to the trusted authorization function. Needs
 // resolved drizzle-orm types.
 import { ts } from '../../performance/compiler.js';
 import { executedQuery } from '../../performance/drizzle.js';

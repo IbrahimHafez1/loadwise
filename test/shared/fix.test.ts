@@ -73,7 +73,10 @@ test('bulk fix requires explicit consent, applies source fixes and lists individ
 
 test('a skipped or failed checker stops the batch before any source edit', (context) => {
   const brokenConfigs: FileMap[] = [
-    { 'tsconfig.json': '{"files":["slow.ts"]}', 'maintainability.config.json': '{broken' },
+    {
+      'tsconfig.json': '{"files":["slow.ts"]}',
+      'loadwise.config.json': JSON.stringify({ maintainability: { exclude: 'generated' } }),
+    },
     {},
   ];
   for (const config of brokenConfigs) {

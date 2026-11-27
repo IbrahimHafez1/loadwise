@@ -44,7 +44,7 @@ function fixture(context: TestContext) {
   };
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
-  const directory = fs.mkdtempSync(path.join(base, 'backend-perf-engine-'));
+  const directory = fs.mkdtempSync(path.join(base, 'loadwise-engine-'));
   for (const [name, contents] of Object.entries(files)) fs.writeFileSync(path.join(directory, name), contents);
   context.after(() => {
     for (const name of Object.keys(files)) fs.unlinkSync(path.join(directory, name));

@@ -39,7 +39,7 @@ type CompilerOptionsJson = NonNullable<FixtureTsconfig['compilerOptions']>;
 // `--engine native` reports a rejected option instead of falling back, so a clean native run proves
 // the options were translated.
 function scanNative(context: TestContext, compilerOptions: CompilerOptionsJson, extraFiles: FileMap = {}) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-native-options-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-native-options-'));
   context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const files = {
     'src/index.ts': source,
@@ -87,7 +87,7 @@ for (const compilerOptions of [
   { suppressExcessPropertyErrors: true },
 ]) {
   test(`native scan ignores ${Object.keys(compilerOptions)[0]}`, { skip }, (context) => {
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-native-options-'));
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-native-options-'));
     context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
     fs.mkdirSync(path.join(directory, 'src'));
     fs.writeFileSync(path.join(directory, 'src/index.ts'), source);
@@ -119,7 +119,7 @@ for (const [name, compilerOptions] of Object.entries({
   keyofStringsOnly: { keyofStringsOnly: true, target: 'es2022', module: 'commonjs' },
 })) {
   test(`${name} is still rejected by the native engine, leaving the JS fallback`, { skip }, (context) => {
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-native-options-'));
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-native-options-'));
     context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
     fs.mkdirSync(path.join(directory, 'src'));
     fs.writeFileSync(path.join(directory, 'src/index.ts'), source);

@@ -60,18 +60,18 @@ test('a review applies to one advisory rule on the next physical line', () => {
   const source = [
     "import { readFileSync as read } from 'node:fs';",
     'export async function handle() {',
-    '  // backend-perf-reviewed node-sync-fs-in-async -- Offline snapshot written once.',
+    '  // loadwise-reviewed node-sync-fs-in-async -- Offline snapshot written once.',
     '  read("one");',
     '  read("two");',
-    '  // backend-perf-reviewed unrelated-rule -- Other review.',
+    '  // loadwise-reviewed unrelated-rule -- Other review.',
     '  read("three");',
-    '  // backend-perf-reviewed node-sync-fs-in-async',
+    '  // loadwise-reviewed node-sync-fs-in-async',
     '  read("four");',
     '  /*',
-    '  // backend-perf-reviewed node-sync-fs-in-async -- Inside a block comment.',
+    '  // loadwise-reviewed node-sync-fs-in-async -- Inside a block comment.',
     '  */ read("five");',
     '  const text = `',
-    '  // backend-perf-reviewed node-sync-fs-in-async -- Inside a template.',
+    '  // loadwise-reviewed node-sync-fs-in-async -- Inside a template.',
     '  ${read("six")}`;',
     '}',
   ].join('\r\n');
@@ -89,24 +89,21 @@ test('a review applies to one advisory rule on the next physical line', () => {
   );
 });
 
-test('the loadwise-reviewed directive and the old warden-reviewed and backend-perf-reviewed ones all apply', () => {
+test('only the loadwise-reviewed spelling dismisses a finding', () => {
   const source = [
     "import { readFileSync as read } from 'node:fs';",
     'export async function handle() {',
-    '  // loadwise-reviewed node-sync-fs-in-async -- New directive name.',
+    '  // loadwise-reviewed node-sync-fs-in-async -- Current directive name.',
     '  read("one");',
-    '  // warden-reviewed node-sync-fs-in-async -- Previous directive name.',
-    '  read("three");',
-    '  // backend-perf-reviewed node-sync-fs-in-async -- Old directive name.',
+    '  // retired-reviewed node-sync-fs-in-async -- Retired directive name.',
     '  read("two");',
     '}',
   ].join('\n');
   assert.deepEqual(
     lint(source).map(({ line, contextualReason }) => [line, contextualReason]),
     [
-      [4, 'Reviewed in source: New directive name.'],
-      [6, 'Reviewed in source: Previous directive name.'],
-      [8, 'Reviewed in source: Old directive name.'],
+      [4, 'Reviewed in source: Current directive name.'],
+      [6, undefined],
     ],
   );
 });
@@ -116,7 +113,7 @@ test('a source review cannot lower a transaction contract', () => {
     [
       "import { Pool } from 'pg';",
       'const pool = new Pool();',
-      '// backend-perf-reviewed pg-transaction-on-pool -- This annotation cannot waive the contract.',
+      '// loadwise-reviewed pg-transaction-on-pool -- This annotation cannot waive the contract.',
       "pool.query('BEGIN');",
     ].join('\n'),
     { 'node_modules/pg/index.d.ts': 'export class Pool { query(text: string): Promise<unknown> }' },
@@ -146,7 +143,7 @@ test('only test write advisories receive an automatic test-path context', () => 
 test('test-directory context is relative to the owning package, independently of invocation directory', (context) => {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : tmpdir();
   fs.mkdirSync(base, { recursive: true });
-  const directory = fs.mkdtempSync(path.join(base, 'backend-perf-review-'));
+  const directory = fs.mkdtempSync(path.join(base, 'loadwise-review-'));
   const testParent = path.join(directory, 'tests');
   const checkout = path.join(testParent, 'checkout');
   fs.mkdirSync(checkout, { recursive: true });
@@ -249,7 +246,7 @@ test('seed and test helper files make blocking calls contextual even inside a lo
 test('a project that itself lives under a test directory keeps its sources visible', (context) => {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : tmpdir();
   fs.mkdirSync(base, { recursive: true });
-  const directory = fs.mkdtempSync(path.join(base, 'backend-perf-review-'));
+  const directory = fs.mkdtempSync(path.join(base, 'loadwise-review-'));
   const checkout = path.join(directory, 'tests', 'checkout');
   fs.mkdirSync(path.join(checkout, 'src'), { recursive: true });
   const manifest = path.join(checkout, 'package.json');
@@ -265,7 +262,7 @@ test('a project that itself lives under a test directory keeps its sources visib
 });
 
 test('seed, script and tooling sources are contextual for every request-path-only rule', (context) => {
-  const directory = fs.mkdtempSync(path.join(tmpdir(), 'backend-perf-setup-'));
+  const directory = fs.mkdtempSync(path.join(tmpdir(), 'loadwise-setup-'));
   fs.writeFileSync(path.join(directory, 'package.json'), '{}');
   context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const ts = loadSyntax();
@@ -303,7 +300,7 @@ test('seed, script and tooling sources are contextual for every request-path-onl
 });
 
 test('a standalone entry point or a database run script is operator tooling wherever it lives', (context) => {
-  const directory = fs.mkdtempSync(path.join(tmpdir(), 'backend-perf-entry-'));
+  const directory = fs.mkdtempSync(path.join(tmpdir(), 'loadwise-entry-'));
   fs.writeFileSync(path.join(directory, 'package.json'), '{}');
   context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const ts = loadSyntax();

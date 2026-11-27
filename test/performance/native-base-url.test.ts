@@ -38,7 +38,7 @@ const sources = {
 };
 
 function scanBothEngines(context: TestContext, configs: FileMap) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-native-base-url-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-native-base-url-'));
   context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   for (const [name, contents] of Object.entries({ ...sources, ...configs })) {
     fs.mkdirSync(path.dirname(path.join(directory, name)), { recursive: true });
