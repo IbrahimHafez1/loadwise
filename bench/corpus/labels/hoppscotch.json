@@ -56,7 +56,7 @@
     "note": "six positional parameters"
   },
   {
-    "pillar": "maint",
+    "pillar": "rel",
     "ruleId": "swallowed-error",
     "file": "packages/hoppscotch-cli/src/index.ts",
     "line": 107,
@@ -112,7 +112,7 @@
     "note": "collections.find per collection in forEach is quadratic in collection count"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "floating-promise",
     "file": "packages/hoppscotch-backend/src/auth/auth.service.ts",
     "line": 323,
@@ -120,7 +120,7 @@
     "note": "updateUserLastLoggedOn catches internally and cannot reject"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "floating-promise",
     "file": "packages/hoppscotch-backend/src/infra-config/infra-config.service.ts",
     "line": 379,
@@ -128,7 +128,7 @@
     "note": "async enableAndDisableSSO is called without await or catch"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "floating-promise",
     "file": "packages/hoppscotch-backend/src/team-collection/team-collection.service.ts",
     "line": 847,
@@ -136,7 +136,7 @@
     "note": "pubsub.publish is deliberate fire-and-forget subscription fan-out"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "floating-promise",
     "file": "packages/hoppscotch-backend/src/team/team.service.ts",
     "line": 101,
@@ -144,7 +144,7 @@
     "note": "pubsub.publish is deliberate fire-and-forget subscription fan-out"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "http-call-without-timeout",
     "file": "packages/hoppscotch-cli/src/utils/auth/digest.ts",
     "line": 103,
@@ -152,7 +152,7 @@
     "note": "axios.request with no timeout option"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "http-call-without-timeout",
     "file": "packages/hoppscotch-common/src/platform/std/kernel-interceptors/agent/store.ts",
     "line": 200,
@@ -320,7 +320,7 @@
     "note": "onboarding token appended to query string"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "json-parse-unguarded",
     "file": "packages/hoppscotch-cli/src/utils/hopp-fetch.ts",
     "line": 231,
@@ -328,7 +328,7 @@
     "note": "json() mirrors fetch Response.json which throws by contract"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "promise-return-escapes-catch",
     "file": "packages/hoppscotch-desktop/src/router.ts",
     "line": 16,

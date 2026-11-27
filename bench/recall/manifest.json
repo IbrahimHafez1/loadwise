@@ -102,7 +102,7 @@
     },
     {
       "id": "perf-mongoose-aggregate-uncast-id",
-      "pillar": "perf",
+      "pillar": "rel",
       "ruleId": "mongoose-aggregate-uncast-id",
       "project": "vulnerable-app",
       "file": "server.ts",
@@ -264,7 +264,7 @@
     },
     {
       "id": "perf-http-call-without-timeout",
-      "pillar": "perf",
+      "pillar": "rel",
       "ruleId": "http-call-without-timeout",
       "project": "perf-http-call-without-timeout",
       "file": "index.js",
@@ -282,7 +282,7 @@
     },
     {
       "id": "perf-floating-promise",
-      "pillar": "perf",
+      "pillar": "rel",
       "ruleId": "floating-promise",
       "project": "perf-floating-promise",
       "file": "index.js",
@@ -489,7 +489,7 @@
     },
     {
       "id": "be-check-then-update-race",
-      "pillar": "perf",
+      "pillar": "rel",
       "ruleId": "check-then-update-race",
       "project": "vulnerable-app",
       "file": "server.ts",
@@ -498,7 +498,7 @@
     },
     {
       "id": "be-payment-idempotency",
-      "pillar": "perf",
+      "pillar": "rel",
       "ruleId": "payment-missing-idempotency-key",
       "project": "vulnerable-app",
       "file": "server.ts",
@@ -507,7 +507,7 @@
     },
     {
       "id": "be-webhook-idempotency",
-      "pillar": "perf",
+      "pillar": "rel",
       "ruleId": "webhook-missing-idempotency-check",
       "project": "vulnerable-app",
       "file": "server.ts",
@@ -543,7 +543,7 @@
     },
     {
       "id": "perf-phase5-unbounded-promise-all",
-      "pillar": "perf",
+      "pillar": "rel",
       "ruleId": "unbounded-promise-all",
       "project": "perf-phase5-unbounded-promise-all",
       "file": "index.ts",

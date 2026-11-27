@@ -56,7 +56,7 @@
     "note": "six positional parameters"
   },
   {
-    "pillar": "maint",
+    "pillar": "rel",
     "ruleId": "swallowed-error",
     "file": "apps/api/v2/src/middleware/request-ids/request-id.interceptor.ts",
     "line": 32,
@@ -64,7 +64,7 @@
     "note": "body is stringified only for a log line, so continuing after the catch is intended"
   },
   {
-    "pillar": "maint",
+    "pillar": "rel",
     "ruleId": "swallowed-error",
     "file": "apps/web/components/apps/btcpayserver/BtcpayPaymentComponent.tsx",
     "line": 177,
@@ -376,7 +376,7 @@
     "note": "findMany with deep include fetches all columns of booking, attendees, bookingSeat, user, eventType"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "request-number-unvalidated",
     "file": "apps/api/v2/src/platform/schedules/schedules_2024_04_15/controllers/schedules.controller.ts",
     "line": 108,
@@ -384,7 +384,7 @@
     "note": "passes Number(scheduleId) directly without ParseIntPipe or NaN validation"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "request-number-unvalidated",
     "file": "apps/api/v2/src/platform/schedules/schedules_2024_06_11/controllers/schedules.controller.ts",
     "line": 159,
@@ -392,7 +392,7 @@
     "note": "passes Number(scheduleId) directly without ParseIntPipe or NaN validation"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "find-then-create-race",
     "file": "apps/web/app/api/webhook/app-credential/route.ts",
     "line": 90,
@@ -400,7 +400,7 @@
     "note": "read-then-create/update race without upsert or transaction"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "find-then-create-race",
     "file": "packages/trpc/server/routers/loggedInViewer/addNotificationsSubscription.handler.ts",
     "line": 60,

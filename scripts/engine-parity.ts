@@ -1,5 +1,5 @@
-// Runs `loadwise perf` on the JS and native engines for each project and fails when their results
-// differ.
+// Runs `loadwise perf` and `loadwise rel` on the JS and native engines for each project and fails
+// when their results differ.
 // Usage: node scripts/engine-parity.js [projectDir ...] With no arguments it scans the repos in
 // bench/corpus/manifest.json under ../loadwise-corpus.
 
@@ -13,6 +13,8 @@ const CLI_PATH = path.join(LOADWISE_DIR, 'bin', 'loadwise.js');
 const MANIFEST_PATH = path.join(LOADWISE_DIR, 'bench', 'corpus', 'manifest.json');
 const DEFAULT_CORPUS_DIR = path.join(LOADWISE_DIR, '..', 'loadwise-corpus');
 const ENGINES = ['js', 'native'];
+// Both checkers report from the shared source pass, so both must agree across engines.
+const COMMANDS = ['perf', 'rel'];
 const RUN_TIMEOUT_MS = 20 * 60 * 1000;
 const MAX_OUTPUT_BYTES = 1024 * 1024 * 1024;
 const NOT_COMPARABLE_EXIT_CODE = 2;
@@ -131,8 +133,8 @@ function parseJson(text: string): EngineReport | null {
   }
 }
 
-function runEngine(projectDir: string, engine: string): EngineRun {
-  const args = [CLI_PATH, 'perf', '-p', projectDir, '--engine', engine, '--json', '--include-contextual'];
+function runEngine(projectDir: string, engine: string, command: string): EngineRun {
+  const args = [CLI_PATH, command, '-p', projectDir, '--engine', engine, '--json', '--include-contextual'];
   const spawned = spawnSync(process.execPath, args, {
     cwd: LOADWISE_DIR,
     encoding: 'utf8',
@@ -157,11 +159,13 @@ function main(argv: readonly string[]): number {
   let different = false;
   let comparable = 0;
   for (const project of projects) {
-    const [jsRun, nativeRun] = ENGINES.map((engine) => runEngine(project, engine));
-    const comparison = compareRuns(jsRun, nativeRun);
-    console.log(formatComparison(project, comparison).join('\n'));
-    if (comparison.kind === 'different') different = true;
-    if (comparison.kind !== 'not-comparable') comparable += 1;
+    for (const command of COMMANDS) {
+      const [jsRun, nativeRun] = ENGINES.map((engine) => runEngine(project, engine, command));
+      const comparison = compareRuns(jsRun, nativeRun);
+      console.log(formatComparison(`${project} (${command})`, comparison).join('\n'));
+      if (comparison.kind === 'different') different = true;
+      if (comparison.kind !== 'not-comparable') comparable += 1;
+    }
   }
   if (different || (projects.length > 0 && comparable === 0)) return FINDINGS_EXIT_CODE;
   return 0;

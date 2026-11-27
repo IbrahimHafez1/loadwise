@@ -5,6 +5,7 @@ import test from 'node:test';
 
 import { securityRules } from '../../lib/security/rule-ids.js';
 import { knownRules } from '../../lib/performance/rule-ids.js';
+import { knownRules as reliabilityRules } from '../../lib/reliability/rule-ids.js';
 import type { Finding, Pillar } from '../../lib/shared/types.js';
 import { evaluateCase } from '../../bench/recall/runner.js';
 
@@ -27,6 +28,7 @@ const manifest: RecallManifest = JSON.parse(fs.readFileSync(path.join(recallDir,
 const knownRuleIdsByPillar: Partial<Record<Pillar, Set<string>>> = {
   sec: new Set(securityRules),
   perf: new Set(knownRules),
+  rel: new Set(reliabilityRules),
 };
 
 // The benchmark itself reports misses; this guards the manifest so a typo is never counted as a

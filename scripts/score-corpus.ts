@@ -12,6 +12,7 @@ import os from 'node:os';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as perf from '../lib/performance/rule-ids.js';
+import * as rel from '../lib/reliability/rule-ids.js';
 import * as maint from '../lib/maintainability/rule-ids.js';
 import * as sec from '../lib/security/rule-ids.js';
 
@@ -27,6 +28,8 @@ const MINIMUM_LABELS_FOR_FLOOR = 10;
 const MEASURED_LABEL_COUNT = 10;
 const PILLAR_LIB_DIRS: Record<string, string> = {
   perf: path.join(LIB_DIR, 'performance'),
+  // The reliability rules the performance analyzer finds keep their fix builders beside it.
+  rel: path.join(LIB_DIR, 'performance'),
   maint: path.join(LIB_DIR, 'maintainability'),
   sec: path.join(LIB_DIR, 'security'),
 };
@@ -39,7 +42,12 @@ const PRETTIER_BIN = path.join(
   'bin',
   'prettier.cjs',
 );
-const PILLARS: Record<string, string> = { perf: 'performance', maint: 'maintainability', sec: 'security' };
+const PILLARS: Record<string, string> = {
+  perf: 'performance',
+  rel: 'reliability',
+  maint: 'maintainability',
+  sec: 'security',
+};
 const CORPUS_PATH_MARKER = 'loadwise-corpus/';
 const FLAG_NAMES_WITH_VALUE = new Set(['from', 'loadwise', 'corpus', 'repos', 'concurrency', 'min-precision']);
 const RULE_COLUMN_WIDTH = 52;
@@ -426,6 +434,7 @@ function readAllLabels(): Label[] {
 function registeredRules(): Record<string, RegisteredPillar> {
   return {
     perf: { ruleIds: [...perf.knownRules], impactByRule: perf.impactByRule },
+    rel: { ruleIds: [...rel.knownRules], impactByRule: rel.impactByRule },
     maint: { ruleIds: [...maint.knownRules], impactByRule: maint.impactByRule },
     sec: { ruleIds: sec.securityRules, impactByRule: sec.impactByRule },
   };

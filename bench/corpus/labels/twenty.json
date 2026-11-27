@@ -256,7 +256,7 @@
     "note": "integration-test app bootstrap"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "stream-pipe-unhandled-error",
     "file": "packages/twenty-cli/src/transport/__tests__/fetch-with-proxy.spec.ts",
     "line": 53,
@@ -264,7 +264,7 @@
     "note": "test proxy code with error handling on upstream"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "stream-pipe-unhandled-error",
     "file": "packages/twenty-cli/src/transport/__tests__/fetch-with-proxy.spec.ts",
     "line": 54,

@@ -48,7 +48,7 @@
     "note": "six positional parameters"
   },
   {
-    "pillar": "maint",
+    "pillar": "rel",
     "ruleId": "swallowed-error",
     "file": "apps/remix/app/routes/embed+/v2+/authoring+/envelope.edit.$id.tsx",
     "line": 137,
@@ -120,7 +120,7 @@
     "note": "type export nobody imports"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "floating-promise",
     "file": "packages/lib/server-only/envelope/update-envelope.ts",
     "line": 82,
@@ -128,7 +128,7 @@
     "note": "assertEnvelopeMutable returns Promise<void> and is not awaited so the guard does not block"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "floating-promise",
     "file": "packages/lib/server-only/recipient/delete-envelope-recipient.ts",
     "line": 68,
@@ -136,7 +136,7 @@
     "note": "async assertEnvelopeMutable guard is not awaited"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "floating-promise",
     "file": "packages/trpc/server/envelope-router/replace-envelope-item-pdf.ts",
     "line": 63,
@@ -144,7 +144,7 @@
     "note": "fixed since the first campaign: now reported|async assertEnvelopeMutable guard is not awaited"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "http-call-without-timeout",
     "file": "apps/openpage-api/app/community/total-forks/route.ts",
     "line": 5,
@@ -152,7 +152,7 @@
     "note": "server route fetches an external service with no timeout"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "http-call-without-timeout",
     "file": "apps/openpage-api/app/github/issues/route.ts",
     "line": 4,
@@ -160,7 +160,7 @@
     "note": "server route fetches GitHub with no timeout"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "http-call-without-timeout",
     "file": "packages/lib/client-only/hooks/use-embed-popup-auth.ts",
     "line": 149,
@@ -168,7 +168,7 @@
     "note": "browser code under client-only, not a Node socket"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "http-call-without-timeout",
     "file": "packages/lib/jobs/client/local.ts",
     "line": 380,
@@ -472,7 +472,7 @@
     "note": "type unused; remix imports packages/lib copy instead"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "json-parse-unguarded",
     "file": "packages/ui/primitives/document-flow/field-item-advanced-settings.tsx",
     "line": 167,

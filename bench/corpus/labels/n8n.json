@@ -1,6 +1,6 @@
 [
   {
-    "pillar": "maint",
+    "pillar": "rel",
     "ruleId": "swallowed-error",
     "file": "packages/cli/src/evaluation.ee/evaluation-collections.controller.ee.ts",
     "line": 47,
@@ -8,7 +8,7 @@
     "note": "feature-flag failure leaves a sentinel that is handled right after"
   },
   {
-    "pillar": "maint",
+    "pillar": "rel",
     "ruleId": "swallowed-error",
     "file": "packages/cli/src/modules/instance-ai/instance-ai-settings.service.ts",
     "line": 131,
@@ -24,7 +24,7 @@
     "note": "constant list of about 25 extensions"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "floating-promise",
     "file": "packages/@n8n/db/src/migrations/common/1630330987096-UpdateWorkflowCredentials.ts",
     "line": 27,
@@ -296,7 +296,7 @@
     "note": "dev test-stack CLI printing throwaway test credentials"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "json-parse-unguarded",
     "file": "packages/@n8n/instance-ai/src/workspace/pack-workspace-sdk.ts",
     "line": 230,
@@ -304,7 +304,7 @@
     "note": "trusted local package.json in SDK packing script"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "promise-return-escapes-catch",
     "file": "packages/@n8n/typeorm/src/query-builder/SelectQueryBuilder.ts",
     "line": 1767,
@@ -312,7 +312,7 @@
     "note": "queryRunner.stream returns a promise; rejection skips rollback catch"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "async-callback-unhandled-rejection",
     "file": "packages/@n8n/backend-services/src/events/relays/event-relay.ts",
     "line": 17,
@@ -336,7 +336,7 @@
     "note": "two independent counts awaited serially"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "stream-pipe-unhandled-error",
     "file": "packages/@n8n/backend-network/src/http/__tests__/binary-buffer.test.ts",
     "line": 22,
@@ -344,7 +344,7 @@
     "note": "test code"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "stream-pipe-unhandled-error",
     "file": "packages/@n8n/backend-network/src/http/__tests__/binary-buffer.test.ts",
     "line": 30,

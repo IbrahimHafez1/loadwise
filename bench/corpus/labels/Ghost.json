@@ -32,7 +32,7 @@
     "note": "developer tooling over a short specialist list"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "http-call-without-timeout",
     "file": "apps/activitypub/src/utils/image.ts",
     "line": 12,
@@ -40,7 +40,7 @@
     "note": "browser fetch in a frontend app, the Node undici default does not apply"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "http-call-without-timeout",
     "file": "apps/announcement-bar/src/utils/api.ts",
     "line": 32,
@@ -256,7 +256,7 @@
     "note": "AdminPage imports BasePage via pages barrel"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "json-parse-unguarded",
     "file": "apps/activitypub/src/lib/feature-flags.tsx",
     "line": 27,
@@ -264,7 +264,7 @@
     "note": "corrupt localStorage value crashes state initializer"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "promise-return-escapes-catch",
     "file": "apps/activitypub/src/utils/image.ts",
     "line": 19,
@@ -272,7 +272,7 @@
     "note": "FileReader promise returned inside try; onerror bypasses catch"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "async-callback-unhandled-rejection",
     "file": "apps/activitypub/src/views/preferences/components/bluesky-sharing.tsx",
     "line": 114,
@@ -280,7 +280,7 @@
     "note": "mutateAsync awaited in setInterval async callback, no catch"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "async-callback-unhandled-rejection",
     "file": "apps/admin-x-framework/test/unit/utils/api/fetch-api.test.tsx",
     "line": 49,

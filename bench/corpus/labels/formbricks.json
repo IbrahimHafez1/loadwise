@@ -72,7 +72,7 @@
     "note": "mock export nobody imports"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "http-call-without-timeout",
     "file": "apps/web/modules/survey/list/lib/v3-surveys-client.ts",
     "line": 197,
@@ -80,7 +80,7 @@
     "note": "browser API client, not a Node socket"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "http-call-without-timeout",
     "file": "apps/web/playwright/utils/helper.ts",
     "line": 377,

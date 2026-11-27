@@ -32,7 +32,7 @@
     "note": "vendored third-party three.js build"
   },
   {
-    "pillar": "maint",
+    "pillar": "rel",
     "ruleId": "swallowed-error",
     "file": "frontend/src/assets/private/three.js",
     "line": 26899,
@@ -40,7 +40,7 @@
     "note": "vendored third-party three.js build"
   },
   {
-    "pillar": "maint",
+    "pillar": "rel",
     "ruleId": "swallowed-error",
     "file": "routes/profileImageFileUpload.ts",
     "line": 43,
@@ -72,7 +72,7 @@
     "note": "code-fix snippets are read from disk by challenge key"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "floating-promise",
     "file": "routes/fileUpload.ts",
     "line": 88,
@@ -456,7 +456,7 @@
     "note": "raw DB error object returned in 500 response"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "json-parse-unguarded",
     "file": "lib/startup/validateDependencies.ts",
     "line": 15,
@@ -472,7 +472,7 @@
     "note": "small infra text files post-processed in memory, not streamable"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "stream-pipe-unhandled-error",
     "file": "routes/order.ts",
     "line": 45,
@@ -480,7 +480,7 @@
     "note": "pdfkit piped to file write stream with no error handler"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "stream-pipe-unhandled-error",
     "file": "routes/videoHandler.ts",
     "line": 38,

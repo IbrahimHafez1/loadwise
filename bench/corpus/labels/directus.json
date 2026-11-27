@@ -1,6 +1,6 @@
 [
   {
-    "pillar": "maint",
+    "pillar": "rel",
     "ruleId": "swallowed-error",
     "file": "api/src/middleware/respond.ts",
     "line": 57,
@@ -88,7 +88,7 @@
     "note": "filter().length > 0 used only as an existence check"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "floating-promise",
     "file": "api/src/controllers/server.ts",
     "line": 149,
@@ -96,7 +96,7 @@
     "note": "fixed since the first campaign: now reported|setOwner is not awaited inside a try so a rejection escapes the catch"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "floating-promise",
     "file": "api/src/schedules/telemetry.ts",
     "line": 34,
@@ -104,7 +104,7 @@
     "note": "track with wait false is a deliberate fire-and-forget"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "http-call-without-timeout",
     "file": "api/src/telemetry/lib/send-report.ts",
     "line": 31,
@@ -152,7 +152,7 @@
     "note": "one UPDATE per row inside a loop on the sort path"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "promise-return-escapes-catch",
     "file": "api/src/ai/providers/anthropic-file-support.ts",
     "line": 49,
@@ -280,7 +280,7 @@
     "note": "error file imports createError via ../index.js barrel"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "json-parse-unguarded",
     "file": "api/src/deployment/drivers/netlify.ts",
     "line": 354,
@@ -288,7 +288,7 @@
     "note": "websocket message parsed with no try/catch"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "promise-return-escapes-catch",
     "file": "api/src/ai/providers/anthropic-file-support.ts",
     "line": 74,
@@ -296,7 +296,7 @@
     "note": "fetch returned inside try; rejection bypasses logging catch"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "async-callback-unhandled-rejection",
     "file": "packages/extensions-sdk/src/cli/commands/build.ts",
     "line": 477,
@@ -312,7 +312,7 @@
     "note": "three independent getUsage awaits run serially"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "stream-pipe-unhandled-error",
     "file": "api/src/controllers/assets.ts",
     "line": 56,
@@ -320,7 +320,7 @@
     "note": "archive errors surfaced via complete() in try/catch"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "stream-pipe-unhandled-error",
     "file": "api/src/controllers/assets.ts",
     "line": 125,
@@ -328,7 +328,7 @@
     "note": "archive errors surfaced via complete() in try/catch"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "stream-pipe-unhandled-error",
     "file": "api/src/controllers/extensions.ts",
     "line": 342,

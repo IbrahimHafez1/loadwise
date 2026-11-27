@@ -1,6 +1,6 @@
 [
   {
-    "pillar": "maint",
+    "pillar": "rel",
     "ruleId": "swallowed-error",
     "file": "server/src/repositories/machine-learning.repository.ts",
     "line": 180,
@@ -8,7 +8,7 @@
     "note": "tries each candidate url and throws when all fail"
   },
   {
-    "pillar": "maint",
+    "pillar": "rel",
     "ruleId": "swallowed-error",
     "file": "server/src/services/api.service.ts",
     "line": 45,
@@ -24,7 +24,7 @@
     "note": "filter().length === 0 used only as an existence check"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "http-call-without-timeout",
     "file": "packages/cli/src/commands/asset.ts",
     "line": 434,
@@ -32,7 +32,7 @@
     "note": "upload fetch with no timeout or signal"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "http-call-without-timeout",
     "file": "server/src/repositories/server-info.repository.ts",
     "line": 72,
@@ -80,7 +80,7 @@
     "note": "bcrypt compareSync on the login path"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "promise-return-escapes-catch",
     "file": "server/src/repositories/machine-learning.repository.ts",
     "line": 174,
@@ -248,7 +248,7 @@
     "note": "maintenance login unthrottled"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "json-parse-unguarded",
     "file": "packages/plugin-sdk/src/cli.ts",
     "line": 20,
@@ -256,7 +256,7 @@
     "note": "dev CLI reading local manifest file"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "promise-return-escapes-catch",
     "file": "server/src/repositories/server-info.repository.ts",
     "line": 78,
@@ -264,7 +264,7 @@
     "note": "response.json() rejection skips catch that wraps the error"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "stream-pipe-unhandled-error",
     "file": "server/src/controllers/integrity-admin.controller.ts",
     "line": 92,

@@ -48,7 +48,7 @@
     "note": "six positional parameters"
   },
   {
-    "pillar": "maint",
+    "pillar": "rel",
     "ruleId": "swallowed-error",
     "file": "integration-tests/helpers/wait-for-index.ts",
     "line": 68,
@@ -56,7 +56,7 @@
     "note": "logs inside a polling retry loop that retries until timeout"
   },
   {
-    "pillar": "maint",
+    "pillar": "rel",
     "ruleId": "swallowed-error",
     "file": "packages/core/framework/src/http/audit.ts",
     "line": 471,
@@ -64,7 +64,7 @@
     "note": "audit recording is best effort and must not fail the request"
   },
   {
-    "pillar": "maint",
+    "pillar": "rel",
     "ruleId": "swallowed-error",
     "file": "packages/core/utils/src/modules-sdk/loaders/load-models.ts",
     "line": 14,
@@ -160,7 +160,7 @@
     "note": "short restricted-field lists"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "floating-promise",
     "file": "packages/admin/dashboard/src/routes/orders/order-detail/components/order-activity-section/order-note-form.tsx",
     "line": 38,
@@ -168,7 +168,7 @@
     "note": "mutateAsync promise is not awaited or handled"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "http-call-without-timeout",
     "file": "packages/core/js-sdk/src/admin/product.ts",
     "line": 125,
@@ -176,7 +176,7 @@
     "note": "client SDK upload helper"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "http-call-without-timeout",
     "file": "packages/modules/providers/auth-github/src/services/github.ts",
     "line": 112,
@@ -400,7 +400,7 @@
     "note": "rejectUnauthorized false default for every non-local DB host"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "json-parse-unguarded",
     "file": "packages/admin/admin-bundler/src/commands/plugin.ts",
     "line": 17,
@@ -408,7 +408,7 @@
     "note": "build tooling reading own package.json"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "async-callback-unhandled-rejection",
     "file": "packages/admin/admin-vite-plugin/src/plugin.ts",
     "line": 171,

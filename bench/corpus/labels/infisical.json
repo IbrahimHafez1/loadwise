@@ -1,6 +1,6 @@
 [
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "http-call-without-timeout",
     "file": "backend/src/db/seed-saml.ts",
     "line": 59,

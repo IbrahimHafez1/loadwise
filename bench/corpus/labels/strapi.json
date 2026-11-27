@@ -16,7 +16,7 @@
     "note": "find over one to three route strategies"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "floating-promise",
     "file": "packages/core/core/src/middlewares/body.ts",
     "line": 92,

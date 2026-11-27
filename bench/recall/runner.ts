@@ -32,7 +32,13 @@ interface CaseResult extends RecallCase {
 const RECALL_DIR = import.meta.dirname;
 const MANIFEST_PATH = path.join(RECALL_DIR, 'manifest.json');
 const CLI_PATH = path.resolve(RECALL_DIR, '..', '..', 'bin', 'loadwise.js');
-const PILLAR_KEYS: Record<Pillar, string> = { perf: 'performance', sec: 'security', maint: 'maintainability' };
+const PILLAR_KEYS: Record<Pillar, string> = {
+  perf: 'performance',
+  rel: 'reliability',
+  maint: 'maintainability',
+  sec: 'security',
+  a11y: 'accessibility',
+};
 
 function parseArgs(argv: readonly string[]): RecallOptions {
   const options: RecallOptions = {};

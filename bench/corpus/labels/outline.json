@@ -40,7 +40,7 @@
     "note": "1764 lines of code"
   },
   {
-    "pillar": "maint",
+    "pillar": "rel",
     "ruleId": "swallowed-error",
     "file": "build.js",
     "line": 202,
@@ -124,8 +124,8 @@
     "ruleId": "jwt-sign-without-expiry",
     "file": "server/models/User.ts",
     "line": 642,
-    "verdict": "fp",
-    "note": "expiry is carried in an expiresAt claim that the verifier enforces"
+    "verdict": "tp",
+    "note": "expiresAt is optional, so a call without it signs a session token with no expiry"
   },
   {
     "pillar": "sec",
@@ -248,7 +248,7 @@
     "note": "test code asserting a count"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "json-parse-unguarded",
     "file": "server/routes/assets.ts",
     "line": 132,
@@ -256,7 +256,7 @@
     "note": "repo-bundled locale file, not external input"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "async-callback-unhandled-rejection",
     "file": "app/components/WebsocketProvider.tsx",
     "line": 569,

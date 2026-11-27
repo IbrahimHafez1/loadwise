@@ -11,62 +11,8 @@
         },
         {
           "ruleId": "unreferenced-file",
-          "file": "../../lib/maintainability/types/typescript-jsdoc-internals.ts",
-          "fingerprint": "0362fdd9974d",
-          "count": 1
-        },
-        {
-          "ruleId": "unreferenced-file",
-          "file": "../../lib/maintainability/types/typescript-site-fix-internals.ts",
-          "fingerprint": "c88727f31ce5",
-          "count": 1
-        },
-        {
-          "ruleId": "unreferenced-file",
-          "file": "../../lib/performance/types/typescript-binder.ts",
-          "fingerprint": "6fd235ea21ec",
-          "count": 1
-        },
-        {
-          "ruleId": "unreferenced-file",
-          "file": "../../lib/performance/types/typescript-token-lookup.ts",
-          "fingerprint": "647fb7d5f387",
-          "count": 1
-        },
-        {
-          "ruleId": "unreferenced-file",
-          "file": "../../lib/performance/types/typescript-token-position.ts",
-          "fingerprint": "1e840e3c9e4c",
-          "count": 1
-        },
-        {
-          "ruleId": "unreferenced-file",
           "file": "../../lib/shared/types/cli-finding.ts",
           "fingerprint": "935d8cea16fb",
-          "count": 1
-        },
-        {
-          "ruleId": "unreferenced-file",
-          "file": "../../lib/shared/types/typescript-assignment-target.ts",
-          "fingerprint": "b2021aa91c43",
-          "count": 1
-        },
-        {
-          "ruleId": "unreferenced-file",
-          "file": "../../lib/shared/types/typescript-internals.ts",
-          "fingerprint": "af94ca3963b2",
-          "count": 1
-        },
-        {
-          "ruleId": "unreferenced-file",
-          "file": "../../lib/shared/types/typescript-module-resolution.ts",
-          "fingerprint": "59df409f1100",
-          "count": 1
-        },
-        {
-          "ruleId": "unreferenced-file",
-          "file": "../../lib/shared/types/typescript-outer-expression.ts",
-          "fingerprint": "ba9ece1240b4",
           "count": 1
         },
         {
@@ -97,12 +43,6 @@
           "ruleId": "unused-export",
           "file": "../../lib/maintainability/polyglot-duplicates.ts",
           "fingerprint": "0791100352e0",
-          "count": 1
-        },
-        {
-          "ruleId": "unused-export",
-          "file": "../../lib/maintainability/site-fixes/extract-block.ts",
-          "fingerprint": "660a1dcfd60d",
           "count": 1
         },
         {

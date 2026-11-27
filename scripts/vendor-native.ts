@@ -12,11 +12,15 @@ const manifest = JSON.parse(fs.readFileSync(path.join(source, 'package.json'), '
 if (manifest.name !== 'typescript' || manifest.version !== '7.1.0-beta') {
   throw new Error('Expected the published typescript@7.1.0-beta package.');
 }
+const entryPoints = ['./sync', './ast', './ast/is', './ast/utils', './fs'];
+const entryFiles = entryPoints.map((entry) => manifest.exports?.[entry]);
+if (!entryFiles.every((entryFile) => typeof entryFile === 'string')) {
+  throw new Error(`Expected exports for ${entryPoints.join(', ')} in the typescript package.`);
+}
 // Only after the source is confirmed, so a wrong path leaves the current vendored copy in place.
 fs.rmSync(destination, { recursive: true, force: true });
 const files = new Set(['package.json', 'LICENSE', 'NOTICE.txt', 'vendor/vscode-jsonrpc/License.txt']);
-const entryPoints = ['./sync', './ast', './ast/is', './ast/utils', './fs'];
-for (const entry of entryPoints) files.add(path.normalize(manifest.exports[entry]));
+for (const entryFile of entryFiles) files.add(path.normalize(entryFile));
 
 // TypeScript's binding ships ESM, with CommonJS used by its JSON-RPC dependency.
 // Follow static imports in both syntaxes, preserving the original file bytes.

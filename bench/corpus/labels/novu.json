@@ -152,7 +152,7 @@
     "note": "filter().length === 0 used only as an existence check"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "floating-promise",
     "file": "apps/api/src/app/layouts-v2/usecases/upsert-layout/upsert-layout.usecase.ts",
     "line": 190,
@@ -160,7 +160,7 @@
     "note": "repository delete is not awaited so the write can fail unseen"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "floating-promise",
     "file": "apps/worker/src/app/workflow/usecases/send-message/send-message-push.usecase.ts",
     "line": 313,
@@ -168,7 +168,7 @@
     "note": "message update is not awaited so the write can fail unseen"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "http-call-without-timeout",
     "file": "apps/api/src/app/agents/channels/agent-config-resolver.service.ts",
     "line": 551,
@@ -176,7 +176,7 @@
     "note": "server axios call to Slack with no timeout"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "http-call-without-timeout",
     "file": "apps/api/src/app/integrations/usecases/azure-setup-oauth-callback/azure-setup-oauth-callback.usecase.ts",
     "line": 184,
@@ -264,7 +264,7 @@
     "note": "local CLI preflight check"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "promise-return-escapes-catch",
     "file": "apps/api/src/app/inbox/usecases/unsnooze-notification/unsnooze-notification.usecase.ts",
     "line": 59,
@@ -272,7 +272,7 @@
     "note": "returned promise inside try without await bypasses the catch"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "promise-return-escapes-catch",
     "file": "apps/dashboard/src/components/ai-elements/prompt-input.tsx",
     "line": 572,
@@ -280,7 +280,7 @@
     "note": "FileReader promise with only a resolve handler"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "promise-return-escapes-catch",
     "file": "libs/application-generic/src/agent-runtimes/anthropic/anthropic-agent-runtime.provider.ts",
     "line": 465,
@@ -696,7 +696,7 @@
     "note": "uploads set ACL public-read"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "json-parse-unguarded",
     "file": "libs/application-generic/src/services/auth/shared.ts",
     "line": 8,
@@ -704,7 +704,7 @@
     "note": "request.query.state parsed unguarded in auth callback"
   },
   {
-    "pillar": "perf",
+    "pillar": "rel",
     "ruleId": "async-callback-unhandled-rejection",
     "file": "apps/dashboard/src/hooks/use-form-autosave.ts",
     "line": 99,
