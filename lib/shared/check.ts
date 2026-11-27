@@ -250,6 +250,11 @@ async function scanForFixes(checkers?: readonly string[]): Promise<Finding[]> {
   for (const run of runs) process.stderr.write(run?.stderr ?? '');
   return options.selected.flatMap((pillar, index) => {
     if (!runs[index] && pillar.optional) return [];
+    if (!runs[index] && !projectConfig(options.directory)) {
+      throw new Error(
+        `No tsconfig.json or jsconfig.json in ${options.directory}, so the ${pillar.title} checker cannot run. Run loadwise fix from the project folder. No fixes applied.`,
+      );
+    }
     const report = parsedReport(runs[index]);
     if (!report || !Array.isArray(report.findings) || ![0, 1].includes(runs[index]?.code ?? invalidInputCode)) {
       throw new Error(`The ${pillar.title} scan did not complete. No fixes applied.`);
