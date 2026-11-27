@@ -39,7 +39,7 @@
     "vscode"
   ],
   "bin": {
-    "loadwise": "./bin/loadwise.js"
+    "loadwise": "bin/loadwise.js"
   },
   "files": [
     "bin/",
