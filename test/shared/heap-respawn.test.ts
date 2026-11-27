@@ -13,8 +13,19 @@ const skip =
     ? 'needs POSIX signals and a re-spawned checker'
     : false;
 
-test('stopping a re-spawned watch run also stops the watcher it started', { skip }, async () => {
-  const child = spawn(process.execPath, [bin, 'perf', '--watch', '-p', 'examples/tsconfig.json'], { cwd: root });
+test('stopping a re-spawned watch run also stops the watcher it started', { skip }, async (context) => {
+  // Its own process group, so a failed wait or a regression cannot leave the watcher holding this test process open.
+  const child = spawn(process.execPath, [bin, 'perf', '--watch', '-p', 'examples/tsconfig.json'], {
+    cwd: root,
+    detached: true,
+  });
+  context.after(() => {
+    try {
+      process.kill(-Number(child.pid), 'SIGKILL');
+    } catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'ESRCH')) throw error;
+    }
+  });
   let stdout = '';
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('watch produced no result')), watchTimeoutMs);
