@@ -20,9 +20,7 @@ import type {
   FindingKey,
 } from './types/baseline.js';
 import type { PillarName } from './types/pillar-name.js';
-import { impactByRule as impactByRuleRuleIds } from '../performance/rule-ids.js';
-import { impactByRule as impactByRuleRuleIds2 } from '../maintainability/rule-ids.js';
-import { impactByRule as impactByRuleRuleIds22 } from '../security/rule-ids.js';
+import { pillarOfRule, rulesByPillar } from './rule-registry.js';
 import { extractBaselineFlags } from './baseline-flags.js';
 import { assignFindingIds } from '../performance/finding-ids.js';
 import { discoverWorkspaces, selectWorkspaces } from './workspaces.js';
@@ -53,11 +51,6 @@ interface BaselineScanValues {
 const DEFAULT_BASELINE_NAME = 'loadwise-baseline.json';
 const BASELINE_VERSION = 1;
 const BOM_PATTERN = new RegExp('^' + String.fromCharCode(0xfeff));
-const impactTableByPillar: Record<PillarName, () => Readonly<Record<string, string>>> = {
-  performance: () => impactByRuleRuleIds,
-  maintainability: () => impactByRuleRuleIds2,
-  security: () => impactByRuleRuleIds22,
-};
 
 // An explicit file is relative to the working directory; the default sits in the project root.
 function resolveBaselineFile(option: BaselineOption, projectRoot: string): string {
@@ -181,7 +174,7 @@ function createOutsideScan(
   const workspaces = selectedWorkspaceDirectories(projectRoot, scope.workspaces);
   const scannedPaths = limitedToPaths(baselineFile, scope) ? scope.paths : undefined;
   const ignored = new Set(scope.ignoredRules);
-  const impactByRule = scope.minImpact === undefined ? undefined : impactTableByPillar[pillar]();
+  const impactByRule = scope.minImpact === undefined ? undefined : rulesByPillar[pillar].impactByRule;
   const baseDirectory = path.dirname(baselineFile);
   const inAny = (directories: readonly string[], file: string): boolean =>
     directories.some((directory: string) => isWithin(directory, path.resolve(baseDirectory, file)));
@@ -219,6 +212,25 @@ function writePillarBaseline(
   return findings.length;
 }
 
+function sectionEntries(document: BaselineDocument, section: string): BaselineCount[] {
+  const recorded = document.pillars[section]?.findings;
+  return Array.isArray(recorded) ? recorded : [];
+}
+
+// The entries that judge a pillar's findings. A rule that moved to another pillar (reliability took
+// rules from performance and maintainability) was recorded under its old section, so those entries
+// count for the pillar that owns the rule now until that pillar writes a section of its own, and no
+// longer count, even as stale, for the old one.
+function recordedEntries(document: BaselineDocument, pillar: PillarName): BaselineCount[] {
+  const own = sectionEntries(document, pillar).filter(({ ruleId }) => (pillarOfRule(ruleId) ?? pillar) === pillar);
+  if (document.pillars[pillar] !== undefined) return own;
+  const moved = Object.keys(document.pillars)
+    .filter((section) => section !== pillar)
+    .flatMap((section) => sectionEntries(document, section))
+    .filter(({ ruleId }) => pillarOfRule(ruleId) === pillar);
+  return [...own, ...moved];
+}
+
 // Removes findings the baseline accounts for. `stale` counts recorded findings that no longer
 // occur; they leave the file only on the next --write-baseline.
 function filterPillarBaseline(
@@ -231,8 +243,7 @@ function filterPillarBaseline(
   const document = readDocument(baselineFile);
   if (!document) throw new Error(`Baseline not found: ${baselineFile}. Create it with --write-baseline.`);
   const remaining = new Map<string, number>();
-  const recorded = document.pillars[pillar]?.findings;
-  for (const entry of Array.isArray(recorded) ? recorded : []) {
+  for (const entry of recordedEntries(document, pillar)) {
     if (!Number.isInteger(entry.count) || entry.count <= 0) continue;
     const key = keyText(entry);
     remaining.set(key, (remaining.get(key) ?? 0) + entry.count);

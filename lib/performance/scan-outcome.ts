@@ -1,6 +1,7 @@
 import type { Finding, ScanResult, SkippedFile } from '../shared/types.js';
 import type { ChangedScope, SourceScanValues } from './types/source-scan-values.js';
 import { fixAllCommand } from '../shared/fix-command.js';
+import type { SourceCommand } from './types/source-command.js';
 
 interface SourceResultInput {
   result: ScanResult;
@@ -10,6 +11,8 @@ interface SourceResultInput {
   baselineOptions: SourceScanValues['baselineOptions'];
   positionals: readonly string[];
   scope: ChangedScope | undefined;
+  /** The checker whose fix command the report prints. */
+  command: SourceCommand;
   // A caller of checkCode may ask for the findings instead of an exit code.
   report: (result: ScanResult, values: SourceScanValues) => number | Finding[] | Promise<number | Finding[]>;
 }
@@ -46,22 +49,23 @@ function reportSourceResult({
   positionals,
   scope,
   report,
+  command,
 }: SourceResultInput): number | Finding[] | Promise<number | Finding[]> {
   const reportValues = {
     ...values,
     project,
     baselineOptions,
-    fixCommand: fixAllCommand('perf', project, positionals, usedFallback ? { ...values, engine: 'js' } : values),
+    fixCommand: fixAllCommand(command, project, positionals, usedFallback ? { ...values, engine: 'js' } : values),
   };
   return report(result, scope ? { ...reportValues, changedLines: scope.changedLines } : reportValues);
 }
 
 async function editorAnalyzers() {
-  const [{ performanceAnalyzers }, { analyzer }] = await Promise.all([
+  const [{ reliabilityAnalyzers, accessibilityAnalyzer }, { analyzer }] = await Promise.all([
     import('./projects.js'),
     import('../security/cli.js'),
   ]);
-  return [...performanceAnalyzers, analyzer];
+  return [...reliabilityAnalyzers, analyzer, accessibilityAnalyzer];
 }
 
 export { editorAnalyzers, exitCodeWithSkips, noteEmptyIgnoredScan, recordSkippedFile, reportSourceResult };

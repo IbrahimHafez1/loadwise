@@ -1,6 +1,5 @@
-// AGENTS.md and the pre-commit hook hold loadwise text between start and end markers. Markers written under earlier
-// tool names count too, so one rerun turns an older install, even one block per former checker, into one block.
-// Text outside the blocks is never changed.
+// AGENTS.md and the pre-commit hook hold loadwise text between start and end markers. Rerunning init replaces the
+// block in place; text outside the blocks is never changed.
 import type { MarkerPair } from './types/managed-blocks.js';
 
 interface BlockRange {

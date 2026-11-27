@@ -46,25 +46,6 @@ constraints:
         - kind: verbatim_string_literal
 
 ---
-id: csharp-async-void
-language: CSharp
-severity: warning
-message: async void methods cannot be awaited and crash the process on unhandled exceptions. Return Task instead.
-rule:
-  all:
-    - pattern:
-        context: 'class C { async void $METHOD($$$PARAMS) { $$$BODY } }'
-        selector: method_declaration
-    - not:
-        any:
-          - pattern:
-              context: 'class C { async void $METHOD(object $SENDER, $ARGS $E) { $$$BODY } }'
-              selector: method_declaration
-          - pattern:
-              context: 'class C { async void $METHOD(object? $SENDER, $ARGS $E) { $$$BODY } }'
-              selector: method_declaration
-
----
 id: csharp-string-concat-in-loop
 language: CSharp
 severity: warning

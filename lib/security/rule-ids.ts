@@ -117,7 +117,34 @@ const impactByRule: Readonly<Record<string, ImpactLevel>> = {
   'jwt-weak-secret-literal': 'high',
   'graphql-batching-unbounded': 'medium',
   'express-cookie-auth-missing-csrf': 'high',
+  'csharp-process-start': 'medium',
+  'csharp-ef-from-sql-raw': 'high',
+  'go-exec-command-shell': 'high',
+  'go-sql-sprintf-injection': 'high',
+  'java-runtime-exec': 'medium',
+  'java-sql-string-concat': 'high',
+  'python-insecure-deserialization': 'high',
+  'python-unsafe-yaml-load': 'high',
+  'python-subprocess-shell-true': 'high',
+  'rust-command-shell': 'high',
+  'rust-unsafe-raw-pointer-deref': 'medium',
 };
+
+// Rules the ast-grep polyglot scan reports from polyglot/security. They are syntactic patterns, so
+// they are not in ruleInfo, which lists only the TypeScript source rules that --ignore accepts.
+const polyglotRules = [
+  'csharp-process-start',
+  'csharp-ef-from-sql-raw',
+  'go-exec-command-shell',
+  'go-sql-sprintf-injection',
+  'java-runtime-exec',
+  'java-sql-string-concat',
+  'python-insecure-deserialization',
+  'python-unsafe-yaml-load',
+  'python-subprocess-shell-true',
+  'rust-command-shell',
+  'rust-unsafe-raw-pointer-deref',
+];
 
 const securityRules = Object.keys(ruleInfo);
 // Findings of these rules count for `--fail-on contract`. None yet; see the security design, open
@@ -125,4 +152,4 @@ const securityRules = Object.keys(ruleInfo);
 const contractRules = new Set<string>();
 
 export const movedRules = Object.keys(movedRuleInfo);
-export { securityRules, ruleInfo, impactByRule, contractRules };
+export { securityRules, polyglotRules, ruleInfo, impactByRule, contractRules };

@@ -11,7 +11,7 @@ import type { ChildRun } from './types/checker-run.js';
 const formatVersion = 1;
 const maxEntries = 20;
 const gitListBuffer = 1 << 28;
-const cacheableCommands = new Set(['check', 'perf', 'maint', 'sec']);
+const cacheableCommands = new Set(['check', 'perf', 'rel', 'maint', 'sec', 'a11y']);
 // Subcommands that read live state (databases, advisories) or write files.
 const uncachedSubcommands = new Set(['deps', 'db', 'migrations', 'fix']);
 // Flags that edit files, watch, depend on git history or the network, or write side files.

@@ -3,6 +3,7 @@ import type { BaselineRunOptions } from '../shared/types/baseline.js';
 import type { SourceReportResult, SourceReportValues } from '../shared/types/source-report.js';
 import type { PerformancePolicy } from './types/performance-policy.js';
 import type { SourceAnalyzer } from './types/source-analyzer.js';
+import type { SourceCommand } from './types/source-command.js';
 import type { ChangedScope, ScanSettings, SourceScanValues } from './types/source-scan-values.js';
 
 export type PrintLine = (line: string) => void;
@@ -28,7 +29,7 @@ export interface WorkspaceTarget {
 /** Where a scan reads its policy from, and how to read it again in watch mode. */
 
 export interface PolicySource {
-  filename: string;
+  filename: string | undefined;
   read(): PerformancePolicy | undefined;
 }
 
@@ -56,6 +57,8 @@ export interface ScanValues extends SourceScanValues {
 export interface PrintValues extends Omit<SourceReportValues, 'projectDirectory' | 'settings'> {
   settings: ScanSettings;
   projectDirectory?: string;
+  /** The pillar the report belongs to; `loadwise rel` reports reliability. */
+  sourcePillar?: 'performance' | 'reliability' | 'accessibility';
 }
 
 export interface SourceCodeOptions {
@@ -80,7 +83,7 @@ export interface PillarOutput {
   stdout: string;
 }
 
-export interface CheckWithSecurityInput {
+export interface CheckWithPillarsInput {
   values: ScanValues;
   positionals: string[];
   policy: PerformancePolicy | undefined;
@@ -89,6 +92,10 @@ export interface CheckWithSecurityInput {
   project: string | undefined;
   baselineOptions: BaselineRunOptions;
   inferredFiles: string[] | undefined;
+  /** The checkers that share the pass, in report order. */
+  commands: SourceCommand[];
+  /** Markup files named on the command line, which accessibility reads beside the program. */
+  markupFiles: readonly string[];
 }
 
 export interface ScanSourceInput {
@@ -100,4 +107,8 @@ export interface ScanSourceInput {
   scope: ChangedScope | undefined;
   engine: string;
   report: ExitCodeReporter | FindingsReporter;
+  /** The analyzers of a terminal report; the editor's reporter always runs every source pillar. */
+  analyzers: SourceAnalyzer[];
+  /** Accessibility without a program to analyze: only markup files are read. */
+  skipProgram: boolean;
 }

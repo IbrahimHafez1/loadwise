@@ -27,4 +27,6 @@ export interface SourceCheckValues {
   online?: boolean;
   /** Set after parsing: the command that applies fixes, shown in reports. */
   fixCommand?: string;
+  /** Set after parsing: the pillar the report belongs to, `performance` unless `loadwise rel` runs. */
+  sourcePillar?: 'performance' | 'reliability' | 'accessibility';
 }

@@ -9,13 +9,17 @@ import os from 'node:os';
 import path from 'node:path';
 import ts from 'typescript';
 import { applyFix } from '../../editor/apply-fix.cjs';
-import { analyzeSources, performanceAnalyzers } from '../../lib/performance/projects.js';
+import {
+  accessibilityAnalyzer,
+  analyzeSources,
+  performanceAnalyzers,
+  reliabilityAnalyzer,
+} from '../../lib/performance/projects.js';
 import {
   attachSiteFixes as attachPerformanceFixes,
   loadBuilders as loadPerformanceBuilders,
 } from '../../lib/performance/site-fix.js';
 
-await loadPerformanceBuilders();
 import { attachSiteFixes as attachMaintainabilityFixes } from '../../lib/maintainability/site-fix.js';
 import { scan as scanMaintainability } from '../../lib/maintainability/scan.js';
 import { applyFix as applyMaintainabilityFix } from '../../lib/maintainability/apply-fix.js';
@@ -36,9 +40,14 @@ import type { FixableFinding } from '../types/findings.js';
 import type { VerifyFixRequest } from '../types/fix-verification.js';
 import * as securityAnalyzeModule from '../../lib/security/analyze.js';
 
-// Performance rules and security rules share one program run, as the CLI and the editor run them.
-const performanceAndSecurityAnalyzers: SourceAnalyzer[] = [
+await loadPerformanceBuilders();
+
+// Performance, reliability, accessibility and security rules share one program run; each rule id is
+// reported by exactly one pillar's analyzer, so one run serves every pillar's samples.
+const sourceAnalyzers: SourceAnalyzer[] = [
   ...performanceAnalyzers,
+  reliabilityAnalyzer,
+  accessibilityAnalyzer,
   {
     pillar: 'security',
     analyzeFile: securityAnalyzeModule.analyzeFile,
@@ -59,7 +68,7 @@ const ambientDeclarations = [
   'declare var console: { log(...values: unknown[]): void; warn(...values: unknown[]): void; error(...values: unknown[]): void };',
   'declare function fetch(input: unknown, init?: object): Promise<unknown>;',
   'declare var AbortSignal: { timeout(milliseconds: number): unknown };',
-  'declare function setTimeout(callback: (...values: any[]) => void, milliseconds?: number): unknown;',
+  'declare function setTimeout<Values extends unknown[]>(callback: (...values: Values) => void, milliseconds?: number, ...values: Values): unknown;',
   '',
 ].join('\n');
 const sourcePattern = /\.[cm]?[jt]sx?$/;
@@ -101,7 +110,7 @@ async function scanSourceFiles({ root, files, policy, migrations }: SourceScanRe
     .filter(isScannedSource)
     .map((name) => path.join(root, name));
   const findings: Finding[] = sources.length
-    ? analyzeSources({ files: sources, policy, analyzers: performanceAndSecurityAnalyzers }).findings
+    ? analyzeSources({ files: sources, policy, analyzers: sourceAnalyzers }).findings
     : [];
   findings.push(...schemaFileFindings(root));
   if (migrations) findings.push(...(await migrationFindings(root)));
@@ -121,17 +130,17 @@ async function scanProject(request: VerifyFixRequest & { root: string }) {
   return scanSourceFiles({ root, files: request.files, policy: request.policy, migrations: request.migrations });
 }
 
+// Every file under the folder outside node_modules.
+function walkFiles(folder: string): string[] {
+  return fs.readdirSync(folder, { withFileTypes: true }).flatMap((entry) => {
+    if (entry.name === 'node_modules') return [];
+    const full = path.join(folder, entry.name);
+    return entry.isDirectory() ? walkFiles(full) : [full];
+  });
+}
+
 function diagnosticKeys(root: string) {
-  const names: string[] = [];
-  const collect = (folder: string) => {
-    for (const entry of fs.readdirSync(folder, { withFileTypes: true })) {
-      if (entry.name === 'node_modules') continue;
-      const full = path.join(folder, entry.name);
-      if (entry.isDirectory()) collect(full);
-      else if (sourcePattern.test(entry.name)) names.push(full);
-    }
-  };
-  collect(root);
+  const names = walkFiles(root).filter((file) => sourcePattern.test(path.basename(file)));
   const program = ts.createProgram(names, {
     strict: true,
     noEmit: true,
@@ -154,7 +163,10 @@ function diagnosticKeys(root: string) {
 
 function countBy<Item>(items: readonly Item[], keyOf: (item: Item) => string): Map<string, number> {
   const counts = new Map<string, number>();
-  for (const item of items) counts.set(keyOf(item), (counts.get(keyOf(item)) ?? 0) + 1);
+  for (const item of items) {
+    const key = keyOf(item);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
   return counts;
 }
 
@@ -214,7 +226,7 @@ function copyProject(root: string) {
   return copy;
 }
 
-// `pillar` is 'security', 'performance' or 'maintainability'; `files` maps relative names to
+// `pillar` is 'security', 'performance', 'reliability', 'accessibility' or 'maintainability'; `files` maps relative names to
 // contents (package stubs under node_modules included); `policy` is the optional query or
 // maintainability policy. `migrations: true` also runs the migration checks of `loadwise perf
 // migrations`, for samples whose finding is in a migration file. Schema and SQL files have no type
@@ -230,9 +242,12 @@ async function verifyFix(request: VerifyFixRequest) {
     assert.ok(reported.length > 0, `${ruleId} should be reported for the sample`);
     const fixable = reported.find(hasFix);
     assert.ok(fixable, `${ruleId} should come with an automatic fix`);
-    const diagnosticsBefore = countBy(diagnosticKeys(root), String);
+    const diagnosticsBefore = countBy(diagnosticKeys(root), (key) => key);
     applyFinding(pillar, root, fixable);
-    const newDiagnostics = newEntries(countBy(diagnosticKeys(root), String), diagnosticsBefore);
+    const newDiagnostics = newEntries(
+      countBy(diagnosticKeys(root), (key) => key),
+      diagnosticsBefore,
+    );
     assert.deepEqual(newDiagnostics, [], `the fixed ${ruleId} code has new type errors`);
     rescanRoot = copyProject(root);
     const findingsAfter = await scanProject({
@@ -260,18 +275,10 @@ async function verifyFix(request: VerifyFixRequest) {
 // disk.
 function changedSources(root: string, files: FileMap) {
   const created: FileMap = {};
-  const collect = (folder: string) => {
-    for (const entry of fs.readdirSync(folder, { withFileTypes: true })) {
-      if (entry.name === 'node_modules') continue;
-      const full = path.join(folder, entry.name);
-      if (entry.isDirectory()) collect(full);
-      else {
-        const name = path.relative(root, full).split(path.sep).join('/');
-        if (!(name in files) && name !== ambientFile) created[name] = '';
-      }
-    }
-  };
-  collect(root);
+  for (const file of walkFiles(root)) {
+    const name = path.relative(root, file).split(path.sep).join('/');
+    if (!(name in files) && name !== ambientFile) created[name] = '';
+  }
   return created;
 }
 

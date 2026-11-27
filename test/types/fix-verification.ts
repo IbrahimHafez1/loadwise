@@ -25,4 +25,4 @@ export interface MaintainabilityVerificationCase {
 
 export type VerifyFixRequest =
   | ({ pillar: 'maintainability' } & Omit<MaintainabilityVerificationCase, 'todo'>)
-  | ({ pillar: 'performance' | 'security' } & Omit<FixVerificationCase, 'todo'>);
+  | ({ pillar: 'performance' | 'security' | 'reliability' | 'accessibility' } & Omit<FixVerificationCase, 'todo'>);

@@ -38,7 +38,7 @@ const usage = `Usage: loadwise fix (--yes | --all | --handoff) [checkers...]
   --no-verify-types  Skip Layer-2 semantic type-check verification on modified TS files.
   --no-comments  Do not add the "// Loadwise <rule-id>: <why>" comment above each fixed statement.
   --no-format    Do not format the changed lines with the project's Prettier.
-  Checkers: performance (perf), maintainability (maint), security (sec).
+  Checkers: performance (perf), reliability (rel), maintainability (maint), security (sec), accessibility (a11y).
   Omit checker names to use the project's configured checkers.
 
   loadwise fix --all
@@ -81,7 +81,10 @@ function fixOptions(args: string[]) {
     for (const item of list.split(',')) {
       const selector = item.trim();
       const checker = pillars.find(({ name, jsonKey }) => name === selector || jsonKey === selector);
-      if (!checker) throw new Error(`Invalid checker "${selector}". Choose performance, maintainability, or security.`);
+      if (!checker)
+        throw new Error(
+          `Invalid checker "${selector}". Choose performance, reliability, maintainability, security, or accessibility.`,
+        );
       selected.add(checker.name);
     }
   }

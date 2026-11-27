@@ -70,7 +70,7 @@ test('plain loadwise checks the current folder with every checker in titled sect
   assert.doesNotMatch(run.stderr, /agent instructions/);
   assert.match(
     run.stdout,
-    /^== Performance ==\n1 file\(s\) checked, 0 finding\(s\)\.\n== Maintainability ==\n.*\n== Security ==\n1 file\(s\) checked, 0 finding\(s\)\.\n$/,
+    /^== Performance ==\n1 file\(s\) checked, 0 finding\(s\)\.\n== Reliability ==\n1 file\(s\) checked, 0 finding\(s\)\.\n== Maintainability ==\n.*\n== Security ==\n1 file\(s\) checked, 0 finding\(s\)\.\n$/,
   );
   assert.deepEqual(loadwise(root, 'check', '.'), run);
 });
@@ -87,35 +87,37 @@ test('--json prints one key per checker', (context) => {
   const root = project(context, { 'tsconfig.json': tsconfig, 'a.ts': slowSource });
   const run = loadwise(root, '--json');
   const report = JSON.parse(run.stdout);
-  assert.deepEqual(Object.keys(report), ['performance', 'maintainability', 'security']);
+  assert.deepEqual(Object.keys(report), ['performance', 'reliability', 'maintainability', 'security', 'accessibility']);
   assert.equal(report.performance.findings.length, 3);
   assert.deepEqual(report.maintainability.findings, []);
   assert.deepEqual(report.security.findings, []);
+  assert.equal(report.accessibility, null, 'a project without frontend sources skips accessibility');
 });
 
 test('one checker with invalid configuration makes check exit 2 and its JSON report null', (context) => {
   const root = project(context, {
     'tsconfig.json': tsconfig,
     'a.ts': slowSource,
-    'maintainability.config.json': '{broken',
+    'loadwise.config.json': JSON.stringify({ maintainability: { exclude: 'generated' } }),
   });
   const run = loadwise(root, '--json');
   assert.equal(run.code, 2);
-  assert.match(run.stderr, /Invalid JSON in .*maintainability\.config\.json/);
+  assert.match(run.stderr, /exclude must be an array/);
   const report = JSON.parse(run.stdout);
   assert.equal(report.maintainability, null);
   assert.equal(report.performance.findings.length, 3);
 });
 
-test('without a tsconfig or jsconfig the performance and security checkers are skipped with a note', (context) => {
+test('without a tsconfig or jsconfig the performance, reliability and security checkers are skipped with a note', (context) => {
   const root = project(context, { 'a.ts': quietSource });
   const run = loadwise(root, '--json');
   assert.equal(run.code, 0, run.stderr);
   assert.match(
     run.stderr,
-    /no tsconfig\.json or jsconfig\.json in .*; skipped the performance and security checkers\./,
+    /no tsconfig\.json or jsconfig\.json in .*; skipped the performance, reliability and security checkers\./,
   );
   assert.equal(JSON.parse(run.stdout).performance, null);
+  assert.equal(JSON.parse(run.stdout).reliability, null);
   assert.equal(JSON.parse(run.stdout).security, null);
 });
 
@@ -124,9 +126,10 @@ test('--only and --skip select checkers, and --json keys follow the selection', 
   const keys = (...args: string[]) => Object.keys(JSON.parse(loadwise(root, '--json', ...args).stdout));
   assert.deepEqual(keys('--only', 'maint'), ['maintainability']);
   assert.deepEqual(keys('--only', 'maint,perf,maint'), ['performance', 'maintainability']);
-  assert.deepEqual(keys('--skip', 'perf'), ['maintainability', 'security']);
+  assert.deepEqual(keys('--skip', 'perf'), ['reliability', 'maintainability', 'security', 'accessibility']);
+  assert.deepEqual(keys('--only', 'rel'), ['reliability']);
   assert.deepEqual(keys('--only', 'sec'), ['security']);
-  assert.deepEqual(keys('--skip', 'sec'), ['performance', 'maintainability']);
+  assert.deepEqual(keys('--skip', 'sec'), ['performance', 'reliability', 'maintainability', 'accessibility']);
   const maintOnly = loadwise(root, '--only', 'maint');
   assert.equal(maintOnly.code, 0, 'the performance findings are not checked');
   assert.doesNotMatch(maintOnly.stdout, /== Performance ==/);
@@ -136,11 +139,11 @@ test('invalid checker selections exit 2 and name the valid checkers', (context) 
   const root = project(context, { 'tsconfig.json': tsconfig, 'a.ts': quietSource });
   const unknown = loadwise(root, '--only', 'perf,lint');
   assert.equal(unknown.code, 2);
-  assert.match(unknown.stderr, /Unknown --only name "lint"; use perf, maint, sec\./);
+  assert.match(unknown.stderr, /Unknown --only name "lint"; use perf, rel, maint, sec, a11y\./);
   const both = loadwise(root, '--only', 'perf', '--skip', 'maint');
   assert.equal(both.code, 2);
   assert.match(both.stderr, /Choose either --only or --skip\./);
-  assert.equal(loadwise(root, '--skip', 'perf,maint,sec').code, 2);
+  assert.equal(loadwise(root, '--skip', 'perf,rel,maint,sec,a11y').code, 2);
 });
 
 test('perf and sec selected together share one child whose envelope splits into two reports', (context) => {
@@ -227,7 +230,7 @@ test('--help documents check, every checker command and the selection flags', ()
   }
 });
 
-test('--min-impact reaches both checkers: it filters their findings and an invalid level exits 2', (context) => {
+test('--min-impact reaches the checkers: it filters their findings and an invalid level exits 2', (context) => {
   const root = project(context, { 'tsconfig.json': tsconfig, 'a.ts': slowSource });
   assert.equal(loadwise(root, 'check').code, 1);
   const critical = loadwise(root, 'check', '--min-impact', 'critical', '--json');

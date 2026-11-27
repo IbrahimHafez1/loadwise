@@ -8,7 +8,7 @@ import { classifyExecutionContext, isVendoredMinified } from '../../lib/shared/e
 import { checkDockerfile } from '../../lib/security/files/dockerfile.js';
 import { checkCompose } from '../../lib/security/files/compose.js';
 import { isCatastrophicPattern } from '../../lib/security/injection/redos.js';
-import { checkSwallowedErrors } from '../../lib/maintainability/swallowed-errors.js';
+import { checkSwallowedErrors } from '../../lib/reliability/swallowed-errors.js';
 import { configFilePaths } from '../../lib/maintainability/config-entry-points.js';
 
 function sourceOf(fileName: string, code: string) {

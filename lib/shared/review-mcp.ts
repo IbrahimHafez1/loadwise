@@ -69,8 +69,10 @@ const readName = 'loadwise_read_report';
 const checkName = 'loadwise_check';
 const checkerFlags = new Map([
   ['performance', 'perf'],
+  ['reliability', 'rel'],
   ['maintainability', 'maint'],
   ['security', 'sec'],
+  ['accessibility', 'a11y'],
 ]);
 const pageLength = 12000;
 const annotations = { readOnlyHint: true, openWorldHint: false };
@@ -178,7 +180,10 @@ async function freshReport(directory: string, args: ToolArguments, session: McpS
   if (Object.keys(args).some((key) => key !== 'checkers')) return toolText('Only checkers may be supplied.', true);
   const { checkers } = args;
   if (checkers !== undefined && !isCheckerList(checkers))
-    return toolText('Select one or more distinct checker names: performance, maintainability, security.', true);
+    return toolText(
+      'Select one or more distinct checker names: performance, reliability, maintainability, security, accessibility.',
+      true,
+    );
   const flags = checkers ? ['--only', checkers.map((name: string) => checkerFlags.get(name)).join(',')] : [];
   try {
     const event = await scanProject(directory, flags);

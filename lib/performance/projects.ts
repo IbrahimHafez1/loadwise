@@ -2,6 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
 import { analyzeFile } from './analyze.js';
+import { analyzeFile as analyzeReliabilityFile } from '../reliability/analyze.js';
+import { repositoryRoot, standaloneFindings } from '../reliability/standalone-sources.js';
+import { analyzeFile as analyzeAccessibilityFile } from '../accessibility/analyze.js';
+import { sourcePillarOf } from '../shared/rule-registry.js';
 import { withoutEmitOptions } from './emit-options.js';
 import { enableSchemaTooling } from './schema-tooling.js';
 import {
@@ -292,9 +296,14 @@ function uninstalledBaseConfigs(parsed: ParsedCommandLine): Diagnostic[] {
 }
 
 // Each analyzer is { pillar, analyzeFile(program, sourceFile, policy, forEachSourceCandidate) }.
-// With more than one, every finding is stamped with its analyzer's pillar so the caller can split
-// the report.
+// With more than one, every finding is stamped with its pillar (see sourcePillarOf) so the caller can
+// split the report. A lone analyzer leaves the split to each finding's rule id.
 const performanceAnalyzers: SourceAnalyzer[] = [{ pillar: 'performance', analyzeFile }];
+const reliabilityAnalyzer: SourceAnalyzer = { pillar: 'reliability', analyzeFile: analyzeReliabilityFile };
+// Reliability needs the performance analyzer too, for the reliability rules it still finds.
+const reliabilityAnalyzers: SourceAnalyzer[] = [...performanceAnalyzers, reliabilityAnalyzer];
+// Nothing of accessibility lives in the performance analyzer, so `loadwise a11y` runs this one alone.
+const accessibilityAnalyzer: SourceAnalyzer = { pillar: 'accessibility', analyzeFile: analyzeAccessibilityFile };
 
 interface AnalyzerRun {
   readonly program: Program;
@@ -333,7 +342,7 @@ function runAnalyzers({
     }
     for (const finding of analyzerFindings) {
       finding.file = relativeToWorkingDirectory(finding.file ?? source.fileName);
-      if (analyzers.length > 1) finding.pillar = analyzer.pillar;
+      if (analyzers.length > 1) finding.pillar = sourcePillarOf(finding.ruleId, analyzer.pillar);
       findings.push(finding);
     }
   }
@@ -380,6 +389,21 @@ function analyzeProgram({
   return { scannedFiles: scanned.size, findings: findings.sort(compareFindings) };
 }
 
+// Reliability rules that need no types also run on source files outside every analyzed program.
+function standaloneReliabilityFindings(
+  roots: ReadonlySet<string>,
+  scanned: ReadonlySet<string>,
+  analyzers: SourceScanOptions['analyzers'],
+): Finding[] {
+  if (!analyzers?.includes(reliabilityAnalyzer)) return [];
+  const findings = standaloneFindings(roots, (file) => scanned.has(canonicalFileName(file)));
+  for (const finding of findings) {
+    finding.file = relativeToWorkingDirectory(finding.file ?? '');
+    if (analyzers.length > 1) finding.pillar = sourcePillarOf(finding.ruleId, reliabilityAnalyzer.pillar);
+  }
+  return findings;
+}
+
 // `project` is one config or an array of them. `onlyFiles` limits the roots of each config to the changed files;
 // imports still resolve through the config.
 function analyzeSources({ project, files, policy, onlyFiles, analyzers, preRead }: SourceScanOptions): ScanResult {
@@ -389,6 +413,8 @@ function analyzeSources({ project, files, policy, onlyFiles, analyzers, preRead 
   const notedBases = new Set<string>();
   // Folders scanned with a config that leaves JavaScript out.
   const scopesWithoutJs = new Set<string>();
+  // Folders whose files no program may have analyzed, listed once the programs are done.
+  const standaloneRoots = new Set<string>();
   const referenceFindings = new Map<string, Finding>();
   const unresolvedPackages = new Set<string>();
   const skippedFiles: SkippedFile[] = [];
@@ -480,6 +506,7 @@ function analyzeSources({ project, files, policy, onlyFiles, analyzers, preRead 
       visitConfig(resolveConfig(ts.resolveProjectReferencePath(reference)), scope);
     }
     if (!parsed.options.allowJs && !onlyFiles) scopesWithoutJs.add(scope ?? path.dirname(filename));
+    standaloneRoots.add(scope ?? repositoryRoot(path.dirname(filename)));
     // The companion jsconfig only adds what the tsconfig left out.
     const isNew = (filename: string) => !companion || !scanned.has(canonicalFileName(path.resolve(filename)));
     scan(
@@ -520,6 +547,7 @@ function analyzeSources({ project, files, policy, onlyFiles, analyzers, preRead 
     if (!unresolvedPackages.has(packageName)) console.error(formatUninstalledDependencyNote(packageName));
   }
   for (const finding of referenceFindings.values()) findings.push(finding);
+  if (!files.length && !onlyFiles) findings.push(...standaloneReliabilityFindings(standaloneRoots, scanned, analyzers));
   return {
     scannedFiles: scanned.size,
     findings: findings.sort(compareFindings),
@@ -535,4 +563,7 @@ export {
   preReadSources,
   resolveConfig,
   performanceAnalyzers,
+  reliabilityAnalyzer,
+  reliabilityAnalyzers,
+  accessibilityAnalyzer,
 };

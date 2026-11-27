@@ -5,31 +5,44 @@ import path from 'node:path';
 import test, { type TestContext } from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { knownRules } from '../../lib/performance/rule-ids.js';
+import { pillarOfRule } from '../../lib/shared/rule-registry.js';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const bin = path.join(root, 'bin/loadwise.js');
 const fakeSubcommands = pathToFileURL(path.join(import.meta.dirname, 'fake-subcommands.js')).href;
 
-function run(args: string[], nodeOptions: string[] = []) {
-  return spawnSync(process.execPath, [...nodeOptions, bin, 'perf', ...args], { cwd: root, encoding: 'utf8' });
+function run(args: string[], nodeOptions: string[] = [], checker = 'perf') {
+  return spawnSync(process.execPath, [...nodeOptions, bin, checker, ...args], { cwd: root, encoding: 'utf8' });
 }
 
 function snapshotFile(context: TestContext, contents: object) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-subcommands-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-subcommands-'));
   context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const filename = path.join(directory, 'snapshot.json');
   fs.writeFileSync(filename, JSON.stringify(contents));
   return filename;
 }
 
-test('migrations and db dispatch to their modules with the remaining arguments', () => {
-  for (const command of ['migrations', 'db']) {
-    const result = run([command, '--json', 'extra'], ['--import', fakeSubcommands]);
+test('rel migrations and perf db dispatch to their modules with the remaining arguments', () => {
+  for (const [checker, command] of [
+    ['rel', 'migrations'],
+    ['perf', 'db'],
+  ]) {
+    const result = run([command, '--json', 'extra'], ['--import', fakeSubcommands], checker);
     assert.equal(result.status, 3, result.stderr);
     assert.equal(result.stderr, 'fake loaded: ' + command + '\n');
     assert.deepEqual(JSON.parse(result.stdout), { command, argv: ['--json', 'extra'] });
   }
+});
+
+test('perf migrations still dispatches, after a note naming rel migrations', () => {
+  const result = run(['migrations', '--json', 'extra'], ['--import', fakeSubcommands]);
+  assert.equal(result.status, 3, result.stderr);
+  assert.equal(
+    result.stderr,
+    'Note: `loadwise perf migrations` is now `loadwise rel migrations`.\nfake loaded: migrations\n',
+  );
+  assert.deepEqual(JSON.parse(result.stdout), { command: 'migrations', argv: ['--json', 'extra'] });
 });
 
 test('source scans never load the migrations or db modules', () => {
@@ -41,7 +54,8 @@ test('source scans never load the migrations or db modules', () => {
 test('usage lists the new commands and the schema flag', () => {
   const help = run(['--help']);
   assert.equal(help.status, 0, help.stderr);
-  assert.match(help.stdout, /loadwise perf migrations /);
+  assert.match(help.stdout, /moved to loadwise rel migrations and loadwise rel contracts/);
+  assert.match(run(['--help'], [], 'rel').stdout, /loadwise rel migrations /);
   assert.match(help.stdout, /loadwise perf db /);
   assert.match(help.stdout, /--schema snapshot\.json/);
 });
@@ -57,7 +71,7 @@ test('--ignore accepts index, migration, database and new source rule ids', () =
     'redis-command-in-loop',
     'password-hash-sync-in-async',
   ]) {
-    assert.ok(knownRules.has(ruleId), ruleId);
+    assert.ok(pillarOfRule(ruleId), ruleId);
   }
   const result = run(['examples/indexed.ts', '--ignore', 'migration-breaking-drop', '--ignore', 'db-missing-index']);
   assert.equal(result.status, 0, result.stderr);

@@ -13,9 +13,9 @@ function fixAllCommand(
   for (const name of values.workspace) inputs.push('--workspace', name);
   if (values.policy) inputs.push('--policy', values.policy);
   if (values['loadwise-config']) inputs.push('--loadwise-config', values['loadwise-config']);
-  if (command === 'perf') {
+  if (command === 'perf' || command === 'rel') {
     if (values.schema) inputs.push('--schema', values.schema);
-    const engine = values.with === 'sec' ? 'js' : values.native ? 'native' : values.engine;
+    const engine = values.with !== undefined ? 'js' : values.native ? 'native' : values.engine;
     if (engine) inputs.push('--engine', engine);
   }
   inputs.push(...files.map((file) => (file.startsWith('-') ? './' + file : file)));

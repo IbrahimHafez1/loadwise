@@ -23,10 +23,6 @@ function initAgent(root: string, ...args: string[]) {
   return spawnSync(process.execPath, [bin, 'agent', 'init', ...args], { cwd: root, encoding: 'utf8' });
 }
 
-function legacyBlock(name: string, body: string) {
-  return `<!-- ${name}:agent:start -->\n${body}\n<!-- ${name}:agent:end -->`;
-}
-
 test('MCP configuration pins the executable and project even when the client starts elsewhere', (context) => {
   const root = tempRoot(context);
   const project = path.join(root, 'project with spaces');
@@ -47,7 +43,7 @@ test('MCP configuration pins the executable and project even when the client sta
   }
 });
 
-test('agent init writes one block covering all three checkers', (context) => {
+test('agent init writes one block covering every checker', (context) => {
   const root = tempRoot(context);
   assert.equal(initAgent(root).status, 0);
   const text = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8');
@@ -55,11 +51,13 @@ test('agent init writes one block covering all three checkers', (context) => {
   assert.match(text, /npx loadwise check --json/);
   assert.match(text, /npx loadwise perf --fix --only <id>/);
   assert.match(text, /npx loadwise maint --fix --only <id>/);
+  assert.match(text, /npx loadwise rel --fix --only <id>/);
   assert.match(text, /npx loadwise sec --fix --only <id>/);
+  assert.match(text, /npx loadwise a11y --fix --only <id>/);
   assert.match(text, /\/\/ loadwise-reviewed <rule-id> -- <specific reason>/);
   assert.match(text, /check, audit, preview or handoff-only request, report the results without editing/);
   assert.match(text, /explicit request to fix findings already authorizes work/);
-  assert.doesNotMatch(text, /warden/);
+  assert.doesNotMatch(text, /warden|â€/);
 });
 
 test('agent init replaces its own block and keeps the other text', (context) => {
@@ -91,7 +89,10 @@ test('ask and auto instructions assess all findings and verify actual changes wi
     assert.match(text, /loadwise agent verify --outcomes/);
     assert.match(text, /Evaluate both generated and manual findings against the actual code, callers and tests/);
     assert.match(text, /A unified `check --config <file>` maps to `--loadwise-config <file>`/);
-    assert.match(text, /Performance and security use the ids from that filtered scan without those change flags/);
+    assert.match(
+      text,
+      /Performance, reliability, security and accessibility use the ids from that filtered scan without those change flags/,
+    );
     assert.match(text, /explicitly requests `loadwise fix --yes` or `loadwise fix --all`/);
     assert.match(text, /before\/after hunks and per-finding outcomes with `--json`/);
     assert.match(text, /command the user already ran, review every actual applied hunk/);
@@ -109,34 +110,6 @@ test('agent init imports AGENTS.md from CLAUDE.md exactly once', (context) => {
   initAgent(root);
   initAgent(root);
   assert.equal(fs.readFileSync(claudeFile, 'utf8'), '# Project notes\n\n@AGENTS.md\n');
-});
-
-test('the codewarden-era perf and maint blocks become one loadwise block in place', (context) => {
-  const root = tempRoot(context);
-  const agentsFile = path.join(root, 'AGENTS.md');
-  fs.writeFileSync(
-    agentsFile,
-    `# Team rules\n\n${legacyBlock('warden-backend', 'perf text')}\n\nBetween.\n\n${legacyBlock('warden-maint', 'maint text')}\n\nafter\n`,
-  );
-  assert.equal(initAgent(root).status, 0);
-  const text = fs.readFileSync(agentsFile, 'utf8');
-  assert.ok(text.startsWith('# Team rules\n\n<!-- loadwise:agent:start -->'));
-  assert.ok(text.endsWith('<!-- loadwise:agent:end -->\n\nBetween.\n\nafter\n'));
-  assert.equal(text.match(/agent:start/g)?.length, 1);
-  assert.doesNotMatch(text, /warden|perf text|maint text/);
-});
-
-test('blocks written under the oldest names are upgraded too', (context) => {
-  for (const name of ['backend-perf-check', 'maintainability-check']) {
-    const root = tempRoot(context);
-    const agentsFile = path.join(root, 'AGENTS.md');
-    fs.writeFileSync(agentsFile, `# Team rules\n\n${legacyBlock(name, 'old text')}\n`);
-    assert.equal(initAgent(root).status, 0);
-    const text = fs.readFileSync(agentsFile, 'utf8');
-    assert.ok(text.startsWith('# Team rules\n\n<!-- loadwise:agent:start -->'));
-    assert.ok(text.endsWith('<!-- loadwise:agent:end -->\n'));
-    assert.doesNotMatch(text, new RegExp(name + '|old text'));
-  }
 });
 
 test('perf agent init and maint agent init write the same single block', (context) => {

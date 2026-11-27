@@ -1,7 +1,7 @@
 {
   "name": "loadwise",
   "displayName": "Loadwise",
-  "description": "See backend performance and maintainability findings and suggested improvements as you edit.",
+  "description": "See performance, reliability, maintainability and accessibility findings and suggested improvements as you edit.",
   "publisher": "IbrahimHafez1",
   "version": "0.1.2",
   "license": "Apache-2.0",

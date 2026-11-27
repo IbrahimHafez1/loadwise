@@ -59,7 +59,7 @@ interface CoverageResult {
 }
 
 const usage =
-  'Usage: loadwise agent verify [--save] [--checker perf|maint|sec] --outcomes outcomes.json report.json [more-reports.json ...]';
+  'Usage: loadwise agent verify [--save] [--checker perf|rel|maint|sec|a11y] --outcomes outcomes.json report.json [more-reports.json ...]';
 const statuses = ['fixed', 'verified', 'intentional', 'false-positive', 'deferred'];
 const checkerNames = new Map(
   pillars.flatMap(({ name, jsonKey }): [string, string][] => [
@@ -173,7 +173,7 @@ function recordStandaloneScan(report: JsonRecord, source: string, state: VerifyS
   if (!checker) {
     checker = checkerNamed(declaredChecker(findings[0]));
     if (!checker || findings.some((finding: unknown) => checkerNamed(declaredChecker(finding)) === undefined))
-      throw new Error(source + ' needs --checker perf|maint|sec for an unlabelled standalone scan.');
+      throw new Error(source + ' needs --checker perf|rel|maint|sec|a11y for an unlabelled standalone scan.');
   }
   recordFindings(findings, source + '.findings', state, checker);
 }
@@ -280,7 +280,7 @@ function runAgentVerify(args: string[]): number {
   if (!values.outcomes || !positionals.length) throw new Error(usage);
   const selectedChecker = checkerNamed(values.checker?.[0]);
   if (values.checker && (!selectedChecker || values.checker.length !== 1))
-    throw new Error('Pass one checker name to --checker: perf, maint or sec.');
+    throw new Error('Pass one checker name to --checker: perf, rel, maint, sec or a11y.');
   const outcomesDocument = readJson(values.outcomes);
   const outcomes = requireArray(
     isRecord(outcomesDocument) ? outcomesDocument.outcomes : undefined,

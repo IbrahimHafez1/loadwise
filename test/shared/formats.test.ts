@@ -8,13 +8,14 @@ import { escapeData, escapeProperty, formatGithub } from '../../lib/shared/forma
 import { formatSarif } from '../../lib/shared/formats/sarif.js';
 import { resolveFormat, renderReports } from '../../lib/shared/formats/index.js';
 import * as performanceRules from '../../lib/performance/rule-ids.js';
+import * as reliabilityRules from '../../lib/reliability/rule-ids.js';
 import * as maintainabilityRules from '../../lib/maintainability/rule-ids.js';
 import type { Finding } from '../../lib/shared/types.js';
 import type { FormatReport, ReportEntry } from '../../lib/shared/types/report-formats.js';
 import type { SarifLog, SarifResult, SarifRule, SarifRun } from '../types/sarif.js';
 import type { TestContext } from 'node:test';
 import type { FileMap } from '../types/project-files.js';
-import { securityRules } from '../../lib/security/rule-ids.js';
+import { securityRules, polyglotRules as securityPolyglotRules } from '../../lib/security/rule-ids.js';
 import { descriptionByRule as securityDescriptions } from '../../lib/security/rule-descriptions.js';
 
 const { descriptionByRule } = performanceRules;
@@ -28,7 +29,6 @@ const root = path.resolve('/repo/app');
 const performanceReport: FormatReport = {
   findings: [
     { file: 'a.ts', line: 3, column: 5, ruleId: 'pg-query-in-loop', message: 'Slow. Detail.', id: 'aaa111' },
-    { file: 'b.ts', line: 1, column: 1, ruleId: 'pg-transaction-on-pool', message: 'Contract broken.', id: 'bbb222' },
     {
       file: 'c.ts',
       line: 2,
@@ -38,6 +38,11 @@ const performanceReport: FormatReport = {
       id: 'ccc333',
       contextualReason: 'test file',
     },
+  ],
+};
+const reliabilityReport: FormatReport = {
+  findings: [
+    { file: 'b.ts', line: 1, column: 1, ruleId: 'pg-transaction-on-pool', message: 'Contract broken.', id: 'bbb222' },
   ],
 };
 const maintainabilityReport: FormatReport = {
@@ -55,6 +60,7 @@ const maintainabilityReport: FormatReport = {
 };
 const entries: ReportEntry[] = [
   { pillar: 'performance', root, report: performanceReport },
+  { pillar: 'reliability', root, report: reliabilityReport },
   { pillar: 'maintainability', root, report: maintainabilityReport },
   { pillar: 'security', root, report: null },
 ];
@@ -72,7 +78,11 @@ function loadwise(directory: string, ...args: string[]) {
 }
 
 test('every rule with an impact level has a one-line description', () => {
-  for (const { impactByRule, descriptionByRule: descriptions } of [performanceRules, maintainabilityRules]) {
+  for (const { impactByRule, descriptionByRule: descriptions } of [
+    performanceRules,
+    reliabilityRules,
+    maintainabilityRules,
+  ]) {
     assert.deepEqual(Object.keys(descriptions).sort(), Object.keys(impactByRule).sort());
     for (const text of Object.values(descriptions)) assert.match(text, /^[^\n]{10,140}\.$/);
   }
@@ -87,8 +97,9 @@ test('a rule without a registered description is summarized by the first sentenc
 });
 
 test('SARIF registers every security rule and formats security findings at warning or note level', () => {
-  assert.deepEqual(Object.keys(securityDescriptions).sort(), [...securityRules].sort());
-  const findings = securityRules.map((ruleId): Finding => ({
+  const describedRules = [...securityRules, ...securityPolyglotRules];
+  assert.deepEqual(Object.keys(securityDescriptions).sort(), [...describedRules].sort());
+  const findings = describedRules.map((ruleId): Finding => ({
     file: 'a.ts',
     ruleId,
     message: 'Finding details.',
@@ -103,7 +114,7 @@ test('SARIF registers every security rule and formats security findings at warni
   }
   assert.deepEqual(
     run.tool.driver.rules.map(({ id }: SarifRule) => id),
-    securityRules,
+    describedRules,
   );
   assert.ok(run.results.slice(0, -1).every(({ level }) => level === 'warning'));
   assert.equal(run.results.at(-1)?.level, 'note');
@@ -117,20 +128,20 @@ test('github escaping follows the workflow command rules', () => {
 test('github annotations use warning, error for contract findings and notice for contextual ones', () => {
   assert.deepEqual(formatGithub(entries).split('\n'), [
     '::warning file=a.ts,line=3,col=5,title=pg-query-in-loop::Slow. Detail.',
-    '::error file=b.ts,line=1,col=1,title=pg-transaction-on-pool::Contract broken.',
     '::notice file=c.ts,line=2,col=2,title=pg-query-in-loop::Test.',
+    '::error file=b.ts,line=1,col=1,title=pg-transaction-on-pool::Contract broken.',
     '::error file=src/x.ts,line=9,col=1,title=folder-boundary::Boundary.',
   ]);
 });
 
 test('configured levels override the default and contextual levels in both CI formats', () => {
-  const findings: Finding[] = [
-    { ...performanceReport.findings[2], level: 'error' },
-    { ...performanceReport.findings[1], level: 'warn' },
+  // A contextual finding raised to error, and a contract finding lowered to a warning.
+  const configured: ReportEntry[] = [
+    { pillar: 'performance', root, report: { findings: [{ ...performanceReport.findings[1], level: 'error' }] } },
+    { pillar: 'reliability', root, report: { findings: [{ ...reliabilityReport.findings[0], level: 'warn' }] } },
   ];
-  const configured: ReportEntry[] = [{ pillar: 'performance', root, report: { findings } }];
   assert.deepEqual(
-    JSON.parse(formatSarif(configured)).runs[0].results.map(({ level }: SarifResult) => level),
+    JSON.parse(formatSarif(configured)).runs.map(({ results }: SarifRun) => results[0].level),
     ['error', 'warning'],
   );
   assert.match(formatGithub(configured), /^::error .*\n::warning /);
@@ -148,19 +159,29 @@ test('sarif has one run per reported pillar with rules, levels, locations and fi
   const sarif: SarifLog = JSON.parse(formatSarif(entries));
   assert.equal(sarif.version, '2.1.0');
   assert.match(sarif.$schema, /sarif-2\.1\.0/);
-  assert.equal(sarif.runs.length, 2);
-  const [performance, maintainability] = sarif.runs;
+  assert.equal(sarif.runs.length, 3);
+  const [performance, reliability, maintainability] = sarif.runs;
   assert.equal(performance.tool.driver.name, 'loadwise');
   assert.deepEqual(
     performance.tool.driver.rules.map(({ id }: SarifRule) => id),
-    ['pg-query-in-loop', 'pg-transaction-on-pool'],
+    ['pg-query-in-loop'],
   );
   assert.equal(performance.tool.driver.rules[0].helpUri, 'https://github.com/IbrahimHafez1/loadwise#pg-query-in-loop');
   assert.equal(performance.tool.driver.rules[0].shortDescription.text, descriptionByRule['pg-query-in-loop']);
   assert.deepEqual(
     performance.results.map(({ level }: SarifResult) => level),
-    ['warning', 'error', 'note'],
+    ['warning', 'note'],
   );
+  assert.equal(reliability.automationDetails.id, 'loadwise/reliability/');
+  assert.deepEqual(
+    reliability.tool.driver.rules.map(({ id }: SarifRule) => id),
+    ['pg-transaction-on-pool'],
+  );
+  assert.equal(
+    reliability.tool.driver.rules[0].shortDescription.text,
+    reliabilityRules.descriptionByRule['pg-transaction-on-pool'],
+  );
+  assert.equal(reliability.results[0].level, 'error');
   assert.deepEqual(performance.results[0].partialFingerprints, { 'loadwise/findingId/v1': 'aaa111' });
   assert.deepEqual(performance.results[0].locations[0].physicalLocation.region, { startLine: 3, startColumn: 5 });
   assert.equal(performance.results[0].locations[0].physicalLocation.artifactLocation.uri, 'a.ts');
@@ -223,7 +244,7 @@ test('check --format sarif prints one run per checker and keeps the exit code', 
   const sarif: SarifLog = JSON.parse(run.stdout);
   assert.deepEqual(
     sarif.runs.map((sarifRun: SarifRun) => sarifRun.automationDetails.id),
-    ['loadwise/performance/', 'loadwise/maintainability/', 'loadwise/security/'],
+    ['loadwise/performance/', 'loadwise/reliability/', 'loadwise/maintainability/', 'loadwise/security/'],
   );
   assert.equal(sarif.runs[0].results.length, 3);
   for (const result of sarif.runs[0].results) {

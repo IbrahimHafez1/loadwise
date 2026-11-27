@@ -189,6 +189,21 @@ const fixRationaleByRule: Readonly<Record<string, string>> = {
   'long-parameter-list': 'The parameters are grouped, so call sites name each value.',
   'duplicate-implementation': 'The duplicates share one implementation, so a change is made once.',
   'dependency-cycle': 'The shared piece moved out of the cycle, so the modules no longer import each other.',
+  'unused-import': 'The import was never used in this file, so removing it changes nothing at runtime.',
+  'unused-local-variable': 'The variable was never read and its initializer has no side effects, so it was removed.',
+  'stray-console': 'The message goes through the project logger, so it carries a level and the logger structure.',
+  'deprecated-node-api': 'The supported API replaces the deprecated call with the same result.',
+
+  // Reliability
+  'unguarded-boundary-access': 'Optional chaining yields undefined instead of throwing when the input lacks the value.',
+  'assignment-in-condition': 'The condition compares the values instead of assigning one to the other.',
+  'nan-comparison': 'Number.isNaN detects NaN, which no equality comparison can.',
+  'invalid-typeof-comparison': 'The comparison names a type typeof can return, so the branch can run.',
+  'unreachable-code': 'The statements after the exit could never run, so removing them changes nothing.',
+  'loop-index-past-length': 'The loop stops at the last valid index instead of reading one past the end.',
+  'file-handle-not-closed': 'The handle closes in finally, so an error no longer leaks the file descriptor.',
+  'query-runner-not-released': 'The runner is released in finally, so an error no longer keeps the pooled connection.',
+  'browser-not-closed': 'The browser closes in finally, so a failure no longer leaves the process running.',
 };
 
 export { fixRationaleByRule };

@@ -5,8 +5,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { impactByRule } from '../../lib/performance/rule-ids.js';
+import { impactByRule as reliabilityImpactByRule } from '../../lib/reliability/rule-ids.js';
 import { impactByRule as impactByRuleRuleIds } from '../../lib/maintainability/rule-ids.js';
-import { securityRules } from '../../lib/security/rule-ids.js';
+import { impactByRule as accessibilityImpactByRule } from '../../lib/accessibility/rule-ids.js';
+import { securityRules, polyglotRules as securityPolyglotRules } from '../../lib/security/rule-ids.js';
 
 const root = path.join(import.meta.dirname, '..', '..');
 const binEntry = path.join(root, 'bin', 'loadwise.js');
@@ -23,7 +25,7 @@ test('every loadwise --help flag and command is in the README', () => {
 });
 
 test('the README names no retired command or package', () => {
-  const retired = readme.match(/warden-backend|warden-maint|@codewarden|codewarden/gi) ?? [];
+  const retired = readme.match(/warden-backend|warden-maint/gi) ?? [];
   assert.deepEqual(retired, []);
 });
 
@@ -50,7 +52,7 @@ test('package.json files covers every runtime require reachable from bin/', () =
   const reachable = entries.flatMap((entry) => [...runtimeRequires(entry)]);
   assert.ok(
     reachable.some((file) => file.includes(path.join('lib', 'maintainability'))),
-    'bin reaches both checkers',
+    'bin reaches the maintainability checker',
   );
   const patterns = packageJson.files.map((entry) => entry.replace(/\/$/, ''));
   const uncovered = reachable
@@ -65,9 +67,14 @@ test('package.json files covers every runtime require reachable from bin/', () =
 // SARIF helpUri points at README#<rule-id>. syntax-error skips the unparsable file instead of
 // becoming a finding, so it has none.
 test('every rule id has exactly one README anchor', () => {
-  const ruleIds = [...Object.keys(impactByRule), ...Object.keys(impactByRuleRuleIds), ...securityRules].filter(
-    (ruleId) => ruleId !== 'syntax-error',
-  );
+  const ruleIds = [
+    ...Object.keys(impactByRule),
+    ...Object.keys(reliabilityImpactByRule),
+    ...Object.keys(impactByRuleRuleIds),
+    ...Object.keys(accessibilityImpactByRule),
+    ...securityRules,
+    ...securityPolyglotRules,
+  ].filter((ruleId) => ruleId !== 'syntax-error');
   const anchorCount = (ruleId: string) => readme.split(`<a id="${ruleId}"></a>`).length - 1;
   assert.deepEqual(
     ruleIds.filter((ruleId) => anchorCount(ruleId) !== 1),

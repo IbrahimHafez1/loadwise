@@ -10,15 +10,17 @@ import type { PillarName } from './types/pillar-name.js';
 import type { ChildRun, PillarDefinition, PillarRunOptions } from './types/checker-run.js';
 import { cachedRun } from './scan-cache.js';
 import { isRecord } from './is-record.js';
-import { knownRules } from '../performance/rule-ids.js';
-import { knownRules as knownRulesRuleIds } from '../maintainability/rule-ids.js';
-import { securityRules } from '../security/rule-ids.js';
+import { rulesByPillar } from './rule-registry.js';
 import { hasInfrastructureFiles } from '../security/files/index.js';
+import { hasFrontendSourcesInWorkspaces } from '../accessibility/frontend-detect.js';
 
-/** The reports of perf and sec when one child ran both. */
+/** The reports of the source checkers when one child ran them together. */
 interface SharedRun {
   reports: Partial<Record<PillarName, ChildRun | undefined>>;
 }
+
+/** The checkers that can share one type-checked Program through `--with`. */
+const sourcePillarNames: ReadonlySet<string> = new Set(['perf', 'rel', 'sec', 'a11y']);
 
 interface FindingsReport {
   findings: Finding[];
@@ -29,11 +31,8 @@ function isFindingsReport(value: unknown): value is FindingsReport {
   return isRecord(value) && Array.isArray(value.findings);
 }
 
-/** What perf and sec print together under `--with sec`. */
-interface SharedEnvelope {
-  performance: ChildRun;
-  security: ChildRun;
-}
+/** What the source checkers print together under `--with`: one run per selected checker. */
+type SharedEnvelope = Partial<Record<PillarName, ChildRun>>;
 
 function isChildRun(value: unknown): value is ChildRun {
   return (
@@ -44,8 +43,14 @@ function isChildRun(value: unknown): value is ChildRun {
   );
 }
 
-function isSharedEnvelope(value: unknown): value is SharedEnvelope {
-  return isRecord(value) && isChildRun(value.performance) && isChildRun(value.security);
+function isSharedEnvelope(value: unknown, keys: readonly PillarName[]): value is SharedEnvelope {
+  return isRecord(value) && keys.every((key) => isChildRun(value[key]));
+}
+
+// "performance and security", or "performance, reliability and security".
+function titleList(names: readonly string[]): string {
+  const titles = names.map((name) => pillars.find((pillar) => pillar.name === name)?.title.toLowerCase() ?? name);
+  return titles.length < 2 ? titles.join('') : `${titles.slice(0, -1).join(', ')} and ${titles[titles.length - 1]}`;
 }
 
 const cli = path.resolve(import.meta.dirname, '../../bin/loadwise.js');
@@ -58,7 +63,8 @@ function runChecker(args: readonly string[], cwd = process.cwd()): Promise<Child
 
 // Names the checker a child ran, for messages about it.
 function checkerLabel(args: readonly string[]): string {
-  if (args.includes('--with')) return 'performance and security checkers';
+  const withIndex = args.indexOf('--with');
+  if (withIndex >= 0) return `${titleList([args[0], ...(args[withIndex + 1] ?? '').split(',')])} checkers`;
   const pillar = pillars.find(({ name }) => name === args[0]);
   return `${pillar ? pillar.title.toLowerCase() : args[0]} checker`;
 }
@@ -112,17 +118,14 @@ function spawnChecker(args: readonly string[], cwd: string): Promise<ChildRun> {
   });
 }
 
-// With --changed-since, API contract breaks join the performance report: the same deploy-safety
+// With --changed-since, API contract breaks join the reliability report: the same deploy-safety
 // gate as migrations.
 async function withContractChecks(
   perfRun: ChildRun | undefined,
   { directory, contractFlags }: PillarRunOptions,
 ): Promise<ChildRun | undefined> {
   if (!contractFlags) return perfRun;
-  const contracts = await runChecker(
-    ['perf', 'contracts', ...contractFlags, '--report-root', process.cwd()],
-    directory,
-  );
+  const contracts = await runChecker(['rel', 'contracts', ...contractFlags, '--report-root', process.cwd()], directory);
   if (!perfRun) return contracts;
   const code = [perfRun.code, contracts.code].includes(invalidInputCode)
     ? invalidInputCode
@@ -162,25 +165,45 @@ function ownProject(directory: string) {
   return fs.existsSync(path.join(directory, 'jsconfig.json')) ? directory : config;
 }
 
-function runPerformance({ directory, flags, workspaces, relative }: PillarRunOptions): Promise<ChildRun | undefined> {
+// `command` is perf, rel or a11y, which run the same source check.
+function runSourceChecker(
+  command: 'perf' | 'rel' | 'a11y',
+  { directory, flags, workspaces, relative }: PillarRunOptions,
+): Promise<ChildRun | undefined> {
   const workspaceFlags = workspaces.flatMap((selector: string) => ['--workspace', selector]);
   const config = ownProject(directory);
-  if (config && !workspaces.length) return runChecker(['perf', '-p', relative(config), ...flags]);
-  // A monorepo root has no config of its own; perf then checks each package's config. A folder
-  // inside a package is checked with the ancestor config that covers it, and reports only its own
-  // files.
+  if (config && !workspaces.length) return runChecker([command, '-p', relative(config), ...flags]);
+  // A monorepo root has no config of its own; the checker then checks each package's config. A
+  // folder inside a package is checked with the ancestor config that covers it, and reports only its
+  // own files.
   if (
     workspaces.length ||
     discoverWorkspaces(directory).packages.length ||
     plainJavaScriptSources(directory) ||
     coveringConfig(directory)
   ) {
-    return runChecker(['perf', '-p', relative(directory), ...workspaceFlags, ...flags]);
+    return runChecker([command, '-p', relative(directory), ...workspaceFlags, ...flags]);
   }
   console.error(
-    `Note: no tsconfig.json or jsconfig.json in ${directory}, and no workspace package has one; skipped the performance checker.`,
+    `Note: no tsconfig.json or jsconfig.json in ${directory}, and no workspace package has one; skipped the ${titleList([command])} checker.`,
   );
   return Promise.resolve(undefined);
+}
+
+const noFrontendNote = (directory: string): string =>
+  `Note: no frontend sources (JSX, HTML, Vue, Svelte or Angular templates) in ${directory}; skipped the accessibility checker.`;
+
+// A project of plain markup has no tsconfig.json; the checker then reads its markup files alone.
+function runAccessibilityChecker(options: PillarRunOptions): Promise<ChildRun | undefined> {
+  if (!hasFrontendSourcesInWorkspaces(options.directory, options.workspaces)) {
+    console.error(noFrontendNote(options.directory));
+    return Promise.resolve(undefined);
+  }
+  const { directory, flags, workspaces, relative } = options;
+  const workspaceFlags = workspaces.flatMap((selector: string) => ['--workspace', selector]);
+  const config = ownProject(directory);
+  if (config && !workspaces.length) return runChecker(['a11y', '-p', relative(config), ...flags]);
+  return runChecker(['a11y', '-p', relative(directory), ...workspaceFlags, ...flags]);
 }
 
 function runSecurityDependencies({ directory, flags, relative }: PillarRunOptions): Promise<ChildRun> {
@@ -211,17 +234,25 @@ const pillars: PillarDefinition[] = [
     name: 'perf',
     title: 'Performance',
     jsonKey: 'performance',
-    ruleIds: () => knownRules,
+    ruleIds: () => rulesByPillar.performance.knownRules,
+    findingRoot: () => process.cwd(),
+    run: (options: PillarRunOptions) => runSourceChecker('perf', options),
+  },
+  {
+    name: 'rel',
+    title: 'Reliability',
+    jsonKey: 'reliability',
+    ruleIds: () => rulesByPillar.reliability.knownRules,
     findingRoot: () => process.cwd(),
     async run(options: PillarRunOptions) {
-      return withContractChecks(await runPerformance(options), options);
+      return withContractChecks(await runSourceChecker('rel', options), options);
     },
   },
   {
     name: 'maint',
     title: 'Maintainability',
     jsonKey: 'maintainability',
-    ruleIds: () => knownRulesRuleIds,
+    ruleIds: () => rulesByPillar.maintainability.knownRules,
     findingRoot: (directory: string) => directory,
     run: ({ directory, flags, workspaces, relative }) =>
       runChecker([
@@ -235,7 +266,7 @@ const pillars: PillarDefinition[] = [
     name: 'sec',
     title: 'Security',
     jsonKey: 'security',
-    ruleIds: () => new Set(securityRules),
+    ruleIds: () => rulesByPillar.security.knownRules,
     findingRoot: () => process.cwd(),
     run({ directory, flags, relative, workspaces, online }) {
       const config = ownProject(directory);
@@ -255,6 +286,15 @@ const pillars: PillarDefinition[] = [
       console.error(`Note: no tsconfig.json or jsconfig.json in ${directory}; skipped the security checker.`);
       return Promise.resolve(undefined);
     },
+  },
+  {
+    name: 'a11y',
+    title: 'Accessibility',
+    jsonKey: 'accessibility',
+    optional: true,
+    ruleIds: () => rulesByPillar.accessibility.knownRules,
+    findingRoot: () => process.cwd(),
+    run: (options: PillarRunOptions) => runAccessibilityChecker(options),
   },
 ];
 
@@ -292,29 +332,58 @@ function registeredRuleIds() {
   return new Set(pillars.flatMap((pillar) => [...pillar.ruleIds()]));
 }
 
-// perf and sec read the same project, so when both are selected one child type-checks it once and
-// prints both reports as { performance: { code, stdout }, security: { code, stdout } }. Resolves to
-// one run per selected pillar.
+// perf, rel and sec read the same project, so when two or more are selected one child type-checks it
+// once and prints every report as { performance: { code, stdout }, reliability: ..., security: ... }.
+// Resolves to one run per selected pillar.
 async function runPillars(
   selected: readonly PillarDefinition[],
   options: (pillar: PillarDefinition) => PillarRunOptions,
 ): Promise<(ChildRun | undefined)[]> {
-  const perf = selected.find(({ name }) => name === 'perf');
-  const security = selected.find(({ name }) => name === 'sec');
-  if (!perf || !security) return Promise.all(selected.map((pillar) => pillar.run(options(pillar))));
-  const perfOptions = options(perf);
-  const secOptions = options(security);
-  const sharedRun = runSharedSourceCheck(perfOptions, secOptions);
+  const shared = selected.filter(
+    (pillar) =>
+      sourcePillarNames.has(pillar.name) &&
+      (pillar.name !== 'a11y' || hasFrontendSourcesInWorkspaces(options(pillar).directory, options(pillar).workspaces)),
+  );
+  if (shared.length < 2) return Promise.all(selected.map((pillar) => pillar.run(options(pillar))));
+  const sharedRun = runSharedSourceCheck(shared, options);
   const runs = await Promise.all(
-    selected.map((pillar) =>
-      pillar.name === 'perf' || pillar.name === 'sec' ? sharedRun : pillar.run(options(pillar)),
-    ),
+    selected.map((pillar) => (shared.includes(pillar) ? sharedRun : pillar.run(options(pillar)))),
   );
   return runs.map((run, index) => (run && 'reports' in run ? run.reports[selected[index].jsonKey] : run));
 }
 
-async function runSharedSourceCheck(perfOptions: PillarRunOptions, secOptions: PillarRunOptions): Promise<SharedRun> {
-  const { directory, flags, relative, workspaces } = perfOptions;
+// Without a source config only the parts that need none still run: security's file checks, reliability's API
+// contract checks and accessibility's markup files.
+async function runWithoutSourceConfig(
+  shared: readonly PillarDefinition[],
+  options: (pillar: PillarDefinition) => PillarRunOptions,
+  directory: string,
+): Promise<SharedRun> {
+  const security = shared.find(({ name }) => name === 'sec');
+  const fileSecurity = security && runFileSecurity(options(security));
+  const needsConfig = shared.filter(({ name }) => name !== 'a11y').map(({ name }) => name);
+  const skipped = fileSecurity ? 'the source checks' : `the ${titleList(needsConfig)} checkers`;
+  console.error(`Note: no tsconfig.json or jsconfig.json in ${directory}; skipped ${skipped}.`);
+  const runs = await Promise.all(
+    shared.map((pillar) => {
+      if (pillar.name === 'sec') return fileSecurity;
+      if (pillar.name === 'rel') return withContractChecks(undefined, options(pillar));
+      if (pillar.name === 'a11y') return runAccessibilityChecker(options(pillar));
+      return undefined;
+    }),
+  );
+  return { reports: Object.fromEntries(shared.map((pillar, index) => [pillar.jsonKey, runs[index]])) };
+}
+
+async function runSharedSourceCheck(
+  shared: readonly PillarDefinition[],
+  options: (pillar: PillarDefinition) => PillarRunOptions,
+): Promise<SharedRun> {
+  // The child that runs the shared pass is a perf-engine command; security's own command does not take --with.
+  const primary = shared.find(({ name }) => name !== 'sec') ?? shared[0];
+  const others = shared.filter((pillar) => pillar !== primary);
+  const primaryOptions = options(primary);
+  const { directory, flags, relative, workspaces } = primaryOptions;
   const config = ownProject(directory);
   if (
     !workspaces.length &&
@@ -323,44 +392,50 @@ async function runSharedSourceCheck(perfOptions: PillarRunOptions, secOptions: P
     !plainJavaScriptSources(directory) &&
     !coveringConfig(directory)
   ) {
-    const fileSecurity = runFileSecurity(secOptions);
-    const skipped = fileSecurity ? 'the source checks' : 'the performance and security checkers';
-    console.error(`Note: no tsconfig.json or jsconfig.json in ${directory}; skipped ${skipped}.`);
-    const [performance, security] = await Promise.all([withContractChecks(undefined, perfOptions), fileSecurity]);
-    return { reports: { performance, security } };
+    return runWithoutSourceConfig(shared, options, directory);
   }
   const workspaceFlags = workspaces.flatMap((selector: string) => ['--workspace', selector]);
+  // Each pillar's options carry only its own --ignore ids, so the shared child receives all of them.
   const sharedFlags = [...flags];
-  const secFlags = secOptions.flags;
-  for (let index = 0; index < secFlags.length; index++) {
-    if (secFlags[index] === '--ignore') sharedFlags.push('--ignore', secFlags[++index]);
+  for (const other of others) {
+    const otherFlags = options(other).flags;
+    for (let index = 0; index < otherFlags.length; index++) {
+      if (otherFlags[index] === '--ignore') sharedFlags.push('--ignore', otherFlags[++index]);
+    }
   }
+  const security = shared.find(({ name }) => name === 'sec');
   const run = await runChecker([
-    'perf',
+    primary.name,
     '-p',
     relative(config && !workspaces.length ? config : directory),
     ...workspaceFlags,
     '--with',
-    'sec',
+    others.map(({ name }) => name).join(','),
     ...sharedFlags,
-    ...(secOptions.online ? ['--online'] : []),
+    ...(security && options(security).online ? ['--online'] : []),
   ]);
+  const keys = shared.map(({ jsonKey }) => jsonKey);
   const failed: ChildRun = { code: run.code === 0 ? invalidInputCode : run.code, stdout: '', stderr: run.stderr };
   let envelope: SharedEnvelope;
   try {
     const parsed: unknown = JSON.parse(run.stdout);
-    if (!isSharedEnvelope(parsed)) throw new Error('Malformed shared envelope.');
+    if (!isSharedEnvelope(parsed, keys)) throw new Error('Malformed shared envelope.');
     envelope = parsed;
   } catch {
-    return { reports: { performance: failed, security: { ...failed, stderr: '' } } };
+    return {
+      reports: Object.fromEntries(keys.map((key, index) => [key, index ? { ...failed, stderr: '' } : failed])),
+    };
   }
   // The child's warnings belong to the run once, so they print with the first report.
-  return {
-    reports: {
-      performance: await withContractChecks({ ...envelope.performance, stderr: run.stderr }, perfOptions),
-      security: { ...envelope.security, stderr: '' },
-    },
-  };
+  const reports = await Promise.all(
+    shared.map(async (pillar, index): Promise<ChildRun | undefined> => {
+      const report = envelope[pillar.jsonKey];
+      if (!report) return undefined;
+      const own: ChildRun = { ...report, stderr: index ? '' : run.stderr };
+      return pillar.name === 'rel' ? withContractChecks(own, options(pillar)) : own;
+    }),
+  );
+  return { reports: Object.fromEntries(keys.map((key, index) => [key, reports[index]])) };
 }
 
 export { pillarNames, pillars, registeredRuleIds, selectPillars, runPillars, runChecker };

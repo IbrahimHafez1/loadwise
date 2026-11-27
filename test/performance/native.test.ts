@@ -120,7 +120,7 @@ test(
 test('native CLI covers clean and flagged files, overlapping configs, and invalid inputs', { skip }, (context) => {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
-  const directory = fs.mkdtempSync(path.join(base, 'backend-perf-native-test-'));
+  const directory = fs.mkdtempSync(path.join(base, 'loadwise-native-test-'));
   const inputs = {
     'flag.ts':
       'export function check(keys: string[], payload: string) { const ids: string[] = JSON.parse(payload); return keys.map(key => ids.includes(key)); }',
@@ -159,7 +159,7 @@ test(
   (context) => {
     const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
     fs.mkdirSync(base, { recursive: true });
-    const directory = fs.mkdtempSync(path.join(base, 'backend-perf-native-fix-'));
+    const directory = fs.mkdtempSync(path.join(base, 'loadwise-native-fix-'));
     const inputs = {
       'serial.ts': [
         'declare function first(): Promise<number>;',
@@ -177,19 +177,19 @@ test(
       fs.rmdirSync(directory);
     });
     for (const [name, contents] of Object.entries(inputs)) fs.writeFileSync(path.join(directory, name), contents);
-    const run = (args: readonly string[]) =>
-      spawnSync(process.execPath, [bin, 'perf', ...args, '--json'], { cwd: directory, encoding: 'utf8' });
-    const native = JSON.parse(run(['--native', '-p', '.']).stdout);
-    assert.deepEqual(native, JSON.parse(run(['-p', '.']).stdout));
-    const fixedRules = native.findings
-      .filter((finding: Finding) => finding.fix)
-      .map((finding: Finding) => finding.ruleId);
+    const run = (checker: string, args: readonly string[]) =>
+      spawnSync(process.execPath, [bin, checker, ...args, '--json'], { cwd: directory, encoding: 'utf8' });
+    const fixedRules = ['perf', 'rel'].flatMap((checker) => {
+      const native = JSON.parse(run(checker, ['--native', '-p', '.']).stdout);
+      assert.deepEqual(native, JSON.parse(run(checker, ['-p', '.']).stdout));
+      return native.findings.filter((finding: Finding) => finding.fix).map((finding: Finding) => finding.ruleId);
+    });
     assert.deepEqual(fixedRules.sort(), ['http-call-without-timeout', 'serial-awaits-in-literal']);
   },
 );
 
 test('a missing `types` entry is noted on stderr instead of aborting the native scan', { skip }, (context) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-native-types-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-native-types-'));
   context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const compilerOptions = { types: ['vitest/globals'], module: 'commonjs', target: 'es2022' };
   fs.writeFileSync(path.join(directory, 'tsconfig.json'), JSON.stringify({ compilerOptions, include: ['index.ts'] }));

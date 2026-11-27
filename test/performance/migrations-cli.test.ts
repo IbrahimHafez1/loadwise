@@ -15,7 +15,7 @@ const OLD_MIGRATION = 'prisma/migrations/20240101_init/migration.sql';
 const NEW_MIGRATION = 'prisma/migrations/20240102_index/migration.sql';
 
 function temporaryProject(context: TestContext) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-migrations-cli-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-migrations-cli-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   write(root, 'package.json', '{"dependencies":{"@prisma/client":"6"}}');
   write(root, 'prisma/schema.prisma', '');
@@ -39,7 +39,7 @@ function migrations(cwd: string, ...args: string[]) {
   return { code: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 
-describe('loadwise perf migrations', () => {
+describe('loadwise rel migrations', () => {
   test('without a baseline every migration is enforced, with one stderr hint', (context) => {
     const root = temporaryProject(context);
     const { code, stdout, stderr } = migrations(root);
@@ -50,14 +50,14 @@ describe('loadwise perf migrations', () => {
     );
     assert.match(stdout, /1 migration file\(s\) checked, 1 finding\(s\)\./);
     assert.equal(stderr.trim().split('\n').length, 1);
-    assert.match(stderr, /All 1 migration file\(s\) are enforced\. Run `loadwise perf migrations --write-baseline`/);
+    assert.match(stderr, /All 1 migration file\(s\) are enforced\. Run `loadwise rel migrations --write-baseline`/);
   });
 
   test('--write-baseline accepts existing files; only new ones fail; old findings are contextual', (context) => {
     const root = temporaryProject(context);
     const written = migrations(root, '--write-baseline');
     assert.equal(written.code, 0);
-    assert.match(written.stdout, /Wrote 1 migration file\(s\) to backend-perf\.migrations-baseline\.json\./);
+    assert.match(written.stdout, /Wrote 1 migration file\(s\) to loadwise.migrations-baseline\.json\./);
 
     const accepted = migrations(root);
     assert.equal(accepted.code, 0);
@@ -97,7 +97,7 @@ describe('loadwise perf migrations', () => {
   });
 
   test('helper modules next to code migrations are neither counted nor baselined', (context) => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-perf-migrations-cli-'));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-migrations-cli-'));
     context.after(() => fs.rmSync(root, { recursive: true, force: true }));
     write(root, 'package.json', '{"dependencies":{"pg":"8","typeorm":"0.3"}}');
     write(
@@ -156,6 +156,6 @@ describe('loadwise perf migrations', () => {
   test('--help prints usage and exits 0', (context) => {
     const { code, stdout } = migrations(temporaryProject(context), '--help');
     assert.equal(code, 0);
-    assert.match(stdout, /^Usage:\n {2}loadwise perf migrations /);
+    assert.match(stdout, /^Usage:\n {2}loadwise rel migrations /);
   });
 });

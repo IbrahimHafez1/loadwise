@@ -5,10 +5,7 @@ import fs, { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import * as ts from 'typescript';
-import * as maintainabilityRuleIds from '../maintainability/rule-ids.js';
-import * as performanceRuleIds from '../performance/rule-ids.js';
-import { descriptionByRule } from '../security/rule-descriptions.js';
-import { impactByRule as impactByRuleRuleIds } from '../security/rule-ids.js';
+import { pillarOfRule, rulesByPillar } from './rule-registry.js';
 import { writeFileAtomic } from './atomic-write.js';
 import { createWhyCommentTools, formatComment, withoutComment } from './fix-presentation-comments.js';
 import { formatInChild, formatRanges, missingPrettierNote, scriptFile } from './fix-presentation-prettier.js';
@@ -37,17 +34,9 @@ import type {
 } from './types/fix-presentation.js';
 import type { FormattedHunk, FormattedUpdates, HunkedFileUpdate } from './types/fix-run.js';
 
-const checkers: RuleDescriptions[] = [
-  performanceRuleIds,
-  maintainabilityRuleIds,
-  {
-    impactByRule: impactByRuleRuleIds,
-    descriptionByRule: descriptionByRule,
-  },
-];
-
 function checkerFor(ruleId: string): RuleDescriptions | undefined {
-  return checkers.find(({ impactByRule }) => Object.hasOwn(impactByRule, ruleId));
+  const pillar = pillarOfRule(ruleId);
+  return pillar && rulesByPillar[pillar];
 }
 
 function loadTs(): TypeScript {

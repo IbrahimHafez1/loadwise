@@ -23,14 +23,23 @@ interface PolyglotScan {
 // fs.promises.realpath is the JS implementation; only the native one keeps Windows casing.
 const realpathNative = promisify(fs.realpath.native);
 
-const config = path.resolve(import.meta.dirname, '../../polyglot/performance/sgconfig.yml');
+const configByPillar = {
+  performance: path.resolve(import.meta.dirname, '../../polyglot/performance/sgconfig.yml'),
+  reliability: path.resolve(import.meta.dirname, '../../polyglot/reliability/sgconfig.yml'),
+};
 const extensions = new Set(['.py', '.go', '.java', '.cs', '.rs']);
 const excludedDirectories =
   '!**/{node_modules,dist,build,coverage,.next,.nuxt,.venv,venv,__pycache__,.cache,.turbo,target,vendor,.worktrees}';
 
 async function retryRules(configPath: string, language: string) {
   const name = language.toLowerCase();
-  const rule = await fs.promises.readFile(path.join(path.dirname(configPath), 'rules', name + '.yml'), 'utf8');
+  // A rule set may cover fewer languages than the scan globs, so a language without rules retries the parse check alone.
+  const rule = await fs.promises
+    .readFile(path.join(path.dirname(configPath), 'rules', name + '.yml'), 'utf8')
+    .catch((error: unknown) => {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return '';
+      throw error;
+    });
   const error = {
     id: 'polyglot-parse-error-' + name,
     language,
@@ -199,9 +208,12 @@ async function scanPolyglot(configPath: string, paths: readonly string[]): Promi
   return { scannedFiles: scanned.size, skippedFiles: 0, findings: unique };
 }
 
-/** Run ast-grep polyglot performance checks on the given files or directories. */
-async function checkPolyglot(paths: readonly string[]): Promise<PolyglotScan> {
-  return scanPolyglot(config, paths);
+/** Run the ast-grep polyglot performance or reliability checks on the given files or directories. */
+async function checkPolyglot(
+  paths: readonly string[],
+  pillar: keyof typeof configByPillar = 'performance',
+): Promise<PolyglotScan> {
+  return scanPolyglot(configByPillar[pillar], paths);
 }
 
 export { checkPolyglot, scanPolyglot };

@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { exampleFor as performanceExample } from '../../editor/performance-examples.cjs';
+import { exampleFor as reliabilityExample } from '../../editor/reliability-examples.cjs';
 import { exampleFor as maintainabilityExample } from '../../editor/maintainability-examples.cjs';
 import { exampleFor as securityExample } from '../../editor/security-examples.cjs';
+import { exampleFor as accessibilityExample } from '../../editor/accessibility-examples.cjs';
 import { hotPathLabel } from '../shared/hot-path.js';
 import { getFindingComparison, inlineComparison } from '../../editor/finding-comparison.cjs';
 import type { Finding } from '../shared/types.js';
@@ -18,6 +19,10 @@ const languageIds: Record<string, string> = {
   mts: 'typescript',
   cts: 'typescript',
   tsx: 'typescriptreact',
+  html: 'html',
+  htm: 'html',
+  vue: 'vue',
+  svelte: 'svelte',
   py: 'python',
   go: 'go',
   java: 'java',
@@ -44,7 +49,12 @@ const controlCharacters = /[\p{Cc}\p{Zl}\p{Zp}]/gu;
 const invalidFilename = /[\p{Cc}\p{Zl}\p{Zp}]| \| \d+ \| \d+ \| \d+ \| (?:error|warning) \| [a-z0-9-]+ \| /u;
 
 function sourceExample(ruleId: string, languageId: string, message: string) {
-  return performanceExample(ruleId, languageId, message) ?? securityExample(ruleId, languageId);
+  // Reliability examples fall back to the performance ones, so one lookup covers the shared source pass.
+  return (
+    reliabilityExample(ruleId, languageId, message) ??
+    securityExample(ruleId, languageId) ??
+    accessibilityExample(ruleId, languageId)
+  );
 }
 
 function inside(root: string, file: string): boolean {
@@ -159,7 +169,7 @@ function formatFinding(
   const parts = messageParts(finding, message, example, comparison);
   const tokenLength = /^[\p{L}\p{N}_$]+/u.exec(text.slice(offset))?.[0].length ?? 1;
   return [
-    'BACKEND_CHECKER',
+    'LOADWISE',
     path.relative(root, filename),
     line,
     offset + 1,

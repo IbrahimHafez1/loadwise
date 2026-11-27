@@ -66,7 +66,7 @@ model Payment {
   account   Account @relation(fields: [accountTenant, accountId], references: [tenantId, id])
 }`;
     const findingsFor = (provider: string) => {
-      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'perf-check-fk-'));
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-fk-'));
       try {
         fs.mkdirSync(path.join(root, 'prisma'));
         fs.writeFileSync(path.join(root, 'package.json'), '{}');

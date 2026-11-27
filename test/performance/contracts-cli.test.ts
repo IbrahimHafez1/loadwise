@@ -13,7 +13,7 @@ interface ContractsReport {
 }
 
 interface CheckReport {
-  performance: ContractsReport;
+  reliability: ContractsReport;
   security?: ContractsReport | null;
 }
 
@@ -61,7 +61,7 @@ function repository(context: TestContext, before: FileMap, after: FileMap) {
 }
 
 function contracts(root: string, ...args: string[]) {
-  const run = spawnSync(process.execPath, [BIN, 'perf', 'contracts', '--changed-since', 'HEAD', '--json', ...args], {
+  const run = spawnSync(process.execPath, [BIN, 'rel', 'contracts', '--changed-since', 'HEAD', '--json', ...args], {
     cwd: root,
     encoding: 'utf8',
   });
@@ -113,7 +113,7 @@ function openApi(overrides = {}) {
   );
 }
 
-describe('loadwise perf contracts: OpenAPI', () => {
+describe('loadwise rel contracts: OpenAPI', () => {
   test('flags removed operations, response fields, new required inputs, type changes and removed enum values', (context) => {
     const next = JSON.parse(openApi());
     delete next.paths['/users'].delete;
@@ -225,7 +225,7 @@ describe('loadwise perf contracts: OpenAPI', () => {
   });
 });
 
-describe('loadwise perf contracts: GraphQL SDL', () => {
+describe('loadwise rel contracts: GraphQL SDL', () => {
   test('removing defaults makes non-null inputs required but keeps nullable inputs optional', (context) => {
     const old = 'type Query { f(limit: Int! = 1, optional: Int = 1): Int } input Options { active: Boolean! = true }';
     const next = 'type Query { f(limit: Int!, optional: Int): Int } input Options { active: Boolean! }';
@@ -293,7 +293,7 @@ describe('loadwise perf contracts: GraphQL SDL', () => {
   });
 });
 
-describe('loadwise perf contracts: NestJS DTOs', () => {
+describe('loadwise rel contracts: NestJS DTOs', () => {
   const controller = `
     import { Body, Controller, Get, Post } from '@nestjs/common';
     import { CreateUserDto, UserDto } from './dto';
@@ -348,7 +348,7 @@ describe('loadwise perf contracts: NestJS DTOs', () => {
   });
 });
 
-describe('loadwise perf contracts: DTO unknown input and inheritance', () => {
+describe('loadwise rel contracts: DTO unknown input and inheritance', () => {
   const controller = `
     import { Body, Controller, Post } from '@nestjs/common';
     import { CreateDto } from './dto';
@@ -399,10 +399,10 @@ describe('loadwise perf contracts: DTO unknown input and inheritance', () => {
   });
 });
 
-describe('loadwise perf contracts: command line and check', () => {
+describe('loadwise rel contracts: command line and check', () => {
   test('an unresolvable ref exits 2 with a hint', (context) => {
     const root = repository(context, { 'a.txt': 'x' }, {});
-    const run = spawnSync(process.execPath, [BIN, 'perf', 'contracts', '--changed-since', 'no-such-ref'], {
+    const run = spawnSync(process.execPath, [BIN, 'rel', 'contracts', '--changed-since', 'no-such-ref'], {
       cwd: root,
       encoding: 'utf8',
     });
@@ -414,7 +414,7 @@ describe('loadwise perf contracts: command line and check', () => {
     const next = JSON.parse(openApi());
     delete next.paths['/users'].delete;
     const root = repository(context, { 'openapi.json': openApi() }, { 'openapi.json': JSON.stringify(next, null, 2) });
-    const run = spawnSync(process.execPath, [BIN, 'perf', 'contracts', '--changed-since', 'HEAD'], {
+    const run = spawnSync(process.execPath, [BIN, 'rel', 'contracts', '--changed-since', 'HEAD'], {
       cwd: root,
       encoding: 'utf8',
     });
@@ -426,7 +426,7 @@ describe('loadwise perf contracts: command line and check', () => {
     assert.match(run.stdout, /1 file\(s\) compared, 1 breaking change\(s\)\./);
   });
 
-  test('check --changed-since adds contract findings to the performance report', (context) => {
+  test('check --changed-since adds contract findings to the reliability report', (context) => {
     const next = JSON.parse(openApi());
     delete next.paths['/users'].delete;
     const root = repository(
@@ -441,7 +441,7 @@ describe('loadwise perf contracts: command line and check', () => {
     assert.equal(run.status, 1, run.stderr);
     const report = parseCheckReport(run.stdout);
     assert.deepEqual(
-      report.performance.findings.map(({ ruleId }) => ruleId),
+      report.reliability.findings.map(({ ruleId }) => ruleId),
       ['api-removed-operation'],
     );
   });
@@ -464,14 +464,14 @@ describe('loadwise perf contracts: command line and check', () => {
     }
     const root = repository(context, original, changed);
     const check = (...args: string[]) =>
-      spawnSync(process.execPath, [BIN, 'check', '--only', 'perf,sec', '--changed-since', 'HEAD', '--json', ...args], {
+      spawnSync(process.execPath, [BIN, 'check', '--only', 'rel,sec', '--changed-since', 'HEAD', '--json', ...args], {
         cwd: root,
         encoding: 'utf8',
       });
     const scoped = check('--workspace', 'other', '--min-impact', 'critical');
     assert.equal(scoped.status, 1, scoped.stderr);
     assert.deepEqual(
-      parseCheckReport(scoped.stdout).performance.findings.map(({ file, ruleId }) => [file, ruleId]),
+      parseCheckReport(scoped.stdout).reliability.findings.map(({ file, ruleId }) => [file, ruleId]),
       [['packages/other/openapi.json', 'api-removed-operation']],
     );
     write(
@@ -485,7 +485,7 @@ describe('loadwise perf contracts: command line and check', () => {
     const warnings = check('--ignore', 'api-removed-operation');
     assert.equal(warnings.status, 0, warnings.stderr);
     assert.deepEqual(
-      parseCheckReport(warnings.stdout).performance.findings.map(({ file, ruleId, level }) => [file, ruleId, level]),
+      parseCheckReport(warnings.stdout).reliability.findings.map(({ file, ruleId, level }) => [file, ruleId, level]),
       [['packages/other/openapi.json', 'api-removed-field', 'warn']],
     );
   });
@@ -519,9 +519,9 @@ describe('loadwise perf contracts: command line and check', () => {
     }
 
     const report = parseCheckReport(check('--json'));
-    assert.deepEqual(report.performance.findings, [{ ...finding, file: contract }]);
+    assert.deepEqual(report.reliability.findings, [{ ...finding, file: contract }]);
     const sarif = JSON.parse(check('--format', 'sarif'));
-    const [result] = sarif.runs[0].results;
+    const [result] = sarif.runs.flatMap((run: { results: unknown[] }) => run.results);
     assert.equal(result.locations[0].physicalLocation.artifactLocation.uri, contract);
     assert.match(check(), /^services\/api\/openapi\.json:\d+:\d+ /m);
   });
@@ -530,13 +530,13 @@ describe('loadwise perf contracts: command line and check', () => {
     const next = JSON.parse(openApi());
     delete next.paths['/users'].delete;
     const root = repository(context, { 'openapi.json': openApi() }, { 'openapi.json': JSON.stringify(next, null, 2) });
-    const run = spawnSync(process.execPath, [BIN, 'check', '--only', 'perf,sec', '--changed-since', 'HEAD', '--json'], {
+    const run = spawnSync(process.execPath, [BIN, 'check', '--only', 'rel,sec', '--changed-since', 'HEAD', '--json'], {
       cwd: root,
       encoding: 'utf8',
     });
     assert.equal(run.status, 1, run.stderr);
-    const { performance, security } = parseCheckReport(run.stdout);
-    assert.equal(performance.findings[0].ruleId, 'api-removed-operation');
+    const { reliability, security } = parseCheckReport(run.stdout);
+    assert.equal(reliability.findings[0].ruleId, 'api-removed-operation');
     assert.equal(security, null);
   });
 });

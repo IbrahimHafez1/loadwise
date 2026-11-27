@@ -1,11 +1,9 @@
-import { knownRules as performanceRules } from '../performance/rule-ids.js';
-import { knownRules as maintainabilityRules } from '../maintainability/rule-ids.js';
-import { securityRules } from '../security/rule-ids.js';
+import { pillarOrder, rulesByPillar } from './rule-registry.js';
 
-const pillarNames: readonly string[] = ['perf', 'maint', 'sec'];
+const pillarNames: readonly string[] = ['perf', 'rel', 'maint', 'sec', 'a11y'];
 
 function registeredRuleIds(): Set<string> {
-  return new Set([...performanceRules, ...maintainabilityRules, ...securityRules]);
+  return new Set(pillarOrder.flatMap((pillar) => [...rulesByPillar[pillar].knownRules]));
 }
 
 export { pillarNames, registeredRuleIds };

@@ -183,7 +183,7 @@ async function until(predicate: () => unknown, what: string) {
 function startExtension(performanceCliSource: string) {
   if (!hasModuleLoader(Module)) throw new Error('Module._load is unavailable');
   const moduleLoader = Module;
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'backend-checkers-extension-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-extension-'));
   fs.writeFileSync(path.join(root, 'tsconfig.json'), '{}');
   fs.writeFileSync(path.join(root, 'a.ts'), 'readFileSync(name);\n');
   const performanceCli = path.join(root, 'perf-cli.cjs');

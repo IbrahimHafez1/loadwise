@@ -1,4 +1,4 @@
-// `loadwise perf migrations ...`: static migration safety checks. Never connects to a database.
+// `loadwise rel migrations ...`: static migration safety checks. Never connects to a database.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -22,7 +22,7 @@ import { checkPostgresUnit, createPostgresRegistry } from './rules-postgres.js';
 import { assignFindingIds } from '../finding-ids.js';
 import { findingLabel } from '../finding-text.js';
 import { findProjectRoot } from '../schema/context.js';
-import { impactByRule } from '../rule-ids.js';
+import { impactByRule } from '../../reliability/rule-ids.js';
 import {
   annotateImpact,
   filterMinImpact,
@@ -41,7 +41,7 @@ interface MigrationsResult {
 }
 
 const usage = `Usage:
-  loadwise perf migrations [paths...] [--changed-since <git-ref>] [--baseline <file>] [--write-baseline] [--dialect postgres|mysql] [--json] [--include-contextual] [--ignore rule-id] [--min-impact low|medium|high|critical]
+  loadwise rel migrations [paths...] [--changed-since <git-ref>] [--baseline <file>] [--write-baseline] [--dialect postgres|mysql] [--json] [--include-contextual] [--ignore rule-id] [--min-impact low|medium|high|critical]
 
 With no paths, find Prisma, Drizzle, TypeORM, Knex and Sequelize migrations under the current directory.
 Only new migrations fail. --changed-since <ref> enforces files added or modified since the merge base of <ref> and HEAD, plus untracked files.
@@ -119,7 +119,7 @@ function selectPolicy(values: MigrationOptions, cwd: string, fileCount: number):
     throw new Error(`Migration baseline not found: ${values.baseline}. Create it with --write-baseline.`);
   }
   console.error(
-    `All ${fileCount} migration file(s) are enforced. Run \`loadwise perf migrations --write-baseline\` to accept the existing ones, or use \`--changed-since origin/main\` in CI.`,
+    `All ${fileCount} migration file(s) are enforced. Run \`loadwise rel migrations --write-baseline\` to accept the existing ones, or use \`--changed-since origin/main\` in CI.`,
   );
   return enforceAllPolicy();
 }

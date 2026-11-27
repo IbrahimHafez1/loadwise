@@ -27,18 +27,17 @@ const bin = path.resolve(import.meta.dirname, '../../bin/loadwise.js');
 test('source fail-on thresholds apply after ignores while JSON keeps all remaining findings', (context) => {
   const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
   fs.mkdirSync(base, { recursive: true });
-  const directory = fs.mkdtempSync(path.join(base, 'backend-perf-threshold-'));
+  const directory = fs.mkdtempSync(path.join(base, 'loadwise-threshold-'));
   const pgDirectory = path.join(directory, 'node_modules', 'pg');
   fs.mkdirSync(pgDirectory, { recursive: true });
   const files = {
     'node_modules/pg/index.d.ts': 'export class Pool { query(sql: string): Promise<unknown> }',
     'service.ts': [
       "import { Pool } from 'pg';",
-      "import { readFileSync } from 'node:fs';",
       'const pool = new Pool();',
       'export async function handle() {',
       "  await pool.query('BEGIN');",
-      "  readFileSync('example');",
+      "  pool.query('SELECT 1');",
       '}',
     ].join('\n'),
     'invalid.json': JSON.stringify({ prismaScopes: {} }),
@@ -48,12 +47,13 @@ test('source fail-on thresholds apply after ignores while JSON keeps all remaini
     for (const name of Object.keys(files)) fs.unlinkSync(path.join(directory, name));
     for (const target of [pgDirectory, path.dirname(pgDirectory), directory]) fs.rmdirSync(target);
   });
-  function run(args: string[]) {
-    return spawnSync(process.execPath, [bin, 'perf', ...args], { cwd: directory, encoding: 'utf8' });
+  // pg-transaction-on-pool is a reliability contract rule; performance has no contract rules of its own.
+  function run(args: string[], checker = 'rel') {
+    return spawnSync(process.execPath, [bin, checker, ...args], { cwd: directory, encoding: 'utf8' });
   }
   const sourceArgs = ['service.ts', '--json'];
   const transaction = 'pg-transaction-on-pool',
-    advisory = 'node-sync-fs-in-async';
+    advisory = 'floating-promise';
   const thresholdCases: ThresholdCase[] = [
     { threshold: 'all', ignored: [], status: 1, expected: [transaction, advisory] },
     { threshold: 'contract', ignored: [], status: 1, expected: [transaction, advisory] },
@@ -80,11 +80,13 @@ test('source fail-on thresholds apply after ignores while JSON keeps all remaini
     { args: ['service.ts', '--fail-on', 'other'], error: /--fail-on/ },
     { args: ['service.ts', '--fail-on', 'contract', '--policy', 'invalid.json'], error: /query policy|prismaScopes/i },
     { args: ['service.ts', '--fail-on', 'contract', '--ignore', 'missing-rule'], error: /Unknown source rule/ },
-    { args: ['traces', 'example.json', '--fail-on', 'contract'], error: /--fail-on/ },
   ];
   for (const { args, error } of usageErrorCases) {
     const result = run(args);
     assert.equal(result.status, 2, result.stderr);
     assert.match(result.stderr, error);
   }
+  const traces = run(['traces', 'example.json', '--fail-on', 'contract'], 'perf');
+  assert.equal(traces.status, 2, traces.stderr);
+  assert.match(traces.stderr, /--fail-on/);
 });

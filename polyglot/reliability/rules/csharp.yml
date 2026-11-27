@@ -1,0 +1,65 @@
+# Any method with an async modifier and a void return type is reported, whatever its access modifiers. Event handlers are
+# excluded by shape: exactly two parameters whose second type ends in EventArgs.
+id: csharp-async-void
+language: CSharp
+severity: warning
+message: async void methods cannot be awaited and crash the process on unhandled exceptions. Return Task instead.
+rule:
+  all:
+    - kind: method_declaration
+    - has: { kind: modifier, regex: '^async$' }
+    - not: { has: { kind: modifier, regex: '^override$' } }
+    - has: { field: returns, regex: '^void$' }
+    - not:
+        has:
+          field: parameters
+          all:
+            - has:
+                kind: parameter
+                nthChild: 2
+                has: { field: type, regex: 'EventArgs$' }
+            - not: { has: { kind: parameter, nthChild: 3 } }
+
+---
+# Test sources are ignored. `using var x = ...` and `using (var x = ...)` do not match. HttpClient is deliberately not
+# listed because it is meant to be reused. A declaration is skipped when a later statement in the same block returns the
+# variable, passes it to a constructor (ownership transfer), assigns it elsewhere, or when a try/finally follows.
+id: csharp-disposable-without-using
+language: CSharp
+severity: warning
+message: This stream or database connection is never disposed if an exception is thrown. Declare it with `using var` or a using statement.
+ignores: ['**/*Test.cs', '**/*Tests.cs', '**/*.Tests/**', '**/*.Test/**']
+rule:
+  all:
+    - kind: local_declaration_statement
+    - not:
+        regex: '^(await\s+)?using\b'
+    - has:
+        kind: variable_declaration
+        has:
+          kind: variable_declarator
+          all:
+            - has: { field: name, pattern: $VAR }
+            - has:
+                kind: object_creation_expression
+                has:
+                  field: type
+                  regex: '^(FileStream|StreamReader|StreamWriter|BinaryReader|BinaryWriter|SqlConnection|NpgsqlConnection|MySqlConnection|SqliteConnection)$'
+    - not:
+        precedes:
+          stopBy: end
+          any:
+            - kind: return_statement
+              has: { stopBy: end, pattern: $VAR }
+            - kind: using_statement
+              has: { stopBy: end, pattern: $VAR }
+            - kind: try_statement
+              has: { kind: finally_clause, has: { stopBy: end, pattern: $VAR } }
+            - has:
+                stopBy: end
+                kind: object_creation_expression
+                has: { kind: argument_list, has: { stopBy: end, pattern: $VAR } }
+            - has:
+                stopBy: end
+                kind: assignment_expression
+                has: { field: right, pattern: $VAR }

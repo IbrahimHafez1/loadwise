@@ -1,0 +1,34 @@
+# .unwrap() is ignored in test items (#[test], tokio::test, test_case, rstest, cfg(test), cfg(all(test, ..))), files with an inner #![cfg(test)], tests/, tests.rs, *_test.rs, benches/, examples/ and build.rs, in static and const
+# initializers, and on lock()/read()/write() (lock poisoning is conventionally a panic).
+id: rust-unwrap-in-production
+language: Rust
+severity: warning
+message: unwrap() panics on None or Err and takes the whole thread down in production. Propagate with ?, or use expect with a reason or an explicit fallback.
+ignores: ['**/tests/**', '**/tests.rs', '**/*_test.rs', '**/benches/**', '**/examples/**', '**/build.rs']
+rule:
+  all:
+    - pattern: $RECV.unwrap()
+    - not:
+        any:
+          - pattern: $LOCK.lock().unwrap()
+          - pattern: $LOCK.read().unwrap()
+          - pattern: $LOCK.write().unwrap()
+    - not:
+        inside:
+          kind: source_file
+          has: { kind: inner_attribute_item, regex: '^#!\[cfg\(test\)\]$' }
+          stopBy: end
+    - not:
+        inside:
+          any: [{ kind: static_item }, { kind: const_item }]
+          stopBy: end
+    - not:
+        inside:
+          any: [{ kind: function_item }, { kind: mod_item }, { kind: impl_item }]
+          stopBy: end
+          follows:
+            all:
+              - kind: attribute_item
+              - regex: '^#\[(cfg\(test\)|cfg\(all\(test\b.*\)\)|test|[\w:]+::test(\(.*\))?|test_case\(.*\)|rstest(\(.*\))?|wasm_bindgen_test(\(.*\))?|bench|quickcheck)\]$'
+            stopBy:
+              not: { kind: attribute_item }

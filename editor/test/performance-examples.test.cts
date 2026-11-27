@@ -4,6 +4,7 @@ import path from 'node:path';
 import test from 'node:test';
 import ts from 'typescript';
 import { exampleFor } from '../performance-examples.cjs';
+import { exampleFor as reliabilityExampleFor } from '../reliability-examples.cjs';
 import type { FixExample } from '../types/fix-example.cjs';
 
 const root = path.resolve(__dirname, '../..');
@@ -42,9 +43,12 @@ function parseDiagnostics(code: string, language: string) {
 
 test('each CLI source rule has a syntactically valid hover example', async () => {
   const { sourceRules } = await import('../../lib/performance/rule-ids.js');
+  const reliability = await import('../../lib/reliability/rule-ids.js');
   assert.ok(sourceRules.length > 0);
-  for (const id of sourceRules) {
-    const { code, language } = exampleOf(id, 'javascript');
+  for (const id of [...sourceRules, ...reliability.sourceRules]) {
+    const example = reliabilityExampleFor(id, 'javascript');
+    assert.ok(example, id + ' has no example');
+    const { code, language } = example;
     assert.ok(code.length, id);
     if (language === 'sql') continue;
     // Frontend rules show JSX or decorators, so their examples are tsx or typescript; the rest stay
@@ -56,16 +60,18 @@ test('each CLI source rule has a syntactically valid hover example', async () =>
 
 test('every known rule and every plan or trace rule has a compact example', async () => {
   const { knownRules } = await import('../../lib/performance/rule-ids.js');
-  for (const id of [...knownRules, ...planAndTraceRules]) {
-    const example = exampleFor(id, 'typescript');
+  const { sourceRules } = await import('../../lib/reliability/rule-ids.js');
+  for (const id of [...knownRules, ...sourceRules, ...planAndTraceRules]) {
+    // The reliability examples fall back to the performance ones, so they cover both pillars.
+    const example = reliabilityExampleFor(id, 'typescript');
     assert.ok(example?.code, id + ' has no example');
     assert.ok(example.code.split(String.fromCharCode(10)).length <= 6, id + ' example is longer than six lines');
   }
 });
 
 test('plan, trace, index and migration examples show a before and an after that parse', async () => {
-  const { indexRules, migrationRules, contractRules, databaseRules } =
-    await import('../../lib/performance/rule-ids.js');
+  const { indexRules, databaseRules } = await import('../../lib/performance/rule-ids.js');
+  const { migrationRules, contractRules } = await import('../../lib/reliability/rule-ids.js');
   const standalone = [
     ...indexRules,
     ...migrationRules,

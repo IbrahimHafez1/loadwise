@@ -7,37 +7,39 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import ts from 'typescript';
-import { securityRules, ruleInfo } from '../../lib/security/rule-ids.js';
+import { securityRules, polyglotRules, ruleInfo } from '../../lib/security/rule-ids.js';
 import { knownRules } from '../../lib/performance/rule-ids.js';
 import { exampleFor } from '../../editor/security-examples.cjs';
 
 const root = path.join(import.meta.dirname, '..', '..');
 const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8').replaceAll('\r\n', '\n');
-const section = readme.slice(readme.indexOf('\n# Security checker\n'), readme.indexOf('\n## Developing locally\n'));
+const section = readme.slice(readme.indexOf('\n# Security checker\n'), readme.indexOf('\n# Accessibility checker\n'));
 const helpText = spawnSync(process.execPath, [path.join(root, 'bin', 'loadwise.js'), 'sec', '--help'], {
   encoding: 'utf8',
 }).stdout;
 const maxExampleLines = 6;
 
 test('the README has a security section after the maintainability section', () => {
-  assert.ok(section.length > 1000, 'missing "# Security checker" before "## Developing locally"');
+  assert.ok(section.length > 1000, 'missing "# Security checker" before "# Accessibility checker"');
   assert.ok(readme.indexOf('\n# Maintainability checker\n') < readme.indexOf('\n# Security checker\n'));
 });
 
 test('every security rule is documented, registered with its needs and not also a performance rule', () => {
   const documented = readRuleTokens(section);
   assert.deepEqual(
-    securityRules.filter((rule) => !documented.has(rule)),
+    [...securityRules, ...polyglotRules].filter((rule) => !documented.has(rule)),
     [],
   );
   for (const rule of securityRules) {
     assert.ok(['syntax', 'import', 'types'].includes(ruleInfo[rule].needs), rule);
-    assert.ok(!knownRules.has(rule), `${rule} is registered by both checkers`);
+    assert.ok(!knownRules.has(rule), `${rule} is registered by another checker`);
   }
 });
 
 test('every rule-like README entry in the section is a security rule', () => {
-  const stale = [...readRuleTokens(section)].filter((token) => !securityRules.includes(token));
+  const stale = [...readRuleTokens(section)].filter(
+    (token) => !securityRules.includes(token) && !polyglotRules.includes(token),
+  );
   assert.deepEqual(stale, []);
 });
 

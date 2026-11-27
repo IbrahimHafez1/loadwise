@@ -161,10 +161,30 @@ function parsePureImportBlock(text: string): ImportEdit[] | undefined {
   return edits;
 }
 
+function importBindingKeys(edits: readonly ImportEdit[]): Set<string> {
+  const keys = new Set<string>();
+  for (const edit of edits) {
+    const scope = `${edit.isTypeOnly ? 'type:' : ''}${edit.moduleSpecifier}`;
+    keys.add(`${scope}|module`);
+    if (edit.defaultName) keys.add(`${scope}|default:${edit.defaultName}`);
+    if (edit.namespaceName) keys.add(`${scope}|namespace:${edit.namespaceName}`);
+    for (const name of edit.named ?? []) keys.add(`${scope}|named:${name}`);
+  }
+  return keys;
+}
+
+// A change that drops or narrows an import must not be merged back into the existing import, which
+// would undo it; only changes that keep every binding of `before` and add more are coalesced.
 function isPureImportChange(change: FixChange): boolean {
   if (change.create || change.line !== 1) return false;
-  if (change.before !== '' && !parsePureImportBlock(change.before)) return false;
-  return Boolean(parsePureImportBlock(change.after));
+  const after = parsePureImportBlock(change.after);
+  if (!after) return false;
+  if (change.before === '') return true;
+  const before = parsePureImportBlock(change.before);
+  if (!before) return false;
+  const keptKeys = importBindingKeys(after);
+  const originalKeys = importBindingKeys(before);
+  return [...originalKeys].every((key) => keptKeys.has(key)) && keptKeys.size > originalKeys.size;
 }
 
 /**

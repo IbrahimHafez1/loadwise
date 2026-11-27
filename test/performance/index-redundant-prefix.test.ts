@@ -126,7 +126,7 @@ const prismaHeader = `datasource db {
 `;
 
 function withProject<Result>(files: FileMap, run: (root: string) => Result): Result {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'perf-check-redundant-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-redundant-'));
   try {
     fs.writeFileSync(path.join(root, 'package.json'), '{"dependencies":{"pg":"8.0.0"}}');
     for (const [name, contents] of Object.entries(files)) {

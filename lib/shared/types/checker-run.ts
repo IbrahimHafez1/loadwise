@@ -24,6 +24,8 @@ export interface PillarDefinition {
   name: Pillar;
   title: string;
   jsonKey: PillarName;
+  /** Set when running nothing is normal for some projects, so a missing run is not a failed scan. */
+  optional?: boolean;
   ruleIds(): ReadonlySet<string>;
   /** The folder the checker's finding paths are relative to. */
   findingRoot(directory: string): string;

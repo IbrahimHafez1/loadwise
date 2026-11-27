@@ -35,7 +35,7 @@ test('check writes security to the shared baseline and filters the same finding 
   const write = run(directory, 'check', '--write-baseline');
   assert.equal(write.status, 0, write.stderr);
   const baseline: BaselineFile = JSON.parse(fs.readFileSync(path.join(directory, 'loadwise-baseline.json'), 'utf8'));
-  assert.deepEqual(Object.keys(baseline.pillars), ['maintainability', 'performance', 'security']);
+  assert.deepEqual(Object.keys(baseline.pillars), ['maintainability', 'performance', 'reliability', 'security']);
   assert.equal(baseline.pillars.security.findings[0].ruleId, 'dockerfile-unpinned-base-image');
   const read = run(directory, 'check', '--only', 'perf,sec', '--json', '--baseline');
   assert.equal(read.status, 0, read.stderr);

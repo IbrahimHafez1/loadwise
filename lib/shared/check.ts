@@ -85,6 +85,13 @@ function parseCheckArgs(args: readonly string[]) {
   // --only and --skip beat the config's default selection.
   const choice =
     values.only === undefined && values.skip === undefined ? { only: settings.checkers?.join(',') } : values;
+  // Reliability rules were part of perf before it had its own checker, so a list written then lost them.
+  if (choice === values || !settings.checkers?.includes('perf') || settings.checkers.includes('rel')) {
+    return { values, format, directory, selected: selectPillars(choice), settings, baselineOptions };
+  }
+  console.error(
+    `Note: "checkers" in ${settings.filename} lists perf but not rel; floating promises, races, timeouts and other reliability rules now run under rel. Add "rel" to keep them.`,
+  );
   return { values, format, directory, selected: selectPillars(choice), settings, baselineOptions };
 }
 
@@ -236,6 +243,7 @@ async function scanForFixes(checkers?: readonly string[]): Promise<Finding[]> {
   const runs = await scanCheck(options);
   for (const run of runs) process.stderr.write(run?.stderr ?? '');
   return options.selected.flatMap((pillar, index) => {
+    if (!runs[index] && pillar.optional) return [];
     const report = parsedReport(runs[index]);
     if (!report || !Array.isArray(report.findings) || ![0, 1].includes(runs[index]?.code ?? invalidInputCode)) {
       throw new Error(`The ${pillar.title} scan did not complete. No fixes applied.`);

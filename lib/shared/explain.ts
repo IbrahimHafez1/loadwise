@@ -1,47 +1,33 @@
-import * as performance from '../performance/rule-ids.js';
-import * as maintainability from '../maintainability/rule-ids.js';
-import * as security from '../security/rule-ids.js';
+import { pillarOfRule, rulesByPillar } from './rule-registry.js';
 import type { FixExample } from '../../editor/types/fix-example.cjs';
+import type { PillarName } from './types/pillar-name.js';
 import { exampleFor } from '../../editor/performance-examples.cjs';
+import { exampleFor as exampleForReliabilityExamples } from '../../editor/reliability-examples.cjs';
 import { exampleFor as exampleForMaintainabilityExamples } from '../../editor/maintainability-examples.cjs';
-import { descriptionByRule } from '../security/rule-descriptions.js';
 import { exampleFor as exampleForSecurityExamples } from '../../editor/security-examples.cjs';
+import { exampleFor as exampleForAccessibilityExamples } from '../../editor/accessibility-examples.cjs';
 
-interface RuleChecker {
+interface ExplainedPillar {
   name: string;
-  impactByRule: Readonly<Record<string, string>>;
-  descriptionByRule: Readonly<Record<string, string>>;
   exampleFor(ruleId: string, language: string, message: string): FixExample | undefined;
 }
 
-const checkers: RuleChecker[] = [
-  {
-    name: 'Performance',
-    ...performance,
-    exampleFor: exampleFor,
-  },
-  {
-    name: 'Maintainability',
-    ...maintainability,
-    exampleFor: exampleForMaintainabilityExamples,
-  },
-  {
-    name: 'Security',
-    impactByRule: security.impactByRule,
-    descriptionByRule: descriptionByRule,
-    exampleFor: exampleForSecurityExamples,
-  },
-];
+const explainedPillars: Record<PillarName, ExplainedPillar> = {
+  performance: { name: 'Performance', exampleFor },
+  reliability: { name: 'Reliability', exampleFor: exampleForReliabilityExamples },
+  maintainability: { name: 'Maintainability', exampleFor: exampleForMaintainabilityExamples },
+  security: { name: 'Security', exampleFor: exampleForSecurityExamples },
+  accessibility: { name: 'Accessibility', exampleFor: exampleForAccessibilityExamples },
+};
 
 function explainRule(ruleId: string): string {
-  const checker = checkers.find(({ impactByRule }) => Object.hasOwn(impactByRule, ruleId));
-  if (!checker) throw new Error(`Unknown rule "${ruleId}". Use the rule name shown before the #finding-id.`);
+  const pillar = pillarOfRule(ruleId);
+  if (!pillar) throw new Error(`Unknown rule "${ruleId}". Use the rule name shown before the #finding-id.`);
+  const { name, exampleFor: pillarExample } = explainedPillars[pillar];
+  const { impactByRule, descriptionByRule } = rulesByPillar[pillar];
   const language = /^(python|csharp|java|go|rust)-/.exec(ruleId)?.[1] ?? 'typescript';
-  const example = checker.exampleFor(ruleId, language, '');
-  const lines: string[] = [
-    `${ruleId} (${checker.name}, default impact ${checker.impactByRule[ruleId]})`,
-    checker.descriptionByRule[ruleId],
-  ];
+  const example = pillarExample(ruleId, language, '');
+  const lines: string[] = [`${ruleId} (${name}, default impact ${impactByRule[ruleId]})`, descriptionByRule[ruleId]];
   if (example) lines.push('', 'Example change', example.code, '', example.note ?? '');
   return lines.join('\n');
 }

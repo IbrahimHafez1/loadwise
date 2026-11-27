@@ -33,9 +33,15 @@ const expectedNewRules: Record<string, readonly string[]> = {
   'python.yml': ['python-n-plus-one-orm-loop', 'python-unbounded-comprehension'],
   'go.yml': ['go-sql-query-in-loop', 'go-string-concat-in-loop'],
   'java.yml': ['java-string-concat-in-loop', 'java-jdbc-query-in-loop'],
-  'csharp.yml': ['csharp-async-void', 'csharp-string-concat-in-loop'],
+  'csharp.yml': ['csharp-string-concat-in-loop'],
   'rust.yml': ['rust-clone-in-loop', 'rust-format-in-loop'],
 };
+
+test('csharp-async-void lives in the reliability polyglot rules only', () => {
+  const reliabilityRules = path.resolve(import.meta.dirname, '../../polyglot/reliability/rules/csharp.yml');
+  assert.ok(fs.readFileSync(reliabilityRules, 'utf8').includes('id: csharp-async-void'));
+  assert.ok(!fs.readFileSync(path.join(perfRulesDir, 'csharp.yml'), 'utf8').includes('id: csharp-async-void'));
+});
 
 test('performance polyglot rule YAML files contain all Phase 5 rule IDs', () => {
   for (const [file, ruleIds] of Object.entries(expectedNewRules)) {
@@ -118,7 +124,6 @@ class AsyncSample {
     assert.equal(result.scannedFiles, 5);
     const foundIds = result.findings.map((finding) => finding.ruleId).sort();
     assert.deepEqual(foundIds, [
-      'csharp-async-void',
       'csharp-string-concat-in-loop',
       'go-sql-query-in-loop',
       'go-string-concat-in-loop',
@@ -129,5 +134,10 @@ class AsyncSample {
       'rust-clone-in-loop',
       'rust-format-in-loop',
     ]);
+    const reliability = await checkPolyglot([directory], 'reliability');
+    assert.deepEqual(
+      reliability.findings.map((finding) => finding.ruleId),
+      ['csharp-async-void'],
+    );
   },
 );

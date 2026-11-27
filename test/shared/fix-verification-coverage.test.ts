@@ -14,6 +14,8 @@ import { performanceAddedCases } from './fixtures/fix-verification/performance-a
 import { performanceOrmCases } from './fixtures/fix-verification/performance-orm-cases.js';
 import { performanceHandlerCases } from './fixtures/fix-verification/performance-handler-cases.js';
 import { performanceSchemaCases } from './fixtures/fix-verification/performance-schema-cases.js';
+import { reliabilityCases } from './fixtures/fix-verification/reliability-cases.js';
+import { accessibilityCases } from './fixtures/fix-verification/accessibility-cases.js';
 import { maintainabilityCases } from './fixtures/fix-verification/maintainability-cases.js';
 import { notYetVerified as NOT_YET_VERIFIED } from './fixtures/fix-verification/not-yet-verified.js';
 
@@ -49,6 +51,8 @@ const verified = new Set(
     ...performanceOrmCases,
     ...performanceHandlerCases,
     ...performanceSchemaCases,
+    ...reliabilityCases,
+    ...accessibilityCases,
     ...maintainabilityCases,
   ].map(({ ruleId }) => ruleId),
 );

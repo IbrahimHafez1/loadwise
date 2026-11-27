@@ -82,6 +82,22 @@ const descriptionByRule = {
     'GraphQL query batching is enabled without a batch size, query depth, or cost/complexity limit.',
   'express-cookie-auth-missing-csrf':
     'Cookie-based session or auth is paired with state-changing routes without CSRF protection or `sameSite: "strict"`.',
+  'csharp-process-start':
+    'Process.Start launches an external process and risks command injection with untrusted arguments.',
+  'csharp-ef-from-sql-raw':
+    'FromSqlRaw or ExecuteSqlRaw receives a concatenated or interpolated string, risking SQL injection.',
+  'go-exec-command-shell': 'exec.Command invokes a shell, which risks command injection.',
+  'go-sql-sprintf-injection': 'SQL text formatted with fmt.Sprintf risks SQL injection.',
+  'java-runtime-exec':
+    'Runtime.getRuntime().exec runs an OS command and risks command injection with untrusted arguments.',
+  'java-sql-string-concat': 'A SQL query built by string concatenation risks SQL injection.',
+  'python-insecure-deserialization': 'pickle or marshal deserialization of untrusted data can execute arbitrary code.',
+  'python-unsafe-yaml-load': 'yaml.load without SafeLoader can construct arbitrary Python objects.',
+  'python-subprocess-shell-true':
+    'subprocess with shell=True or os.system passes input through a shell, risking command injection.',
+  'rust-command-shell': 'Command::new("sh") or Command::new("bash") spawns a shell and risks command injection.',
+  'rust-unsafe-raw-pointer-deref':
+    'A raw pointer dereference in an unsafe block bypasses Rust memory safety guarantees.',
 };
 
 export { descriptionByRule };

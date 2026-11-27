@@ -1,12 +1,14 @@
 import path from 'node:path';
-import { impactByRule } from './rule-ids.js';
+import { rulesByPillar } from '../shared/rule-registry.js';
 import { annotateImpact, filterMinImpact, sortByImpactWithinFiles } from '../shared/impact-levels.js';
 import { applyBaselineOptions, baselineNoteLines } from '../shared/baseline.js';
 import { resolveFormat, renderReports } from '../shared/formats/index.js';
-import { contractRules } from '../shared/formats/contract-rules.js';
+import { jsonKeyByCommand } from './source-pillars.js';
+import type { SourceCommand } from './types/source-command.js';
 import { exitCodeWithSkips } from './scan-outcome.js';
 import type { Finding } from '../shared/types.js';
 import type { BaselineFiltered } from '../shared/types/baseline.js';
+import type { PillarName } from '../shared/types/pillar-name.js';
 import type { SourceCheckValues } from './types/source-check-values.js';
 import type { ChangedScope, ScanSettings } from './types/source-scan-values.js';
 import { findProjectRoot } from './schema/context.js';
@@ -60,8 +62,15 @@ export function selectFindings(
   return result.findings;
 }
 
+// The editor's watcher prints performance, reliability and accessibility findings in one report, so all tables apply.
+const impactByRule = {
+  ...rulesByPillar.performance.impactByRule,
+  ...rulesByPillar.reliability.impactByRule,
+  ...rulesByPillar.accessibility.impactByRule,
+};
+
 function isContractFinding({ ruleId }: Pick<Finding, 'ruleId'>): boolean {
-  return contractRules.performance.has(ruleId);
+  return rulesByPillar.performance.contractRules.has(ruleId) || rulesByPillar.reliability.contractRules.has(ruleId);
 }
 
 export async function printResult(
@@ -82,7 +91,7 @@ export async function printResult(
   }
   const baseline = applyBaselineOptions({
     options: values.baselineOptions ?? {},
-    pillar: 'performance',
+    pillar: values.sourcePillar ?? 'performance',
     findings: result.findings,
     projectRoot: values.projectDirectory ?? process.cwd(),
     absoluteFileOf: (finding: Finding) => path.resolve(finding.file ?? ''),
@@ -125,7 +134,7 @@ function printSourceOutput(
 ): void {
   const format = resolveFormat(values);
   if (format === 'json') print(JSON.stringify(result, null, values.watch ? 0 : 2));
-  else if (format !== 'text') printStructured(format, result, values.projectDirectory, print);
+  else if (format !== 'text') printStructured(format, result, values, print);
   else if (values.changedLines) {
     printChangedFindings(result.findings, values.fixCommand, print);
     if (baseline) for (const line of baselineNoteLines(baseline)) print(line);
@@ -140,11 +149,16 @@ function printSourceOutput(
 function printStructured(
   format: string,
   result: PerformanceScanResult,
-  repositoryDirectory: string | undefined,
+  values: Pick<PrintValues, 'projectDirectory' | 'sourcePillar'>,
   print: PrintLine,
 ): void {
   const output = renderReports(format, [
-    { pillar: 'performance', root: process.cwd(), repositoryDirectory, report: result },
+    {
+      pillar: values.sourcePillar ?? 'performance',
+      root: process.cwd(),
+      repositoryDirectory: values.projectDirectory,
+      report: result,
+    },
   ]);
   if (output) print(output);
 }
@@ -154,6 +168,7 @@ function printStructured(
 export function readChangedScope(
   values: SourceCheckValues & { help?: boolean },
   positionals: readonly string[],
+  readsMarkupFiles = false,
 ): ChangedScope | undefined {
   if (values.help || (!values.staged && values['changed-since'] === undefined)) return undefined;
   if (values.staged && values['changed-since'] !== undefined) {
@@ -162,8 +177,9 @@ export function readChangedScope(
   if (positionals.length || values.watch || values.fix) {
     throw new Error('--staged and --changed-since cannot be combined with explicit files, --watch or --fix.');
   }
-  // `check` runs the security checker too, which also reads env, Dockerfile and compose files.
-  const allFiles = values.with !== undefined;
+  // `check` runs the security checker too, which also reads env, Dockerfile and compose files; accessibility reads
+  // HTML, Vue and Svelte files.
+  const allFiles = values.with !== undefined || readsMarkupFiles;
   const changedLines = collectProjectChangedLines(
     { staged: values.staged, ref: values['changed-since'], allFiles },
     values.project,
@@ -171,23 +187,27 @@ export function readChangedScope(
   return { changedLines, isChangedFile: (filename: string) => changedLines.has(fileKey(filename)) };
 }
 
-export function printEmptyChangedReport(values: Pick<SourceCheckValues, 'format' | 'json' | 'with'>): void {
+// `commands` are the checkers of the run, the first being the one invoked; several print the `--with` envelope.
+export function printEmptyChangedReport(
+  values: Pick<SourceCheckValues, 'format' | 'json'>,
+  commands: readonly SourceCommand[],
+): void {
   const result = { scannedFiles: 0, findings: [] };
   const format = resolveFormat(values);
-  function output(pillar: 'performance' | 'security'): string {
+  function output(pillar: PillarName): string {
     if (format === 'json') return JSON.stringify(result);
     if (format === 'text') return 'No changed files to check.';
     return renderReports(format, [{ pillar, root: process.cwd(), report: result }]);
   }
-  if (values.with === 'sec') {
+  if (commands.length > 1) {
     const reports: Record<string, PillarOutput> = {};
-    for (const pillar of ['performance', 'security'] as const) {
-      const rendered = output(pillar);
-      reports[pillar] = { code: 0, stdout: rendered ? rendered + '\n' : '' };
+    for (const command of commands) {
+      const rendered = output(jsonKeyByCommand[command]);
+      reports[jsonKeyByCommand[command]] = { code: 0, stdout: rendered ? rendered + '\n' : '' };
     }
     console.log(JSON.stringify(reports));
   } else {
-    const rendered = output('performance');
+    const rendered = output(jsonKeyByCommand[commands[0] ?? 'perf']);
     if (rendered) console.log(rendered);
   }
 }

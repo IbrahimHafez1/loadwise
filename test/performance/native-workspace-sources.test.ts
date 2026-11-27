@@ -40,7 +40,7 @@ test('an uninstalled sibling workspace package resolves to its source on both en
       "import { Log } from '@scope/common/log';\nexport async function run() {\n  Log.warn('x');\n}",
   });
   const run = (engine: string) => {
-    const result = spawnSync(process.execPath, [bin, 'perf', '-p', '.', '--engine', engine, '--json'], {
+    const result = spawnSync(process.execPath, [bin, 'rel', '-p', '.', '--engine', engine, '--json'], {
       cwd: directory,
       encoding: 'utf8',
     });

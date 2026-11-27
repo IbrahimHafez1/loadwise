@@ -76,7 +76,11 @@ async function runEditor(args: readonly string[]): Promise<number> {
   return 0;
 }
 
-async function runPolyglot(args: readonly string[]): Promise<number> {
+// `pillar` picks the rule set: `loadwise perf polyglot` or `loadwise rel polyglot`.
+async function runPolyglot(
+  args: readonly string[],
+  pillar: 'performance' | 'reliability' = 'performance',
+): Promise<number> {
   const { values, positionals } = parseCommand(args, {
     json: { type: 'boolean' },
     'min-impact': { type: 'string' },
@@ -85,12 +89,12 @@ async function runPolyglot(args: readonly string[]): Promise<number> {
   if (values.help) return showHelp();
   parseMinImpact(values['min-impact']);
   if (!positionals.length) throw new Error('Pass at least one file or directory to polyglot.');
-  const result = await (await import('./polyglot.js')).checkPolyglot(positionals);
+  const result = await (await import('./polyglot.js')).checkPolyglot(positionals, pillar);
   const settings = loadSettings({ directory: process.cwd(), explicit: values['loadwise-config'] });
   // The polyglot scan reports skippedFiles as a count, which printing never reads but the JSON
   // output keeps.
   const printable: Omit<PolyglotScan, 'skippedFiles'> = result;
-  const code = await printResult(printable, { ...values, ignore: [], settings });
+  const code = await printResult(printable, { ...values, ignore: [], settings, sourcePillar: pillar });
   notifyEditor(positionals.length === 1 ? positionals[0] : process.cwd());
   return code;
 }
@@ -103,9 +107,9 @@ async function main(args: readonly string[]): Promise<number> {
     case 'agent':
       return runAgentCommand(args.slice(1));
     case 'migrations':
-      return (await import('./migrations/cli.js')).run(args.slice(1));
     case 'contracts':
-      return (await import('./contracts/cli.js')).run(args.slice(1));
+      console.error(`Note: \`loadwise perf ${args[0]}\` is now \`loadwise rel ${args[0]}\`.`);
+      return (await import('../reliability/cli.js')).main(args);
     case 'db':
       return (await import('./db/cli.js')).run(args.slice(1));
     case 'traces':
@@ -119,4 +123,4 @@ async function main(args: readonly string[]): Promise<number> {
   return checkCode(sourceArgs, printResult, baselineOptions);
 }
 
-export { main, sourcePolicy, workspaceTarget, projectDirectory, scanFilter, relativeToCwd };
+export { main, runPolyglot, sourcePolicy, workspaceTarget, projectDirectory, scanFilter, relativeToCwd };

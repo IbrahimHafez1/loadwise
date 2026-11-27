@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { loadSettings } from '../../lib/shared/config.js';
-import { registeredRuleIds } from '../../lib/shared/pillars.js';
+import { pillarNames, registeredRuleIds } from '../../lib/shared/pillars.js';
 import type { Finding } from '../../lib/shared/types.js';
 import type { TestContext } from 'node:test';
 import type { JsonFileMap } from '../types/project-files.js';
@@ -165,7 +165,7 @@ test('--config names another file and a missing one exits 2', (context) => {
   assert.match(missing.stderr, /Cannot find config file .*nope\.json/);
 });
 
-test('the performance section replaces backend-perf.policy.json and notes when both exist', (context) => {
+test('the performance section supplies the query policy and ignores unreferenced policy files', (context) => {
   const policy = { parallelReads: [{ from: '@app/reads', exports: ['fetchUser', 'fetchPosts'] }] };
   const source = [
     "import { fetchUser, fetchPosts } from '@app/reads';",
@@ -191,53 +191,43 @@ test('the performance section replaces backend-perf.policy.json and notes when b
     '',
   ].join('\n');
   const files = { 'tsconfig.json': readsTsconfig, 'reads.ts': reads, 'a.ts': source };
-  const legacyIds = perfRun(project(context, { ...files, 'backend-perf.policy.json': policy })).ruleIds;
-  assert.ok(legacyIds.length > 0, 'the legacy policy produces a finding');
-  assert.deepEqual(
-    perfRun(project(context, { ...files, 'loadwise.config.json': { performance: policy } })).ruleIds,
-    legacyIds,
-  );
-
-  const both = project(context, {
-    ...files,
-    'backend-perf.policy.json': { parallelReads: [] },
-    'loadwise.config.json': { performance: policy },
-  });
-  const run = perfRun(both);
-  assert.deepEqual(run.ruleIds, legacyIds);
-  assert.match(run.stderr, /has a "performance" section; ignoring .*backend-perf\.policy\.json/);
+  const sectionIds = perfRun(project(context, { ...files, 'loadwise.config.json': { performance: policy } })).ruleIds;
+  assert.ok(sectionIds.length > 0, 'the policy section produces a finding');
+  assert.deepEqual(perfRun(project(context, { ...files, 'policy.json': policy })).ruleIds, []);
 
   const broken = project(context, { ...files, 'loadwise.config.json': { performance: { nope: 1 } } });
   assert.match(perfRun(broken).stderr, /Cannot load the "performance" section/);
 });
 
-test('the maintainability section replaces maintainability.config.json and --config still wins', (context) => {
+test('the maintainability section supplies the policy and --config still wins', (context) => {
   const files = { 'src/a.ts': 'export const one = 1;\n', 'other/b.ts': 'export const two = 2;\n' };
-  const legacy = project(context, { ...files, 'maintainability.config.json': placement });
-  const legacyFindings = maintFindings(legacy);
-  assert.ok(legacyFindings.some((finding: Finding) => finding.ruleId === 'file-placement'));
-
   const sectioned = project(context, { ...files, 'loadwise.config.json': { maintainability: placement } });
-  assert.equal(maintFindings(sectioned).length, legacyFindings.length);
+  const sectionFindings = maintFindings(sectioned);
+  assert.ok(sectionFindings.some((finding: Finding) => finding.ruleId === 'file-placement'));
 
   const both = project(context, {
     ...files,
-    'maintainability.config.json': placement,
+    'policy.json': placement,
     'loadwise.config.json': { maintainability: { exclude: ['src'] } },
   });
   assert.deepEqual(maintFindings(both), []);
-  assert.match(loadwise(both, 'maint', '.', '--json').stderr, /has a "maintainability" section; ignoring/);
-  assert.equal(maintFindings(both, '--config', 'maintainability.config.json').length, legacyFindings.length);
+  assert.equal(maintFindings(both, '--config', 'policy.json').length, sectionFindings.length);
 });
 
 test('maint applies off, warn and --ignore to its findings', (context) => {
-  const files = { 'src/a.ts': 'export const one = 1;\n', 'maintainability.config.json': placement };
+  const files = { 'src/a.ts': 'export const one = 1;\n', 'loadwise.config.json': { maintainability: placement } };
   assert.equal(loadwise(project(context, files), 'maint', '.', ...skipUnreferenced).code, 1);
-  const warn = project(context, { ...files, 'loadwise.config.json': { rules: { 'file-placement': 'warn' } } });
+  const warn = project(context, {
+    ...files,
+    'loadwise.config.json': { maintainability: placement, rules: { 'file-placement': 'warn' } },
+  });
   const warned = loadwise(warn, 'maint', '.', ...skipUnreferenced);
   assert.equal(warned.code, 0, warned.stderr);
   assert.match(warned.stdout, /1 finding\(s\) are warnings/);
-  const off = project(context, { ...files, 'loadwise.config.json': { rules: { 'file-placement': 'off' } } });
+  const off = project(context, {
+    ...files,
+    'loadwise.config.json': { maintainability: placement, rules: { 'file-placement': 'off' } },
+  });
   assert.match(loadwise(off, 'maint', '.', ...skipUnreferenced).stdout, /0 finding\(s\)/);
   const ignored = loadwise(project(context, files), 'maint', '.', '--ignore', 'file-placement', ...skipUnreferenced);
   assert.match(ignored.stdout, /0 finding\(s\)/);
@@ -287,6 +277,7 @@ test('the shipped schema lists exactly the registered rule ids and config keys',
   const ruleIds = [...registeredRuleIds()].sort();
   assert.deepEqual([...schema.properties.rules.propertyNames.enum].sort(), ruleIds);
   assert.deepEqual([...schema.properties.overrides.items.properties.rules.propertyNames.enum].sort(), ruleIds);
+  assert.deepEqual(schema.properties.checkers.items.enum, [...pillarNames]);
   assert.deepEqual(Object.keys(schema.properties).sort(), [
     '$schema',
     'checkers',

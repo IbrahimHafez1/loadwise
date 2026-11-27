@@ -6,10 +6,13 @@ import { spawnSync } from 'node:child_process';
 import type { Finding } from '../../lib/shared/types.js';
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']);
+// The only files the accessibility checker reads besides the script files that can hold JSX.
+const MARKUP_EXTENSIONS = new Set(['.html', '.htm', '.vue', '.svelte']);
+const ACCESSIBILITY_EXTENSIONS = new Set(['.tsx', '.jsx', ...MARKUP_EXTENSIONS]);
 const DEFAULT_TIMEOUT_MS = 20000;
 const MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
 
-type CheckerCommand = 'perf' | 'maint' | 'sec';
+type CheckerCommand = 'perf' | 'rel' | 'maint' | 'sec' | 'a11y';
 
 interface LocalBinary {
   projectRoot: string;
@@ -104,10 +107,37 @@ function formatFeedback(projectRoot: string, relativeFile: string, findings: Fin
   return `loadwise found ${findings.length} issue(s) in ${relativeFile}. Check each finding against the actual code, callers and tests. Apply or adapt a justified change within the user's request. Keep intentional behavior and explain why.\n${lines.join('\n')}`;
 }
 
+function sourceFindings(
+  local: LocalBinary,
+  relativeFile: string,
+  safeRelativeFile: string,
+  deadline: number,
+): Finding[] {
+  const perfReport = runLoadwise(local.binary, ['perf', safeRelativeFile, '--json'], local.projectRoot, deadline);
+  const relReport = runLoadwise(local.binary, ['rel', safeRelativeFile, '--json'], local.projectRoot, deadline);
+  const secReport = runLoadwise(local.binary, ['sec', safeRelativeFile, '--json'], local.projectRoot, deadline);
+  // maint has no explicit-file mode, so scan the uncommitted changes and keep this file's findings.
+  const maintReport = runLoadwise(
+    local.binary,
+    ['maint', '--changed-since', 'HEAD', '--json'],
+    local.projectRoot,
+    deadline,
+  );
+  return [
+    ...findingsFor(perfReport, relativeFile, 'perf'),
+    ...findingsFor(relReport, relativeFile, 'rel'),
+    ...findingsFor(maintReport, relativeFile, 'maint'),
+    ...findingsFor(secReport, relativeFile, 'sec'),
+  ];
+}
+
 function main(): void {
   const input: HookInput | null = JSON.parse(readStdin());
   const filePath = input?.tool_input?.file_path;
-  if (typeof filePath !== 'string' || !SOURCE_EXTENSIONS.has(path.extname(filePath).toLowerCase())) return;
+  if (typeof filePath !== 'string') return;
+  const extension = path.extname(filePath).toLowerCase();
+  const isSourceFile = SOURCE_EXTENSIONS.has(extension);
+  if (!isSourceFile && !MARKUP_EXTENSIONS.has(extension)) return;
 
   const workspaceRoot = path.resolve(input?.cwd ?? process.cwd());
   const absoluteFile = path.resolve(workspaceRoot, filePath);
@@ -126,19 +156,15 @@ function main(): void {
   const parsedTimeout = Number(process.env.LOADWISE_HOOK_TIMEOUT_MS);
   const timeoutMs = Number.isFinite(parsedTimeout) && parsedTimeout > 0 ? parsedTimeout : DEFAULT_TIMEOUT_MS;
   const deadline = Date.now() + timeoutMs;
-  const perfReport = runLoadwise(local.binary, ['perf', safeRelativeFile, '--json'], local.projectRoot, deadline);
-  const secReport = runLoadwise(local.binary, ['sec', safeRelativeFile, '--json'], local.projectRoot, deadline);
-  // maint has no explicit-file mode, so scan the uncommitted changes and keep this file's findings.
-  const maintReport = runLoadwise(
-    local.binary,
-    ['maint', '--changed-since', 'HEAD', '--json'],
-    local.projectRoot,
-    deadline,
-  );
   const findings = [
-    ...findingsFor(perfReport, relativeFile, 'perf'),
-    ...findingsFor(maintReport, relativeFile, 'maint'),
-    ...findingsFor(secReport, relativeFile, 'sec'),
+    ...(isSourceFile ? sourceFindings(local, relativeFile, safeRelativeFile, deadline) : []),
+    ...(ACCESSIBILITY_EXTENSIONS.has(extension)
+      ? findingsFor(
+          runLoadwise(local.binary, ['a11y', safeRelativeFile, '--json'], local.projectRoot, deadline),
+          relativeFile,
+          'a11y',
+        )
+      : []),
   ];
   if (findings.length === 0) return;
 

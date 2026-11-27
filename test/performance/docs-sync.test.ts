@@ -13,10 +13,7 @@ const binEntry = path.join(root, 'bin', 'loadwise.js');
 const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8').replaceAll('\r\n', '\n');
 // Rule tokens are compared within this checker's part of the README; commands and flags against all
 // of it.
-const section = readme.slice(
-  readme.indexOf('\n# Performance checker\n'),
-  readme.indexOf('\n# Maintainability checker\n'),
-);
+const section = readme.slice(readme.indexOf('\n# Performance checker\n'), readme.indexOf('\n# Reliability checker\n'));
 const helpText = spawnSync(process.execPath, [binEntry, 'perf', '--help'], { encoding: 'utf8' }).stdout;
 
 function sourceFiles(directory: string): string[] {
@@ -29,7 +26,7 @@ function sourceFiles(directory: string): string[] {
 }
 
 test('the README has a performance section', () => {
-  assert.ok(section.length > 1000, 'missing "# Performance checker" before "# Maintainability checker"');
+  assert.ok(section.length > 1000, 'missing "# Performance checker" before "# Reliability checker"');
 });
 
 test('every registry rule is documented in the README', () => {

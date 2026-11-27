@@ -41,7 +41,7 @@ function loadRecipes(filename: string, directory: string): FixRecipes {
     throw new Error('Export an object mapping checker/rule-id keys to fix recipe functions.');
   }
   for (const [key, handler] of Object.entries(recipes)) {
-    if (!/^(perf|maint|sec)\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(key) || !isRecipeHandler(handler)) {
+    if (!/^(perf|rel|maint|sec|a11y)\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(key) || !isRecipeHandler(handler)) {
       throw new Error(`Invalid fix recipe "${key}". Expected a checker/rule-id key and a function.`);
     }
   }

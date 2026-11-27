@@ -1,4 +1,4 @@
-// `loadwise perf contracts ...`: breaking API changes against a git ref. Reads files and git
+// `loadwise rel contracts ...`: breaking API changes against a git ref. Reads files and git
 // history only.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -13,7 +13,7 @@ import { findingLabel } from '../finding-text.js';
 import { findProjectRoot } from '../schema/context.js';
 import { loadSettings } from '../../shared/config.js';
 import { annotateImpact, filterMinImpact, parseMinImpact } from '../../shared/impact-levels.js';
-import { impactByRule } from '../rule-ids.js';
+import { impactByRule } from '../../reliability/rule-ids.js';
 import { discoverWorkspaces, selectWorkspaces } from '../../shared/workspaces.js';
 import type { Finding } from '../../shared/types.js';
 import type {
@@ -57,7 +57,7 @@ interface ContractsResult {
 type LoadedSettings = ReturnType<typeof loadSettings>;
 
 const usage = `Usage:
-  loadwise perf contracts [--changed-since <git-ref>] [--json] [--min-impact <level>] [--ignore <rule-id>] [--workspace <name|path>] [--loadwise-config <file>]
+  loadwise rel contracts [--changed-since <git-ref>] [--json] [--min-impact <level>] [--ignore <rule-id>] [--workspace <name|path>] [--loadwise-config <file>]
 
 Compares the working tree with the merge base of <git-ref> (default HEAD) and flags changes that break API clients:
   OpenAPI/Swagger JSON documents, GraphQL SDL files, and NestJS controller @Body and return classes.

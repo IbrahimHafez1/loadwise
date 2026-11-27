@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { exampleFor as performanceExample } from './performance-examples.cjs';
+import { exampleFor as reliabilityExample } from './reliability-examples.cjs';
 import { exampleFor as maintainabilityExample } from './maintainability-examples.cjs';
 import { exampleFor as securityExample } from './security-examples.cjs';
+import { exampleFor as accessibilityExample } from './accessibility-examples.cjs';
 import { getFindingComparison, inlineComparison } from './finding-comparison.cjs';
 import { isChangeApplied, locateChange } from './apply-fix.cjs';
 import type { Finding, FindingFix, FixChange } from '../lib/shared/types.js';
@@ -126,7 +127,12 @@ const advice = new Map([
 ]);
 
 function sourceExample(ruleId: string, languageId: string, message: string): FixExample | undefined {
-  return performanceExample(ruleId, languageId, message) ?? securityExample(ruleId, languageId);
+  // Reliability examples fall back to the performance ones, so one lookup covers the shared source pass.
+  return (
+    reliabilityExample(ruleId, languageId, message) ??
+    securityExample(ruleId, languageId) ??
+    accessibilityExample(ruleId, languageId)
+  );
 }
 
 function sourceRange(

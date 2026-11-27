@@ -1,13 +1,20 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
-import { analysisOptions, analyzeProgram, diagnosticText, resolveConfig } from './projects.js';
+import {
+  analysisOptions,
+  analyzeProgram,
+  accessibilityAnalyzer,
+  diagnosticText,
+  reliabilityAnalyzers,
+  resolveConfig,
+} from './projects.js';
 import type { BuilderProgram, Diagnostic, Node, Program, SourceFile, WatchOfConfigFile } from 'typescript';
 import type { PerformancePolicy } from './types/performance-policy.js';
 
 /** The project policy file being watched, re-read on every refresh. */
 interface WatchPolicySource {
-  filename: string;
+  filename: string | undefined;
   read(): PerformancePolicy | undefined;
 }
 
@@ -70,7 +77,13 @@ function watchProject(configPath: string | undefined, { onResult, onError, polic
       }
       const configErrors = program.getConfigFileParsingDiagnostics();
       if (configErrors.length) throw new Error(configErrors.map(diagnosticText).join('\n'));
-      result = analyzeProgram({ program, policy: policySource?.read(), forEachSourceCandidate });
+      result = analyzeProgram({
+        program,
+        policy: policySource?.read(),
+        forEachSourceCandidate,
+        // The editor shows reliability and accessibility findings beside performance ones, from the same Program.
+        analyzers: [...reliabilityAnalyzers, accessibilityAnalyzer],
+      });
       if (!result.scannedFiles) throw new Error('No JavaScript or TypeScript source files to check.');
     } catch (error) {
       onError(error);
@@ -87,9 +100,9 @@ function watchProject(configPath: string | undefined, { onResult, onError, polic
   function policyChanged(current: fs.Stats, previous: fs.Stats): void {
     if (current.nlink || previous.nlink) refresh();
   }
-  if (policySource) fs.watchFile(policySource.filename, { interval: 250 }, policyChanged);
+  if (policySource?.filename !== undefined) fs.watchFile(policySource.filename, { interval: 250 }, policyChanged);
   function unwatchPolicy(): void {
-    if (policySource) fs.unwatchFile(policySource.filename, policyChanged);
+    if (policySource?.filename !== undefined) fs.unwatchFile(policySource.filename, policyChanged);
   }
   let watcher: WatchOfConfigFile<BuilderProgram>;
   try {

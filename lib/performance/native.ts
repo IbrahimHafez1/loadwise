@@ -23,6 +23,8 @@ import { noteUnscannedJavaScript } from './unscanned-javascript.js';
 import nativeSyntax from './native-syntax.js';
 import * as nativeChecker from './native-checker.js';
 import * as performanceAnalyze from './analyze.js';
+import { sourcePillarOf } from '../shared/rule-registry.js';
+import { repositoryRoot, standaloneFindings } from '../reliability/standalone-sources.js';
 import * as schemaTooling from './schema-tooling.js';
 
 // What a caller passes: one config or several, or explicit files; `onlyFiles` keeps just the
@@ -169,6 +171,8 @@ function analyzeNative({
   const visitedConfigs = new Set<string>();
   // Folders scanned with a config that leaves JavaScript out.
   const scopesWithoutJs = new Set<string>();
+  // Folders whose files no program may have analyzed, listed once the programs are done.
+  const standaloneRoots = new Set<string>();
   const scanned = new Set<string>();
   const findings = new Map<string, Finding>();
   const skippedFiles: SkippedFile[] = [];
@@ -254,10 +258,12 @@ function analyzeNative({
         if (!fileFindings) continue;
         scanned.add(key);
         for (const finding of fileFindings) {
+          // A rule can report in another file than the scanned one, so that file is part of the key.
+          const findingKey = finding.file === undefined ? key : canonical(finding.file);
           if (finding.file !== undefined) finding.file = relativeToWorkingDirectory(finding.file);
           mergeFinding(
             findings,
-            `${key}\0${finding.line}\0${finding.column}\0${finding.ruleId}\0${finding.message}`,
+            `${findingKey}\0${finding.line}\0${finding.column}\0${finding.ruleId}\0${finding.message}`,
             finding,
           );
         }
@@ -275,7 +281,7 @@ function analyzeNative({
       try {
         const analyzerFindings = analyzer.analyzeFile(adapter, source, policy);
         if (selectedAnalyzers.length > 1)
-          analyzerFindings.forEach((finding: Finding) => (finding.pillar = analyzer.pillar));
+          for (const finding of analyzerFindings) finding.pillar = sourcePillarOf(finding.ruleId, analyzer.pillar);
         fileFindings = [...(fileFindings ?? []), ...analyzerFindings];
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -305,6 +311,7 @@ function analyzeNative({
       visitConfig(resolveConfig(reference.path), projects, scope);
     }
     if (!parsed.options.allowJs && !onlyFiles) scopesWithoutJs.add(scope ?? path.dirname(filename));
+    standaloneRoots.add(scope ?? repositoryRoot(path.dirname(filename)));
     const rootFiles = onlyFiles ? parsed.fileNames.filter(onlyFiles) : parsed.fileNames;
     if (!rootFiles.some((filename: string) => isSourceInput(filename) && isInScope(scope, filename))) return;
     // Option diagnostics do not depend on root files, so an empty program reports them cheaply.
@@ -358,6 +365,18 @@ function analyzeNative({
     for (const [roots, options, analyzes] of projects) scan(roots, options, analyzes);
     if (!scanned.size && !onlyFiles && !skippedFiles.length)
       throw new Error('No JavaScript or TypeScript source files to check.');
+    if (!files.length && !onlyFiles && selectedAnalyzers.some((analyzer) => analyzer.pillar === 'reliability')) {
+      for (const finding of standaloneFindings(standaloneRoots, (file) => scanned.has(canonical(file)))) {
+        const file = finding.file ?? '';
+        finding.file = relativeToWorkingDirectory(file);
+        if (selectedAnalyzers.length > 1) finding.pillar = sourcePillarOf(finding.ruleId, 'reliability');
+        mergeFinding(
+          findings,
+          `${canonical(file)}\0${finding.line}\0${finding.column}\0${finding.ruleId}\0${finding.message}`,
+          finding,
+        );
+      }
+    }
     noteUnscannedJavaScript([...scopesWithoutJs], (filename: string) => scanned.has(canonical(filename)));
     return {
       scannedFiles: scanned.size,

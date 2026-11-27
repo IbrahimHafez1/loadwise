@@ -12,7 +12,7 @@ import type { FindingFix, FixChange, SiteFixInput } from '../../lib/shared/types
 import type { TestContext } from 'node:test';
 import type { FileMap } from '../types/project-files.js';
 import { analyzeFunctions } from '../../lib/maintainability/functions.js';
-import { checkSwallowedErrors } from '../../lib/maintainability/swallowed-errors.js';
+import { checkSwallowedErrors } from '../../lib/reliability/swallowed-errors.js';
 import { scanWithFixes, withSecurity } from '../performance/site-fix-helpers.js';
 import * as performanceFix from '../../lib/performance/site-fix.js';
 

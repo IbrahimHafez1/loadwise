@@ -162,7 +162,7 @@ test('check writes one section per pillar and reads them back', (context) => {
   assert.equal(written.code, 0, written.stderr);
   const { version, pillars } = readBaseline(root);
   assert.equal(version, 1);
-  assert.deepEqual(Object.keys(pillars), ['maintainability', 'performance', 'security']);
+  assert.deepEqual(Object.keys(pillars), ['maintainability', 'performance', 'reliability', 'security']);
   assert.equal(
     pillars.performance.findings.reduce((total: number, { count }: { count: number }) => total + count, 0),
     3,
@@ -196,7 +196,7 @@ test('an explicit file scan still hides accepted findings and leaves stale count
   assert.doesNotMatch(text, /fixed findings|run --write-baseline/i);
 });
 
-test('changed-line scans leave stale counts unknown for all three checkers', (context) => {
+test('changed-line scans leave stale counts unknown for every checker', (context) => {
   const root = project(context, {
     'tsconfig.json': tsconfig,
     'a.ts': slowSource,
@@ -227,8 +227,12 @@ test('changed-line scans leave stale counts unknown for all three checkers', (co
   for (const scope of [['--staged'], ['--changed-since', 'HEAD']]) {
     const scan = loadwise(root, 'check', '--baseline', '--json', ...scope);
     assert.equal(scan.code, 0, scan.stderr);
-    const reports: Record<string, { baselineHidden: number; baselineStale: number | null }> = JSON.parse(scan.stdout);
+    const reports: Record<string, { baselineHidden: number; baselineStale: number | null } | null> = JSON.parse(
+      scan.stdout,
+    );
+    // Accessibility skips a project without frontend sources, which leaves its report null.
     for (const report of Object.values(reports)) {
+      if (!report) continue;
       assert.equal(report.baselineHidden, 0);
       assert.equal(report.baselineStale, null);
     }

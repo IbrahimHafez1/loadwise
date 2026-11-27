@@ -1,7 +1,8 @@
 import { diffLines, labelledLines } from '../shared/fix-terminal.js';
 import path from 'node:path';
-import { exampleFor } from '../../editor/performance-examples.cjs';
+import { exampleFor } from '../../editor/reliability-examples.cjs';
 import { exampleFor as securityExample } from '../../editor/security-examples.cjs';
+import { exampleFor as accessibilityExample } from '../../editor/accessibility-examples.cjs';
 import { formatImpact } from './impact.js';
 import { hotPathLabel } from '../shared/hot-path.js';
 import type { Finding, FindingFix } from '../shared/types.js';
@@ -26,6 +27,10 @@ const exampleLanguages: Record<string, string> = {
   mts: 'typescript',
   cts: 'typescript',
   tsx: 'typescriptreact',
+  html: 'html',
+  htm: 'html',
+  vue: 'vue',
+  svelte: 'svelte',
   py: 'python',
   go: 'go',
   java: 'java',
@@ -38,7 +43,9 @@ function attachExample(finding: Finding): void {
   const languageId = exampleLanguages[path.extname(finding.file).slice(1).toLowerCase()];
   const example =
     languageId &&
-    (exampleFor(finding.ruleId, languageId, finding.message) ?? securityExample(finding.ruleId, languageId));
+    (exampleFor(finding.ruleId, languageId, finding.message) ??
+      securityExample(finding.ruleId, languageId) ??
+      accessibilityExample(finding.ruleId, languageId));
   if (!example) return;
   const note = example.note ?? example.review;
   finding.example = { language: example.language, code: example.code, ...(note && { note }) };

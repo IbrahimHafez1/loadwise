@@ -4,7 +4,7 @@ import type * as ts from 'typescript';
 import type { PillarName } from './types/pillar-name.js';
 
 export type ImpactLevel = 'low' | 'medium' | 'high' | 'critical';
-export type Pillar = 'perf' | 'maint' | 'sec';
+export type Pillar = 'perf' | 'rel' | 'maint' | 'sec' | 'a11y';
 
 /** One change of a fix as it appears on a reported finding. */
 export interface FixChange {

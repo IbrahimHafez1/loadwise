@@ -35,12 +35,12 @@ const sourceGlob = '**/*.{' + [...sourceSuffixes].join(',') + '}';
 // Inputs besides source files that change findings. A change restarts the incremental watcher as
 // well.
 const configGlob =
-  '**/{schema.prisma,package.json,tsconfig*.json,jsconfig*.json,loadwise.config.json,maintainability.config.json,backend-perf.policy.json,*.sql,migrations}';
+  '**/{schema.prisma,package.json,tsconfig*.json,jsconfig*.json,loadwise.config.json,*.sql,migrations}';
 const ignored = new Set(
   '.git node_modules dist build coverage .next .nuxt .venv venv __pycache__ target vendor'.split(' '),
 );
 const excludeGlob = '**/{' + [...ignored].join(',') + '}/**';
-const scanEnv = { ...process.env, BACKEND_CHECKERS_EDITOR_SCAN: '1' };
+const scanEnv = { ...process.env, LOADWISE_EDITOR_SCAN: '1' };
 
 /** What the editor lists for one checker run on a folder. */
 interface ScanTask {
@@ -48,6 +48,8 @@ interface ScanTask {
   source: string;
   args: string[] | null;
   watch?: boolean;
+  /** Findings the running watcher already shows; scanned on their own only without it. */
+  watched?: boolean;
 }
 
 /** The incremental watcher of one folder; `pending` is set until its first report. */
@@ -250,13 +252,16 @@ function monitor(
       }
     }
     const project = explicitProject || (await firstExisting(root, ['tsconfig.json', 'jsconfig.json']));
-    const hasMaintainabilityInput =
-      project || (await exists(path.join(root, 'maintainability.config.json'))) || (await findOne(sourceGlob));
+    const hasMaintainabilityInput = project || (await findOne(sourceGlob));
     const hasPolyglotInput = await findOne(polyglotGlob);
     const tasks: ScanTask[] = [
       { id: perf, source: perf, args: project ? ['perf', '-p', project] : null, watch: true },
+      // The watcher reports reliability and accessibility with performance, under the perf label whose fix commands still apply them.
+      { id: perf + '-reliability', source: perf, args: project ? ['rel', '-p', project] : null, watched: true },
+      { id: perf + '-accessibility', source: perf, args: project ? ['a11y', '-p', project] : null, watched: true },
       { id: maint, source: maint, args: hasMaintainabilityInput ? ['maint', '.'] : null },
       { id: perf + '-polyglot', source: perf, args: hasPolyglotInput ? ['perf', 'polyglot', '.'] : null },
+      { id: perf + '-polyglot-reliability', source: perf, args: hasPolyglotInput ? ['rel', 'polyglot', '.'] : null },
     ];
     return { project, tasks };
   }
@@ -271,7 +276,7 @@ function monitor(
       return;
     }
     const { project, tasks } = await workspaceScanTasks(settings);
-    for (const { id, source, args, watch } of tasks) {
+    for (const { id, source, args, watch, watched } of tasks) {
       if (signal.signal.aborted || version !== revision) return;
       if (!args) {
         if (watch) stopWatch();
@@ -284,6 +289,10 @@ function monitor(
         if (!path.isAbsolute(script)) throw new Error('CLI override must be an absolute path.');
         if (watch && !watchUnavailable && project) {
           ensureWatch(script, project, restart);
+          continue;
+        }
+        if (watched && !watchUnavailable && project) {
+          clear(id);
           continue;
         }
         const findings = await readFindings(script, args, root, scanSignal);

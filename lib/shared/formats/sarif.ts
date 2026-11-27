@@ -4,25 +4,17 @@ const { version: toolVersion } = packageManifest;
 import { findingLevel, repositoryPathFor } from './finding-location.js';
 import type { Finding, SkippedFile } from '../types.js';
 import type { FormatPillar, RanReportEntry, ReportEntry, RepositoryPath } from '../types/report-formats.js';
-import { descriptionByRule } from '../../performance/rule-ids.js';
-import { descriptionByRule as descriptionByRuleRuleIds } from '../../maintainability/rule-ids.js';
-import { descriptionByRule as descriptionByRuleRuleDescriptions } from '../../security/rule-descriptions.js';
+import { rulesByPillar } from '../rule-registry.js';
 
 const sarifSchema = 'https://json.schemastore.org/sarif-2.1.0.json';
 const documentationUrl = 'https://github.com/IbrahimHafez1/loadwise';
 const fingerprintKey = 'loadwise/findingId/v1';
 const sourceRootId = '%SRCROOT%';
 
-const descriptionsByPillar: Record<FormatPillar, () => Readonly<Record<string, string>>> = {
-  performance: () => descriptionByRule,
-  maintainability: () => descriptionByRuleRuleIds,
-  security: () => descriptionByRuleRuleDescriptions,
-};
-
 // Messages carry per-site detail, so a rule without a registered description is summarized by its
 // first sentence.
 function shortDescription(pillar: FormatPillar, ruleId: string, message: string) {
-  return descriptionsByPillar[pillar]?.()[ruleId] ?? message.match(/^.*?[.!?](?=\s|$)/s)?.[0] ?? message;
+  return rulesByPillar[pillar].descriptionByRule[ruleId] ?? message.match(/^.*?[.!?](?=\s|$)/s)?.[0] ?? message;
 }
 
 interface SarifRule {
