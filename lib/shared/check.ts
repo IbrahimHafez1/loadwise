@@ -41,6 +41,12 @@ const invalidInputCode = 2;
 const thresholdMetCode = 1;
 
 function parseCheckArgs(args: readonly string[]) {
+  // Each checker takes --fix, so `loadwise --fix` is a natural guess; point it to the fix command instead of a parser error.
+  if (args.includes('--fix')) {
+    throw new Error(
+      'check never changes files. Run `loadwise fix --yes` for automatic edits, or `loadwise fix --all` to also apply edits marked for review.',
+    );
+  }
   const { args: checkArgs, ...baselineOptions } = extractBaselineFlags(args);
   const { values, positionals } = parseArgs({
     args: checkArgs,
