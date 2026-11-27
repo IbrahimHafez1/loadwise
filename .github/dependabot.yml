@@ -14,6 +14,9 @@ updates:
       # TypeScript 7 removed the JavaScript compiler API the checkers are built on.
       - dependency-name: typescript
         update-types: ['version-update:semver-major']
+      # The native engine binaries must match the vendored API in lib/performance/vendor/typescript and each other, so
+      # they move together by hand; Dependabot proposed per-platform nightlies.
+      - dependency-name: '@typescript/typescript-*'
   - package-ecosystem: github-actions
     directory: /
     schedule:
