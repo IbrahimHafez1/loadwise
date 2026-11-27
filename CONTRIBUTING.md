@@ -47,9 +47,10 @@ npm run bench:recall
 ## Releasing (maintainers)
 
 1. In a pull request, bump `version` in `package.json` and `plugin/.claude-plugin/plugin.json` and move the `[Unreleased]` notes in `CHANGELOG.md` under the new version.
-2. After it merges, tag the merge commit `vX.Y.Z` and push the tag. The `release` workflow runs the full check, stages the npm publish through Trusted Publishing (no token), creates the GitHub release and moves the `v0` Action tag.
-3. Approve the staged version on npmjs.com with 2FA; only then does it go live. A `-` in the version (for example `v0.6.0-rc.1`) publishes under the `next` dist-tag instead of `latest`.
-4. If the workflow fails after the stage step, settle the staged version on npmjs.com before re-running it. Re-staging the same version fails with `409 Conflict`, and the workflow's token cannot see or clear a pending stage. Approve it if the build was good, and the re-run skips straight to the GitHub release and `v0` tag; reject it to stage again from the re-run.
+2. After it merges, tag the merge commit `vX.Y.Z` and push the tag. The `release` workflow runs the full check and stages the npm publish through Trusted Publishing (no token).
+3. Approve the staged version on npmjs.com with 2FA; only then does it go live. A `-` in the version (for example `v0.6.0-rc.1`) publishes under the `next` dist-tag instead of `latest`. Approve stages in version order and reject an older pending one, since approving it later would move the dist-tag back to the older version.
+4. The workflow's GitHub release job waits up to two hours for the approval, then creates the GitHub release and, for a stable `v0.x` version, moves the `v0` Action tag. If it timed out, approve the version and re-run the failed job.
+5. If the workflow fails after the stage step, settle the staged version on npmjs.com before re-running it. Re-staging the same version fails with `409 Conflict`, and the workflow's token cannot see or clear a pending stage. Approve it if the build was good, and the re-run skips straight to the GitHub release and `v0` tag, reusing a release that already exists; reject it to stage again from the re-run.
 
 ## License
 
