@@ -10,6 +10,6 @@
     "kysely": "0.28.8",
     "mongoose": "8.19.1",
     "sequelize": "6.37.7",
-    "typeorm": "0.3.28"
+    "typeorm": "0.3.31"
   }
 }
