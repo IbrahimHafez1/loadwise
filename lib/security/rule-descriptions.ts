@@ -70,7 +70,7 @@ const descriptionByRule = {
   'client-env-secret-exposed':
     'A secret-named env variable is read under a browser prefix (NEXT_PUBLIC_, VITE_, REACT_APP_...), so the build ships it to every visitor.',
   'jsx-javascript-url':
-    'A URL search parameter, router query or location hash starts a JSX href, action or iframe src, so a javascript: URL can run script.',
+    'In React 18 and older or Preact, a URL search parameter or location hash starts a JSX href, action or iframe src (javascript: XSS).',
   'next-image-any-remote-host':
     "A Next.js images.remotePatterns entry sets hostname '**', so the image optimizer fetches and serves any host (open proxy).",
   'express-missing-helmet':
