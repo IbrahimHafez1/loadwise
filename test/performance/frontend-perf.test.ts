@@ -611,3 +611,27 @@ export class X {}`;
     fs.rmSync(templateFile, { force: true });
   }
 });
+
+test('react-component-defined-in-component sees a null-rendering nested component and JSX returned through a local', () => {
+  const nullRendering =
+    'export function List() { const Observer = () => { useEffect(() => {}, []); return null; }; return <Observer />; }';
+  const viaLocal = 'export function List() { const Row = () => <li />; const content = <Row />; return content; }';
+  for (const source of [nullRendering, viaLocal]) {
+    assert.equal(only(`${REACT_IMPORT}${source}`, 'react-component-defined-in-component').length, 1);
+  }
+  const helperOuter = 'export function build() { const Row = () => <li />; const content = <Row />; return content; }';
+  const unrenderedNull = 'export function List() { const Observer = () => null; return <ul />; }';
+  for (const source of [helperOuter, unrenderedNull]) {
+    assert.deepEqual(only(`${REACT_IMPORT}${source}`, 'react-component-defined-in-component'), []);
+  }
+});
+
+test('angular-ngfor-missing-trackby reports a literal array extended with dynamic items and an unterminated comment tail', () => {
+  const header = "import { Component } from '@angular/core';\n";
+  const concatenated = `'<li *ngFor="let item of [1].concat(items)">x</li>'`;
+  const concatSource = `${header}@Component({ selector: 'x', template: ${concatenated} })\nexport class X {}`;
+  assert.equal(only(concatSource, 'angular-ngfor-missing-trackby', 'x.ts').length, 1);
+  const unterminated = `'<!-- <li *ngFor="let item of items">x</li>'`;
+  const tailSource = `${header}@Component({ selector: 'x', template: ${unterminated} })\nexport class X {}`;
+  assert.deepEqual(only(tailSource, 'angular-ngfor-missing-trackby', 'x.ts'), []);
+});
