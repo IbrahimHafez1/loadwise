@@ -18,7 +18,7 @@ function errorRules(source: string): string[] {
   );
 }
 
-const spawnImport = "import { spawn, fork, exec } from 'node:child_process';\n";
+const spawnImport = "import { spawn, fork, exec, execFile } from 'node:child_process';\n";
 const flagged = ['child-process-without-error-listener'];
 
 test('child-process-without-error-listener reports spawned processes that only get other listeners', () => {
@@ -28,6 +28,8 @@ test('child-process-without-error-listener reports spawned processes that only g
     "const child = spawn('ls');\nchild.on('close', () => {});",
     "const child = fork('worker.js');\nchild.stdout?.on('data', () => {});\nchild.kill();",
     "const child = exec('ls');\nchild.on('exit', () => {});",
+    "const file = '/missing';\nexecFile(file);",
+    "const child = spawn('ls');\nchild.on('close', onClose).on('exit', onExit);",
     "function run() { const child = spawn('ls'); return new Promise((resolve) => child.on('close', resolve)); }",
   ];
   for (const source of sources) assert.deepEqual(childProcessRules(spawnImport + source), flagged, source);
@@ -55,6 +57,7 @@ test('child-process-without-error-listener accepts handled, handed-off and callb
     "const { stdout } = spawn('ls');",
     "exec('ls', (error) => {});",
     "exec('ls', callback);",
+    "const child = spawn('ls');\nchild.on('close', onClose).on('error', onError);",
     "const child = spawn('ls');\nreturn child;",
   ];
   for (const source of sources) assert.deepEqual(childProcessRules(spawnImport + source), [], source);
@@ -70,6 +73,9 @@ test('error-rethrown-without-cause reports a new error that drops the caught one
     "try { work(); } catch (err) { throw new Error('work failed'); }",
     'try { work(); } catch (error) { throw new TypeError(`bad config ${path}`); }',
     "try { work(); } catch (e) { throw new RangeError('gave up'); }",
+    "try { work(); } catch (e) { throw new AggregateError([], 'gave up'); }",
+    "try { work(); } catch (e) { throw Error('gave up'); }",
+    'try { work(); } catch (err) { throw new Error(config.err); }',
   ];
   for (const source of sources) assert.deepEqual(errorRules(source), ['error-rethrown-without-cause'], source);
 });
@@ -101,6 +107,9 @@ test('throw-non-error reports strings, numbers, templates and object literals', 
     "throw 'failed: ' + reason;",
     'throw [1, 2];',
     'throw null;',
+    'throw -1;',
+    'throw -1n;',
+    'throw undefined;',
   ];
   for (const source of sources) assert.deepEqual(errorRules(source), ['throw-non-error'], source);
 });
@@ -141,6 +150,17 @@ test('error-logged-without-stack accepts logs with the error, a rethrow, an exit
     "try { work(); } catch (err) { console.error('failed'); }",
   ];
   for (const source of sources) assert.deepEqual(errorRules(source), [], source);
+});
+
+test('throw-non-error is not skipped for production folders that merely contain "test" in their name', () => {
+  for (const file of ['src/latest/service.ts', 'src/contest/service.ts']) {
+    const found = withProgram("throw 'x';", noPackages, (_program, sourceFile) => checkErrorValues(sourceFile, file));
+    assert.deepEqual(
+      found.map(({ ruleId }) => ruleId),
+      ['throw-non-error'],
+      file,
+    );
+  }
 });
 
 test('throw-non-error and error-logged-without-stack skip fixtures, e2e helpers, test utilities and migrations', () => {

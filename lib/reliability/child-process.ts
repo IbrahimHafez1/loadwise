@@ -18,7 +18,10 @@ function spawnedMember(call: CallExpression, checker: CheckerAdapter): string | 
   if (origin?.moduleName !== 'child_process' || origin.members.length !== 1) return;
   const [member] = origin.members;
   if (alwaysEmitting.has(member)) return member;
-  const hasCallback = call.arguments.some((argument) => ts.isFunctionLike(argument) || ts.isIdentifier(argument));
+  // The first argument is the command or file, never the callback; a later identifier may be the callback.
+  const hasCallback = call.arguments.some(
+    (argument, index) => ts.isFunctionLike(argument) || (index > 0 && ts.isIdentifier(argument)),
+  );
   return callbackAccepting.has(member) && !hasCallback ? member : undefined;
 }
 
@@ -39,7 +42,11 @@ function useOf(reference: Node): Use {
   if (!ts.isPropertyAccessExpression(access) || access.expression !== node) return 'escapes';
   const call = access.parent;
   if (!listenerMethods.has(access.name.text)) return 'plain';
-  return ts.isCallExpression(call) && call.expression === access && registersErrorListener(call) ? 'listener' : 'plain';
+  if (!ts.isCallExpression(call) || call.expression !== access) return 'plain';
+  if (registersErrorListener(call)) return 'listener';
+  // Listener methods return the emitter, so `child.on('close', f).on('error', g)` still registers one.
+  const chained = outermostWrapper(call).parent;
+  return ts.isPropertyAccessExpression(chained) ? useOf(call) : 'plain';
 }
 
 function declarationLacksErrorListener(declaration: VariableDeclaration, checker: CheckerAdapter): boolean {
