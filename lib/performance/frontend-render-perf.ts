@@ -23,10 +23,13 @@ const COMPONENT_NAME = /^[A-Z]/;
 const NG_FOR_ATTRIBUTE = /\*ngFor\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
 // Only an array of string and number literals keeps its identities; objects, calls and spreads do not.
 const LITERAL_ITEM = String.raw`(?:'[^']*'|"[^"]*"|-?\d+(?:\.\d+)?)`;
-const STATIC_ARRAY_SOURCE = new RegExp(String.raw`\bof\s+\[\s*(?:${LITERAL_ITEM}\s*(?:,\s*${LITERAL_ITEM}\s*)*)?\]`);
+const STATIC_ARRAY_SOURCE = new RegExp(
+  String.raw`\bof\s+\[\s*(?:${LITERAL_ITEM}\s*(?:,\s*${LITERAL_ITEM}\s*)*)?\]\s*(?:;|$)`,
+);
 // A `trackBy` binding in the microsyntax (`trackBy: fn` or `trackBy fn`), not a property or variable of that name.
 const TRACK_BY = /(?<![.\w$])trackBy(?:\s*:|\s+[\w$])/;
-const HTML_COMMENT = /<!--[\s\S]*?-->/g;
+// A terminated comment, or an unterminated `<!--` and everything after it, so no `<!--` survives.
+const HTML_COMMENT = /<!--[\s\S]*?(?:-->|$)/g;
 const CONTROL_CHARACTERS = /\p{Cc}/gu;
 const REACT_COMPONENT_WRAPPERS = new Set(['memo', 'forwardRef']);
 const HTML_FILE = /\.html?$/i;
@@ -85,9 +88,18 @@ function isJsx(expression: Expression): boolean {
 function returnsJsx(fn: FunctionNode): boolean {
   if (!fn.body) return false;
   if (!ts.isBlock(fn.body)) return isJsx(fn.body);
+  // `const content = <Row />; return content;`
+  const jsxLocals = new Set<string>();
+  walkSkippingFunctions(fn.body, (node: Node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer && isJsx(node.initializer)) {
+      jsxLocals.add(node.name.text);
+    }
+  });
   let found = false;
   walkSkippingFunctions(fn.body, (node: Node) => {
-    if (ts.isReturnStatement(node) && node.expression && isJsx(node.expression)) found = true;
+    if (!ts.isReturnStatement(node) || !node.expression) return;
+    const returned = ts.skipOuterExpressions(node.expression);
+    if (isJsx(returned) || (ts.isIdentifier(returned) && jsxLocals.has(returned.text))) found = true;
   });
   return found;
 }
@@ -124,7 +136,7 @@ function rendersAsElement(outer: FunctionNode, declaration: Node, name: string, 
 function checkComponentInComponent(fn: FunctionNode, context: PerformanceRuleContext) {
   const name = declaredName(fn);
   const declaration = declarationOf(fn);
-  if (!name || !declaration || !COMPONENT_NAME.test(name) || !returnsJsx(fn)) return;
+  if (!name || !declaration || !COMPONENT_NAME.test(name)) return;
   const outer = enclosingFunction(fn);
   if (!outer || !isComponent(outer) || !returnsJsx(outer)) return;
   if (!rendersAsElement(outer, declaration, name, context)) return;
