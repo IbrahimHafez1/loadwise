@@ -4,11 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { impactByRule } from '../../lib/performance/rule-ids.js';
-import { impactByRule as reliabilityImpactByRule } from '../../lib/reliability/rule-ids.js';
-import { impactByRule as impactByRuleRuleIds } from '../../lib/maintainability/rule-ids.js';
-import { impactByRule as accessibilityImpactByRule } from '../../lib/accessibility/rule-ids.js';
-import { securityRules, polyglotRules as securityPolyglotRules } from '../../lib/security/rule-ids.js';
+import { RULE_DOCS_DIR, isChecker, isFixable, readPages, readRegistry, renderReadme } from '../../scripts/rule-docs.js';
 
 const root = path.join(import.meta.dirname, '..', '..');
 const binEntry = path.join(root, 'bin', 'loadwise.js');
@@ -64,22 +60,74 @@ test('package.json files covers every runtime require reachable from bin/', () =
   assert.deepEqual(uncovered, [], `not shipped by package.json files: ${uncovered.join(', ')}`);
 });
 
-// SARIF helpUri points at README#<rule-id>. syntax-error skips the unparsable file instead of
-// becoming a finding, so it has none.
+const registry = readRegistry();
+const pages = readPages(root);
+const pageById = new Map(pages.map(({ page }) => [page.id, page]));
+const ruleIds = registry.map((record) => record.id);
+
+test('every registered rule id has a page and every page has a registered rule id', () => {
+  assert.deepEqual(
+    ruleIds.filter((ruleId) => !pageById.has(ruleId)),
+    [],
+  );
+  const registered = new Set(ruleIds);
+  assert.deepEqual(
+    pages.filter(({ file, page }) => file !== `${page.id}.md` || !registered.has(page.id)).map(({ file }) => file),
+    [],
+  );
+});
+
+test('each rule page matches the registry', () => {
+  const mismatches = registry.flatMap((record) => {
+    const page = pageById.get(record.id);
+    if (!page) return [];
+    const fields = [
+      ['title', page.title, record.id],
+      ['checker', page.checker, record.checker],
+      ['impact', page.impact, record.impact],
+      ['description', page.description, record.description],
+    ] as const;
+    const wrong = fields.filter(([, actual, expected]) => actual !== expected).map(([name]) => `${record.id}: ${name}`);
+    if (!isChecker(page.checker)) wrong.push(`${record.id}: unknown checker`);
+    if (!isFixable(page.fixable)) wrong.push(`${record.id}: unknown fixable value ${page.fixable}`);
+    const unknownRelated = page.related.filter((related) => related === record.id || !pageById.has(related));
+    if (unknownRelated.length > 0) wrong.push(`${record.id}: related ${unknownRelated.join(', ')}`);
+    return wrong;
+  });
+  assert.deepEqual(mismatches, []);
+});
+
+test('the README rule index is generated from the rule pages', async () => {
+  const generated = await renderReadme(
+    path.join(root, 'README.md'),
+    readme,
+    pages.map(({ page }) => page),
+  );
+  assert.equal(generated, readme, 'README.md rule index is stale. Run: npm run docs:rules');
+});
+
+// SARIF helpUri points at README#<rule-id>, so the index keeps one anchor per rule. syntax-error skips the
+// unparsable file instead of becoming a finding, so it has none.
 test('every rule id has exactly one README anchor', () => {
-  const ruleIds = [
-    ...Object.keys(impactByRule),
-    ...Object.keys(reliabilityImpactByRule),
-    ...Object.keys(impactByRuleRuleIds),
-    ...Object.keys(accessibilityImpactByRule),
-    ...securityRules,
-    ...securityPolyglotRules,
-  ].filter((ruleId) => ruleId !== 'syntax-error');
   const anchorCount = (ruleId: string) => readme.split(`<a id="${ruleId}"></a>`).length - 1;
   assert.deepEqual(
     ruleIds.filter((ruleId) => anchorCount(ruleId) !== 1),
     [],
   );
+});
+
+// A later docs site reads these pages as MDX, where a bare < or { starts markup or an expression.
+test('rule pages have no bare < or { outside code', () => {
+  const bareMarkup = pages
+    .filter(({ page }) => {
+      const prose = page.body
+        .replaceAll(/```[\s\S]*?```/g, '')
+        .replaceAll(/`[^`\n]*`/g, '')
+        .replaceAll(/\\[<{]/g, '');
+      return /[<{]/.test(prose);
+    })
+    .map(({ file }) => `${RULE_DOCS_DIR}/${file}`);
+  assert.deepEqual(bareMarkup, []);
 });
 
 test('npm pack ships examples/*.ts and no implementation .ts or .cts source files', () => {

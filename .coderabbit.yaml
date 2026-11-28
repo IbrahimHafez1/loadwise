@@ -25,7 +25,7 @@ reviews:
       instructions: >-
         Follow CONTRIBUTING.md: no `any`, no non-null `!`, no `as` type assertions except `as const` (import and
         export aliases are fine), relative imports use the emitted file's extension
-        (`.js` from `.ts`, `.cjs` from `.cts`), descriptive names. A rule or autofix change needs positive and negative tests and matching README docs.
+        (`.js` from `.ts`, `.cjs` from `.cts`), descriptive names. A rule or autofix change needs positive and negative tests and a matching rule page in `docs/rules/`.
     - path: 'lib/**'
       instructions: >-
         Loadwise is precision-first: a false positive costs more than a missed detection. Label a suggestion that
