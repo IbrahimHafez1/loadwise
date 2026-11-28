@@ -1,6 +1,7 @@
 // next-image-any-remote-host: `images.remotePatterns` in a Next.js config lets `hostname: '**'`
-// match every host, so `/_next/image?url=...` fetches and serves any URL an attacker names: an open
-// proxy that bills the app for the bandwidth and reaches hosts only the server can see.
+// match every host, so `/_next/image?url=...` fetches and serves images from any host an attacker
+// names within the entry's protocol, port and pathname: a proxy that bills the app for the bandwidth.
+// Before Next.js 16 (or with `dangerouslyAllowLocalIP`) it also reaches local addresses.
 import { ts } from '../../performance/compiler.js';
 import { nameText, unwrap } from './literals.js';
 import type { Node, PropertyAssignment } from 'typescript';
@@ -8,7 +9,7 @@ import type { SecurityRuleContext } from '../../shared/types.js';
 
 const ruleId = 'next-image-any-remote-host';
 const message =
-  "`hostname: '**'` in `images.remotePatterns` lets the Next.js image optimizer fetch and serve images from any host, so anyone can use `/_next/image` as an open proxy to arbitrary or internal URLs. List the exact hosts (or a `**.your-cdn.com` subdomain pattern) instead.";
+  "`hostname: '**'` in `images.remotePatterns` lets the Next.js image optimizer fetch and serve images from any host, so anyone can use `/_next/image` as an image proxy for any host the entry's protocol, port and pathname allow (before Next.js 16, local IP addresses too). List the exact hosts (or a `**.your-cdn.com` subdomain pattern) instead.";
 // `*` matches one host label; `**` matches every host.
 const anyHost = '**';
 
