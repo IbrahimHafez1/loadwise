@@ -60,6 +60,7 @@ const sourceRules = [
   'orm-deep-offset',
   'list-count-per-request',
   'notification-send-in-loop',
+  'llm-call-without-max-tokens',
   'session-memory-store',
   'orm-cartesian-include',
   'json-roundtrip-clone',
@@ -155,6 +156,7 @@ const impactByRule: Readonly<Record<string, ImpactLevel>> = {
   'orm-deep-offset': 'high',
   'list-count-per-request': 'medium',
   'notification-send-in-loop': 'high',
+  'llm-call-without-max-tokens': 'medium',
   'session-memory-store': 'high',
   'orm-cartesian-include': 'high',
   'json-roundtrip-clone': 'low',
@@ -301,7 +303,7 @@ const descriptionByRule = {
   'pg-top-k-materialization': 'A pg query loads an unbounded result that JavaScript sorts to keep the top rows.',
   'pg-unreleased-checkout': 'A chained pool checkout loses the client, so it is never released.',
   'pool-created-per-request-or-item':
-    'A database or Redis client or pool is created on a per-request or per-item path.',
+    'A database, Redis, S3, OpenAI, Anthropic or Stripe client or pool is created on a per-request or per-item path.',
   'prisma-count-materialization': 'A Prisma query loads rows only to count them.',
   'prisma-count-for-existence': 'A Prisma query counts all matches only to check whether any row exists.',
   'prisma-distinct-in-memory': 'Prisma findMany with distinct reads every matching row and de-duplicates in memory.',
@@ -326,6 +328,7 @@ const descriptionByRule = {
   'list-count-per-request': 'A list endpoint runs a full count query on every request.',
   'notification-send-in-loop':
     'A push, email or Firebase message is sent once per loop iteration instead of in one batch.',
+  'llm-call-without-max-tokens': 'An OpenAI chat or responses call sets no output token limit.',
   'session-memory-store': 'An express-session middleware has no store, so sessions live in process memory.',
   'orm-cartesian-include': 'One query joins two or more one-to-many relations, so the returned rows multiply.',
   'json-roundtrip-clone': 'A value is deep-cloned with JSON.parse(JSON.stringify(...)) on a request path.',

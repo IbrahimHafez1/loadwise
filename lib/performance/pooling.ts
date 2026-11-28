@@ -20,6 +20,8 @@ import type { RepeatOwner } from './types/repeat-owner.js';
 interface DriverSpec {
   member: string;
   declarations: string[];
+  // True when the package also exports the class as its default (`import OpenAI from 'openai'`).
+  defaultExport?: boolean;
 }
 
 // A local name bound by an import of a driver or http module; `member` is absent for a default or
@@ -37,6 +39,10 @@ const drivers = new Map<string, DriverSpec>([
   ['@prisma/client', { member: 'PrismaClient', declarations: ['@prisma/client', '.prisma/client'] }],
   ['redis', { member: 'createClient', declarations: ['redis', '@redis/client'] }],
   ['@redis/client', { member: 'createClient', declarations: ['@redis/client'] }],
+  ['@aws-sdk/client-s3', { member: 'S3Client', declarations: ['@aws-sdk/client-s3'] }],
+  ['openai', { member: 'OpenAI', declarations: ['openai'], defaultExport: true }],
+  ['@anthropic-ai/sdk', { member: 'Anthropic', declarations: ['@anthropic-ai/sdk'], defaultExport: true }],
+  ['stripe', { member: 'Stripe', declarations: ['stripe'], defaultExport: true }],
 ]);
 const httpModules = new Set(['http', 'https', 'node:http', 'node:https']);
 const routeMethods = new Set(['get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'all']);
@@ -79,7 +85,11 @@ function importedMember(
     importsByFile.set(file, bindings);
   }
   const binding = bindings.get(local.text);
-  if (!binding || qualified === Boolean(binding.member)) return;
+  if (!binding) return;
+  // A bare default import names the class itself, as in `new OpenAI()`.
+  const bareDefault =
+    !qualified && ts.isImportClause(binding.declaration) && drivers.get(binding.moduleName)?.defaultExport;
+  if (qualified === Boolean(binding.member) && !bareDefault) return;
   if (!checker.getSymbolAtLocation(local)?.declarations?.includes(binding.declaration)) return;
   return { moduleName: binding.moduleName, member: qualified ? target.name.text : binding.member };
 }
@@ -248,7 +258,8 @@ function checkPoolCreation(node: CallExpression | NewExpression, context: Perfor
   }
   const imported = importedMember(target, context.checker);
   const driver = imported && drivers.get(imported.moduleName);
-  if (!driver || imported.member !== driver.member || constructing === (driver.member === 'createClient')) return;
+  const isDriverMember = imported?.member === driver?.member || (!imported?.member && driver?.defaultExport);
+  if (!driver || !isDriverMember || constructing === (driver.member === 'createClient')) return;
   const owner = findRepeatOwner(node, context.checker) || requestHandlerOwner(node, context);
   if (!owner || cachedInitialization(node, owner, context.checker) || !verifiedDriver(target, driver, context.checker))
     return;

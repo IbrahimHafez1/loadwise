@@ -279,7 +279,7 @@ function transactionOnPool({ node, sourceFile, text }: SiteFixInput): FixResult 
 
 // ---- pool-created-per-request-or-item ----
 
-const closingMethods = new Set(['end', 'close', 'quit', 'disconnect', '$disconnect']);
+const closingMethods = new Set(['end', 'close', 'quit', 'disconnect', '$disconnect', 'destroy']);
 const declarationKinds = new Set<SyntaxKind>([
   ts.SyntaxKind.VariableDeclaration,
   ts.SyntaxKind.Parameter,
