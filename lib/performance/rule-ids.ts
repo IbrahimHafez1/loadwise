@@ -67,6 +67,8 @@ const sourceRules = [
   'react-index-as-key',
   'react-fetch-in-effect-no-abort',
   'react-inline-object-in-jsx-prop',
+  'react-component-defined-in-component',
+  'angular-ngfor-missing-trackby',
   'angular-subscribe-without-cleanup',
   'angular-default-change-detection',
   'vue-watch-missing-cleanup',
@@ -137,6 +139,8 @@ const impactByRule: Readonly<Record<string, ImpactLevel>> = {
   'react-index-as-key': 'low',
   'react-fetch-in-effect-no-abort': 'low',
   'react-inline-object-in-jsx-prop': 'low',
+  'react-component-defined-in-component': 'medium',
+  'angular-ngfor-missing-trackby': 'low',
   'angular-subscribe-without-cleanup': 'medium',
   'angular-default-change-detection': 'low',
   'vue-watch-missing-cleanup': 'medium',
@@ -350,6 +354,9 @@ const descriptionByRule = {
     'A fetch in an effect has no AbortController or cleanup, so dependency changes can race and apply stale results.',
   'react-inline-object-in-jsx-prop':
     'An inline object literal is passed to a memo() component, creating a new reference each render and defeating the memo.',
+  'react-component-defined-in-component':
+    'A component is declared inside another component and rendered as an element, so it remounts on every render and loses its state and DOM.',
+  'angular-ngfor-missing-trackby': 'An *ngFor has no trackBy, so a changed list recreates the DOM of every item.',
   'angular-subscribe-without-cleanup':
     'An RxJS subscription in a component has no completing operator or ngOnDestroy unsubscribe and keeps running after destruction.',
   'angular-default-change-detection':

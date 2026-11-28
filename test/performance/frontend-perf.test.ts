@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { test } from 'node:test';
 import ts from 'typescript';
 import { createRuleContext, withProgram, requireContextualReason } from './helpers.js';
@@ -485,4 +487,77 @@ test('frontend-barrel-heavy-import skips MUI icon subpath imports', () => {
 test('rules skip test sources', () => {
   const source = "export function init() { window.addEventListener('online', () => {}); }";
   assert.deepEqual(findings(source, 'init.test.ts'), []);
+});
+
+test('react-component-defined-in-component reports a nested component rendered as an element', () => {
+  const declaration = 'export function List() { const Row = () => <li />; return <ul><Row /></ul>; }';
+  const functionForm = 'export function List() { function Row() { return <li />; } return <ul><Row /></ul>; }';
+  const wrapped = 'export const List = memo(() => { const Row = () => <li />; return <Row />; });';
+  for (const source of [declaration, functionForm, wrapped]) {
+    assert.equal(only(`${REACT_IMPORT}${source}`, 'react-component-defined-in-component').length, 1);
+  }
+});
+
+test('react-component-defined-in-component ignores helpers, render props, module scope and unrendered components', () => {
+  const lowercaseHelper = 'export function List() { const row = () => <li />; return <ul>{row()}</ul>; }';
+  const renderProp =
+    'export function List(p: { render: (n: () => unknown) => unknown }) { return p.render(() => <li />); }';
+  const moduleScope = 'const Row = () => <li />;\nexport function List() { return <Row />; }';
+  const calledAsFunction = 'export function List() { const Row = () => <li />; return <ul>{Row()}</ul>; }';
+  const insideCallback =
+    'export function List(p: { rows: string[] }) { return <ul>{p.rows.map((r) => { const Cell = () => <li />; return <Cell />; })}</ul>; }';
+  const notComponentOuter = 'export function build() { const Row = () => <li />; return <Row />; }';
+  const shadowed = 'const Row = () => <li />;\nexport function List() { const Other = () => <i />; return <Row />; }';
+  for (const source of [
+    lowercaseHelper,
+    renderProp,
+    moduleScope,
+    calledAsFunction,
+    insideCallback,
+    notComponentOuter,
+    shadowed,
+  ]) {
+    assert.deepEqual(only(source, 'react-component-defined-in-component'), []);
+  }
+});
+
+test('angular-ngfor-missing-trackby reports an inline template loop without trackBy', () => {
+  const source = `import { Component } from '@angular/core';
+@Component({ selector: 'x', template: '<li *ngFor="let item of items">{{ item }}</li><li *ngFor="let a of more">{{ a }}</li>' })
+export class X { items: string[] = []; more: string[] = []; }`;
+  const found = only(source, 'angular-ngfor-missing-trackby', 'x.ts');
+  assert.equal(found.length, 1);
+  assert.match(found[0].message, /and 1 more/);
+});
+
+test('angular-ngfor-missing-trackby ignores trackBy, literal arrays, @for blocks and other decorators', () => {
+  const header = "import { Component } from '@angular/core';\n";
+  const templates = [
+    `'<li *ngFor="let item of items; trackBy: byId">x</li>'`,
+    `'<li *ngFor="let item of [1, 2, 3]">x</li>'`,
+    `'@for (item of items; track item.id) { <li>x</li> }'`,
+    `'<li>plain</li>'`,
+  ];
+  for (const template of templates) {
+    const source = `${header}@Component({ selector: 'x', template: ${template} })\nexport class X {}`;
+    assert.deepEqual(only(source, 'angular-ngfor-missing-trackby', 'x.ts'), []);
+  }
+  const foreign = `function Component(metadata: object): ClassDecorator { return () => {}; }\n@Component({ template: '<li *ngFor="let i of items">x</li>' })\nexport class X {}`;
+  assert.deepEqual(only(foreign, 'angular-ngfor-missing-trackby', 'x.ts'), []);
+});
+
+test('angular-ngfor-missing-trackby reads a templateUrl html file', () => {
+  // The scanned source lives in the helpers' virtual project folder, so the template goes beside it.
+  const directory = path.resolve(import.meta.dirname, 'virtual-project');
+  const templateFile = path.join(directory, 'ngfor-fixture.component.html');
+  fs.mkdirSync(directory, { recursive: true });
+  fs.writeFileSync(templateFile, '<li *ngFor="let item of items">{{ item }}</li>');
+  try {
+    const source = `import { Component } from '@angular/core';
+@Component({ selector: 'x', templateUrl: './ngfor-fixture.component.html' })
+export class X {}`;
+    assert.equal(only(source, 'angular-ngfor-missing-trackby', 'ngfor-fixture.ts').length, 1);
+  } finally {
+    fs.rmSync(templateFile, { force: true });
+  }
 });

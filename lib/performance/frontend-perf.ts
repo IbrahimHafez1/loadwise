@@ -8,10 +8,12 @@
 // - angular-default-change-detection
 // - vue-watch-missing-cleanup
 // - vue-v-for-missing-key
+// frontend-render-perf.ts adds react-component-defined-in-component and angular-ngfor-missing-trackby.
 // Every rule rests on where a name comes from (its import), never on the name alone.
 import { ts } from './compiler.js';
 import { isTestSource } from './review-context.js';
 import { declaredInPackage, initializerOf, packageOf, propertyName } from './schema/ts-helpers.js';
+import { checkComponentInComponent, checkNgForTrackBy, isFunctionNode } from './frontend-render-perf.js';
 import { checkAddEventListener, checkHeavyBarrelImport, checkLayoutThrashing, isLoop } from './frontend-dom-perf.js';
 import {
   ANGULAR_MODULES,
@@ -420,6 +422,8 @@ function destroyHookReleases(classNode: ClassDeclaration): boolean {
 function checkAngularClass(classNode: ClassDeclaration, context: PerformanceRuleContext) {
   if (!ts.canHaveDecorators(classNode) || !ts.getDecorators(classNode)?.length) return;
   checkAngularChangeDetection(classNode, context);
+  const component = componentMetadata(classNode, context.checker);
+  if (component) checkNgForTrackBy(component.metadata, context);
   if (!isAngularComponentOrDirective(classNode, context.checker)) return;
   if (destroyHookReleases(classNode)) return;
   walkAll(classNode, (node: Node) => {
@@ -534,6 +538,7 @@ function checkFrontendNode(node: Node, context: PerformanceRuleContext) {
   else if (ts.isCallExpression(node)) checkCall(node, context);
   else if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) checkInlineObjectProps(node, context);
   else if (ts.isClassDeclaration(node)) checkAngularClass(node, context);
+  else if (isFunctionNode(node)) checkComponentInComponent(node, context);
   else if (isLoop(node)) checkLayoutThrashing(node, context);
 }
 

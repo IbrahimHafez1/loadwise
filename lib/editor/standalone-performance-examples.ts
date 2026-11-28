@@ -547,6 +547,18 @@ const standaloneExamples: Record<string, FixExample> = {
     code: 'const options = { dense: true };\n<Row options={options} />',
     note: 'Hoist the object or memoise it.',
   },
+  'react-component-defined-in-component': {
+    language: 'tsx',
+    before: 'function List() { const Row = () => <li />; return <Row />; }',
+    code: 'const Row = () => <li />;\nfunction List() { return <Row />; }',
+    note: 'Declare the component at module scope and pass props.',
+  },
+  'angular-ngfor-missing-trackby': {
+    language: 'typescript',
+    before: '<li *ngFor="let item of items">{{ item.name }}</li>',
+    code: '<li *ngFor="let item of items; trackBy: trackById">{{ item.name }}</li>',
+    note: 'Return a stable identifier from trackBy.',
+  },
   'angular-subscribe-without-cleanup': {
     language: 'typescript',
     before: 'interval(1000).subscribe(tick);',
