@@ -244,9 +244,9 @@ test('a polynomial pattern run on a function parameter is contextual, other untr
 
 test('a huge or negative cut does not count as a length cap', () => {
   const source = route(
-    'emailPattern.test(req.body.email.slice(0, 1e9));',
-    'emailPattern.test(req.body.email.slice(0, -1));',
-    'emailPattern.test(req.body.email.slice(0, 254));',
+    String.raw`/\s+.*\s+$/.test(req.body.email.slice(0, 1e9));`,
+    String.raw`/\s+.*\s+$/.test(req.body.email.slice(0, -1));`,
+    String.raw`/\s+.*\s+$/.test(req.body.email.slice(0, 254));`,
   );
   assert.deepEqual(redosLines(source), [5, 6]);
 });
