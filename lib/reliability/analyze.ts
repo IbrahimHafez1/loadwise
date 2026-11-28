@@ -8,6 +8,9 @@ import { checkResourceLeaks } from './resource-leaks.js';
 import { checkChildProcesses } from './child-process.js';
 import { checkErrorValues } from './error-values.js';
 import { checkReactBugs } from './react-bugs.js';
+import { checkSwitchExhaustive } from './switch-exhaustive.js';
+import { checkPoolTimeout } from './pool-timeout.js';
+import { checkUncaughtException } from './uncaught-exception.js';
 import { isVendoredMinified } from '../shared/execution-context.js';
 import { relativeToProject, reviewedReason, reviewMarkers } from '../performance/review-context.js';
 import type { SourceFile } from 'typescript';
@@ -27,6 +30,9 @@ function analyzeFile(program: ProgramAdapter, sourceFile: SourceFile): Finding[]
     ...checkChildProcesses(sourceFile, file, checker),
     ...checkErrorValues(sourceFile, file),
     ...checkReactBugs(sourceFile, file, checker, program.getCompilerOptions().jsxImportSource),
+    ...checkSwitchExhaustive(sourceFile, file, checker),
+    ...checkPoolTimeout(sourceFile, file, checker),
+    ...checkUncaughtException(sourceFile, file, checker),
   ];
   const hasReviewComments = reviewMarkers.some((marker) => sourceFile.text.includes(marker));
   return findings.map((finding) => {
