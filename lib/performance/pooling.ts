@@ -54,6 +54,26 @@ const cachingOperators = (): readonly SyntaxKind[] => [
   ts.SyntaxKind.BarBarToken,
 ];
 
+function indexImports(file: SourceFile): Map<string, ImportBinding> {
+  const bindings = new Map<string, ImportBinding>();
+  for (const statement of file.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
+    const moduleName = statement.moduleSpecifier.text;
+    if (!drivers.has(moduleName) && !httpModules.has(moduleName)) continue;
+    const clause = statement.importClause;
+    if (!clause || clause.isTypeOnly) continue;
+    if (clause.name) bindings.set(clause.name.text, { moduleName, declaration: clause });
+    const names = clause.namedBindings;
+    if (!names) continue;
+    if (ts.isNamespaceImport(names)) {
+      bindings.set(names.name.text, { moduleName, declaration: names });
+      continue;
+    }
+    registerNamedImports(names, bindings, moduleName);
+  }
+  return bindings;
+}
+
 // An identifier in a large project rarely names a driver. Index import spellings once,
 // then ask the checker about scope only for candidates with a matching local name.
 function importedMember(
@@ -66,29 +86,16 @@ function importedMember(
   const file = local.getSourceFile();
   let bindings = importsByFile.get(file);
   if (!bindings) {
-    bindings = new Map<string, ImportBinding>();
-    for (const statement of file.statements) {
-      if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
-      const moduleName = statement.moduleSpecifier.text;
-      if (!drivers.has(moduleName) && !httpModules.has(moduleName)) continue;
-      const clause = statement.importClause;
-      if (!clause || clause.isTypeOnly) continue;
-      if (clause.name) bindings.set(clause.name.text, { moduleName, declaration: clause });
-      const names = clause.namedBindings;
-      if (!names) continue;
-      if (ts.isNamespaceImport(names)) {
-        bindings.set(names.name.text, { moduleName, declaration: names });
-        continue;
-      }
-      registerNamedImports(names, bindings, moduleName);
-    }
+    bindings = indexImports(file);
     importsByFile.set(file, bindings);
   }
   const binding = bindings.get(local.text);
   if (!binding) return;
   // A bare default import names the class itself, as in `new OpenAI()`.
   const bareDefault =
-    !qualified && ts.isImportClause(binding.declaration) && drivers.get(binding.moduleName)?.defaultExport;
+    !qualified &&
+    (ts.isImportClause(binding.declaration) || ts.isImportSpecifier(binding.declaration)) &&
+    drivers.get(binding.moduleName)?.defaultExport;
   if (qualified === Boolean(binding.member) && !bareDefault) return;
   if (!checker.getSymbolAtLocation(local)?.declarations?.includes(binding.declaration)) return;
   return { moduleName: binding.moduleName, member: qualified ? target.name.text : binding.member };

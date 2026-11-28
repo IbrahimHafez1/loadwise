@@ -163,3 +163,21 @@ test('module-scope S3, OpenAI and Stripe clients stay quiet', () => {
     [],
   );
 });
+
+test('a named default import of a client class is recognized, a namespace import is not', () => {
+  const findings = lint(
+    [
+      "import { default as OpenAI } from 'openai';",
+      "import * as Stripe from 'stripe';",
+      'for (const id of [1,2]) {',
+      '  new OpenAI();',
+      "  new Stripe('key');",
+      '}',
+    ].join('\n'),
+    files,
+  );
+  assert.deepEqual(
+    findings.map(({ ruleId, line }) => [ruleId, line]),
+    [['pool-created-per-request-or-item', 4]],
+  );
+});

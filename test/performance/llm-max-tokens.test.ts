@@ -46,3 +46,25 @@ test('calls with a cap, unknown options or another receiver stay quiet', () => {
     [],
   );
 });
+
+test('a cap set to undefined or null still reports, and the legacy completions resource stays quiet', () => {
+  const legacyFiles = {
+    'node_modules/openai/index.d.ts': files['node_modules/openai/index.d.ts'].replace(
+      'responses: Responses;',
+      'responses: Responses; completions: Completions;',
+    ),
+  };
+  const findings = lint(
+    header +
+      [
+        "client.chat.completions.create({ model: 'm', max_tokens: undefined });",
+        "client.responses.create({ model: 'm', max_output_tokens: null });",
+        "client.completions.create({ model: 'm' });",
+      ].join('\n'),
+    legacyFiles,
+  );
+  assert.deepEqual(
+    findings.map(({ ruleId, line }) => [ruleId, line]),
+    [3, 4].map((line) => [rule, line]),
+  );
+});

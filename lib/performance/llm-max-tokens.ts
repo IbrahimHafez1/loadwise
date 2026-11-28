@@ -1,5 +1,5 @@
 import { ts } from './compiler.js';
-import type { CallExpression, ObjectLiteralExpression } from 'typescript';
+import type { CallExpression, Expression, ObjectLiteralElementLike, ObjectLiteralExpression } from 'typescript';
 import type { PerformanceRuleContext } from '../shared/types.js';
 
 const RULE_ID = 'llm-call-without-max-tokens';
@@ -14,7 +14,20 @@ function isOpenAiCreate(call: CallExpression, context: PerformanceRuleContext): 
   const resource = callee.expression;
   if (!ts.isPropertyAccessExpression(resource) || !['completions', 'responses'].includes(resource.name.text))
     return false;
+  // The legacy `client.completions` resource takes only `max_tokens`, so the chat remedy would not apply.
+  if (resource.name.text === 'completions' && !isChatResource(resource.expression)) return false;
   return context.isPackageType(resource, ['openai'], RESOURCE_TYPES);
+}
+
+function isChatResource(receiver: Expression): boolean {
+  return ts.isPropertyAccessExpression(receiver) && receiver.name.text === 'chat';
+}
+
+// `max_tokens: undefined` is dropped on serialization, so it sets no limit.
+function isUnsetValue(property: ObjectLiteralElementLike): boolean {
+  if (!ts.isPropertyAssignment(property)) return false;
+  const value = ts.skipOuterExpressions(property.initializer);
+  return value.kind === ts.SyntaxKind.NullKeyword || (ts.isIdentifier(value) && value.text === 'undefined');
 }
 
 // True when the key set is fully known and holds no output cap. A spread or computed key may carry
@@ -25,7 +38,7 @@ function lacksOutputCap(options: ObjectLiteralExpression): boolean {
     const name = property.name;
     if (!name) return false;
     if (ts.isComputedPropertyName(name)) return false;
-    if (OUTPUT_CAP_KEYS.has(name.text)) return false;
+    if (OUTPUT_CAP_KEYS.has(name.text) && !isUnsetValue(property)) return false;
   }
   return true;
 }

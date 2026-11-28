@@ -362,11 +362,22 @@ function wholeLines(text: string, statement: Node): LineRange | undefined {
   return { start: start - (text[start - 2] === '\r' ? 2 : 1), end };
 }
 
+function redeclaresName(node: Node, name: string): boolean {
+  const opensScope =
+    ts.isFunctionLike(node) || ts.isBlock(node) || ts.isCatchClause(node) || ts.isIterationStatement(node, false);
+  return opensScope && bindingNamesWithin(node).has(name);
+}
+
 function closingStatements(scope: Node, name: string): ExpressionStatement[] | undefined {
   const statements: ExpressionStatement[] = [];
   let usable = true;
   (function visit(child: Node): void {
     if (!usable) return;
+    // A nested scope that redeclares the name closes a different resource, so no fix is offered.
+    if (child !== scope && redeclaresName(child, name)) {
+      usable = false;
+      return;
+    }
     if (ts.isIdentifier(child) && child.text === name && isReference(child)) {
       const access = child.parent;
       const call = access.parent;

@@ -210,6 +210,12 @@ const standaloneExamples: Record<string, FixExample> = {
     code: 'await messaging.sendEach(tokens.map((token) => ({ token, notification })));',
     note: 'One request per recipient multiplies latency and rate-limit use. Keep per-recipient sends only when each message is personalised.',
   },
+  'llm-call-without-max-tokens': {
+    language: 'javascript',
+    before: 'await openai.chat.completions.create({ model, messages });',
+    code: 'await openai.chat.completions.create({ model, messages, max_completion_tokens: 1024 });',
+    note: 'Without a cap a long or runaway completion is billed in full. Pick a limit the feature can justify.',
+  },
   'session-memory-store': {
     language: 'javascript',
     before: 'app.use(session({ secret, resave: false }));',
