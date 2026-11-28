@@ -129,10 +129,9 @@ test('tsconfig-strict-disabled flags strict false and bare strict opt-outs', (co
 
 test('tsconfig-strict-disabled accepts strict projects and explicit strict', (context) => {
   const found = tsconfigFindings(context, {
-    'tsconfig.json': '{ "compilerOptions": { "strict": true, "noImplicitAny": false } }',
+    'tsconfig.json': '{ "compilerOptions": { "strict": true } }',
     'a/tsconfig.json': '{ "extends": "../tsconfig.json" }',
     'b/tsconfig.json': '{ "compilerOptions": { "target": "es2022", "strictPropertyInitialization": false } }',
-    'c/tsconfig.json': '{ "compilerOptions": { "strict": true, "strictNullChecks": false } }',
     'd/tsconfig.json': 'not json at all {',
   });
   assert.deepEqual(found, []);
@@ -144,6 +143,9 @@ test('tsconfig-strict-disabled skips test, fixture and template configs', (conte
     'tsconfig.test.json': loose,
     'tsconfig.spec.json': loose,
     'test/tsconfig.json': loose,
+    'spec/tsconfig.json': loose,
+    'specs/tsconfig.json': loose,
+    '__tests__/tsconfig.json': loose,
     'fixtures/app/tsconfig.json': loose,
     'templates/app/tsconfig.json': loose,
     'examples/app/tsconfig.json': loose,
@@ -157,4 +159,45 @@ test('double-type-assertion skips tests and generated code', () => {
   assert.deepEqual(lines('src/a.test.ts', source, 'double-type-assertion'), []);
   assert.deepEqual(lines('src/generated/graphql.ts', source, 'double-type-assertion'), []);
   assert.deepEqual(lines('src/client.generated.ts', source, 'double-type-assertion'), []);
+});
+
+test('tsconfig-strict-disabled flags a sub-option opt-out even when strict is true', (context) => {
+  const found = tsconfigFindings(context, {
+    'tsconfig.json': '{ "compilerOptions": { "strict": true, "noImplicitAny": false } }',
+    'c/tsconfig.json': '{ "compilerOptions": { "strict": true, "strictNullChecks": false } }',
+  });
+  assert.deepEqual(found, ['tsconfig.json:1', 'c/tsconfig.json:1']);
+});
+
+test('focused-test-committed flags chained, computed and aliased focused forms', () => {
+  const source = [
+    "import { test as nodeTest } from 'node:test';",
+    "nodeTest.only('a', () => {});",
+    "it['only']('b', () => {});",
+    "test.concurrent.only('c', () => {});",
+    "it.each(cases).only('d', () => {});",
+    "it.only.each`x`('e', () => {});",
+  ].join('\n');
+  assert.deepEqual(lines('src/a.test.ts', source, 'focused-test-committed'), [2, 3, 4, 5, 6]);
+});
+
+test('focused-test-committed ignores an uninvoked .only.each reference', () => {
+  assert.deepEqual(lines('src/a.test.ts', 'const parameterize = it.only.each;', 'focused-test-committed'), []);
+});
+
+test('focused-test-committed recognizes more test file names and folders', () => {
+  const source = "it.only('b', () => {});";
+  for (const file of ['integration-tests/a.ts', 'cypress/component/a.ts', 'src/a.e2e-spec.ts', 'src/a.cy.ts']) {
+    assert.deepEqual(lines(file, source, 'focused-test-committed'), [1], file);
+  }
+  assert.deepEqual(lines('integration-tests/a.ts', 'const a = value as unknown as User;', 'double-type-assertion'), []);
+});
+
+test('ts-suppression-without-reason flags a trailing directive on a code line', () => {
+  assert.deepEqual(lines('src/a.ts', 'setup(); // @ts-ignore\nbroken();', 'ts-suppression-without-reason'), [1]);
+});
+
+test('double-type-assertion flags a comment between as and unknown', () => {
+  const source = 'const user = value as /* compatibility */ unknown as User;';
+  assert.deepEqual(lines('src/a.ts', source, 'double-type-assertion'), [1]);
 });

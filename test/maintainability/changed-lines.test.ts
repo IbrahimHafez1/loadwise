@@ -275,6 +275,17 @@ test('many changed files fall back to the full scan, which keeps cross-file rule
   assert.ok(fullScan.findings.some((finding) => finding.ruleId === 'duplicate-implementation'));
 });
 
+test('a changed production tsconfig is checked for strictness, an unchanged one is not', async (context) => {
+  const root = tempRepo(context);
+  fs.writeFileSync(path.join(root, 'index.ts'), 'export const value = 1;\n');
+  fs.writeFileSync(path.join(root, 'tsconfig.json'), '{ "compilerOptions": { "strict": false } }');
+  const policy = loadPolicy();
+  const changed = await scanChangedFiles(root, policy, ['tsconfig.json', 'index.ts'], { parallelFrom: 5 });
+  const unchanged = await scanChangedFiles(root, policy, ['index.ts'], { parallelFrom: 5 });
+  assert.ok(changed.findings.some((finding) => finding.ruleId === 'tsconfig-strict-disabled'));
+  assert.ok(!unchanged.findings.some((finding) => finding.ruleId === 'tsconfig-strict-disabled'));
+});
+
 test('workspace counts describe the selected files in both full and changed scans', (context) => {
   const root = tempRepo(context);
   fs.writeFileSync(path.join(root, 'package.json'), '{"workspaces":["packages/*"]}');

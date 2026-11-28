@@ -7,6 +7,7 @@ import { listFiles, createResolver } from './inputs.js';
 import { archivedCopies, sourceContext } from './snapshot-context.js';
 import { checkGraph } from './architecture.js';
 import { checkPlacement } from './layout.js';
+import { checkTsconfigStrictness } from './tsconfig-strict.js';
 import { analyzePolyglot } from './polyglot.js';
 import { readSources, analyzeSource } from './analyze-source.js';
 import type { Finding, SkippedFile } from '../shared/types.js';
@@ -53,6 +54,11 @@ async function scanChangedFiles(
   });
   const polyglot = await analyzePolyglot({ root, files: polyglotTargets, includeDuplicates: false });
   for (const finding of polyglot.findings) findings.push(finding);
+  for (const finding of checkTsconfigStrictness(
+    root,
+    inventory.filter((file) => changed.has(file)),
+  ))
+    findings.push(finding);
   reportUnparsablePolyglot(skippedFiles, polyglot);
   for (const finding of checkGraph({ files: sourceFiles, edges, boundaries: policy.boundaries, constEnums }))
     findings.push(finding);
