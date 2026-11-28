@@ -7,6 +7,7 @@ import test from 'node:test';
 import type { TestContext } from 'node:test';
 import { configlessSources, discoverWorkspaces } from '../../lib/shared/workspaces.js';
 import type { Finding } from '../../lib/shared/types.js';
+import { listFiles } from '../../lib/maintainability/inputs.js';
 import { executable } from '../../lib/performance/native-runtime.js';
 
 let nativeSkip: string | false = false;
@@ -312,7 +313,14 @@ test('JavaScript under a sub-folder jsconfig, or a git-ignored tsconfig, is not 
     'plain-package/index.js': syncReadSource,
   });
   assert.equal(configlessSources(path.join(root, 'jsconfig-package')), undefined);
-  assert.equal(configlessSources(path.join(root, 'ignored-package')), undefined);
+  // Git hides the ignored config from the inventory, so only the disk check can see it.
+  const ignoredPackage = path.join(root, 'ignored-package');
+  assert.equal(spawnSync('git', ['init', '-q'], { cwd: root }).status, 0);
+  assert.deepEqual(
+    listFiles(ignoredPackage).filter((file) => file.startsWith('src/')),
+    ['src/index.ts'],
+  );
+  assert.equal(configlessSources(ignoredPackage), undefined);
   assert.equal(configlessSources(path.join(root, 'plain-package'))?.length, 1);
 });
 
