@@ -5,9 +5,9 @@ import { findingLevel, repositoryPathFor } from './finding-location.js';
 import type { Finding, SkippedFile } from '../types.js';
 import type { FormatPillar, RanReportEntry, ReportEntry, RepositoryPath } from '../types/report-formats.js';
 import { rulesByPillar } from '../rule-registry.js';
+import { repositoryUrl, ruleDocUrl } from '../rule-docs.js';
 
 const sarifSchema = 'https://json.schemastore.org/sarif-2.1.0.json';
-const documentationUrl = 'https://github.com/IbrahimHafez1/loadwise';
 const fingerprintKey = 'loadwise/findingId/v1';
 const sourceRootId = '%SRCROOT%';
 
@@ -30,7 +30,7 @@ function rulesFor(pillar: FormatPillar, findings: Finding[]): SarifRule[] {
     rules.set(ruleId, {
       id: ruleId,
       shortDescription: { text: shortDescription(pillar, ruleId, message) },
-      helpUri: `${documentationUrl}#${ruleId}`,
+      helpUri: ruleDocUrl(ruleId) ?? repositoryUrl,
     });
   }
   return [...rules.values()];
@@ -83,7 +83,7 @@ function runFor({ pillar, root, repositoryDirectory, report }: RanReportEntry) {
       driver: {
         name: 'loadwise',
         version: toolVersion,
-        informationUri: documentationUrl,
+        informationUri: repositoryUrl,
         rules: rulesFor(pillar, findings),
       },
     },
@@ -104,4 +104,4 @@ function formatSarif(entries: readonly ReportEntry[]): string {
   return JSON.stringify({ version: '2.1.0', $schema: sarifSchema, runs }, null, 2);
 }
 
-export { documentationUrl, formatSarif };
+export { formatSarif };

@@ -25,6 +25,7 @@ import {
   descriptionByRule as reliabilityDescriptions,
 } from '../lib/reliability/rule-ids.js';
 import { descriptionByRule as securityDescriptions } from '../lib/security/rule-descriptions.js';
+import { undocumentedRules } from '../lib/shared/rule-docs.js';
 import {
   impactByRule as securityImpact,
   polyglotRules as securityPolyglotRules,
@@ -37,8 +38,6 @@ type Checker = (typeof CHECKERS)[number];
 const FIXABLE_VALUES = ['none', 'inline', 'manual'] as const;
 type Fixable = (typeof FIXABLE_VALUES)[number];
 
-// syntax-error skips the unparsable file instead of becoming a finding, so it has no page.
-const UNDOCUMENTED_RULE = 'syntax-error';
 const RULE_DOCS_DIR = 'docs/rules';
 const FRONTMATTER_PATTERN = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/;
 const MARKER_PATTERN =
@@ -73,7 +72,7 @@ function recordsFor(
   descriptions: Readonly<Record<string, string>>,
 ): RuleRecord[] {
   return ruleIds
-    .filter((id) => id !== UNDOCUMENTED_RULE)
+    .filter((id) => !undocumentedRules.has(id))
     .map((id) => {
       const impact = impacts[id];
       const description = descriptions[id];
