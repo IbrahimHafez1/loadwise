@@ -1,6 +1,7 @@
 // Rule id -> [code, note]: a fix example of at most six lines that parses as JavaScript.
 import type { RuleExamples } from '../types/rule-example.js';
 
+// Keep sorted by rule id; test/shared/registry-order.test.ts checks it.
 const examples: RuleExamples = {
   'code-injection': [
     "const operations = { sum: (a, b) => a + b, max: Math.max };\nconst operation = operations[req.body.operation];\nif (!operation) throw new BadRequestException('Unknown operation');",

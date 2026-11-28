@@ -2,6 +2,7 @@
 // not TypeScript.
 import type { RuleExamples } from '../types/rule-example.js';
 
+// Keep sorted by rule id; test/shared/registry-order.test.ts checks it.
 const examples: RuleExamples = {
   'committed-secret': [
     '# .gitignore\n.env\n# keep .env.example with placeholders only',

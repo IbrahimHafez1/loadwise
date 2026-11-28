@@ -1,7 +1,16 @@
 // Rule id -> [code, note]: a fix example of at most six lines that parses as JavaScript.
 import type { RuleExamples } from '../types/rule-example.js';
 
+// Keep sorted by rule id; test/shared/registry-order.test.ts checks it.
 const examples: RuleExamples = {
+  'angular-bypass-security-trust': [
+    'this.sanitizer.bypassSecurityTrustHtml(DOMPurify.sanitize(html))',
+    "Sanitize before bypassing, or don't bypass.",
+  ],
+  'client-env-secret-exposed': [
+    '// server-only code\nconst stripe = new Stripe(process.env.STRIPE_SECRET_KEY);',
+    'Read the secret on the server under an unprefixed name; ship only publishable keys to the browser.',
+  ],
   'cookie-missing-security-flags': [
     "res.cookie('session', token, {\n  httpOnly: true,\n  secure: process.env.NODE_ENV === 'production',\n  sameSite: 'lax',\n});",
     'httpOnly keeps scripts from reading the cookie, secure limits it to HTTPS and sameSite limits cross-site sends.',
@@ -14,13 +23,34 @@ const examples: RuleExamples = {
     'app.use(cors({\n  origin: /^https:\\/\\/(?:[\\w-]+\\.)*example\\.com$/,\n  credentials: true,\n}));',
     'Start the host after `//` or a dot, escape its dots and end it with `$`, so look-alike hosts such as evilexample.com do not match.',
   ],
+  'database-error-in-response': [
+    "try {\n  await prisma.user.create({ data });\n} catch (error) {\n  logger.error(error);\n  res.status(500).json({ error: 'Internal error' });\n}",
+    'Log the driver error on the server and return a generic message.',
+  ],
+  'dom-xss-sink': ['el.textContent = location.hash;', 'Use textContent, or DOMPurify.sanitize() if markup is needed.'],
   'error-stack-in-response': [
     "logger.error(err);\nres.status(500).json({ message: 'Internal server error' });",
     'Log the error on the server and return a generic message. Return err.message only when it is written for clients.',
   ],
+  'express-missing-helmet': [
+    'const app = express();\napp.use(helmet());\napp.listen(3000);',
+    'Set the headers in the app, or confirm your proxy or CDN sets them.',
+  ],
+  'frontend-storage-secret-token': [
+    '// send the token in an HttpOnly, Secure, SameSite cookie from the server',
+    'Page scripts cannot read an HttpOnly cookie.',
+  ],
   'graphql-introspection-enabled': [
     "new ApolloServer({\n  typeDefs,\n  introspection: process.env.NODE_ENV !== 'production',\n});",
     'Turn introspection and the playground on only outside production.',
+  ],
+  'graphql-query-depth-unbounded': [
+    'new ApolloServer({ typeDefs, resolvers, validationRules: [depthLimit(7)] });',
+    'A depth or cost limit rejects abusive nested queries before they run.',
+  ],
+  'jsx-javascript-url': [
+    "const safeHref = /^https?:\\/\\//i.test(next) || /^\\/(?!\\/)/.test(next) ? next : '/';",
+    'Allow only http(s) or same-site relative URLs, then render the checked value in the href.',
   ],
   'mass-assignment': [
     'await prisma.user.create({\n  data: { name: body.name, email: body.email },\n});',
@@ -30,9 +60,25 @@ const examples: RuleExamples = {
     'app.useGlobalPipes(new ValidationPipe({\n  whitelist: true,\n  forbidNonWhitelisted: true,\n}));',
     'whitelist strips properties without a validation decorator; forbidNonWhitelisted rejects the request instead.',
   ],
+  'next-image-any-remote-host': [
+    "const nextConfig = {\n  images: { remotePatterns: [{ protocol: 'https', hostname: 'images.example-cdn.com' }] },\n};",
+    'Name the hosts your images come from.',
+  ],
+  'password-hash-in-response': [
+    'const user = await prisma.user.findUnique({ where: { id }, omit: { passwordHash: true } });\nres.json(user);',
+    'Leave the password hash out at the read so no response can include it.',
+  ],
+  'postmessage-missing-origin-check': [
+    "window.addEventListener('message', (event) => {\n  if (event.origin !== EXPECTED_ORIGIN) return;\n  use(event.data);\n});",
+    "Check who sent the message, and name the target origin instead of '*' when sending.",
+  ],
   'prototype-pollution': [
     "const blocked = new Set(['__proto__', 'constructor', 'prototype']);\nif (blocked.has(key)) throw new Error('Invalid key');\ntarget[key] = value;",
     'Reject the keys that reach the prototype, or copy only fields you list.',
+  ],
+  'react-dangerously-set-inner-html': [
+    "createElement('div', { dangerouslySetInnerHTML: { __html: DOMPurify.sanitize(html) } })",
+    'Sanitize first, or render JSX.',
   ],
   'reflected-xss-response': [
     'res.send(`<p>Hello ${escapeHtml(req.query.name)}</p>`);',
@@ -42,70 +88,25 @@ const examples: RuleExamples = {
     'logger.info({ userId: user.id, tokenId: token.id });',
     'Log an identifier or a redacted value, never the secret itself.',
   ],
-  'template-autoescape-disabled': [
-    "nunjucks.configure('views', { autoescape: true });\nswig.setDefaults({ autoescape: true });",
-    "Leave escaping on and mark a trusted value with the engine's safe filter or triple braces, one value at a time.",
-  ],
-  'xml-external-entities': [
-    'const document = parseXml(xml);',
-    'Call the parser without noent and dtdload so external entities are not loaded.',
-  ],
-  'password-hash-in-response': [
-    'const user = await prisma.user.findUnique({ where: { id }, omit: { passwordHash: true } });\nres.json(user);',
-    'Leave the password hash out at the read so no response can include it.',
+  'secret-in-url-query': [
+    'await fetch(`${base}/items`, { headers: { Authorization: `Bearer ${apiKey}` } });',
+    'Send credentials in a header or the body; URLs end up in logs and Referer headers.',
   ],
   'storage-object-public-acl': [
     'await s3.send(new PutObjectCommand({ Bucket, Key, Body }));\nreturn getSignedUrl(s3, new GetObjectCommand({ Bucket, Key }), { expiresIn: 300 });',
     'Keep objects private and hand out short-lived presigned URLs.',
   ],
-  'secret-in-url-query': [
-    'await fetch(`${base}/items`, { headers: { Authorization: `Bearer ${apiKey}` } });',
-    'Send credentials in a header or the body; URLs end up in logs and Referer headers.',
-  ],
-  'graphql-query-depth-unbounded': [
-    'new ApolloServer({ typeDefs, resolvers, validationRules: [depthLimit(7)] });',
-    'A depth or cost limit rejects abusive nested queries before they run.',
-  ],
-  'database-error-in-response': [
-    "try {\n  await prisma.user.create({ data });\n} catch (error) {\n  logger.error(error);\n  res.status(500).json({ error: 'Internal error' });\n}",
-    'Log the driver error on the server and return a generic message.',
-  ],
-  'dom-xss-sink': ['el.textContent = location.hash;', 'Use textContent, or DOMPurify.sanitize() if markup is needed.'],
-  'react-dangerously-set-inner-html': [
-    "createElement('div', { dangerouslySetInnerHTML: { __html: DOMPurify.sanitize(html) } })",
-    'Sanitize first, or render JSX.',
-  ],
-  'angular-bypass-security-trust': [
-    'this.sanitizer.bypassSecurityTrustHtml(DOMPurify.sanitize(html))',
-    "Sanitize before bypassing, or don't bypass.",
+  'template-autoescape-disabled': [
+    "nunjucks.configure('views', { autoescape: true });\nswig.setDefaults({ autoescape: true });",
+    "Leave escaping on and mark a trusted value with the engine's safe filter or triple braces, one value at a time.",
   ],
   'vue-v-html-unsanitized': [
     "h('div', { innerHTML: DOMPurify.sanitize(html) })",
     'Sanitize first, or use text children.',
   ],
-  'frontend-storage-secret-token': [
-    '// send the token in an HttpOnly, Secure, SameSite cookie from the server',
-    'Page scripts cannot read an HttpOnly cookie.',
-  ],
-  'postmessage-missing-origin-check': [
-    "window.addEventListener('message', (event) => {\n  if (event.origin !== EXPECTED_ORIGIN) return;\n  use(event.data);\n});",
-    "Check who sent the message, and name the target origin instead of '*' when sending.",
-  ],
-  'client-env-secret-exposed': [
-    '// server-only code\nconst stripe = new Stripe(process.env.STRIPE_SECRET_KEY);',
-    'Read the secret on the server under an unprefixed name; ship only publishable keys to the browser.',
-  ],
-  'jsx-javascript-url': [
-    "const safeHref = /^https?:\\/\\//i.test(next) || /^\\/(?!\\/)/.test(next) ? next : '/';",
-    'Allow only http(s) or same-site relative URLs, then render the checked value in the href.',
-  ],
-  'next-image-any-remote-host': [
-    "const nextConfig = {\n  images: { remotePatterns: [{ protocol: 'https', hostname: 'images.example-cdn.com' }] },\n};",
-    'Name the hosts your images come from.',
-  ],
-  'express-missing-helmet': [
-    'const app = express();\napp.use(helmet());\napp.listen(3000);',
-    'Set the headers in the app, or confirm your proxy or CDN sets them.',
+  'xml-external-entities': [
+    'const document = parseXml(xml);',
+    'Call the parser without noent and dtdload so external entities are not loaded.',
   ],
 };
 

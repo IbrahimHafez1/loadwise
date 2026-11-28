@@ -1,6 +1,7 @@
 // Rule id -> [code, note]: a fix example of at most six lines that parses as JavaScript.
 import type { RuleExamples } from '../types/rule-example.js';
 
+// Keep sorted by rule id; test/shared/registry-order.test.ts checks it.
 const examples: RuleExamples = {
   'open-redirect': [
     "const next = String(req.query.next ?? '/');\nconst target = next.startsWith('/') && !next.startsWith('//') ? next : '/';\nres.redirect(target);",

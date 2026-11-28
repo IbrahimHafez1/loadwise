@@ -1,7 +1,12 @@
 // Rule id -> [code, note]: a fix example of at most six lines that parses as JavaScript.
 import type { RuleExamples } from '../types/rule-example.js';
 
+// Keep sorted by rule id; test/shared/registry-order.test.ts checks it.
 const examples: RuleExamples = {
+  'auth-route-without-rate-limit': [
+    "app.post('/login', rateLimit({ windowMs: 60_000, max: 5 }), loginHandler);",
+    'Limit attempts per IP and per account; a gateway or proxy limit also counts.',
+  ],
   'bcrypt-low-cost': [
     'const hash = await bcrypt.hash(password, 12);',
     'Use a cost of 10 or higher; 12 is a common choice. Measure the hashing time on your hardware and raise the cost while a login stays fast enough.',
@@ -49,10 +54,6 @@ const examples: RuleExamples = {
   'weak-password-hash': [
     'const passwordHash = await bcrypt.hash(password, 12);\nconst matches = await bcrypt.compare(attempt, passwordHash);',
     'Hash passwords with bcrypt, argon2 or crypto.scrypt. Existing hashes need a migration: re-hash each password at its next successful login.',
-  ],
-  'auth-route-without-rate-limit': [
-    "app.post('/login', rateLimit({ windowMs: 60_000, max: 5 }), loginHandler);",
-    'Limit attempts per IP and per account; a gateway or proxy limit also counts.',
   ],
 };
 

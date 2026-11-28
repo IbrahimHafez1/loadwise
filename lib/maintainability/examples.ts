@@ -5,47 +5,15 @@ interface RuleExample {
   after: string[];
 }
 
+// Keep sorted by rule id; test/shared/registry-order.test.ts checks it.
 const examples: Record<string, RuleExample> = {
-  'unused-import': {
-    before: ["import { readFile, writeFile } from 'node:fs/promises';", 'await writeFile(path, text);'],
-    after: ["import { writeFile } from 'node:fs/promises';", 'await writeFile(path, text);'],
+  'data-access-boundary': {
+    before: ['// src/http/handler.ts', 'import { Pool } from "pg";', 'const rows = await new Pool().query(sql);'],
+    after: ['// src/http/handler.ts', 'import { loadUsers } from "../data/users";', 'const rows = await loadUsers();'],
   },
-  'unused-local-variable': {
-    before: [
-      'function total(items) {',
-      "  const label = 'sum';",
-      '  return items.reduce((sum, item) => sum + item, 0);',
-      '}',
-    ],
-    after: ['function total(items) {', '  return items.reduce((sum, item) => sum + item, 0);', '}'],
-  },
-  'stray-console': {
-    before: ['export function placeOrder(order: Order) {', "  console.log('placing', order.id);", '}'],
-    after: [
-      'export function placeOrder(order: Order) {',
-      "  logger.info({ orderId: order.id }, 'placing order');",
-      '}',
-    ],
-  },
-  'deprecated-node-api': {
-    before: ['const zeroed = new Buffer(16);', "const copy = new Buffer('hi', 'utf8');"],
-    after: ['const zeroed = Buffer.alloc(16);', "const copy = Buffer.from('hi', 'utf8');"],
-  },
-  'focused-test-committed': {
-    before: ["describe.only('checkout', () => {", "  it('adds an item', () => {});", '});'],
-    after: ["describe('checkout', () => {", "  it('adds an item', () => {});", '});'],
-  },
-  'ts-suppression-without-reason': {
-    before: ['// @ts-ignore', 'legacyClient.connect(options);'],
-    after: ['// @ts-expect-error legacyClient types omit the options argument', 'legacyClient.connect(options);'],
-  },
-  'double-type-assertion': {
-    before: ['const response = await fetchUser();', 'const user = response as unknown as User;'],
-    after: ['const response = await fetchUser();', 'const user = parseUser(response);'],
-  },
-  'tsconfig-strict-disabled': {
-    before: ['// tsconfig.json', '{ "compilerOptions": { "strict": false } }'],
-    after: ['// tsconfig.json', '{ "compilerOptions": { "strict": true } }'],
+  'deep-control-flow': {
+    before: ['for (const item of items) {', '  if (item.ready) {', '    if (item.valid) save(item);', '  }', '}'],
+    after: ['for (const item of items) {', '  if (!item.ready || !item.valid) continue;', '  save(item);', '}'],
   },
   'dependency-cycle': {
     before: ['// a.ts: import { total } from "./b";', '// b.ts: import { total } from "./a";'],
@@ -53,6 +21,26 @@ const examples: Record<string, RuleExample> = {
       '// shared.ts: export const total = (xs) => xs.length;',
       '// a.ts and b.ts: import { total } from "./shared";',
     ],
+  },
+  'deprecated-node-api': {
+    before: ['const zeroed = new Buffer(16);', "const copy = new Buffer('hi', 'utf8');"],
+    after: ['const zeroed = Buffer.alloc(16);', "const copy = Buffer.from('hi', 'utf8');"],
+  },
+  'double-type-assertion': {
+    before: ['const response = await fetchUser();', 'const user = response as unknown as User;'],
+    after: ['const response = await fetchUser();', 'const user = parseUser(response);'],
+  },
+  'duplicate-implementation': {
+    before: ['const okA = (n) => n >= 1 && n <= 9;', 'const okB = (n) => n >= 1 && n <= 9;'],
+    after: ['export const inRange = (n) => n >= 1 && n <= 9;', '// call inRange(n) from both sites'],
+  },
+  'file-placement': {
+    before: ['// outside the declared folder', 'src/user.controller.ts'],
+    after: ['// moved, imports updated', 'src/http/user.controller.ts'],
+  },
+  'focused-test-committed': {
+    before: ["describe.only('checkout', () => {", "  it('adds an item', () => {});", '});'],
+    after: ["describe('checkout', () => {", "  it('adds an item', () => {});", '});'],
   },
   'folder-boundary': {
     before: [
@@ -67,14 +55,6 @@ const examples: Record<string, RuleExample> = {
       'run(await loadCount());',
     ],
   },
-  'data-access-boundary': {
-    before: ['// src/http/handler.ts', 'import { Pool } from "pg";', 'const rows = await new Pool().query(sql);'],
-    after: ['// src/http/handler.ts', 'import { loadUsers } from "../data/users";', 'const rows = await loadUsers();'],
-  },
-  'duplicate-implementation': {
-    before: ['const okA = (n) => n >= 1 && n <= 9;', 'const okB = (n) => n >= 1 && n <= 9;'],
-    after: ['export const inRange = (n) => n >= 1 && n <= 9;', '// call inRange(n) from both sites'],
-  },
   'high-branch-complexity': {
     before: [
       'if (kind === "a") return doA(x);',
@@ -87,14 +67,6 @@ const examples: Record<string, RuleExample> = {
       'const handle = handlers[kind] ?? reject;',
       'return handle(x);',
     ],
-  },
-  'deep-control-flow': {
-    before: ['for (const item of items) {', '  if (item.ready) {', '    if (item.valid) save(item);', '  }', '}'],
-    after: ['for (const item of items) {', '  if (!item.ready || !item.valid) continue;', '  save(item);', '}'],
-  },
-  'query-mutates-state': {
-    before: ['/** @maintainabilityQuery */', 'current() { this.count += 1; return this.count; }'],
-    after: ['/** @maintainabilityQuery */', 'current() { return this.count; }', 'increment() { this.count += 1; }'],
   },
   'large-class': {
     before: [
@@ -126,6 +98,26 @@ const examples: Record<string, RuleExample> = {
       'send({ to: a, from: b, subject: c, body: d });',
     ],
   },
+  'query-mutates-state': {
+    before: ['/** @maintainabilityQuery */', 'current() { this.count += 1; return this.count; }'],
+    after: ['/** @maintainabilityQuery */', 'current() { return this.count; }', 'increment() { this.count += 1; }'],
+  },
+  'stray-console': {
+    before: ['export function placeOrder(order: Order) {', "  console.log('placing', order.id);", '}'],
+    after: [
+      'export function placeOrder(order: Order) {',
+      "  logger.info({ orderId: order.id }, 'placing order');",
+      '}',
+    ],
+  },
+  'ts-suppression-without-reason': {
+    before: ['// @ts-ignore', 'legacyClient.connect(options);'],
+    after: ['// @ts-expect-error legacyClient types omit the options argument', 'legacyClient.connect(options);'],
+  },
+  'tsconfig-strict-disabled': {
+    before: ['// tsconfig.json', '{ "compilerOptions": { "strict": false } }'],
+    after: ['// tsconfig.json', '{ "compilerOptions": { "strict": true } }'],
+  },
   'unreferenced-file': {
     before: ['// src/legacy-export.ts', '// imported by nothing, not an entry point', 'export const run = () => {};'],
     after: ['// delete src/legacy-export.ts, or import it', '// from the file that really uses it'],
@@ -134,9 +126,18 @@ const examples: Record<string, RuleExample> = {
     before: ['// helpers.ts', 'export const used = () => 1;', 'export const neverImported = () => 2;'],
     after: ['// helpers.ts', 'export const used = () => 1;', 'const neverImported = () => 2; // or delete it'],
   },
-  'file-placement': {
-    before: ['// outside the declared folder', 'src/user.controller.ts'],
-    after: ['// moved, imports updated', 'src/http/user.controller.ts'],
+  'unused-import': {
+    before: ["import { readFile, writeFile } from 'node:fs/promises';", 'await writeFile(path, text);'],
+    after: ["import { writeFile } from 'node:fs/promises';", 'await writeFile(path, text);'],
+  },
+  'unused-local-variable': {
+    before: [
+      'function total(items) {',
+      "  const label = 'sum';",
+      '  return items.reduce((sum, item) => sum + item, 0);',
+      '}',
+    ],
+    after: ['function total(items) {', '  return items.reduce((sum, item) => sum + item, 0);', '}'],
   },
 };
 

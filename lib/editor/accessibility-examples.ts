@@ -13,12 +13,8 @@ interface AccessibilityExample {
   note: string;
 }
 
+// Keep sorted by rule id; test/shared/registry-order.test.ts checks it.
 const examples: Record<string, AccessibilityExample> = {
-  'a11y-img-missing-alt': {
-    jsx: { before: '<img src={logo} />', code: '<img src={logo} alt="Company logo" />' },
-    html: { before: '<img src="logo.png">', code: '<img src="logo.png" alt="Company logo">' },
-    note: 'Describe the image, or use alt="" if it is decorative.',
-  },
   'a11y-button-missing-type': {
     jsx: {
       before: '<button onClick={save}>Save</button>',
@@ -41,6 +37,24 @@ const examples: Record<string, AccessibilityExample> = {
     },
     note: 'A button works with the keyboard and screen readers without extra attributes.',
   },
+  'a11y-html-missing-lang': {
+    jsx: { before: '<html>', code: '<html lang="en">' },
+    html: { before: '<html>', code: '<html lang="en">' },
+    note: 'Set the language of the page content.',
+  },
+  'a11y-iframe-missing-title': {
+    jsx: { before: '<iframe src={mapUrl} />', code: '<iframe src={mapUrl} title="Store location map" />' },
+    html: {
+      before: '<iframe src="/map"></iframe>',
+      code: '<iframe src="/map" title="Store location map"></iframe>',
+    },
+    note: 'The title is what screen readers announce for the frame.',
+  },
+  'a11y-img-missing-alt': {
+    jsx: { before: '<img src={logo} />', code: '<img src={logo} alt="Company logo" />' },
+    html: { before: '<img src="logo.png">', code: '<img src="logo.png" alt="Company logo">' },
+    note: 'Describe the image, or use alt="" if it is decorative.',
+  },
   'a11y-invalid-aria': {
     jsx: { before: '<div aria-lable="Close" />', code: '<div aria-label="Close" />' },
     html: { before: '<div aria-lable="Close"></div>', code: '<div aria-label="Close"></div>' },
@@ -56,19 +70,6 @@ const examples: Record<string, AccessibilityExample> = {
       code: '<label>Email <input type="email"></label>',
     },
     note: 'A placeholder is not a label; wrap the input, or use label for, or aria-label.',
-  },
-  'a11y-html-missing-lang': {
-    jsx: { before: '<html>', code: '<html lang="en">' },
-    html: { before: '<html>', code: '<html lang="en">' },
-    note: 'Set the language of the page content.',
-  },
-  'a11y-iframe-missing-title': {
-    jsx: { before: '<iframe src={mapUrl} />', code: '<iframe src={mapUrl} title="Store location map" />' },
-    html: {
-      before: '<iframe src="/map"></iframe>',
-      code: '<iframe src="/map" title="Store location map"></iframe>',
-    },
-    note: 'The title is what screen readers announce for the frame.',
   },
   'a11y-positive-tabindex': {
     jsx: { before: '<div tabIndex={2} />', code: '<div tabIndex={0} />' },
