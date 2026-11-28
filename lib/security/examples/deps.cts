@@ -2,6 +2,7 @@
 // example is the fix command.
 import type { RuleExamples } from '../types/rule-example.js';
 
+// Keep sorted by rule id; test/shared/registry-order.test.ts checks it.
 const examples: RuleExamples = {
   'dependency-known-vulnerability': [
     '// Direct dependency: npm install lodash@4.17.21\n// Transitive: add "overrides": { "lodash": "4.17.21" } to package.json',
