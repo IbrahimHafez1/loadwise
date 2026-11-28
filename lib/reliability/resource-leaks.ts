@@ -2,6 +2,7 @@
 // intervals. Each rule only fires for a resource held in a local (or a field, for intervals), so a
 // resource that is returned, stored or passed on is never reported: its new owner decides when it ends.
 import { ts } from '../performance/compiler.js';
+import { calleeName } from '../performance/call-syntax.js';
 import { walkNodes } from './walk.js';
 import { isIgnoredSource } from './source-helpers.js';
 import type {
@@ -396,12 +397,6 @@ function acquisitionMessage(acquisition: Acquisition, state: LeakState): string 
 function findingAt(sourceFile: SourceFile, file: string, node: Node, ruleId: string, message: string): Finding {
   const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
   return { file, line: position.line + 1, column: position.character + 1, ruleId, message };
-}
-
-function calleeName(call: CallExpression): string | undefined {
-  const callee = ts.skipOuterExpressions(call.expression);
-  if (ts.isIdentifier(callee)) return callee.text;
-  return ts.isPropertyAccessExpression(callee) ? callee.name.text : undefined;
 }
 
 function functionNameOf(functionNode: Node): string | undefined {
