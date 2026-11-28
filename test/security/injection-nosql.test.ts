@@ -249,6 +249,35 @@ test('a stage pushed in an outer loop reaches an aggregate inside an inner loop'
   assert.deepEqual(nosqlLines(source), [[10, 'D']]);
 });
 
+test('a stage pushed by a helper that never runs is silent, one in the calling callback is reported', () => {
+  const source = route(
+    'const pipeline: object[] = [];',
+    'const add = () => pipeline.push({ $match: { name: req.body.name } });',
+    'User.aggregate(pipeline);',
+    'const shared: object[] = [];',
+    '[1].forEach(() => {',
+    '  shared.push({ $match: { name: req.body.name } });',
+    '  User.aggregate(shared);',
+    '});',
+  );
+  assert.deepEqual(nosqlLines(source), [[10, 'D']]);
+});
+
+test('a stage pushed after aggregate reaches it on the next pass of a for loop that creates the pipeline', () => {
+  const source = route(
+    'for (const pipeline: object[] = []; req.body.more; ) {',
+    '  User.aggregate(pipeline);',
+    '  pipeline.push({ $match: { name: req.body.name } });',
+    '}',
+    'for (const name of req.body.names) {',
+    '  const fresh: object[] = [];',
+    '  User.aggregate(fresh);',
+    '  fresh.push({ $match: { name } });',
+    '}',
+  );
+  assert.deepEqual(nosqlLines(source), [[7, 'D']]);
+});
+
 test('a field written to a local $or branch is reported, an $eq-wrapped one is silent', () => {
   const source = route(
     'const branch: Record<string, unknown> = {};',
