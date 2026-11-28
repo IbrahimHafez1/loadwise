@@ -586,4 +586,4 @@ function checkResourceLeaks(sourceFile: SourceFile, file: string, checker: Check
 export { checkResourceLeaks };
 
 // Shared with the child-process rule, which resolves imports and finds uses of a local the same way.
-export { declaringStatement, findingAt, importedReference, outermostWrapper, referencesTo, sameMembers };
+export { declaringStatement, findingAt, importedReference, insideNestedFunction, outermostWrapper, referencesTo };

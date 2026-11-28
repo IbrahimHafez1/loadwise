@@ -3,7 +3,7 @@
 import { ts } from '../performance/compiler.js';
 import { walkNodes } from './walk.js';
 import { isIgnoredSource } from './source-helpers.js';
-import { findingAt } from './resource-leaks.js';
+import { findingAt, insideNestedFunction } from './resource-leaks.js';
 import type { Block, CatchClause, Expression, Identifier, Node, SourceFile, ThrowStatement } from 'typescript';
 import type { Finding } from '../shared/types.js';
 
@@ -16,12 +16,6 @@ const failureLogMethods = new Set(['error', 'fatal']);
 const looseFolder =
   /(?:^|\/)(?:__fixtures__|__mocks__|fixtures?|e2e|migrations?|tests?|__tests__|testing|test[-_][\w-]*|[\w-]*[-_]tests?)\//i;
 const loggerName = /^(?:console|_?logger|_?log)$/i;
-
-function insideNestedFunction(node: Node, container: Node): boolean {
-  for (let current = node.parent; current && current !== container; current = current.parent)
-    if (ts.isFunctionLike(current)) return true;
-  return false;
-}
 
 // Statements of the catch block itself, not of callbacks declared inside it.
 function ownNodes(block: Block, visit: (node: Node) => void): void {
