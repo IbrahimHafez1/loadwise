@@ -3,7 +3,7 @@
 import { ts } from '../performance/compiler.js';
 import { walkNodes } from './walk.js';
 import { isIgnoredSource } from './source-helpers.js';
-import { findingAt, insideNestedFunction } from './resource-leaks.js';
+import { findingAt, insideNestedFunction, outermostWrapper } from './resource-leaks.js';
 import type { Block, CatchClause, Expression, Identifier, Node, SourceFile, ThrowStatement } from 'typescript';
 import type { Finding } from '../shared/types.js';
 
@@ -15,6 +15,7 @@ const failureLogMethods = new Set(['error', 'fatal']);
 // Fixtures, end-to-end helpers, test utilities and one-off migrations throw and log loosely on purpose.
 const looseFolder =
   /(?:^|\/)(?:__fixtures__|__mocks__|fixtures?|e2e|migrations?|tests?|__tests__|testing|test[-_][\w-]*|[\w-]*[-_]tests?)\//i;
+const globalObjectName = /^(?:globalThis|global|window|self)$/;
 const loggerName = /^(?:console|_?logger|_?log)$/i;
 
 // Statements of the catch block itself, not of callbacks declared inside it.
@@ -44,7 +45,10 @@ function constructedName(thrown: Expression): string | undefined {
   if (!ts.isNewExpression(expression) && !ts.isCallExpression(expression)) return;
   const callee = ts.skipOuterExpressions(expression.expression);
   if (ts.isIdentifier(callee)) return callee.text;
-  return ts.isPropertyAccessExpression(callee) ? callee.name.text : undefined;
+  // Only `globalThis.Error` is certainly the built-in; `domain.Error` is a domain constructor.
+  if (!ts.isPropertyAccessExpression(callee)) return;
+  const owner = ts.skipOuterExpressions(callee.expression);
+  return ts.isIdentifier(owner) && globalObjectName.test(owner.text) ? callee.name.text : undefined;
 }
 
 // `new Error('x', { cause: previous })` already keeps a cause, just not the caught one.
@@ -120,17 +124,17 @@ function isFailureLog(node: Node): boolean {
 
 // `err instanceof Error` only inspects the value, so it neither logs nor hands the error on.
 function isTypeGuard(reference: Identifier): boolean {
-  const guard = reference.parent;
+  const value = outermostWrapper(reference);
+  const guard = value.parent;
   return (
-    ts.isBinaryExpression(guard) &&
-    guard.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword &&
-    guard.left === reference
+    ts.isBinaryExpression(guard) && guard.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword && guard.left === value
   );
 }
 
 function isMessageRead(reference: Identifier): boolean {
-  const access = reference.parent;
-  return ts.isPropertyAccessExpression(access) && access.expression === reference && access.name.text === 'message';
+  const value = outermostWrapper(reference);
+  const access = value.parent;
+  return ts.isPropertyAccessExpression(access) && access.expression === value && access.name.text === 'message';
 }
 
 function enclosingFailureLog(reference: Node, block: Block): Node | undefined {
