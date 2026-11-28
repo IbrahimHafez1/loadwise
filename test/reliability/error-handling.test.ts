@@ -29,6 +29,8 @@ test('child-process-without-error-listener reports spawned processes that only g
     "const child = fork('worker.js');\nchild.stdout?.on('data', () => {});\nchild.kill();",
     "const child = exec('ls');\nchild.on('exit', () => {});",
     "const file = '/missing';\nexecFile(file);",
+    "const child = spawn('ls'), startedAt = Date.now();\nchild.on('close', onClose);",
+    "spawn('ls').on('close', onClose).on('exit', onExit);",
     "const child = spawn('ls');\nchild.on('close', onClose).on('exit', onExit);",
     "function run() { const child = spawn('ls'); return new Promise((resolve) => child.on('close', resolve)); }",
   ];
@@ -57,6 +59,8 @@ test('child-process-without-error-listener accepts handled, handed-off and callb
     "const { stdout } = spawn('ls');",
     "exec('ls', (error) => {});",
     "exec('ls', callback);",
+    "exec('ls', handlers.done);",
+    "spawn('ls').on('close', onClose).on('error', onError);",
     "const child = spawn('ls');\nchild.on('close', onClose).on('error', onError);",
     "const child = spawn('ls');\nreturn child;",
     "const child = spawn('ls');\nregister(child.on('close', onClose));",
@@ -73,6 +77,7 @@ test('child-process-without-error-listener ignores a local spawn and other modul
 test('error-rethrown-without-cause reports a new error that drops the caught one', () => {
   const sources = [
     "try { work(); } catch (err) { throw new Error('work failed'); }",
+    "try { work(); } catch (err) { throw new globalThis.Error('work failed'); }",
     "try { work(); } catch (err) { throw (new Error('work failed')); }",
     'try { work(); } catch (error) { throw new TypeError(`bad config ${path}`); }',
     "try { work(); } catch (e) { throw new RangeError('gave up'); }",
@@ -87,6 +92,7 @@ test('error-rethrown-without-cause accepts a cause, a use of the caught error an
   const sources = [
     "try { work(); } catch (err) { throw new Error('work failed', { cause: err }); }",
     "try { work(); } catch (err) { throw new Error('work failed', { cause: previous }); }",
+    "try { work(); } catch (err) { throw new domain.Error('not found'); }",
     'try { work(); } catch (err) { throw new Error(`work failed: ${err}`); }',
     "try { work(); } catch (err) { logger.error(err); throw new Error('work failed'); }",
     "try { work(); } catch (err) { if (err.code === 'ENOENT') throw new Error('missing'); throw err; }",
@@ -136,6 +142,8 @@ test('error-logged-without-stack reports a catch that logs only the message and 
     "try { work(); } catch (err) { logger.error('failed: ' + err.message); }",
     'try { work(); } catch (err) { this.logger.error(`failed: ${err.message}`); return null; }',
     "try { work(); } catch (err) { console.error('failed', err.message); res.status(500).end(); }",
+    'try { work(); } catch (err) { console.error((err as Error).message); }',
+    'try { work(); } catch (err) { console.error((err).message); }',
     'try { work(); } catch (err) { if (err instanceof Error) console.error(err.message); }',
     'try { work(); } catch (err) { console.error(err.message); try { cleanup(); } catch (err) { console.error(err); } }',
     'try { work(); } catch (err) { console.error(err.message); try { cleanup(); } catch (err) { console.error(err); } }',

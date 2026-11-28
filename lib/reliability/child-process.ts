@@ -4,7 +4,7 @@
 import { ts } from '../performance/compiler.js';
 import { walkNodes } from './walk.js';
 import { isIgnoredSource } from './source-helpers.js';
-import { declaringStatement, findingAt, importedReference, outermostWrapper, referencesTo } from './resource-leaks.js';
+import { findingAt, importedReference, outermostWrapper, referencesTo } from './resource-leaks.js';
 import type { CallExpression, Node, SourceFile, VariableDeclaration } from 'typescript';
 import type { CheckerAdapter, Finding } from '../shared/types.js';
 
@@ -18,9 +18,11 @@ function spawnedMember(call: CallExpression, checker: CheckerAdapter): string | 
   if (origin?.moduleName !== 'child_process' || origin.members.length !== 1) return;
   const [member] = origin.members;
   if (alwaysEmitting.has(member)) return member;
-  // The first argument is the command or file, never the callback; a later identifier may be the callback.
+  // The first argument is the command or file, never the callback; a later identifier or property (`handlers.done`) may be the callback.
   const hasCallback = call.arguments.some(
-    (argument, index) => ts.isFunctionLike(argument) || (index > 0 && ts.isIdentifier(argument)),
+    (argument, index) =>
+      ts.isFunctionLike(argument) ||
+      (index > 0 && (ts.isIdentifier(argument) || ts.isPropertyAccessExpression(argument))),
   );
   return callbackAccepting.has(member) && !hasCallback ? member : undefined;
 }
@@ -58,8 +60,8 @@ function useOf(reference: Node): Use {
 }
 
 function declarationLacksErrorListener(declaration: VariableDeclaration, checker: CheckerAdapter): boolean {
-  const statement = declaringStatement(declaration);
-  if (!statement || !ts.isIdentifier(declaration.name)) return false;
+  const statement = declaration.parent.parent;
+  if (!ts.isVariableStatement(statement) || !ts.isIdentifier(declaration.name)) return false;
   return referencesTo(declaration, statement.parent, checker).every((reference) => useOf(reference) === 'plain');
 }
 
@@ -72,7 +74,7 @@ function resultIsUnheld(call: CallExpression): boolean {
   if (!ts.isPropertyAccessExpression(parent) || parent.expression !== node) return false;
   const outer = parent.parent;
   if (!ts.isCallExpression(outer) || outer.expression !== parent) return false;
-  if (listenerMethods.has(parent.name.text)) return !registersErrorListener(outer) && isStatement(outer);
+  if (listenerMethods.has(parent.name.text)) return !registersErrorListener(outer) && resultIsUnheld(outer);
   return parent.name.text === 'unref' && isStatement(outer);
 }
 
@@ -87,6 +89,13 @@ function lacksErrorListener(call: CallExpression, checker: CheckerAdapter): bool
   return resultIsUnheld(call);
 }
 
+// exec and execFile keep an internal 'error' listener, so a failed spawn goes unnoticed instead of crashing.
+function failureMessage(member: string): string {
+  if (callbackAccepting.has(member))
+    return `This ${member}() call has no callback and no 'error' listener, so a failed spawn (a missing binary, no permission) goes unnoticed. Pass a callback or add child.on('error', ...).`;
+  return `This ${member}() child process has no 'error' listener. If the spawn fails (a missing binary, no permission), Node emits 'error' and, with no listener, the parent process crashes. Add child.on('error', ...) or wait with events.once(child, 'exit').`;
+}
+
 function checkChildProcesses(sourceFile: SourceFile, file: string, checker: CheckerAdapter): Finding[] {
   if (!sourceFile.text.includes('child_process') || isIgnoredSource(sourceFile, file)) return [];
   const findings: Finding[] = [];
@@ -94,15 +103,7 @@ function checkChildProcesses(sourceFile: SourceFile, file: string, checker: Chec
     if (!ts.isCallExpression(node)) return;
     const member = spawnedMember(node, checker);
     if (!member || !lacksErrorListener(node, checker)) return;
-    findings.push(
-      findingAt(
-        sourceFile,
-        file,
-        node,
-        'child-process-without-error-listener',
-        `This ${member}() child process has no 'error' listener. If the spawn fails (a missing binary, no permission), Node emits 'error' and, with no listener, the parent process crashes. Add child.on('error', ...) or wait with events.once(child, 'exit').`,
-      ),
-    );
+    findings.push(findingAt(sourceFile, file, node, 'child-process-without-error-listener', failureMessage(member)));
   });
   return findings;
 }
