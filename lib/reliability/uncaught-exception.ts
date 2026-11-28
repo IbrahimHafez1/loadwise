@@ -51,15 +51,20 @@ function isDormantFunction(node: Node): boolean {
   return !ts.isCallExpression(node.parent) && !ts.isNewExpression(node.parent);
 }
 
+// A throw counts only when it leaves the handler, so one inside a `try` that has a `catch` is not evidence.
 function endsOrRethrows(handler: Node): boolean {
   let ends = false;
-  const visit = (node: Node): void => {
+  const visit = (node: Node, caught: boolean): void => {
     if (ends || isDormantFunction(node)) return;
-    if (ts.isThrowStatement(node) || isExitCodeAssignment(node)) ends = true;
+    if ((ts.isThrowStatement(node) && !caught) || isExitCodeAssignment(node)) ends = true;
     else if (ts.isCallExpression(node) && shutdownCallName.test(calleeName(node) ?? '')) ends = true;
-    else ts.forEachChild(node, visit);
+    else if (ts.isTryStatement(node) && node.catchClause) {
+      visit(node.tryBlock, true);
+      visit(node.catchClause, caught);
+      if (node.finallyBlock) visit(node.finallyBlock, caught);
+    } else ts.forEachChild(node, (child) => visit(child, ts.isFunctionLike(child) ? false : caught));
   };
-  ts.forEachChild(handler, visit);
+  ts.forEachChild(handler, (child) => visit(child, false));
   return ends;
 }
 

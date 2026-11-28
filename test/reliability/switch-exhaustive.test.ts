@@ -92,6 +92,8 @@ test('switch-not-exhaustive accepts an assignment outside the switch and reports
   ];
   for (const source of quiet) assert.deepEqual(scan(source), [], source);
   const reported = [
+    "type M = 'a' | 'b' | 'c';\nexport function f(m: M, ready: boolean) { let value: number; if (ready) value = 0; switch (m) { case 'a': value = 1; break; } return value; }",
+    "type M = 'a' | 'b' | 'c';\nexport function f(m: M) { let value: number; const init = () => { value = 0; }; switch (m) { case 'a': value = 1; break; } return value; }",
     "type M = 'a' | 'b' | 'c';\nexport function f(m: M) { let value!: number; switch (m) { case 'a': value = 1; break; } return value; }",
     "type M = 'a' | 'b' | 'c';\nexport function f(m: M) { let value: number; switch (m) { case 'a': [value] = [1]; break; } return value; }",
     "type M = 'a' | 'b' | 'c';\nexport function f(m: M) { let value: number; switch (m) { case 'a': ({ value } = { value: 1 }); break; } return value; }",
@@ -106,6 +108,15 @@ test('switch-not-exhaustive reaches switches nested in final blocks, counts null
     "type M = 'a' | 'b' | 'c';\nexport function f(m: M) { switch (m) { case 'a': return null; case 'b': return null; } }",
   ];
   for (const source of reported) assert.equal(scan(source)[0]?.ruleId, 'switch-not-exhaustive', source);
+  const quietTail = [
+    "type M = 'a' | 'b';\nexport function f(m: M) { try { switch (m) { case 'a': return 1; } } finally { return 0; } }",
+    "type M = 'a' | 'b';\nexport function f(m: M) { try { switch (m) { case 'a': return 1; } } finally { throw new Error('x'); } }",
+    "type M = 'a' | 'b';\nexport function f(m: M) { let value: number; switch (m) { case 'a': value = 1; break; } return m === 'a' ? value : 0; }",
+  ];
+  for (const source of quietTail) assert.deepEqual(scan(source), [], source);
+  const promiseSource =
+    "type M = 'a' | 'b';\nexport function f(m: M) { switch (m) { case 'a': return Promise.resolve(); } }";
+  assert.equal(scan(promiseSource)[0]?.ruleId, 'switch-not-exhaustive', promiseSource);
   const quiet =
     "type M = 'a' | 'b' | 'c';\ndeclare function fail(): never;\nexport function f(m: M) { switch (m) { case 'a': return fail(); case 'b': return fail(); } }";
   assert.deepEqual(scan(quiet), [], quiet);

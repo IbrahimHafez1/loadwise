@@ -36,26 +36,27 @@ function disablesTimeout(value: Expression): boolean {
   return ts.isNumericLiteral(expression) && Number(expression.text) === 0;
 }
 
-function setsTimeout(property: ObjectLiteralElementLike): boolean {
-  if (ts.isSpreadAssignment(property)) return true;
-  if (propertyName(property) !== timeoutOption) return false;
-  return !ts.isPropertyAssignment(property) || !disablesTimeout(property.initializer);
-}
-
-// Only the `connectionTimeoutMillis` query parameter of a connection string sets the timeout.
-function urlSetsTimeout(connectionString: string): boolean {
-  const query = connectionString.split('?').slice(1).join('?');
-  return new URLSearchParams(query).getAll(timeoutOption).some((value) => Number(value) > 0);
+// A later property overrides an earlier one, so the last spread or `connectionTimeoutMillis` property decides. A spread
+// may supply the timeout, so it counts as setting it.
+function setsTimeout(properties: readonly ObjectLiteralElementLike[]): boolean {
+  for (const property of properties.toReversed()) {
+    if (ts.isSpreadAssignment(property)) return true;
+    if (propertyName(property) !== timeoutOption) continue;
+    return !ts.isPropertyAssignment(property) || !disablesTimeout(property.initializer);
+  }
+  return false;
 }
 
 // Whether the configuration visibly lacks the option. A configuration held elsewhere (a variable, a spread) may set it.
+// A connection string never sets it: pg reads the timer from the `connectionTimeoutMillis` property of the argument, so
+// a query parameter in the URL does not enable it.
 function lacksTimeout(node: NewExpression): boolean {
   const [config] = node.arguments ?? [];
   if (config === undefined) return true;
   const expression = ts.skipOuterExpressions(config);
-  if (ts.isStringLiteralLike(expression)) return !urlSetsTimeout(expression.text);
+  if (ts.isStringLiteralLike(expression)) return true;
   if (!ts.isObjectLiteralExpression(expression)) return false;
-  return !expression.properties.some(setsTimeout);
+  return !setsTimeout(expression.properties);
 }
 
 function checkPoolTimeout(sourceFile: SourceFile, file: string, checker: CheckerAdapter): Finding[] {

@@ -52,7 +52,7 @@ const examples: Record<string, { before: string; code: string; note: string }> =
   },
   'uncaught-exception-continues': {
     before: "process.on('uncaughtException', (error) => {\n  logger.error(error);\n});",
-    code: "process.on('uncaughtException', (error) => {\n  logger.error(error);\n  process.exit(1);\n});",
+    code: "process.on('uncaughtException', (error) => {\n  logger.error(error);\n  logger.flush(() => process.exit(1));\n});",
     note: 'The process is in an unknown state after an uncaught exception; flush logs, then exit non-zero.',
   },
   'loop-index-past-length': {

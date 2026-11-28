@@ -42,7 +42,7 @@ test('pool-without-connection-timeout stays quiet when a timeout is set, hidden 
     "import { Pool } from 'pg';\nexport const pool = new Pool({ connectionTimeoutMillis: 5000 });",
     "import { Pool } from 'pg';\nconst base = { max: 1 };\nexport const pool = new Pool({ ...base });",
     "import { Pool } from 'pg';\nconst config = { max: 1 };\nexport const pool = new Pool(config);",
-    "import { Client } from 'pg';\nexport const client = new Client('postgres://h/db?connectionTimeoutMillis=500');",
+    "import { Pool } from 'pg';\nconst base = { max: 1 };\nexport const pool = new Pool({ connectionTimeoutMillis: 0, ...base });",
     'class Pool { constructor(public config: object) {} }\nexport const pool = new Pool({ max: 1 });',
   ];
   for (const source of quiet) assert.deepEqual(scanPool(source), [], source);
@@ -72,11 +72,13 @@ test('uncaught-exception-continues stays quiet when the handler ends the process
   for (const source of quiet) assert.deepEqual(scanHandler(source), [], source);
 });
 
-test('pool-without-connection-timeout follows import aliases and reads quoted, disabled and URL options', () => {
+test('pool-without-connection-timeout follows import aliases and reads quoted, disabled, overridden and URL options', () => {
   const reported = [
     "import { Pool as PgPool } from 'pg';\nexport const pool = new PgPool({ max: 1 });",
     "import { Pool } from 'pg';\nexport const pool = new Pool({ connectionTimeoutMillis: 0 });",
     "import { Pool } from 'pg';\nexport const pool = new Pool({ connectionTimeoutMillis: undefined });",
+    "import { Pool } from 'pg';\nconst base = { max: 1 };\nexport const pool = new Pool({ ...base, connectionTimeoutMillis: 0 });",
+    "import { Client } from 'pg';\nexport const client = new Client('postgres://h/db?connectionTimeoutMillis=500');",
     "import { Client } from 'pg';\nexport const client = new Client('postgres://timeout:pw@timeout.example/db?application_name=timeout');",
   ];
   for (const source of reported) {
@@ -102,6 +104,7 @@ test('uncaught-exception-continues reads prependOnceListener, same-file methods 
 
 test('uncaught-exception-continues needs the process exit code and ignores functions that are never called', () => {
   const reported = [
+    "process.on('uncaughtException', (error) => { try { throw error; } catch (caught) { console.error(caught); } });",
     "const state = { exitCode: 0 };\nprocess.on('uncaughtException', (error) => { state.exitCode = 1; console.error(error); });",
     "process.on('uncaughtException', (error) => { const rethrow = () => { throw error; }; console.error(error); });",
   ];
@@ -109,6 +112,8 @@ test('uncaught-exception-continues needs the process exit code and ignores funct
     assert.equal(scanHandler(source)[0]?.ruleId, 'uncaught-exception-continues', source);
   }
   const quiet = [
+    "process.on('uncaughtException', (error) => { try { console.error(error); } finally { throw error; } });",
+    "process.on('uncaughtException', (error) => { try { throw error; } catch (caught) { throw caught; } });",
     "process.on('uncaughtException', (error) => { console.error(error); setTimeout(() => process.exit(1), 100); });",
   ];
   for (const source of quiet) assert.deepEqual(scanHandler(source), [], source);
