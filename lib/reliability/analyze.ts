@@ -5,6 +5,8 @@ import { checkInsertTerminators } from './sql-insert-terminator.js';
 import { checkSuspiciousLogic } from './suspicious-logic.js';
 import { checkBoundaryAccess } from './boundary-access.js';
 import { checkResourceLeaks } from './resource-leaks.js';
+import { checkChildProcesses } from './child-process.js';
+import { checkErrorValues } from './error-values.js';
 import { isVendoredMinified } from '../shared/execution-context.js';
 import { relativeToProject, reviewedReason, reviewMarkers } from '../performance/review-context.js';
 import type { SourceFile } from 'typescript';
@@ -21,6 +23,8 @@ function analyzeFile(program: ProgramAdapter, sourceFile: SourceFile): Finding[]
     ...checkSuspiciousLogic(sourceFile, file, program.getCompilerOptions()),
     ...checkBoundaryAccess(sourceFile, file, checker),
     ...checkResourceLeaks(sourceFile, file, checker),
+    ...checkChildProcesses(sourceFile, file, checker),
+    ...checkErrorValues(sourceFile, file),
   ];
   const hasReviewComments = reviewMarkers.some((marker) => sourceFile.text.includes(marker));
   return findings.map((finding) => {
