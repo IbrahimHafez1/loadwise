@@ -14,7 +14,9 @@ const TYPESCRIPT_FILE = /\.[cm]?tsx?$/i;
 const FOCUSABLE_RUNNERS = new Set(['describe', 'it', 'test', 'suite']);
 // Jasmine's focused forms, which are plain functions rather than `.only` members.
 const JASMINE_FOCUSED = new Set(['fit', 'fdescribe']);
-const SUPPRESSION_DIRECTIVE = /^(?:\/\/\/?|\/\*+)\s*@ts-(ignore|expect-error|nocheck)\b(.*)$/s;
+// The compiler reads a directive from the last line of a comment, where a block comment's `*` gutter may precede it.
+const SUPPRESSION_DIRECTIVE = /^\s*(?:[/*]\s*)*@ts-(ignore|expect-error|nocheck)\b(.*)$/s;
+const WORD_CHARACTER = /[\p{L}\p{N}]/u;
 const WATCHED_DIRECTIVE = /@ts-(?:ignore|expect-error|nocheck)/;
 
 // `test.concurrent.only(...)` and `test.describe.serial.only(...)` still focus the runner.
@@ -74,9 +76,9 @@ function isFocusedMember(node: Node, runnerNames: ReadonlySet<string>): boolean 
   const { parent } = node;
   if (isInvokedMember(node)) return true;
   return (
-    ts.isPropertyAccessExpression(parent) &&
+    (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) &&
     parent.expression === node &&
-    parent.name.text === 'each' &&
+    focusedMemberName(parent) === 'each' &&
     isInvokedMember(parent)
   );
 }
@@ -132,11 +134,14 @@ function checkFocusedTests(sourceFile: SourceFile, file: string): Finding[] {
 }
 
 function suppressionReason(commentText: string): { directive: string; hasReason: boolean } | undefined {
-  const match = SUPPRESSION_DIRECTIVE.exec(commentText);
+  const lastNewline = commentText.lastIndexOf('\n');
+  const match = SUPPRESSION_DIRECTIVE.exec(commentText.slice(lastNewline + 1));
   if (!match) return;
   // Text after the directive counts as a reason only when it holds a word, so `-` or `*/` alone do not.
   const afterDirective = match[2].replace(/\*\/\s*$/, '');
-  return { directive: match[1], hasReason: /[\p{L}\p{N}]/u.test(afterDirective) };
+  // Earlier lines of a block comment may already explain the suppression.
+  const precedingLines = commentText.slice(0, Math.max(lastNewline, 0));
+  return { directive: match[1], hasReason: WORD_CHARACTER.test(afterDirective) || WORD_CHARACTER.test(precedingLines) };
 }
 
 function commentRangesOf(sourceFile: SourceFile): ts.CommentRange[] {
@@ -180,11 +185,15 @@ function unwrapParentheses(node: Node): Node {
   return ts.isParenthesizedExpression(node) ? unwrapParentheses(node.expression) : node;
 }
 
+function isTypeAssertion(node: Node): node is ts.AsExpression | ts.TypeAssertion {
+  return ts.isAsExpression(node) || ts.isTypeAssertionExpression(node);
+}
+
 function isDoubleAssertion(node: Node): boolean {
-  if (!ts.isAsExpression(node)) return false;
+  if (!isTypeAssertion(node)) return false;
   const inner = unwrapParentheses(node.expression);
   return (
-    ts.isAsExpression(inner) &&
+    isTypeAssertion(inner) &&
     (inner.type.kind === ts.SyntaxKind.UnknownKeyword || inner.type.kind === ts.SyntaxKind.AnyKeyword)
   );
 }
@@ -193,7 +202,7 @@ function checkDoubleTypeAssertions(sourceFile: SourceFile, file: string): Findin
   // Tests cast through `unknown` to build partial mocks, which is the accepted way to do it there.
   if (!TYPESCRIPT_FILE.test(file) || isTestFile(file)) return [];
   // A comment may sit between `as` and the type, so the cheap prefilter only looks for both words.
-  if (!/\bas\b/.test(sourceFile.text) || !/\b(?:unknown|any)\b/.test(sourceFile.text)) return [];
+  if (!/\bas\b|<[^>]*>/.test(sourceFile.text) || !/\b(?:unknown|any)\b/.test(sourceFile.text)) return [];
   const findings: Finding[] = [];
   walkNodes(sourceFile, (node) => {
     if (!isDoubleAssertion(node)) return;

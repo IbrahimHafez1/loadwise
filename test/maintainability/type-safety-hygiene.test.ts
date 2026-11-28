@@ -87,8 +87,9 @@ test('double-type-assertion flags casts through unknown and any', () => {
     'const b = value as any as User;',
     'const c = (value as unknown) as User;',
     'const d = <User>(value as unknown);',
+    'const e = <User><unknown>value;',
   ].join('\n');
-  assert.deepEqual(lines('src/a.ts', source, 'double-type-assertion'), [1, 2, 3]);
+  assert.deepEqual(lines('src/a.ts', source, 'double-type-assertion'), [1, 2, 3, 4, 5]);
 });
 
 test('double-type-assertion leaves single and typed casts alone', () => {
@@ -101,6 +102,7 @@ test('double-type-assertion leaves single and typed casts alone', () => {
   ].join('\n');
   assert.deepEqual(lines('src/a.ts', source, 'double-type-assertion'), []);
   assert.deepEqual(lines('src/a.js', 'const a = value;', 'double-type-assertion'), []);
+  assert.deepEqual(lines('src/a.ts', 'const a = <User>value;\nconst b = <unknown>value;', 'double-type-assertion'), []);
 });
 
 function writeTsconfigs(context: TestContext, configs: Record<string, string>): string {
@@ -200,4 +202,18 @@ test('ts-suppression-without-reason flags a trailing directive on a code line', 
 test('double-type-assertion flags a comment between as and unknown', () => {
   const source = 'const user = value as /* compatibility */ unknown as User;';
   assert.deepEqual(lines('src/a.ts', source, 'double-type-assertion'), [1]);
+});
+
+test('focused-test-committed flags a computed .each after .only', () => {
+  assert.deepEqual(lines('src/a.test.ts', "it.only['each']([1])('case', () => {});", 'focused-test-committed'), [1]);
+  assert.deepEqual(lines('src/a.test.ts', "const parameterize = it.only['each'];", 'focused-test-committed'), []);
+});
+
+test('ts-suppression-without-reason reads the directive on a block comment last line', () => {
+  const bare = '/*\n * @ts-ignore */\nbroken();';
+  const withReason = '/*\n * @ts-ignore legacy typings */\nbroken();';
+  const reasonAbove = '/*\n * Legacy typings.\n * @ts-ignore */\nbroken();';
+  assert.deepEqual(lines('src/a.ts', bare, 'ts-suppression-without-reason'), [1]);
+  assert.deepEqual(lines('src/a.ts', withReason, 'ts-suppression-without-reason'), []);
+  assert.deepEqual(lines('src/a.ts', reasonAbove, 'ts-suppression-without-reason'), []);
 });
