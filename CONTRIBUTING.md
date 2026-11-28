@@ -43,6 +43,7 @@ npm run bench:recall
 
 - Keep rules, autofixes, and `README.md` rule anchors / `--help` docs in sync (`test/shared/docs-sync.test.js` enforces this).
 - Include focused positive and negative regression tests for any rule, parser, or autofix change.
+- Insert a new rule id in sorted position in every rule registry list (`test/shared/registry-order.test.ts` enforces this), so parallel rule pull requests do not conflict.
 - Keep commits small and focused: one logical change per commit (a rule, a fix, a refactor, a docs update), with its tests in the same commit, and a [Conventional Commits](https://www.conventionalcommits.org/) message such as `fix(rel): ...` or `feat(a11y): ...`. Don't mix unrelated changes, formatting sweeps or dependency updates into a feature commit. Each commit should build and pass its tests.
 - Add a changelog fragment instead of editing `CHANGELOG.md`: one file `changes/<short-kebab-slug>.md` with `section: Added|Changed|Deprecated|Removed|Fixed|Security` in its frontmatter and the entry text as the body, written like a `CHANGELOG.md` bullet without the leading `- `. [changes/README.md](changes/README.md) has an example. This keeps open pull requests from conflicting over the same lines.
 - Do not commit built `.js` / `.cjs` artifacts or `.tgz` archives (they are gitignored).
