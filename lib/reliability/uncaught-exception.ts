@@ -6,7 +6,7 @@ import { isIgnoredSource } from './source-helpers.js';
 import type { CheckerAdapter, Finding } from '../shared/types.js';
 import type { CallExpression, Expression, Node, SourceFile } from 'typescript';
 
-const listenerMethods = new Set(['on', 'once', 'addListener', 'prependListener']);
+const listenerMethods = new Set(['on', 'once', 'addListener', 'prependListener', 'prependOnceListener']);
 // Calls that end the process or start its shutdown, however the project names them.
 const shutdownCallName = /exit|shutdown|terminate|abort|kill|crash|die|stop|close|destroy/i;
 
@@ -24,9 +24,18 @@ function isProcessListenerCall(call: CallExpression): boolean {
   );
 }
 
+function isProcessReference(node: Node): boolean {
+  const expression = ts.skipOuterExpressions(node);
+  return ts.isIdentifier(expression) && expression.text === 'process';
+}
+
 function isExitCodeAssignment(node: Node): boolean {
   if (!ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) return false;
-  return ts.isPropertyAccessExpression(node.left) && node.left.name.text === 'exitCode';
+  return (
+    ts.isPropertyAccessExpression(node.left) &&
+    node.left.name.text === 'exitCode' &&
+    isProcessReference(node.left.expression)
+  );
 }
 
 function calleeName(call: CallExpression): string | undefined {
@@ -35,28 +44,42 @@ function calleeName(call: CallExpression): string | undefined {
   return ts.isPropertyAccessExpression(callee) ? callee.name.text : undefined;
 }
 
+// A function written inside the handler runs only when called or handed to a call (a scheduled shutdown such as
+// `setTimeout(() => process.exit(1))`); one that is merely declared or stored does not end the process.
+function isDormantFunction(node: Node): boolean {
+  if (!ts.isFunctionLike(node)) return false;
+  return !ts.isCallExpression(node.parent) && !ts.isNewExpression(node.parent);
+}
+
 function endsOrRethrows(handler: Node): boolean {
   let ends = false;
-  walkNodes(handler, (node) => {
+  const visit = (node: Node): void => {
+    if (ends || isDormantFunction(node)) return;
     if (ts.isThrowStatement(node) || isExitCodeAssignment(node)) ends = true;
-    if (ts.isCallExpression(node)) ends = ends || shutdownCallName.test(calleeName(node) ?? '');
-  });
+    else if (ts.isCallExpression(node) && shutdownCallName.test(calleeName(node) ?? '')) ends = true;
+    else ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(handler, visit);
   return ends;
 }
 
-// The handler's code when it is written in place or is a function of this file; undefined when it comes from elsewhere
-// and cannot be read.
-function handlerBody(handler: Expression, checker: CheckerAdapter): Node | undefined {
-  const expression = ts.skipOuterExpressions(handler);
-  if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) return expression;
-  if (!ts.isIdentifier(expression)) return;
-  const declaration = checker.getSymbolAtLocation(expression)?.valueDeclaration;
+function functionOf(declaration: Node | undefined): Node | undefined {
   if (!declaration || declaration.getSourceFile().isDeclarationFile) return;
-  if (ts.isFunctionDeclaration(declaration)) return declaration;
-  const initializer = ts.isVariableDeclaration(declaration) ? declaration.initializer : undefined;
+  if (ts.isFunctionDeclaration(declaration) || ts.isMethodDeclaration(declaration)) return declaration;
+  const initializer =
+    ts.isVariableDeclaration(declaration) || ts.isPropertyAssignment(declaration) ? declaration.initializer : undefined;
   return initializer && (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer))
     ? initializer
     : undefined;
+}
+
+// The handler's code when it is written in place or is a function, method or property of this file; undefined when it
+// comes from elsewhere and cannot be read.
+function handlerBody(handler: Expression, checker: CheckerAdapter): Node | undefined {
+  const expression = ts.skipOuterExpressions(handler);
+  if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) return expression;
+  if (!ts.isIdentifier(expression) && !ts.isPropertyAccessExpression(expression)) return;
+  return functionOf(checker.getSymbolAtLocation(expression)?.valueDeclaration);
 }
 
 function checkUncaughtException(sourceFile: SourceFile, file: string, checker: CheckerAdapter): Finding[] {

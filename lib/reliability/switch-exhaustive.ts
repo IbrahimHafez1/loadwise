@@ -4,13 +4,21 @@
 import { ts } from '../performance/compiler.js';
 import { walkNodes } from './walk.js';
 import { isIgnoredSource } from './source-helpers.js';
-import type { Block, CaseOrDefaultClause, Expression, Node, SourceFile, SwitchStatement } from 'typescript';
+import type {
+  BinaryExpression,
+  Block,
+  CaseOrDefaultClause,
+  Expression,
+  Node,
+  SourceFile,
+  SwitchStatement,
+} from 'typescript';
 import type { CheckerAdapter, Finding, TypeAdapter } from '../shared/types.js';
 
 const minimumLiteralMembers = 2;
 const emptinessFlags = ts.TypeFlags.Undefined | ts.TypeFlags.Null;
 const literalFlags = ts.TypeFlags.StringLiteral | ts.TypeFlags.NumberLiteral;
-const emptyValueFlags = ts.TypeFlags.Void | ts.TypeFlags.Undefined | ts.TypeFlags.Null;
+const emptyValueFlags = ts.TypeFlags.Void | ts.TypeFlags.Undefined | ts.TypeFlags.Never;
 
 interface LiteralMember {
   key: string;
@@ -52,7 +60,8 @@ function statementsOf(clauses: readonly CaseOrDefaultClause[]): Node[] {
   return clauses.flatMap((clause) => [...clause.statements]);
 }
 
-// A returned value that is itself void or undefined (a call to a `Promise<void>` helper) makes the fall-off harmless.
+// A returned value that is itself void, undefined or never (a call to a `Promise<void>` helper or one that always throws)
+// makes the fall-off harmless. `null` is a real value, so falling off the end instead of returning it is a gap.
 function returnsValueWithin(root: Node, checker: CheckerAdapter): boolean {
   let found = false;
   const visit = (node: Node): void => {
@@ -81,60 +90,105 @@ function enclosingFunctionBody(node: Node): Block | undefined {
   }
 }
 
-// The switch is the last statement of its function, so a value that matches no case leaves the function without a
+// Whether nothing runs after the statement before the function ends: it closes its block, or the branch or try block
+// that does.
+function endsFunctionBody(statement: Node, body: Block): boolean {
+  let current: Node = statement;
+  while (current !== body) {
+    const parent: Node = current.parent;
+    if (ts.isBlock(parent) && parent.statements.at(-1) !== current) return false;
+    if (ts.isTryStatement(parent) && parent.finallyBlock === current) return false;
+    const passesThrough =
+      ts.isBlock(parent) || ts.isIfStatement(parent) || ts.isTryStatement(parent) || ts.isCatchClause(parent);
+    if (!passesThrough) return false;
+    current = parent;
+  }
+  return true;
+}
+
+// The switch can be the last thing the function runs, so a value that matches no case leaves the function without a
 // return value.
 function fallsOffFunctionEnd(statement: SwitchStatement, checker: CheckerAdapter): boolean {
   const body = enclosingFunctionBody(statement);
-  return body !== undefined && body.statements.at(-1) === statement && returnsValueWithin(statement, checker);
+  return body !== undefined && endsFunctionBody(statement, body) && returnsValueWithin(statement, checker);
 }
 
-function assignedName(node: Node): string | undefined {
-  if (!ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) return;
-  return ts.isIdentifier(node.left) ? node.left.text : undefined;
+function isPlainAssignment(node: Node): node is BinaryExpression {
+  return ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken;
 }
 
-function assignedWithin(statement: SwitchStatement): Set<string> {
-  const names = new Set<string>();
+// The variable declarations an assignment target writes, including those inside destructuring patterns.
+function assignedDeclarations(target: Node, checker: CheckerAdapter): Node[] {
+  if (ts.isIdentifier(target)) {
+    const declaration = checker.getSymbolAtLocation(target)?.valueDeclaration;
+    return declaration ? [declaration] : [];
+  }
+  if (ts.isShorthandPropertyAssignment(target)) {
+    const declaration = checker.getShorthandAssignmentValueSymbol(target)?.valueDeclaration;
+    return declaration ? [declaration] : [];
+  }
+  if (ts.isPropertyAssignment(target)) return assignedDeclarations(target.initializer, checker);
+  if (ts.isSpreadAssignment(target) || ts.isSpreadElement(target))
+    return assignedDeclarations(target.expression, checker);
+  if (isPlainAssignment(target)) return assignedDeclarations(target.left, checker);
+  if (ts.isObjectLiteralExpression(target))
+    return target.properties.flatMap((property) => assignedDeclarations(property, checker));
+  if (ts.isArrayLiteralExpression(target))
+    return target.elements.flatMap((element) => assignedDeclarations(element, checker));
+  return [];
+}
+
+function isWithin(node: Node, container: Node): boolean {
+  return node.pos >= container.pos && node.end <= container.end;
+}
+
+function assignedWithin(statement: SwitchStatement, checker: CheckerAdapter): Set<Node> {
+  const declarations = new Set<Node>();
   walkNodes(statement.caseBlock, (node) => {
-    const name = assignedName(node);
-    if (name) names.add(name);
+    if (!isPlainAssignment(node)) return;
+    for (const declaration of assignedDeclarations(node.left, checker)) declarations.add(declaration);
   });
-  return names;
-}
-
-function declaredWithoutValue(name: string, statement: SwitchStatement, checker: CheckerAdapter): boolean {
-  const body = enclosingFunctionBody(statement);
-  if (!body) return false;
-  let declaredEmpty = false;
-  walkNodes(body, (node) => {
-    if (!ts.isVariableDeclaration(node) || !ts.isIdentifier(node.name) || node.name.text !== name) return;
-    // A type that admits undefined says the code already handles the unset case.
-    const declaredType = checker.getTypeAtLocation(node.name);
-    const admitsUndefined = (declaredType.flags & ts.TypeFlags.Undefined) !== 0 || unionAdmitsUndefined(declaredType);
-    declaredEmpty =
-      declaredEmpty || (node.initializer === undefined && node.exclamationToken === undefined && !admitsUndefined);
-  });
-  if (!declaredEmpty) return false;
-  // The variable must be read after the switch; a value only set inside it is not used.
-  let readAfter = false;
-  walkNodes(body, (node) => {
-    if (ts.isIdentifier(node) && node.text === name && node.getStart() >= statement.end && !isAssignmentTarget(node))
-      readAfter = true;
-  });
-  return readAfter;
+  return declarations;
 }
 
 function isAssignmentTarget(identifier: Node): boolean {
   const parent = identifier.parent;
-  return (
-    ts.isBinaryExpression(parent) &&
-    parent.left === identifier &&
-    parent.operatorToken.kind === ts.SyntaxKind.EqualsToken
-  );
+  return isPlainAssignment(parent) && parent.left === identifier;
+}
+
+// Whether the declaration has no value of its own, no assignment outside the switch can supply one, and the code after
+// the switch reads it.
+function leavesUnsetValueRead(
+  declaration: Node,
+  statement: SwitchStatement,
+  body: Block,
+  checker: CheckerAdapter,
+): boolean {
+  if (!ts.isVariableDeclaration(declaration) || !ts.isIdentifier(declaration.name) || declaration.initializer) {
+    return false;
+  }
+  if (!isWithin(declaration, body)) return false;
+  // A type that admits undefined says the code already handles the unset case.
+  const declaredType = checker.getTypeAtLocation(declaration.name);
+  if ((declaredType.flags & ts.TypeFlags.Undefined) !== 0 || unionAdmitsUndefined(declaredType)) return false;
+  let assignedElsewhere = false;
+  let readAfter = false;
+  walkNodes(body, (node) => {
+    if (isPlainAssignment(node) && !isWithin(node, statement.caseBlock)) {
+      assignedElsewhere = assignedElsewhere || assignedDeclarations(node.left, checker).includes(declaration);
+    }
+    if (!ts.isIdentifier(node) || node.getStart() < statement.end || isAssignmentTarget(node)) return;
+    readAfter = readAfter || checker.getSymbolAtLocation(node)?.valueDeclaration === declaration;
+  });
+  return readAfter && !assignedElsewhere;
 }
 
 function leavesVariableUnset(statement: SwitchStatement, checker: CheckerAdapter): boolean {
-  for (const name of assignedWithin(statement)) if (declaredWithoutValue(name, statement, checker)) return true;
+  const body = enclosingFunctionBody(statement);
+  if (!body) return false;
+  for (const declaration of assignedWithin(statement, checker)) {
+    if (leavesUnsetValueRead(declaration, statement, body, checker)) return true;
+  }
   return false;
 }
 

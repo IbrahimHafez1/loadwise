@@ -6,23 +6,46 @@ import { ts } from '../performance/compiler.js';
 import { walkNodes } from './walk.js';
 import { isIgnoredSource } from './source-helpers.js';
 import type { CheckerAdapter, Finding } from '../shared/types.js';
-import type { NewExpression, SourceFile } from 'typescript';
+import type { Expression, NewExpression, ObjectLiteralElementLike, SourceFile } from 'typescript';
 
 const pgPackage = /[\\/]node_modules[\\/](?:@types[\\/])?pg(?:-pool)?[\\/]/;
 const pgClassNames = new Set(['Pool', 'Client']);
 const timeoutOption = 'connectionTimeoutMillis';
 
-function constructedName(node: NewExpression): string | undefined {
-  const callee = ts.skipOuterExpressions(node.expression);
-  if (ts.isIdentifier(callee)) return callee.text;
-  return ts.isPropertyAccessExpression(callee) ? callee.name.text : undefined;
+// The constructor is identified by the class it resolves to, so an import alias (`Pool as PgPool`) is still checked
+// and an unrelated local class named `Pool` is not.
+function isPgConstruction(node: NewExpression, checker: CheckerAdapter): boolean {
+  const declaration = checker.getResolvedSignature(node)?.declaration;
+  if (declaration === undefined || !pgPackage.test(declaration.getSourceFile().fileName)) return false;
+  const owner = declaration.parent;
+  return ts.isClassLike(owner) && owner.name !== undefined && pgClassNames.has(owner.name.text);
 }
 
-function isPgConstruction(node: NewExpression, checker: CheckerAdapter): boolean {
-  const name = constructedName(node);
-  if (name === undefined || !pgClassNames.has(name)) return false;
-  const declaration = checker.getResolvedSignature(node)?.declaration;
-  return declaration !== undefined && pgPackage.test(declaration.getSourceFile().fileName);
+function propertyName(property: ObjectLiteralElementLike): string | undefined {
+  const name = property.name;
+  if (name === undefined) return;
+  if (ts.isComputedPropertyName(name))
+    return ts.isStringLiteralLike(name.expression) ? name.expression.text : undefined;
+  return ts.isIdentifier(name) || ts.isStringLiteralLike(name) ? name.text : undefined;
+}
+
+// `connectionTimeoutMillis: 0` and `undefined` are the default, so they do not bound the wait.
+function disablesTimeout(value: Expression): boolean {
+  const expression = ts.skipOuterExpressions(value);
+  if (ts.isIdentifier(expression)) return expression.text === 'undefined';
+  return ts.isNumericLiteral(expression) && Number(expression.text) === 0;
+}
+
+function setsTimeout(property: ObjectLiteralElementLike): boolean {
+  if (ts.isSpreadAssignment(property)) return true;
+  if (propertyName(property) !== timeoutOption) return false;
+  return !ts.isPropertyAssignment(property) || !disablesTimeout(property.initializer);
+}
+
+// Only the `connectionTimeoutMillis` query parameter of a connection string sets the timeout.
+function urlSetsTimeout(connectionString: string): boolean {
+  const query = connectionString.split('?').slice(1).join('?');
+  return new URLSearchParams(query).getAll(timeoutOption).some((value) => Number(value) > 0);
 }
 
 // Whether the configuration visibly lacks the option. A configuration held elsewhere (a variable, a spread) may set it.
@@ -30,12 +53,9 @@ function lacksTimeout(node: NewExpression): boolean {
   const [config] = node.arguments ?? [];
   if (config === undefined) return true;
   const expression = ts.skipOuterExpressions(config);
-  if (ts.isStringLiteralLike(expression)) return !/timeout/i.test(expression.text);
+  if (ts.isStringLiteralLike(expression)) return !urlSetsTimeout(expression.text);
   if (!ts.isObjectLiteralExpression(expression)) return false;
-  return !expression.properties.some(
-    (property) =>
-      ts.isSpreadAssignment(property) || (property.name !== undefined && property.name.getText() === timeoutOption),
-  );
+  return !expression.properties.some(setsTimeout);
 }
 
 function checkPoolTimeout(sourceFile: SourceFile, file: string, checker: CheckerAdapter): Finding[] {

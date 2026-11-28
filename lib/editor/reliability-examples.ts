@@ -40,6 +40,21 @@ const examples: Record<string, { before: string; code: string; note: string }> =
     code: 'function total(items) {\n  return sum(items);\n}',
     note: 'The statements after the exit are deleted; review that nothing there was needed.',
   },
+  'switch-not-exhaustive': {
+    before: 'switch (status) {\n  case "paid": return 1;\n  case "open": return 2;\n}',
+    code: 'switch (status) {\n  case "paid": return 1;\n  case "open": return 2;\n  default: throw new Error(status);\n}',
+    note: 'Add the missing cases, or a default that throws so a new member cannot fall through unnoticed.',
+  },
+  'pool-without-connection-timeout': {
+    before: 'const pool = new Pool({ connectionString });',
+    code: 'const pool = new Pool({ connectionString, connectionTimeoutMillis: 5000 });',
+    note: 'The default of 0 waits forever for a connection; pick a timeout that suits your slowest healthy checkout.',
+  },
+  'uncaught-exception-continues': {
+    before: "process.on('uncaughtException', (error) => {\n  logger.error(error);\n});",
+    code: "process.on('uncaughtException', (error) => {\n  logger.error(error);\n  process.exit(1);\n});",
+    note: 'The process is in an unknown state after an uncaught exception; flush logs, then exit non-zero.',
+  },
   'loop-index-past-length': {
     before: 'for (let i = 0; i <= items.length; i++) {\n  use(items[i]);\n}',
     code: 'for (let i = 0; i < items.length; i++) {\n  use(items[i]);\n}',
