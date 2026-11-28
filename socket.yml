@@ -1,0 +1,6 @@
+# Socket scans the manifests that ship or install. The recall corpus is deliberately vulnerable sample code whose
+# manifests are never installed (only type stubs are committed), so its alerts are expected.
+version: 2
+
+projectIgnorePaths:
+  - 'bench/recall/cases/'
