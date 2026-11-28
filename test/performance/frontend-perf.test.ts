@@ -621,7 +621,9 @@ test('react-component-defined-in-component sees a null-rendering nested componen
   }
   const helperOuter = 'export function build() { const Row = () => <li />; const content = <Row />; return content; }';
   const unrenderedNull = 'export function List() { const Observer = () => null; return <ul />; }';
-  for (const source of [helperOuter, unrenderedNull]) {
+  const shadowedLocal =
+    'export function List() { const Row = () => <li />; const content = null; { const content = <Row />; } return content; }';
+  for (const source of [helperOuter, unrenderedNull, shadowedLocal]) {
     assert.deepEqual(only(`${REACT_IMPORT}${source}`, 'react-component-defined-in-component'), []);
   }
 });
@@ -631,6 +633,10 @@ test('angular-ngfor-missing-trackby reports a literal array extended with dynami
   const concatenated = `'<li *ngFor="let item of [1].concat(items)">x</li>'`;
   const concatSource = `${header}@Component({ selector: 'x', template: ${concatenated} })\nexport class X {}`;
   assert.equal(only(concatSource, 'angular-ngfor-missing-trackby', 'x.ts').length, 1);
+  const aliasedLiteral = `'<li *ngFor="let item of [1,2,3] as items">x</li>'`;
+  const aliasSource = `${header}@Component({ selector: 'x', template: ${aliasedLiteral} })
+export class X {}`;
+  assert.deepEqual(only(aliasSource, 'angular-ngfor-missing-trackby', 'x.ts'), []);
   const unterminated = `'<!-- <li *ngFor="let item of items">x</li>'`;
   const tailSource = `${header}@Component({ selector: 'x', template: ${unterminated} })\nexport class X {}`;
   assert.deepEqual(only(tailSource, 'angular-ngfor-missing-trackby', 'x.ts'), []);

@@ -24,7 +24,7 @@ const NG_FOR_ATTRIBUTE = /\*ngFor\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
 // Only an array of string and number literals keeps its identities; objects, calls and spreads do not.
 const LITERAL_ITEM = String.raw`(?:'[^']*'|"[^"]*"|-?\d+(?:\.\d+)?)`;
 const STATIC_ARRAY_SOURCE = new RegExp(
-  String.raw`\bof\s+\[\s*(?:${LITERAL_ITEM}\s*(?:,\s*${LITERAL_ITEM}\s*)*)?\]\s*(?:;|$)`,
+  String.raw`\bof\s+\[\s*(?:${LITERAL_ITEM}\s*(?:,\s*${LITERAL_ITEM}\s*)*)?\](?:\s+as\s+[\w$]+)?\s*(?:;|$)`,
 );
 // A `trackBy` binding in the microsyntax (`trackBy: fn` or `trackBy fn`), not a property or variable of that name.
 const TRACK_BY = /(?<![.\w$])trackBy(?:\s*:|\s+[\w$])/;
@@ -88,18 +88,24 @@ function isJsx(expression: Expression): boolean {
 function returnsJsx(fn: FunctionNode): boolean {
   if (!fn.body) return false;
   if (!ts.isBlock(fn.body)) return isJsx(fn.body);
-  // `const content = <Row />; return content;`
+  // `const content = <Row />; return content;`. A name declared more than once (a shadowing block
+  // local) is ambiguous without scope analysis, so it never counts.
+  const declarationCounts = new Map<string, number>();
   const jsxLocals = new Set<string>();
   walkSkippingFunctions(fn.body, (node: Node) => {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer && isJsx(node.initializer)) {
-      jsxLocals.add(node.name.text);
-    }
+    if (!ts.isVariableDeclaration(node) || !ts.isIdentifier(node.name)) return;
+    declarationCounts.set(node.name.text, (declarationCounts.get(node.name.text) ?? 0) + 1);
+    if (node.initializer && isJsx(node.initializer)) jsxLocals.add(node.name.text);
   });
   let found = false;
   walkSkippingFunctions(fn.body, (node: Node) => {
     if (!ts.isReturnStatement(node) || !node.expression) return;
     const returned = ts.skipOuterExpressions(node.expression);
-    if (isJsx(returned) || (ts.isIdentifier(returned) && jsxLocals.has(returned.text))) found = true;
+    if (
+      isJsx(returned) ||
+      (ts.isIdentifier(returned) && jsxLocals.has(returned.text) && declarationCounts.get(returned.text) === 1)
+    )
+      found = true;
   });
   return found;
 }
