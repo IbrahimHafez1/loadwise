@@ -40,9 +40,20 @@ const SCHEME_SAFE_PATHS = new Set([
 const HOST_MEMBERS = new Set(['origin', 'host', 'hostname']);
 // `?q=1` and `#x` are relative URLs; only a slice or parse of them can start with a scheme.
 const RELATIVE_PART_MEMBERS = new Set(['search', 'hash']);
-// These keep what their input starts with: a decoded or `String`-converted `#x` still starts with
-// `#`, and `new URL(x)` keeps the scheme of `x`.
-const PREFIX_PRESERVING_CALLS = new Set(['decodeURI', 'decodeURIComponent', 'unescape', 'encodeURI', 'String', 'URL']);
+// These keep what their input starts with: a decoded, case-converted or `String`-converted `#x`
+// still starts with `#`, and `new URL(x)` keeps the scheme of `x`.
+const PREFIX_PRESERVING_CALLS = new Set([
+  'decodeURI',
+  'decodeURIComponent',
+  'unescape',
+  'encodeURI',
+  'String',
+  'URL',
+  'toLowerCase',
+  'toUpperCase',
+  'toLocaleLowerCase',
+  'toLocaleUpperCase',
+]);
 // These escape `:`, so their output can never be read as a scheme unless a decoder around them
 // restores it.
 const SCHEME_ESCAPING_CALLS = new Set(['encodeURIComponent', 'escape']);
@@ -63,12 +74,19 @@ const SEARCH_PARAMS_MODULES = new Set(['next/navigation', 'react-router', 'react
 const NEXT_ROUTER_MODULE = 'next/router';
 const NEXT_LINK_MODULE = 'next/link';
 const URL_STRIPPED_CODE_POINT_LIMIT = 0x20;
+const JAVASCRIPT_SCHEME = 'javascript:';
+// URL parsing removes tabs and newlines anywhere in the input.
+const URL_REMOVED_CHARACTERS = /[\t\n\r]/g;
 
 const isIntrinsicTag = (tagName: string) => /^[a-z]/.test(tagName);
 
-// URL parsing drops leading spaces and control characters, so `' ' + value` still starts with `value`.
-function isStrippedUrlPrefix(text: string) {
-  return [...text].every((character) => (character.codePointAt(0) ?? 0) <= URL_STRIPPED_CODE_POINT_LIMIT);
+// Whether a constant start leaves the scheme open to what follows: `' '` is dropped by URL parsing,
+// and `'java'` can still become `javascript:`. `/`, `#`, `?` or `https://` settle it.
+function leavesSchemeOpen(text: string) {
+  const firstKept = [...text].findIndex((character) => (character.codePointAt(0) ?? 0) > URL_STRIPPED_CODE_POINT_LIMIT);
+  if (firstKept === -1) return true;
+  const start = [...text].slice(firstKept).join('').replaceAll(URL_REMOVED_CHARACTERS, '').toLowerCase();
+  return JAVASCRIPT_SCHEME.startsWith(start);
 }
 
 // Only a value at the start of a URL picks its scheme: `/search?q=${query}` can never become
@@ -155,7 +173,7 @@ function templateLeadSource(
   state: TraceState,
   next: (part: Expression) => string | undefined,
 ) {
-  if (!state.prefixCut) return isStrippedUrlPrefix(node.head.text) ? next(node.templateSpans[0].expression) : undefined;
+  if (!state.prefixCut) return leavesSchemeOpen(node.head.text) ? next(node.templateSpans[0].expression) : undefined;
   for (const span of node.templateSpans) {
     const source = next(span.expression);
     if (source) return source;
@@ -177,7 +195,7 @@ function compoundLeadSource(
     if (state.prefixCut) return next(left) ?? next(node.right);
     const prefix = literalText(left);
     if (prefix === undefined) return next(left);
-    return isStrippedUrlPrefix(prefix) ? next(node.right) : undefined;
+    return leavesSchemeOpen(prefix) ? next(node.right) : undefined;
   }
   // `a && b` yields `b` whenever `a` is truthy; a falsy `a` cannot hold a scheme.
   if (operator === ts.SyntaxKind.AmpersandAmpersandToken) return next(node.right);

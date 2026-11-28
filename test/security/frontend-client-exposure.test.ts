@@ -230,6 +230,9 @@ test('jsx-javascript-url: untrusted values that start a link, form action or fra
     `${reactHeader}export const View = () => <a href={\`/\${'x'}\${location.hash.slice(1)}\`.slice(2)}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={(' ' + '\\t') + location.hash.slice(1)}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={window.String(location.hash.slice(1))}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={'java' + location.hash.slice(1)}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={\` JaVa\\tScript\${location.hash.slice(1)}\`}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={location.hash.slice(1).toLowerCase()}>Go</a>;`,
     `${reactHeader}const target = location.hash.slice(1);\nconst other = location.hash.slice(1);\nexport const View = () => <a href={new URL(other, location.origin).protocol === 'https:' ? target : '/'}>Go</a>;`,
   ];
   for (const source of sources) {
@@ -265,6 +268,9 @@ test('jsx-javascript-url: constant prefixes, own addresses, props, fetched data 
     `${reactHeader}const target = location.hash.slice(1);\nexport const View = () => <a href={new URL(target, location.origin).protocol === 'https:' ? target : '/'}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={new URL(location.hash.slice(1), location.origin).origin}>Home</a>;`,
     `${reactHeader}export const View = () => <a href={location.hash.slice(0, 80)}>Anchor</a>;`,
+    `${reactHeader}export const View = () => <a href={location.hash.toLowerCase()}>Anchor</a>;`,
+    `${reactHeader}export const View = () => <a href={'https://' + location.hash.slice(1)}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={'javax' + location.hash.slice(1)}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={encodeURIComponent(location.hash.slice(1))}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={' ' + location.href}>Share</a>;`,
     `${reactHeader}export const View = () => <a href={new URL(location.href).origin}>Home</a>;`,
