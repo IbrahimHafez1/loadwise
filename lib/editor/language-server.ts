@@ -174,11 +174,18 @@ function startServer(connection: Connection): void {
   function folderFor(filename: string): FolderState | undefined {
     return foldersFor(filename)[0];
   }
+  // A folder with loadwise.enabled off also hides what an enclosing folder reports for its files.
+  function visibleFindings(entries: Iterable<PublishedFinding>): PublishedFinding[] {
+    return uniqueFindings(entries).filter((entry) => {
+      const owner = folderFor(entry.filename);
+      return !owner || settingsFor(owner).enabled;
+    });
+  }
   function entriesFor(uri: string): PublishedFinding[] {
     const filename = filenameOf(uri);
     if (filename === undefined) return [];
     const key = fileKey(filename);
-    return uniqueFindings(
+    return visibleFindings(
       deepestFirst().flatMap((folder) => folder.entries.filter((entry) => fileKey(entry.filename) === key)),
     );
   }
@@ -202,7 +209,7 @@ function startServer(connection: Connection): void {
   // Unchanged files are not resent, and files whose findings are gone get an empty list.
   function sendDiagnostics(): void {
     const next = new Map<string, Diagnostic[]>();
-    for (const entry of uniqueFindings(deepestFirst().flatMap((folder) => folder.entries))) {
+    for (const entry of visibleFindings(deepestFirst().flatMap((folder) => folder.entries))) {
       const list = next.get(entry.uri);
       if (list) list.push(entry.diagnostic);
       else next.set(entry.uri, [entry.diagnostic]);
@@ -299,6 +306,9 @@ function startServer(connection: Connection): void {
     };
     folders.set(fileKey(root), folder);
     await pullSettings(folder);
+    // A nested folder takes over the dismissals and the enabled setting of its files from the
+    // folders around it.
+    republishAll();
     folder.session.schedule();
   }
   function removeFolder({ uri }: WorkspaceFolder): void {
@@ -308,6 +318,8 @@ function startServer(connection: Connection): void {
     folder.session.dispose();
     folders.delete(fileKey(root));
     settingsRequests.delete(folder);
+    // The enclosing folders own its files again, with their own dismissals and settings.
+    republishAll();
     sendDiagnostics();
     updateProgress();
   }

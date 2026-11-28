@@ -115,4 +115,4 @@ function scanProjectFiles(
   return { scannedFiles, findings };
 }
 
-export { hasInfrastructureFiles, scanProjectFiles };
+export { hasInfrastructureFiles, isNamedConfigFile, scanProjectFiles };

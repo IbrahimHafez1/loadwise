@@ -626,6 +626,69 @@ test('nested workspace folders show one diagnostic per finding and both rescan o
   );
 });
 
+// A parent folder `shop` that reports `pkg/orders.ts`, and the nested folder `pkg`, not yet added.
+async function startNestedFolders(context: TestContext, nestedFiles: Record<string, string> = {}) {
+  const base = temporaryBase();
+  const shop = createWorkspace(base, 'shop', {
+    'pkg/orders.ts': ordersText,
+    'other.ts': 'other();\n',
+    ...Object.fromEntries(Object.entries(nestedFiles).map(([file, text]) => ['pkg/' + file, text])),
+  });
+  const nestedRoot = path.join(shop.root, 'pkg');
+  const nested = { uri: pathToFileURL(nestedRoot).href, name: 'pkg' };
+  fs.mkdirSync(path.join(base, 'cli', 'pkg'), { recursive: true });
+  writeReport(shop, 'maint.json', [finding('pkg/orders.ts', 'deep-nesting'), finding('other.ts', 'deep-nesting')]);
+  const client = await startServer(context, shop);
+  const uri = pathToFileURL(path.join(nestedRoot, 'orders.ts')).href;
+  await until(() => client.diagnostics.get(uri)?.length === 1, 'the parent folder to report the nested file');
+  return { client, nested, uri, otherUri: fileUri(shop, 'other.ts') };
+}
+
+test('a nested folder with loadwise disabled hides what the parent reports for its files', async (context) => {
+  const { client, nested, uri, otherUri } = await startNestedFolders(context);
+  client.onRequest('workspace/configuration', (params) => {
+    const [item] = list(record(params).items).map(record);
+    return [item.scopeUri === nested.uri ? { enabled: false } : null];
+  });
+  client.notify('workspace/didChangeWorkspaceFolders', { event: { added: [nested], removed: [] } });
+  await until(() => client.diagnostics.get(uri)?.length === 0, 'the disabled folder to hide the finding');
+  assert.equal(client.diagnostics.get(otherUri)?.length, 1, 'the parent keeps its own files');
+});
+
+test('adding or removing a nested folder applies or drops its dismissals on the parent findings', async (context) => {
+  const dismissed = JSON.stringify([{ file: 'orders.ts', ruleId: 'deep-nesting' }]);
+  const { client, nested, uri } = await startNestedFolders(context, { '.loadwise/dismissed.json': dismissed });
+  client.notify('workspace/didChangeWorkspaceFolders', { event: { added: [nested], removed: [] } });
+  await until(() => client.diagnostics.get(uri)?.length === 0, 'the nested dismissal to hide the parent finding');
+  client.notify('workspace/didChangeWorkspaceFolders', { event: { added: [], removed: [nested] } });
+  await until(() => client.diagnostics.get(uri)?.length === 1, 'the parent finding to return');
+});
+
+test('a refused multi-file edit without a failure index warns that earlier changes may remain', async (context) => {
+  const workspace = createWorkspace(temporaryBase(), 'shop', {
+    'tsconfig.json': '{}',
+    'orders.ts': ordersText,
+    'migrations/000_init.sql': '',
+  });
+  seedOrders(workspace);
+  const client = await startServer(context, workspace);
+  const uri = fileUri(workspace, 'orders.ts');
+  await until(() => client.diagnostics.get(uri)?.length === 4, 'diagnostics');
+  client.onRequest('workspace/applyEdit', () => ({ applied: false }));
+  const lenses = list(await client.request('textDocument/codeLens', { textDocument: { uri } }));
+  const createLens = lenses.find((lens) => record(record(lens).command).title === 'Apply fix: pg-transaction-on-pool');
+  await client.request('workspace/executeCommand', {
+    command: 'loadwise.applyFix',
+    arguments: [commandArgument(createLens)],
+  });
+  // Warnings go out as message requests.
+  const warning = await until(
+    () => client.serverRequests.findLast(({ method }) => method === 'window/showMessageRequest'),
+    'the warning',
+  );
+  assert.match(String(record(warning?.params).message), /may have kept changes/);
+});
+
 test('a late answer to an older settings request does not overwrite newer settings', async (context) => {
   const workspace = createWorkspace(temporaryBase(), 'shop', { 'tsconfig.json': '{}', 'orders.ts': ordersText });
   seedOrders(workspace);

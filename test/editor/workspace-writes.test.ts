@@ -164,3 +164,12 @@ test('templates, and a project setting with any file name, are inputs that resca
   assert.equal(classifyChange(root, path.join(root, 'config', 'editor.json'), 'config/editor.json'), 'config');
   assert.match(watchedGlobs[0], /svelte/);
 });
+
+test('the files the security checker reads without a config are inputs that rescan', () => {
+  const root = path.resolve('workspace');
+  for (const name of ['Dockerfile', 'api.Dockerfile', '.env.production', 'docker-compose.yml', 'compose.yaml']) {
+    assert.equal(classifyChange(root, path.join(root, 'deploy', name)), 'source', name);
+  }
+  assert.ok(watchedGlobs.includes('**/*{Dockerfile,dockerfile}*'));
+  assert.ok(watchedGlobs.includes('**/.env*'));
+});
