@@ -9,9 +9,10 @@ import type { ElementAccessExpression, Expression, ImportSpecifier, Node, Proper
 import type { SecurityRuleContext } from '../../shared/types.js';
 
 const ruleId = 'client-env-secret-exposed';
-// Next.js, Create React App, Expo and Nuxt inline these from `process.env`.
+// Next.js, Create React App and Expo inline these from `process.env`. Nuxt's `NUXT_PUBLIC_` only
+// overrides declared public runtime config, so the prefix alone exposes nothing.
 const expoPrefix = 'EXPO_PUBLIC_';
-const processEnvPrefixes = ['NEXT_PUBLIC_', 'REACT_APP_', expoPrefix, 'NUXT_PUBLIC_'];
+const processEnvPrefixes = ['NEXT_PUBLIC_', 'REACT_APP_', expoPrefix];
 // Vite exposes `VITE_` on `import.meta.env`; Astro replaces it with `PUBLIC_`. SvelteKit keeps
 // Vite's prefix there and uses `PUBLIC_` only for its `$env` modules.
 const vitePrefix = 'VITE_';
