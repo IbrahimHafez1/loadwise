@@ -57,12 +57,12 @@ test('client-env-secret-exposed: secret-named variables under a browser prefix a
   const sources = [
     'const key = process.env.NEXT_PUBLIC_STRIPE_SECRET_KEY;',
     "const key = process.env['NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY'];",
+    'const token = process.env.NEXT_PUBLIC_AWS_SECRET_ACCESS_TOKEN;',
     'const password = process.env.REACT_APP_ADMIN_PASSWORD;',
     'const secret = process.env.EXPO_PUBLIC_CLIENT_SECRET;',
     'const url = process.env.NUXT_PUBLIC_DATABASE_URL;',
     'const key = import.meta.env.VITE_AWS_SECRET_ACCESS_KEY;',
     'const key = import.meta.env.VITE_JWT_PRIVATE_KEY;',
-    'const key = import.meta.env.PUBLIC_API_SECRET;',
   ];
   for (const source of sources) {
     const found = findingsOf('client-env-secret-exposed', processDeclaration + source);
@@ -110,6 +110,8 @@ test('client-env-secret-exposed: publishable, anon and public keys, flags and se
     'process.env.VITE_STRIPE_SECRET_KEY;',
     'import.meta.env.NEXT_PUBLIC_STRIPE_SECRET_KEY;',
     'import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;',
+    // Plain Vite exposes only `VITE_` on import.meta.env; `PUBLIC_` is Astro's prefix.
+    'import.meta.env.PUBLIC_DB_PASSWORD;',
     'const config = { env: { NEXT_PUBLIC_STRIPE_SECRET_KEY: 1 } };\nconfig.env.NEXT_PUBLIC_STRIPE_SECRET_KEY;',
   ];
   for (const source of sources)
@@ -126,32 +128,58 @@ const urlStubs = {
   ...stubs.reactRouter,
 };
 
-// jsx-javascript-url reads the project's package.json from disk, so these fixtures are real files.
-function urlFindingsOf(source: string, manifest: object | null = react18) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-jsx-url-'));
+type ProjectScan = (ruleId: string, source: string, fileName?: string) => ReturnType<typeof analyzeFile>;
+
+// Both rules read the project's package.json from disk, so these fixtures are real files. The outer
+// manifest pins an unreadable React version, so no package.json above the temporary directory can
+// change the answer.
+function withDiskProject<Result>(
+  manifest: object | null,
+  callback: (scan: ProjectScan, writeManifest: (next: object) => void) => Result,
+) {
+  const outer = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-frontend-'));
+  const directory = path.join(outer, 'app');
+  const writeFile = (name: string, content: string) => {
+    const file = path.join(directory, name);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, content);
+  };
+  const writeManifest = (next: object) => writeFile('package.json', JSON.stringify(next));
   try {
-    const files: Record<string, string> = { ...urlStubs, 'view.tsx': source };
-    if (manifest) files['package.json'] = JSON.stringify(manifest);
-    for (const [name, content] of Object.entries(files)) {
-      const file = path.join(directory, name);
-      fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.writeFileSync(file, content);
-    }
-    const viewFile = path.join(directory, 'view.tsx');
-    const program = ts.createProgram([viewFile], {
-      ...compilerOptions,
-      module: ts.ModuleKind.ESNext,
-      moduleResolution: ts.ModuleResolutionKind.Bundler,
-      types: [],
-      noEmit: true,
-    });
-    const sourceFile = program.getSourceFile(viewFile);
-    assert.ok(sourceFile);
-    return analyzeFile(program, sourceFile).filter((finding) => finding.ruleId === 'jsx-javascript-url');
+    fs.writeFileSync(path.join(outer, 'package.json'), JSON.stringify({ dependencies: { react: 'latest' } }));
+    for (const [name, content] of Object.entries(urlStubs)) writeFile(name, content);
+    if (manifest) writeManifest(manifest);
+    const scan: ProjectScan = (ruleId, source, fileName = 'view.tsx') => {
+      writeFile(fileName, source);
+      const sourcePath = path.join(directory, fileName);
+      const program = ts.createProgram([sourcePath], {
+        ...compilerOptions,
+        module: ts.ModuleKind.ESNext,
+        moduleResolution: ts.ModuleResolutionKind.Bundler,
+        types: [],
+        noEmit: true,
+      });
+      const sourceFile = program.getSourceFile(sourcePath);
+      assert.ok(sourceFile);
+      return analyzeFile(program, sourceFile).filter((finding) => finding.ruleId === ruleId);
+    };
+    return callback(scan, writeManifest);
   } finally {
-    fs.rmSync(directory, { recursive: true, force: true });
+    fs.rmSync(outer, { recursive: true, force: true });
   }
 }
+
+function urlFindingsOf(source: string, manifest: object | null = react18) {
+  return withDiskProject(manifest, (scan) => scan('jsx-javascript-url', source));
+}
+
+test('client-env-secret-exposed: import.meta.env.PUBLIC_ is exposed in Astro projects, VITE_ is not', () => {
+  const astro = { dependencies: { astro: '^5.0.0' } };
+  const scan = (source: string) =>
+    withDiskProject(astro, (scanProject) => scanProject('client-env-secret-exposed', source, 'env.ts'));
+  assert.equal(scan('export const key = import.meta.env.PUBLIC_API_SECRET;').length, 1);
+  assert.equal(scan('export const key = import.meta.env.VITE_API_SECRET;').length, 0);
+});
 
 test('jsx-javascript-url: untrusted values that start a link, form action or frame src are reported', () => {
   const sources = [
@@ -163,6 +191,11 @@ test('jsx-javascript-url: untrusted values that start a link, form action or fra
     `${reactHeader}import { useSearchParams } from 'react-router-dom';\nexport function View() { const [params] = useSearchParams(); const next = params.get('next'); return <button formAction={next ?? ''} />; }`,
     `${reactHeader}import { useRouter } from 'next/router';\nexport function View() { const router = useRouter(); return <a href={String(router.query.redirect)}>Back</a>; }`,
     `${reactHeader}import Link from 'next/link';\nimport { useSearchParams } from 'next/navigation';\nexport function View() { const params = useSearchParams(); return <Link href={params.get('next') ?? '/'}>Back</Link>; }`,
+    `${reactHeader}export const View = () => <a href={'' + location.hash.slice(1)}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={\`  \${location.hash.slice(1)}\`}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={location.pathname.slice(1)}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={new URL(location.href).searchParams.get('next') ?? '/'}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={new URL(location.href).hash.slice(1)}>Go</a>;`,
   ];
   for (const source of sources) {
     const found = urlFindingsOf(source);
@@ -186,6 +219,13 @@ test('jsx-javascript-url: constant prefixes, own addresses, props, fetched data 
     `${reactHeader}export const View = () => <a title={location.hash}>Go</a>;`,
     `${reactHeader}declare function Custom(props: { href: string }): null;\nexport const View = () => <Custom href={location.hash} />;`,
     `${reactHeader}import { useRouter } from 'next/navigation';\nexport function View() { const router = useRouter(); return <a href={'/' + String(router)}>Go</a>; }`,
+    `${reactHeader}export const View = () => <a href={decodeURIComponent(location.hash)}>Anchor</a>;`,
+    `${reactHeader}export const View = () => <a href={encodeURIComponent(location.hash.slice(1))}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={' ' + location.href}>Share</a>;`,
+    `${reactHeader}export const View = () => <a href={new URL(location.href).origin}>Home</a>;`,
+    `${reactHeader}export const View = () => <a href={location.origin.slice(0)}>Home</a>;`,
+    `${reactHeader}export const View = () => <div href={location.hash.slice(1)} />;`,
+    `${reactHeader}export const View = () => <span action={location.hash.slice(1)} />;`,
   ];
   for (const source of sources) assert.equal(urlFindingsOf(source).length, 0, source);
 });
@@ -199,6 +239,12 @@ test('jsx-javascript-url: only React 18 and older or Preact render javascript: U
     [{ devDependencies: { 'react-dom': '~17.0.2' }, dependencies: { react: '^19.0.0' } }, 1],
     [{ peerDependencies: { react: '^18.0.0 || ^19.0.0' } }, 1],
     [{ dependencies: { preact: '^10.19.0' } }, 1],
+    [{ optionalDependencies: { 'react-dom': '^18.2.0' } }, 1],
+    [{ dependencies: { react: '<19' } }, 1],
+    [{ dependencies: { react: '>= 18.2 <20' } }, 1],
+    [{ dependencies: { react: '18 - 19' } }, 1],
+    [{ dependencies: { react: '>=18.0.0 >=19.0.0' } }, 0],
+    [{ dependencies: { react: '*' } }, 0],
     [{ dependencies: { react: 'latest' } }, 0],
     [{ dependencies: { react: 'catalog:' } }, 0],
     [{ dependencies: { lodash: '^4.17.21' } }, 0],
@@ -206,6 +252,15 @@ test('jsx-javascript-url: only React 18 and older or Preact render javascript: U
   ];
   for (const [manifest, expected] of projects)
     assert.equal(urlFindingsOf(source, manifest).length, expected, JSON.stringify(manifest));
+});
+
+test('jsx-javascript-url: a changed package.json takes effect without restarting the process', () => {
+  const source = `${reactHeader}export const View = () => <a href={location.hash.slice(1)}>Go</a>;`;
+  withDiskProject(react18, (scan, writeManifest) => {
+    assert.equal(scan('jsx-javascript-url', source).length, 1);
+    writeManifest({ dependencies: { react: '^19.0.0', 'react-dom': '^19.0.0' } });
+    assert.equal(scan('jsx-javascript-url', source).length, 0);
+  });
 });
 
 test("next-image-any-remote-host: hostname '**' in images.remotePatterns is reported", () => {

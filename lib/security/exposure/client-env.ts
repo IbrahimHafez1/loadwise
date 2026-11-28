@@ -4,20 +4,24 @@
 // variable is public wherever it is read; only its name is reported, never a value.
 import { ts } from '../../performance/compiler.js';
 import { unwrap } from './literals.js';
+import { projectDeclares } from './package-manifest.js';
 import type { ElementAccessExpression, Expression, ImportSpecifier, Node, PropertyAccessExpression } from 'typescript';
 import type { SecurityRuleContext } from '../../shared/types.js';
 
 const ruleId = 'client-env-secret-exposed';
 // Next.js, Create React App, Expo and Nuxt inline these from `process.env`.
 const processEnvPrefixes = ['NEXT_PUBLIC_', 'REACT_APP_', 'EXPO_PUBLIC_', 'NUXT_PUBLIC_'];
-// Vite, and Astro and SvelteKit (both on Vite), expose these on `import.meta.env`.
-const importMetaEnvPrefixes = ['VITE_', 'PUBLIC_'];
+// Vite exposes `VITE_` on `import.meta.env`; Astro replaces it with `PUBLIC_`. SvelteKit keeps
+// Vite's prefix there and uses `PUBLIC_` only for its `$env` modules.
+const vitePrefix = 'VITE_';
+const astroPrefix = 'PUBLIC_';
+const importMetaEnvPrefixes = [vitePrefix, astroPrefix];
 const svelteKitPublicModules = new Set(['$env/static/public', '$env/dynamic/public']);
 const svelteKitPublicPrefix = 'PUBLIC_';
 // The secret word must end the name: `..._DISABLE_PASSWORD_LOGIN` is a flag, `..._PASSWORD` a value.
 // Publishable, anon, public, site keys, DSNs and client ids end in other words and stay clean.
 const secretNameEnding =
-  /(?:^|_)(?:SECRET(?:_KEY|_TOKEN|_ACCESS_KEY)?|PASSWORD|PASSWD|PRIVATE_KEY|SERVICE_ROLE(?:_KEY)?|SERVICE_ACCOUNT_KEY|DATABASE_URL)$/;
+  /(?:^|_)(?:SECRET(?:_KEY|_TOKEN|_ACCESS_KEY|_ACCESS_TOKEN)?|PASSWORD|PASSWD|PRIVATE_KEY|SERVICE_ROLE(?:_KEY)?|SERVICE_ACCOUNT_KEY|DATABASE_URL)$/;
 
 function exposedPrefix(name: string, prefixes: readonly string[]) {
   return prefixes.find((prefix) => name.startsWith(prefix) && secretNameEnding.test(name.slice(prefix.length)));
@@ -71,9 +75,18 @@ function envKeyName(node: PropertyAccessExpression | ElementAccessExpression) {
 function checkEnvRead(node: PropertyAccessExpression | ElementAccessExpression, context: SecurityRuleContext) {
   const name = envKeyName(node);
   if (name === undefined) return;
-  const prefixes = prefixesFor(unwrap(node.expression), context);
+  const receiver = unwrap(node.expression);
+  const prefixes = prefixesFor(receiver, context);
   const prefix = prefixes && exposedPrefix(name, prefixes);
-  if (prefix) report(node, name, prefix, context);
+  if (!prefix) return;
+  if (prefixes === importMetaEnvPrefixes && !exposedByBuildTool(prefix, context)) return;
+  report(node, name, prefix, context);
+}
+
+// Read only after a secret-named match, so ordinary env reads never touch package.json.
+function exposedByBuildTool(prefix: string, context: SecurityRuleContext) {
+  const isAstro = projectDeclares(context.sourceFile.fileName, 'astro');
+  return prefix === (isAstro ? astroPrefix : vitePrefix);
 }
 
 // `import { PUBLIC_STRIPE_SECRET_KEY } from '$env/static/public'`.
