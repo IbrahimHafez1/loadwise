@@ -156,3 +156,17 @@ test('uncaught-exception-continues follows named callbacks passed to schedulers'
   ];
   for (const source of reported) assert.equal(scanHandler(source)[0]?.ruleId, 'uncaught-exception-continues', source);
 });
+
+test('uncaught-exception-continues treats inline async functions and async handlers as rejection boundaries', () => {
+  const reported = [
+    "process.on('uncaughtException', (error) => { (async () => { throw error; })().catch(console.error); });",
+    "process.on('uncaughtException', async (error) => { throw error; });",
+  ];
+  for (const source of reported) assert.equal(scanHandler(source)[0]?.ruleId, 'uncaught-exception-continues', source);
+  const quiet = [
+    "process.on('uncaughtException', (error) => { (() => { throw error; })(); });",
+    "process.on('uncaughtException', async () => { process.exit(1); });",
+    "process.on('uncaughtException', (error) => { void (async () => { process.exit(1); })(); });",
+  ];
+  for (const source of quiet) assert.deepEqual(scanHandler(source), [], source);
+});
