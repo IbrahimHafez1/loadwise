@@ -240,6 +240,8 @@ function singleCharacters(node: PatternNode): CodePointRange[] {
     case 'quant':
       return node.max === 0 || node.min > 1 ? [] : singleCharacters(node.body);
     case 'seq': {
+      // An assertion limits where each turn can start, so turns cannot each take one character of a run.
+      if (node.items.some((item) => item.kind === 'assert' || item.kind === 'lookaround')) return [];
       const required = node.items.filter((item) => !nullable(item));
       if (required.length > 1) return [];
       if (required.length === 1) return singleCharacters(required[0]);

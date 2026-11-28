@@ -193,6 +193,8 @@ test('group edges separated by a required character or over disjoint characters 
     String.raw`^\s*(?:x\s*=>)?y$`,
     String.raw`^(?:\d+,)+\d+$`,
     String.raw`^(?:a\s*)+\d+$`,
+    // `\b` stops each turn from starting inside a run of `a`s.
+    String.raw`^a*(?:\ba)+$`,
     // Nothing after the group's `a+` can fail, so no split is retried.
     String.raw`^a*(?:a+)`,
     // An anchored line ending in `.*$` stays exempt when the anchor or the `.*` sits in a group.
