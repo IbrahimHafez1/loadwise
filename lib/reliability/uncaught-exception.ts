@@ -165,7 +165,13 @@ function endsOrRethrows(handler: Node, checker: CheckerAdapter): boolean {
   const visitedHelpers = new Set<Node>();
   const visitChildren = (node: Node, swallowed: boolean): void => {
     ts.forEachChild(node, (child) =>
-      visit(child, isPromiseExecutor(child) || isPromiseReaction(child) || (swallowed && !isDeferredCallback(child))),
+      visit(
+        child,
+        isPromiseExecutor(child) ||
+          isPromiseReaction(child) ||
+          isAsyncFunction(child) ||
+          (swallowed && !isDeferredCallback(child)),
+      ),
     );
   };
   const visitHelper = (helper: Node, swallowed: boolean): void => {
@@ -199,7 +205,7 @@ function endsOrRethrows(handler: Node, checker: CheckerAdapter): boolean {
       visitChildren(node, swallowed);
     }
   };
-  visitChildren(handler, false);
+  visitChildren(handler, isAsyncFunction(handler));
   return ends || exitCodeRetained;
 }
 
