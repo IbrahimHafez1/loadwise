@@ -200,6 +200,22 @@ async function analyzeWithPolyglot(
   }
 }
 
+function detectIgnoredAllSources(
+  root: string,
+  policy: MaintainabilityPolicy,
+  jsFiles: readonly string[],
+  otherSources: readonly string[],
+): boolean {
+  if (jsFiles.length || otherSources.length || policy.placement.length) return false;
+  const ignoredAllSources =
+    Boolean(policy.isIgnored) &&
+    listFiles(root, policy.exclude).some((file) => isAnalyzableSource(file) || isOtherSource(file));
+  if (ignoredAllSources) return true;
+  throw new Error(
+    'No supported source files or placement rules in this directory. Use --graph for a dependency graph from another language.',
+  );
+}
+
 async function scan(
   root: string,
   policy: MaintainabilityPolicy,
@@ -208,17 +224,7 @@ async function scan(
   const inventory = listFiles(root, policy.exclude, policy.isIgnored);
   const jsFiles = inventory.filter(isAnalyzableSource);
   const otherSources = inventory.filter(isOtherSource);
-  let ignoredAllSources = false;
-  if (!jsFiles.length && !otherSources.length && !policy.placement.length) {
-    ignoredAllSources =
-      Boolean(policy.isIgnored) &&
-      listFiles(root, policy.exclude).some((file) => isAnalyzableSource(file) || isOtherSource(file));
-    if (!ignoredAllSources) {
-      throw new Error(
-        'No supported source files or placement rules in this directory. Use --graph for a dependency graph from another language.',
-      );
-    }
-  }
+  const ignoredAllSources = detectIgnoredAllSources(root, policy, jsFiles, otherSources);
   const duplicates = createDuplicateIndex();
   const edges: ModuleEdge[] = [];
   const constEnums = new Map<string, string[]>();
