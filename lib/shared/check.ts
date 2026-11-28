@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { loadSettings } from './config.js';
+import { realTarget } from './real-target.js';
 import { selectPillars, runPillars } from './pillars.js';
 import { parseMinImpact } from './impact-levels.js';
 import { extractBaselineFlags, resolveBaselineFile } from './baseline.js';
@@ -217,8 +218,10 @@ async function scanCheck({
   baselineOptions,
 }: CheckOptions): Promise<CheckRun[]> {
   // Relative paths keep the fix commands the checkers print short and runnable from the same
-  // folder.
-  const relative = (target: string): string => path.relative(process.cwd(), target).split(path.sep).join('/') || '.';
+  // folder. The working directory is already resolved, so resolve the target too: otherwise a
+  // symlinked parent (macOS /var -> /private/var) turns a sibling folder into a chain of "../".
+  const relative = (target: string): string =>
+    path.relative(realTarget(process.cwd()), realTarget(target)).split(path.sep).join('/') || '.';
   const flags = sharedArgs(values, format, settings, baselineOptions, directory);
   const contractFlags = contractArgs(values, format, settings);
   const optionsFor = (pillar: PillarDefinition): PillarRunOptions => ({

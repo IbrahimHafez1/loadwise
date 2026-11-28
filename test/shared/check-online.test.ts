@@ -86,7 +86,7 @@ test('check --online merges the dependency and source results in one security re
   assert.equal(security.findings.length, 1);
   const [finding] = security.findings;
   assert.equal(finding.ruleId, ruleId);
-  assert.equal(path.resolve(root, finding.file), path.join(root, 'package.json'));
+  assert.equal(fs.realpathSync(path.resolve(root, finding.file)), fs.realpathSync(path.join(root, 'package.json')));
   assert.equal(finding.impactLevel, 'high');
 
   const text = await check('--only', 'perf,sec');

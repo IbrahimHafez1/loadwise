@@ -79,7 +79,14 @@ async function resolveInputs(paths: readonly string[]): Promise<{ inputs: Set<st
     if (!stat.isDirectory() && !(stat.isFile() && extensions.has(path.extname(input).toLowerCase()))) {
       throw new Error('Expected a directory or a .py, .go, .java, .cs or .rs file: ' + input);
     }
-    if (process.platform === 'win32') {
+    if (process.platform === 'darwin') {
+      // The default macOS volume ignores case, so a differently cased spelling of the same file
+      // must not be scanned twice. Only the final name is normalized; symlinked parents stay as given.
+      const actual = await realpathNative(input);
+      if (path.basename(actual).toLowerCase() === path.basename(input).toLowerCase()) {
+        input = path.join(path.dirname(input), path.basename(actual));
+      }
+    } else if (process.platform === 'win32') {
       // Preserve symlinks and distinct entries in case-sensitive directories.
       const actual = await realpathNative(input);
       if (actual.toLowerCase() === input.toLowerCase()) input = actual;

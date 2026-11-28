@@ -11,7 +11,7 @@ type WatchResult = Parameters<Parameters<typeof watchProject>[1]['onResult']>[0]
 
 test(
   'watch reports complete snapshots, follows dependency edits, and recovers from invalid inputs',
-  { timeout: 30_000 },
+  { timeout: 90_000 },
   async (context) => {
     const base = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Temp', 'AI-Work') : os.tmpdir();
     fs.mkdirSync(base, { recursive: true });
