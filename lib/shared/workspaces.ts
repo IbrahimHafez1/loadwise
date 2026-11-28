@@ -295,21 +295,32 @@ function selectWorkspaces<Workspace extends WorkspaceDirectory>(
 }
 
 const implementationSource = /(?<!\.d)\.[cm]?[jt]sx?$/i;
-const typeScriptSource = /(?<!\.d)\.[cm]?tsx?$/i;
-const nestedSourceConfig = /(?:^|\/)[jt]sconfig\.json$/i;
+
+// Whether a source sits under a sub-folder's own tsconfig.json or jsconfig.json, found on disk so a
+// git-ignored config counts too.
+function hasNestedSourceConfig(directory: string, file: string): boolean {
+  const packageRoot = path.resolve(directory);
+  for (
+    let folder = path.dirname(path.resolve(packageRoot, file));
+    folder !== packageRoot && folder !== path.dirname(folder);
+    folder = path.dirname(folder)
+  ) {
+    if (isFile(path.join(folder, 'tsconfig.json')) || isFile(path.join(folder, 'jsconfig.json'))) return true;
+  }
+  return false;
+}
 
 // The sources of a Node package without a config of its own, which are checked with the standalone
-// defaults (ES2022, NodeNext). A workspace root keeps to its packages' configs. TypeScript under a
-// sub-folder's own tsconfig.json needs that config's settings, such as paths and decorators, so such a
-// package is left out rather than checked with defaults that would misread it and let fixes through.
+// defaults (ES2022, NodeNext). A workspace root keeps to its packages' configs. A source under a
+// sub-folder's own tsconfig.json or jsconfig.json needs that config's settings, such as paths and
+// decorators, so such a package is left out rather than checked with defaults that would misread it
+// and let fixes through.
 function configlessSources(directory: string): string[] | undefined {
   if (!isFile(path.join(directory, 'package.json')) || projectConfig(directory) || workspacePatterns(directory).length)
     return undefined;
-  const files = listFiles(directory);
-  if (files.some((file) => typeScriptSource.test(file)) && files.some((file) => nestedSourceConfig.test(file)))
-    return undefined;
-  const sources = files.filter((file) => implementationSource.test(file)).map((file) => path.join(directory, file));
-  return sources.length ? sources : undefined;
+  const files = listFiles(directory).filter((file) => implementationSource.test(file));
+  if (files.some((file) => hasNestedSourceConfig(directory, file))) return undefined;
+  return files.length ? files.map((file) => path.join(directory, file)) : undefined;
 }
 
 // Whether a monorepo root has a package the source checkers can read, with its own config or without.

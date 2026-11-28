@@ -230,9 +230,9 @@ async function scanProjectSources(
       ? { scannedFiles: 0, findings: [] }
       : await analyzeWithEngine(
           {
-            project: workspace?.configs ?? values.project,
-            files: inferredFiles ?? positionals,
-            standaloneFiles: workspace?.standaloneFiles,
+            project: inferredFiles ? [] : (workspace?.configs ?? values.project),
+            files: positionals,
+            standaloneFiles: inferredFiles ?? workspace?.standaloneFiles,
             policy: sourcePolicy(values.policy, values.settings).read(),
             onlyFiles: scanFilter(values.settings, scope),
             analyzers: [analyzer],

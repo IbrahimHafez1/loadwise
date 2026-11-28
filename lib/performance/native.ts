@@ -391,11 +391,13 @@ function analyzeNative({
     }
     selectSyntax();
     for (const [roots, options, analyzes] of projects) scan(roots, options, analyzes);
-    const isScanned = (filename: string) => scanned.has(canonical(filename));
+    // The native API starts with the first program, so a scan of only configless sources has nothing to look up.
+    const isScanned = (filename: string) => scanned.size > 0 && scanned.has(canonical(filename));
     const leftOut = unscannedJavaScript(scopesWithoutJs, isScanned, onlyFiles);
     const configless = standaloneFiles.filter(
       (filename) => !isScanned(filename) && (!onlyFiles || onlyFiles(filename)),
     );
+    for (const filename of configless) standaloneRoots.add(repositoryRoot(path.dirname(filename)));
     scan([...leftOut.files, ...configless], standaloneOptions, () => true);
     leftOut.note();
     if (!scanned.size && !onlyFiles && !skippedFiles.length)

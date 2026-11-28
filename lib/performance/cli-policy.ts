@@ -53,6 +53,14 @@ export function sourcePolicy(explicit: string | undefined, settings: ScanSetting
   };
 }
 
+function noteUncheckedWorkspaces(withoutConfig: Parameters<typeof uncheckedWorkspaces>[0]): void {
+  for (const { name } of uncheckedWorkspaces(withoutConfig)) {
+    console.error(
+      `Note: workspace ${name} has no tsconfig.json or jsconfig.json, and a sub-folder's own tsconfig.json or jsconfig.json holds its sources; skipped it. Add a tsconfig.json to the package to check it.`,
+    );
+  }
+}
+
 // A directory without its own config, or an explicit --workspace, means a monorepo: one config per
 // package, and the sources of each package without one, checked with the standalone defaults.
 export function workspaceTarget(
@@ -71,15 +79,11 @@ export function workspaceTarget(
     const sources = configlessSources(workspace.directory);
     return sources ? [{ ...workspace, sources }] : [];
   });
+  noteUncheckedWorkspaces(withoutConfig);
   if (!packages.length && !configless.length) {
     if (values.workspace.length)
       throw new Error('--workspace found no workspace package with JavaScript or TypeScript.');
     return undefined;
-  }
-  for (const { name } of uncheckedWorkspaces(withoutConfig)) {
-    console.error(
-      `Note: workspace ${name} has no tsconfig.json or jsconfig.json, and a sub-folder's own tsconfig.json holds its TypeScript; skipped it. Add a tsconfig.json to the package to check it.`,
-    );
   }
   const chosen = selectWorkspaces([...packages, ...configless], directory, values.workspace);
   return {

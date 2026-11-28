@@ -334,9 +334,9 @@ async function scanSource({
   const editor = report !== printResult;
   return await analyzeSourceCode(
     {
-      project: workspace?.configs ?? values.project,
-      files: inferredFiles ?? positionals,
-      standaloneFiles: workspace?.standaloneFiles,
+      project: inferredFiles ? [] : (workspace?.configs ?? values.project),
+      files: positionals,
+      standaloneFiles: inferredFiles ?? workspace?.standaloneFiles,
       policy,
       onlyFiles: scanFilter(values.settings, scope),
       analyzers: editor ? await editorAnalyzers() : analyzers,
@@ -430,9 +430,9 @@ async function checkWithPillars({
     files: inferredFiles ?? positionals,
   });
   const result: PerformanceScanResult = analyzeSources({
-    project: workspace?.configs ?? values.project,
-    files: inferredFiles ?? positionals,
-    standaloneFiles: workspace?.standaloneFiles,
+    project: inferredFiles ? [] : (workspace?.configs ?? values.project),
+    files: positionals,
+    standaloneFiles: inferredFiles ?? workspace?.standaloneFiles,
     policy,
     onlyFiles: scanFilter(values.settings, scope),
     analyzers: sharedAnalyzers(commands),
