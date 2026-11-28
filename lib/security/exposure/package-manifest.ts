@@ -40,8 +40,9 @@ function nearestManifestAnswer(fileName: string, answerOf: (manifest: Manifest) 
   }
 }
 
+// Only the file's own project counts: a nested Vite app under an Astro workspace root is not Astro.
 function projectDeclares(fileName: string, packageName: string): boolean {
-  return nearestManifestAnswer(fileName, (manifest) => (declaredRange(manifest, packageName) ? true : undefined));
+  return nearestManifestAnswer(fileName, (manifest) => declaredRange(manifest, packageName) !== undefined);
 }
 
 export { declaredRange, nearestManifestAnswer, projectDeclares };

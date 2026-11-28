@@ -10,7 +10,8 @@ import type { SecurityRuleContext } from '../../shared/types.js';
 
 const ruleId = 'client-env-secret-exposed';
 // Next.js, Create React App, Expo and Nuxt inline these from `process.env`.
-const processEnvPrefixes = ['NEXT_PUBLIC_', 'REACT_APP_', 'EXPO_PUBLIC_', 'NUXT_PUBLIC_'];
+const expoPrefix = 'EXPO_PUBLIC_';
+const processEnvPrefixes = ['NEXT_PUBLIC_', 'REACT_APP_', expoPrefix, 'NUXT_PUBLIC_'];
 // Vite exposes `VITE_` on `import.meta.env`; Astro replaces it with `PUBLIC_`. SvelteKit keeps
 // Vite's prefix there and uses `PUBLIC_` only for its `$env` modules.
 const vitePrefix = 'VITE_';
@@ -79,6 +80,8 @@ function checkEnvRead(node: PropertyAccessExpression | ElementAccessExpression, 
   const prefixes = prefixesFor(receiver, context);
   const prefix = prefixes && exposedPrefix(name, prefixes);
   if (!prefix) return;
+  // Expo inlines only the dot form; `process.env['EXPO_PUBLIC_X']` stays undefined in the app.
+  if (prefix === expoPrefix && ts.isElementAccessExpression(node)) return;
   if (prefixes === importMetaEnvPrefixes && !exposedByBuildTool(prefix, context)) return;
   report(node, name, prefix, context);
 }
