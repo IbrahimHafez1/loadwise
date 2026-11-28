@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `react-component-defined-in-component` flags a component declared inside another component and rendered as an element. It is a new component type on every render, so React remounts its subtree and loses its state and DOM.
 - `angular-ngfor-missing-trackby` flags an `*ngFor` with no `trackBy` in an inline `template` or a `templateUrl` HTML file, since a list replaced with new objects recreates every item's DOM. `@for` blocks already require `track` and are not checked.
 - Reliability rules: `child-process-without-error-listener` (a spawned child process with no `error` listener crashes the parent when the spawn fails), `error-rethrown-without-cause`, `throw-non-error` and `error-logged-without-stack`.
+- Performance rule `llm-call-without-max-tokens` reports OpenAI chat completions and responses calls that set no output token limit.
+- `pool-created-per-request-or-item` now also covers `S3Client`, `OpenAI`, `Anthropic` and `Stripe` clients created per request or loop item.
 
 ### Removed
 

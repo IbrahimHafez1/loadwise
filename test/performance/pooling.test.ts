@@ -11,6 +11,10 @@ const files = {
   'node_modules/mongodb/index.d.ts': 'export class MongoClient { constructor(uri: string) }',
   'node_modules/redis/index.d.ts': 'export function createClient(): {connect(): Promise<void>}',
   'node_modules/@prisma/client/index.d.ts': 'export class PrismaClient {}',
+  'node_modules/@aws-sdk/client-s3/index.d.ts': 'export class S3Client { constructor(config: {}) }',
+  'node_modules/openai/index.d.ts': 'export default class OpenAI { constructor(options?: {}) }',
+  'node_modules/@anthropic-ai/sdk/index.d.ts': 'export class Anthropic { constructor(options?: {}) }',
+  'node_modules/stripe/index.d.ts': 'export default class Stripe { constructor(key: string) }',
   'node_modules/@types/express/index.d.ts': 'export interface Router { get(path: string, handle: () => void): void }',
   'node_modules/fastify/index.d.ts':
     'export interface FastifyInstance { post(path: string, options: {}, handle: () => void): void }',
@@ -119,5 +123,43 @@ test('nullish guards around the shared pool assignment allocate once', () => {
   assert.deepEqual(
     findings.map(({ ruleId, line }) => [ruleId, line]),
     [8, 9, 10, 11].map((line) => ['pool-created-per-request-or-item', line]),
+  );
+});
+
+test('detects S3, OpenAI, Anthropic and Stripe clients created per loop item', () => {
+  const findings = lint(
+    [
+      "import { S3Client } from '@aws-sdk/client-s3';",
+      "import OpenAI from 'openai';",
+      "import { Anthropic } from '@anthropic-ai/sdk';",
+      "import Stripe from 'stripe';",
+      'for (const id of [1,2]) {',
+      '  new S3Client({ requestHandler: {} });',
+      '  new OpenAI();',
+      '  new Anthropic();',
+      "  new Stripe('key');",
+      '}',
+    ].join('\n'),
+    files,
+  );
+  assert.deepEqual(
+    findings.map(({ ruleId, line }) => [ruleId, line]),
+    [6, 7, 8, 9].map((line) => ['pool-created-per-request-or-item', line]),
+  );
+});
+
+test('module-scope S3, OpenAI and Stripe clients stay quiet', () => {
+  assert.deepEqual(
+    lint(
+      [
+        "import { S3Client } from '@aws-sdk/client-s3';",
+        "import Stripe from 'stripe';",
+        'const s3 = new S3Client({ requestHandler: {} });',
+        "const stripe = new Stripe('key');",
+        'for (const id of [1,2]) { s3.constructor; stripe.constructor; }',
+      ].join('\n'),
+      files,
+    ),
+    [],
   );
 });

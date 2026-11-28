@@ -44,6 +44,7 @@ import { checkPromiseAwait } from './awaits.js';
 import { checkSortExtreme } from './sort-extreme.js';
 import { checkNodeBlockingCall, flushBlockingCalls } from './node-fs.js';
 import { checkPoolCreation } from './pooling.js';
+import { check as checkLlmMaxTokens } from './llm-max-tokens.js';
 import { checkCollectionCall, checkCollectionAssignment } from './collections.js';
 import { isRepeated } from './repeated.js';
 import { isTestSource, reviewedReason, reviewMarkers, repeatedReviewContext } from './review-context.js';
@@ -99,6 +100,7 @@ const callRules: CallRule[] = [
   checkOffsetPagination,
   checkListCounts,
   checkNotificationLoops,
+  checkLlmMaxTokens,
   checkSessionStore,
   checkCartesianIncludes,
   checkRetryBackoff,
