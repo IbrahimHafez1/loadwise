@@ -59,6 +59,8 @@ test('child-process-without-error-listener accepts handled, handed-off and callb
     "exec('ls', callback);",
     "const child = spawn('ls');\nchild.on('close', onClose).on('error', onError);",
     "const child = spawn('ls');\nreturn child;",
+    "const child = spawn('ls');\nregister(child.on('close', onClose));",
+    "const child = spawn('ls');\nconst forwarded = child.on('close', onClose);\nregister(forwarded);",
   ];
   for (const source of sources) assert.deepEqual(childProcessRules(spawnImport + source), [], source);
 });
@@ -71,6 +73,7 @@ test('child-process-without-error-listener ignores a local spawn and other modul
 test('error-rethrown-without-cause reports a new error that drops the caught one', () => {
   const sources = [
     "try { work(); } catch (err) { throw new Error('work failed'); }",
+    "try { work(); } catch (err) { throw (new Error('work failed')); }",
     'try { work(); } catch (error) { throw new TypeError(`bad config ${path}`); }',
     "try { work(); } catch (e) { throw new RangeError('gave up'); }",
     "try { work(); } catch (e) { throw new AggregateError([], 'gave up'); }",
@@ -83,6 +86,7 @@ test('error-rethrown-without-cause reports a new error that drops the caught one
 test('error-rethrown-without-cause accepts a cause, a use of the caught error and client-facing errors', () => {
   const sources = [
     "try { work(); } catch (err) { throw new Error('work failed', { cause: err }); }",
+    "try { work(); } catch (err) { throw new Error('work failed', { cause: previous }); }",
     'try { work(); } catch (err) { throw new Error(`work failed: ${err}`); }',
     "try { work(); } catch (err) { logger.error(err); throw new Error('work failed'); }",
     "try { work(); } catch (err) { if (err.code === 'ENOENT') throw new Error('missing'); throw err; }",
@@ -132,6 +136,7 @@ test('error-logged-without-stack reports a catch that logs only the message and 
     "try { work(); } catch (err) { logger.error('failed: ' + err.message); }",
     'try { work(); } catch (err) { this.logger.error(`failed: ${err.message}`); return null; }',
     "try { work(); } catch (err) { console.error('failed', err.message); res.status(500).end(); }",
+    'try { work(); } catch (err) { if (err instanceof Error) console.error(err.message); }',
     'try { work(); } catch (err) { console.error(err.message); try { cleanup(); } catch (err) { console.error(err); } }',
     'try { work(); } catch (err) { console.error(err.message); try { cleanup(); } catch (err) { console.error(err); } }',
   ];
