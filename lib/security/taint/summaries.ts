@@ -193,8 +193,9 @@ function createSummaries(program: ProgramAdapter): TaintSummaries {
     let byDeclaration = resolvedByName.get(name);
     if (!byDeclaration) {
       byDeclaration = new Map<Node, CallExpression[]>();
-      const spellings = [name, ...(aliasSpellings.get(name) ?? [])];
-      const candidates = spellings.flatMap((spelling) => callsByName?.get(spelling) ?? []);
+      // Several files can import the same alias; each spelling is collected once.
+      const spellings = new Set([name, ...(aliasSpellings.get(name) ?? [])]);
+      const candidates = [...spellings].flatMap((spelling) => callsByName?.get(spelling) ?? []);
       for (const call of candidates) {
         const target = checker.getResolvedSignature(call)?.declaration ?? constructorMethod(call, checker);
         if (!target) continue;

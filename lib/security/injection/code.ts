@@ -2,7 +2,7 @@
 // `template-injection`: request data compiled as a server-side template, whose expressions run with
 // the server's privileges.
 import { ts } from '../../performance/compiler.js';
-import { reportTraced, isGlobalName, calledExport, initializerOf } from './shared.js';
+import { reportTraced, isGlobalName, calledExport, initializerOf, positionalArguments } from './shared.js';
 import type { CallExpression, Expression, NewExpression, Node } from 'typescript';
 import type { CheckerAdapter, SecurityRuleContext } from '../../shared/types.js';
 
@@ -33,11 +33,13 @@ function templateMessage(label: string) {
   return `\`${label}\` is compiled as a template, which lets a caller run template code on the server. Keep templates fixed and pass input only as data.`;
 }
 
-// `const run = eval;` makes `run(...)` an evaluator call; one hop keeps the lookup bounded.
-function resolveAlias(callee: Expression, context: SecurityRuleContext): Expression {
-  if (!ts.isIdentifier(callee)) return callee;
+// `const run = eval;` makes `run(...)` an evaluator call, also through `const again = run`. The
+// visited identifiers stop a cycle.
+function resolveAlias(callee: Expression, context: SecurityRuleContext, visited = new Set<Node>()): Expression {
+  if (!ts.isIdentifier(callee) || visited.has(callee)) return callee;
+  visited.add(callee);
   const initializer = initializerOf(callee, context.checker);
-  return initializer && ts.isIdentifier(initializer) ? initializer : callee;
+  return initializer && ts.isIdentifier(initializer) ? resolveAlias(initializer, context, visited) : callee;
 }
 
 // The arguments evaluated as code by this call or `new` expression.
@@ -46,18 +48,20 @@ function codeInputs(node: CallExpression | NewExpression, context: SecurityRuleC
   const callee = ts.skipOuterExpressions(node.expression);
   const evaluator = resolveAlias(callee, context);
   if (ts.isCallExpression(node) && callee.kind === ts.SyntaxKind.ImportKeyword) return [node.arguments[0]];
+  // `eval(...['1', extra])` evaluates only the first element.
+  const args = positionalArguments(node.arguments);
   if (isGlobalName(evaluator, evaluatingGlobals, context.checker)) {
-    if (evaluator.text === 'Function') return [...node.arguments];
+    if (evaluator.text === 'Function') return args;
     if (ts.isNewExpression(node)) return [];
-    const [first] = node.arguments;
+    const [first] = args;
     // A function passed to a timer is not evaluated as text.
     return first && !ts.isFunctionLike(first) ? [first] : [];
   }
   if (ts.isPropertyAccessExpression(callee) && !vmAndSerializeMethods.has(callee.name.text)) return [];
   const library = context.libraryCall(node);
   const name = calledExport(library);
-  if (library?.module === 'vm' && name !== undefined && vmFunctions.has(name)) return [node.arguments[0]];
-  if (library?.module === 'node-serialize' && name === 'unserialize') return [node.arguments[0]];
+  if (library?.module === 'vm' && name !== undefined && vmFunctions.has(name)) return [args[0]];
+  if (library?.module === 'node-serialize' && name === 'unserialize') return [args[0]];
   return [];
 }
 
@@ -89,7 +93,7 @@ function derivesFromParameter(expression: Expression, checker: CheckerAdapter) {
 // `eval`, `Function` and the vm functions only: a parameter reaching `require`, `import` or a timer
 // is a common idiom.
 function isEvaluatorCall(node: CallExpression | NewExpression, context: SecurityRuleContext) {
-  const callee = ts.skipOuterExpressions(node.expression);
+  const callee = resolveAlias(ts.skipOuterExpressions(node.expression), context);
   if (isGlobalName(callee, parameterEvaluators, context.checker)) return true;
   return context.libraryCall(node) !== undefined;
 }

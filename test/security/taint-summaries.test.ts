@@ -54,3 +54,18 @@ test('call sites include calls spelled through an import alias', () => {
     assert.equal(summaries.callSites(consume).length, 1);
   });
 });
+
+test('an alias imported by two files collects each call once', () => {
+  const declaration = 'export function consume(value: string) { return value; }';
+  const caller = "import { consume as run } from './consume.js';\nrun('first');";
+  const otherCaller = "import { consume as run } from './consume.js';\nrun('second');";
+  withProgram(caller, { 'consume.ts': declaration, 'other.ts': otherCaller }, (program: ProgramAdapter) => {
+    const summaries = createSummaries(program);
+    const consume = program
+      .getSourceFiles?.()
+      .flatMap((file) => file.statements)
+      .find((statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === 'consume');
+    assert.ok(consume && ts.isFunctionDeclaration(consume));
+    assert.equal(summaries.callSites(consume).length, 2);
+  });
+});

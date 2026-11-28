@@ -214,20 +214,20 @@ function iteratedArray(expression: Expression, checker: CheckerAdapter): Express
   return declaration.initializer;
 }
 
-const arrayMutatingMethods = new Set([
-  'push',
-  'pop',
-  'shift',
-  'unshift',
-  'splice',
-  'sort',
-  'reverse',
-  'fill',
-  'copyWithin',
-]);
+// The methods that can put a new value into the array; `pop`, `sort` and the like only remove or
+// reorder its literal elements.
+const arrayMutatingMethods = new Set(['push', 'unshift', 'splice', 'fill']);
 
-// `const` and `readonly` only pin the binding: `TABLES[0] = x` or `TABLES.push(x)` still changes the
-// elements. Passing the array to another function is not tracked.
+function mutatingMethodName(access: Node): string | undefined {
+  if (ts.isPropertyAccessExpression(access)) return access.name.text;
+  if (!ts.isElementAccessExpression(access)) return;
+  const key = ts.skipOuterExpressions(access.argumentExpression);
+  return ts.isStringLiteralLike(key) ? key.text : undefined;
+}
+
+// `const` and `readonly` only pin the binding: `TABLES[0] = x`, `TABLES.push(x)` or
+// `TABLES['push'](x)` still changes the elements, as does a write through `const alias = TABLES`, so
+// an alias counts as a write. Passing the array to another function is not tracked.
 function hasElementWrites(declaration: Node, symbol: SymbolAdapter, checker: CheckerAdapter) {
   const refersToSymbol = (node: Expression) => {
     const target = ts.skipOuterExpressions(node);
@@ -241,14 +241,27 @@ function hasElementWrites(declaration: Node, symbol: SymbolAdapter, checker: Che
     (function visit(node: Node): boolean | undefined {
       if (ts.isElementAccessExpression(node) && ts.isAssignmentTarget(node) && refersToSymbol(node.expression))
         return true;
+      const method = mutatingMethodName(node);
       if (
-        ts.isPropertyAccessExpression(node) &&
-        arrayMutatingMethods.has(node.name.text) &&
+        (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
+        method !== undefined &&
+        arrayMutatingMethods.has(method) &&
         refersToSymbol(node.expression)
       )
         return true;
+      if (isAliasing(node) && refersToSymbol(node)) return true;
       return ts.forEachChild(node, visit);
     })(declaration.getSourceFile()),
+  );
+}
+
+// `const alias = value` or `alias = value`: the value gets a second name that can be mutated.
+function isAliasing(node: Node): node is Expression {
+  const parent = node.parent;
+  if (!parent || !(ts.isIdentifier(node) || ts.isPropertyAccessExpression(node))) return false;
+  if (ts.isVariableDeclaration(parent)) return parent.initializer === node;
+  return (
+    ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken && parent.right === node
   );
 }
 
@@ -306,7 +319,9 @@ function fieldValuesAreFixed(
     if (ts.isElementAccessExpression(child) && child.expression.kind === ts.SyntaxKind.ThisKeyword) {
       const key = child.argumentExpression;
       const namesOtherField = ts.isStringLiteralLike(key) && key.text !== symbol.name;
-      if (ts.isAssignmentTarget(child) && !namesOtherField) otherWrite = true;
+      // A computed key cannot name an ECMAScript `#private` field.
+      const canWriteField = !ts.isPrivateIdentifier(declaration.name) && !namesOtherField;
+      if (ts.isAssignmentTarget(child) && canWriteField) otherWrite = true;
     }
     ts.forEachChild(child, visit);
   })(declaration.parent);

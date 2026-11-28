@@ -6,8 +6,8 @@ import { ts } from '../../performance/compiler.js';
 import { importedFrom } from '../bindings.js';
 import { analyzeFragment } from '../../performance/pg-fragments.js';
 import { operandsOf } from '../pg-identifier-guards.js';
-import { reportTraced, calledExport, initializerOf } from './shared.js';
-import type { CallExpression, Expression, ObjectLiteralExpression } from 'typescript';
+import { reportTraced, calledExport, initializerOf, fieldWritesOf, positionalArguments } from './shared.js';
+import type { CallExpression, Expression, Node, ObjectLiteralExpression } from 'typescript';
 import type { SecurityRuleContext } from '../../shared/types.js';
 
 const ruleId = 'command-injection';
@@ -21,7 +21,6 @@ const allCommandMethods = new Set([...shellCommands, ...spawnCommands, ...execaC
 const shellPrograms =
   /^(?:(?:\/usr)?\/bin\/)?(?:sh|bash|zsh|dash|ksh)$|^(?:cmd|cmd\.exe|powershell|powershell\.exe|pwsh)$/i;
 const commandFlags = new Set(['-c', '/c', '/C', '-Command', '-command']);
-const maxOptionsDepth = 3;
 
 function message(label: string) {
   return `\`${label}\` reaches a shell command line, so shell metacharacters in it run as commands. Call \`execFile\`/\`spawn\` without \`shell\` and pass the value as an array element.`;
@@ -50,56 +49,86 @@ function childProcessExport(call: CallExpression, context: SecurityRuleContext):
   return binding?.module === 'child_process' ? binding.exported : undefined;
 }
 
-// An options object written inline or held in a `const`.
-function objectLiteralOf(expression: Expression, context: SecurityRuleContext) {
+// An options object written inline or held in a `const`, also behind `const options = base`.
+function objectLiteralOf(
+  expression: Expression,
+  context: SecurityRuleContext,
+  visited = new Set<Node>(),
+): ObjectLiteralExpression | undefined {
   const value = ts.skipOuterExpressions(expression);
   if (ts.isObjectLiteralExpression(value)) return value;
-  const initializer = ts.isIdentifier(value) ? initializerOf(value, context.checker) : undefined;
-  return initializer && ts.isObjectLiteralExpression(initializer) ? initializer : undefined;
+  if (!ts.isIdentifier(value) || visited.has(value)) return;
+  visited.add(value);
+  const initializer = initializerOf(value, context.checker);
+  return initializer && objectLiteralOf(initializer, context, visited);
 }
 
-function optionsOf(call: CallExpression, context: SecurityRuleContext) {
-  for (let index = call.arguments.length - 1; index >= 1; index -= 1) {
-    const options = objectLiteralOf(call.arguments[index], context);
-    if (options) return options;
-  }
+function optionsOf(args: readonly Expression[], context: SecurityRuleContext) {
+  for (let index = args.length - 1; index >= 1; index -= 1)
+    if (objectLiteralOf(args[index], context)) return args[index];
   return undefined;
 }
 
-// `{ shell: true }` or `{ shell: '/bin/bash' }`, written in the options or spread into them. A later
-// property overrides an earlier one, so the last `shell` wins.
-function enablesShell(options: ObjectLiteralExpression, context: SecurityRuleContext, depth = 0): boolean {
-  let enabled = false;
+function isShellValue(expression: Expression) {
+  const value = ts.skipOuterExpressions(expression);
+  return value.kind === ts.SyntaxKind.TrueKeyword || ts.isStringLiteralLike(value);
+}
+
+// The `shell` setting of an options value: true for `{ shell: true }` or `{ shell: '/bin/bash' }`,
+// false when set to anything else, undefined when the options do not set it. A later property,
+// spread or `options.shell = ...` write overrides an earlier one. `resolving` holds the values on
+// the current path, so a cycle stops without hiding a value spread twice.
+function shellSetting(expression: Expression, context: SecurityRuleContext, resolving: Set<Node>): boolean | undefined {
+  const value = ts.skipOuterExpressions(expression);
+  if (resolving.has(value)) return;
+  resolving.add(value);
+  try {
+    if (ts.isObjectLiteralExpression(value)) return literalShellSetting(value, context, resolving);
+    if (!ts.isIdentifier(value)) return;
+    const initializer = initializerOf(value, context.checker);
+    let setting = initializer ? shellSetting(initializer, context, resolving) : undefined;
+    for (const { name, assignment } of fieldWritesOf(value, context.checker))
+      if (name === 'shell') setting = isShellValue(assignment.right);
+    return setting;
+  } finally {
+    resolving.delete(value);
+  }
+}
+
+function literalShellSetting(
+  options: ObjectLiteralExpression,
+  context: SecurityRuleContext,
+  resolving: Set<Node>,
+): boolean | undefined {
+  let setting: boolean | undefined;
   for (const property of options.properties) {
     if (ts.isSpreadAssignment(property)) {
-      const spread = depth < maxOptionsDepth ? objectLiteralOf(property.expression, context) : undefined;
-      if (spread) enabled = enablesShell(spread, context, depth + 1) || enabled;
+      setting = shellSetting(property.expression, context, resolving) ?? setting;
       continue;
     }
     if (!ts.isPropertyAssignment(property)) continue;
     if (!(ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name)) || property.name.text !== 'shell')
       continue;
-    const value = ts.skipOuterExpressions(property.initializer);
-    enabled = value.kind === ts.SyntaxKind.TrueKeyword || ts.isStringLiteralLike(value);
+    setting = isShellValue(property.initializer);
   }
-  return enabled;
+  return setting;
 }
 
-function usesShell(call: CallExpression, context: SecurityRuleContext) {
-  const options = optionsOf(call, context);
-  return options !== undefined && enablesShell(options, context);
+function usesShell(args: readonly Expression[], context: SecurityRuleContext) {
+  const options = optionsOf(args, context);
+  return options !== undefined && shellSetting(options, context, new Set()) === true;
 }
 
-function argumentList(call: CallExpression) {
-  const list = call.arguments[1] && ts.skipOuterExpressions(call.arguments[1]);
+function argumentList(args: readonly Expression[]) {
+  const list = args[1] && ts.skipOuterExpressions(args[1]);
   return list && ts.isArrayLiteralExpression(list) ? list : undefined;
 }
 
 // The script of `spawn('sh', ['-c', script])`.
-function shellScript(call: CallExpression) {
-  const program = call.arguments[0] && ts.skipOuterExpressions(call.arguments[0]);
+function shellScript(args: readonly Expression[]) {
+  const program = args[0] && ts.skipOuterExpressions(args[0]);
   if (!program || !ts.isStringLiteralLike(program) || !shellPrograms.test(program.text)) return;
-  const list = argumentList(call);
+  const list = argumentList(args);
   if (!list) return;
   const flag = list.elements.findIndex((element) => ts.isStringLiteralLike(element) && commandFlags.has(element.text));
   return flag >= 0 ? list.elements[flag + 1] : undefined;
@@ -114,18 +143,20 @@ function shellInputs(call: CallExpression, context: SecurityRuleContext): (Expre
   const library = exported ? undefined : context.libraryCall(call);
   const name = exported ?? calledExport(library);
   const module = exported ? 'child_process' : library?.module;
-  if (module === 'shelljs' && name === 'exec') return [call.arguments[0]];
+  // `exec(...['echo fixed', options])` runs only the first element.
+  const args = positionalArguments(call.arguments);
+  if (module === 'shelljs' && name === 'exec') return [args[0]];
   if (name === undefined) return [];
-  if (module === 'execa' && execaCommands.has(name)) return [call.arguments[0]];
-  if (module === 'child_process' && shellCommands.has(name)) return [call.arguments[0]];
+  if (module === 'execa' && execaCommands.has(name)) return [args[0]];
+  if (module === 'child_process' && shellCommands.has(name)) return [args[0]];
   const spawns =
     (module === 'child_process' && spawnCommands.has(name)) || (module === 'execa' && execaSpawns.has(name));
   if (!spawns) return [];
-  if (usesShell(call, context)) {
-    const list = argumentList(call);
-    return [call.arguments[0], ...(list ? list.elements : [call.arguments[1]])];
+  if (usesShell(args, context)) {
+    const list = argumentList(args);
+    return [args[0], ...(list ? list.elements : [args[1]])];
   }
-  return [shellScript(call)];
+  return [shellScript(args)];
 }
 
 // An interpolated part that is a parameter no traced caller reaches.

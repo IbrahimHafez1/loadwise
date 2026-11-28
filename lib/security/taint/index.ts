@@ -10,7 +10,7 @@ import { propagation } from './propagate.js';
 import { isNumericCall, isPrunedType, isGuarded, stringIsSafe, isRegexEscape } from './sanitizers.js';
 import { validatedField, schemaCall, schemaShape } from './validators.js';
 import { createSummaries, argumentValidations } from './summaries.js';
-import { assignmentsTo } from './guards.js';
+import { assignmentsTo, fieldWritesTo } from './guards.js';
 import { createUrlControl, isUrlConstructor } from './url-parts.js';
 import type {
   BinaryExpression,
@@ -200,8 +200,17 @@ function createTaint(program: ProgramAdapter): TaintApi {
     const depth = pending.push({ byKey, key }) - 1;
     const outerLowestHit = lowestPendingHit;
     lowestPendingHit = Infinity;
-    const result = isPrunedType(expression, checker) ? undefined : resolveExpression(expression, state);
-    pending.pop();
+    let result: TaintResult | undefined;
+    try {
+      result = isPrunedType(expression, checker) ? undefined : resolveExpression(expression, state);
+    } catch (error) {
+      // The cycle marker set above would otherwise answer the next query as a clean value.
+      byKey.delete(key);
+      lowestPendingHit = outerLowestHit;
+      throw error;
+    } finally {
+      pending.pop();
+    }
     // A miss that leaned on a node still being resolved above this one is not final: the outer
     // query may still find a source there, so a later query must re-resolve instead of reusing it.
     if (!result && lowestPendingHit < depth) byKey.delete(key);
@@ -246,10 +255,17 @@ function createTaint(program: ProgramAdapter): TaintApi {
   function resolveBinary(expression: BinaryExpression, next: ResolveNext): TaintResult | undefined {
     const operator = expression.operatorToken.kind;
     if (operator === ts.SyntaxKind.PlusToken) return first([expression.left, expression.right], next);
-    if (operator === ts.SyntaxKind.QuestionQuestionToken || operator === ts.SyntaxKind.BarBarToken)
+    if (operator === ts.SyntaxKind.PlusEqualsToken) return first([expression.left, expression.right], next);
+    if (
+      operator === ts.SyntaxKind.QuestionQuestionToken ||
+      operator === ts.SyntaxKind.BarBarToken ||
+      operator === ts.SyntaxKind.QuestionQuestionEqualsToken ||
+      operator === ts.SyntaxKind.BarBarEqualsToken
+    )
       return first([expression.left, expression.right], next, true);
     if (
       operator === ts.SyntaxKind.AmpersandAmpersandToken ||
+      operator === ts.SyntaxKind.AmpersandAmpersandEqualsToken ||
       operator === ts.SyntaxKind.CommaToken ||
       operator === ts.SyntaxKind.EqualsToken
     )
@@ -339,8 +355,9 @@ function createTaint(program: ProgramAdapter): TaintApi {
       const result = value && partOf(next(value), true);
       const name = propertyKey(property.name);
       if (!result) {
-        // A clean later property overrides the same field of an earlier spread.
-        if (name !== undefined) fields.delete(name);
+        // A clean later property overrides the same field of an earlier spread. A getter or method
+        // is not modelled, so the spread's taint for that field stays.
+        if (value && name !== undefined) fields.delete(name);
         continue;
       }
       whole ??= partOf(result);
@@ -469,7 +486,7 @@ function createTaint(program: ProgramAdapter): TaintApi {
       const loop = resolveLoopVariable(declaration, state);
       if (loop || declaration.parent.flags & ts.NodeFlags.Const) return withStep(loop, declaration);
     } else {
-      const initial = resolve(declaration.initializer, state);
+      const initial = withFieldWrites(resolve(declaration.initializer, state), declaration, state);
       if (declaration.parent.flags & ts.NodeFlags.Const) return withStep(initial, declaration);
       if (initial?.objectFields) return withStep(withLaterFields(initial, declaration, identifier, state), declaration);
       if (initial) return withStep(initial, declaration);
@@ -491,16 +508,45 @@ function createTaint(program: ProgramAdapter): TaintApi {
     declaration: VariableDeclaration,
     identifier: Identifier,
     state: TaintState,
-  ): TaintResult {
+  ): TaintResult | undefined {
     const scope = ts.findAncestor(declaration, (node: Node) => ts.isFunctionLike(node) || ts.isSourceFile(node));
     if (!scope || !initial.objectFields) return initial;
     const fields = new Map(initial.objectFields);
     for (const assignment of assignmentsTo(declaration, scope, checker)) {
       if (assignment.left === identifier) continue;
-      const assigned = resolve(assignment.right, state);
+      const assigned = partOf(resolve(assignment.right, state), true);
+      // `record = req.body`: a value with unknown fields taints every field.
+      if (assigned && !assigned.objectFields) return withStep(assigned, assignment);
       for (const [name, field] of assigned?.objectFields ?? []) if (!fields.has(name)) fields.set(name, field);
     }
     return { ...initial, objectFields: fields };
+  }
+
+  // `const record = {}; record.name = req.body.name`: the literal is not the whole value once a field
+  // is written, so each tainted write adds its field. A tainted computed-key write taints every
+  // field. A value tainted as a whole already covers every field.
+  function withFieldWrites(
+    initial: TaintResult | undefined,
+    declaration: VariableDeclaration,
+    state: TaintState,
+  ): TaintResult | undefined {
+    if (initial && !initial.objectFields) return initial;
+    const initializer = strip(declaration.initializer);
+    if (!initializer || !ts.isObjectLiteralExpression(initializer)) return initial;
+    const scope = ts.findAncestor(declaration, (node: Node) => ts.isFunctionLike(node) || ts.isSourceFile(node));
+    if (!scope) return initial;
+    let result = initial;
+    for (const { name, assignment } of fieldWritesTo(declaration, scope, checker)) {
+      const written = withStep(partOf(resolve(assignment.right, state), true), assignment);
+      if (!written) continue;
+      if (name === undefined) return partOf(written);
+      const base = result ?? partOf(written);
+      if (!base) continue;
+      const fields = new Map(result?.objectFields);
+      fields.set(name, written);
+      result = { ...base, objectFields: fields, objectSteps: result?.objectSteps ?? base.steps.length };
+    }
+    return result;
   }
 
   function resolveCall(call: CallExpression, state: TaintState): TaintResult | undefined {

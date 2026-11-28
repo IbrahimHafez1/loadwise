@@ -279,3 +279,37 @@ test('a loop over a const array whose elements are reassigned is not a fixed val
   ].join('\n');
   assert.deepEqual(sqlFindings(source), [['prisma-raw-unsafe-dynamic', 5, 'C']]);
 });
+
+test('only a write that can add a value to a const array ends its fixed-text exemption', () => {
+  const source = [
+    'declare const prisma: any;',
+    "const REORDERED = ['a', 'b'];",
+    "const PUSHED = ['a', 'b'];",
+    "const ALIASED = ['a', 'b'];",
+    'export async function run(input: string) {',
+    '  REORDERED.reverse();',
+    "  PUSHED['push'](input);",
+    '  const alias = ALIASED;',
+    '  alias.push(input);',
+    '  for (const table of REORDERED) await prisma.$queryRawUnsafe(`SELECT * FROM ${table}`);',
+    '  for (const table of PUSHED) await prisma.$queryRawUnsafe(`SELECT * FROM ${table}`);',
+    '  for (const table of ALIASED) await prisma.$queryRawUnsafe(`SELECT * FROM ${table}`);',
+    '}',
+  ].join('\n');
+  assert.deepEqual(sqlFindings(source), [
+    ['prisma-raw-unsafe-dynamic', 11, 'C'],
+    ['prisma-raw-unsafe-dynamic', 12, 'C'],
+  ]);
+});
+
+test('a computed-key write cannot reach an ECMAScript private field', () => {
+  const source = [
+    'declare const prisma: any;',
+    'class Reports {',
+    "  #table = 'users';",
+    '  rename(key: string, next: string) { this[key] = next; }',
+    '  run() { return prisma.$queryRawUnsafe(`SELECT * FROM ${this.#table}`); }',
+    '}',
+  ].join('\n');
+  assert.deepEqual(sqlFindings(source), []);
+});

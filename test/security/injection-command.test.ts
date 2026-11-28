@@ -131,3 +131,35 @@ test('shell options held in a constant or spread into the options object still r
     [14, 'D'],
   ]);
 });
+
+test('the last shell setting wins across spreads, aliases and later field writes', () => {
+  const source = route(
+    'const on = { shell: true };',
+    'const off = { shell: false };',
+    "const plain = { cwd: '/' };",
+    "spawn('grep', [req.body.pattern], { ...on, ...off });",
+    "spawn('grep', [req.body.pattern], { ...on, ...plain });",
+    'const deep = { ...{ ...{ ...{ ...on } } } };',
+    "spawn('grep', [req.body.pattern], deep);",
+    'const renamed = on;',
+    'const again = renamed;',
+    "spawn('grep', [req.body.pattern], again);",
+    "const later: { cwd: string; shell?: boolean } = { cwd: '/' };",
+    'later.shell = true;',
+    "spawn('grep', [req.body.pattern], later);",
+    'const disabled = { shell: true };',
+    'disabled.shell = false;',
+    "spawn('grep', [req.body.pattern], disabled);",
+  );
+  assert.deepEqual(commandFindings(source), [
+    [13, 'D'],
+    [15, 'D'],
+    [18, 'D'],
+    [21, 'D'],
+  ]);
+});
+
+test('a literal spread passes its elements in order, so a later element is not the command', () => {
+  const source = route("exec(...['echo fixed', { cwd: req.body.dir }]);", "exec(...[req.body.command, { cwd: '/' }]);");
+  assert.deepEqual(commandFindings(source), [[10, 'D']]);
+});

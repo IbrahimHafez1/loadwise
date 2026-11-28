@@ -200,3 +200,24 @@ test('an exact nested sub-document match and a computed key are silent', () => {
   const source = route('User.find({ profile: { name: req.body.name } });', 'User.find({ [req.body.field]: true });');
   assert.deepEqual(nosqlLines(source), []);
 });
+
+test('later filter writes, pushed pipeline stages, local $or branches and where spreads are reported', () => {
+  const source = route(
+    'const filter: Record<string, unknown> = {};',
+    'filter.$where = req.body.code;',
+    'User.find(filter);',
+    'const pipeline: object[] = [];',
+    'pipeline.push({ $match: { name: req.body.name } });',
+    'User.aggregate(pipeline);',
+    'const branch = { name: req.body.name };',
+    'User.find({ $or: [branch] });',
+    'User.where("name", { ...req.body });',
+    'User.where("name", { $eq: req.body.name });',
+  );
+  assert.deepEqual(nosqlLines(source), [
+    [6, 'D'],
+    [9, 'D'],
+    [11, 'D'],
+    [13, 'D'],
+  ]);
+});

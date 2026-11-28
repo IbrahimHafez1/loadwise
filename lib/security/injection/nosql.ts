@@ -2,7 +2,7 @@
 // a MongoDB filter or filter value on a Mongoose model or a MongoDB collection, and request text
 // used as a `$where` expression.
 import { ts } from '../../performance/compiler.js';
-import { reportTraced, methodName, createdBy, calledExport, initializerOf } from './shared.js';
+import { reportTraced, methodName, createdBy, calledExport, initializerOf, fieldWritesOf } from './shared.js';
 import { isProjectSource, returnedExpressions } from '../taint/summaries.js';
 import type {
   ArrayLiteralExpression,
@@ -17,6 +17,7 @@ import type {
 import type { CheckerAdapter, ProgramAdapter, SecurityRuleContext, Trace } from '../../shared/types.js';
 
 const ruleId = 'nosql-operator-injection';
+const stageAddingMethods = new Set(['push', 'unshift']);
 const filterFirstMethods = new Set([
   'find',
   'findOne',
@@ -156,12 +157,36 @@ function filterArguments(call: CallExpression, method: string, checker: CheckerA
   if (method !== 'aggregate') return [];
   const pipeline = call.arguments[0] && resolveLocalLiteral(call.arguments[0], checker);
   if (!pipeline || !ts.isArrayLiteralExpression(pipeline)) return [];
-  return pipeline.elements.flatMap((stage) => {
+  const stages = [...pipeline.elements, ...pushedStages(call.arguments[0], checker)];
+  return stages.flatMap((stage) => {
     const value = ts.skipOuterExpressions(stage);
     if (!ts.isObjectLiteralExpression(value)) return [];
     const match = value.properties.find((property) => propertyKey(property) === '$match');
     return match && ts.isPropertyAssignment(match) ? [match.initializer] : [];
   });
+}
+
+// `pipeline.push(stage)` after `const pipeline = [...]`: the stages added to a local pipeline.
+function pushedStages(node: Expression, checker: CheckerAdapter): Expression[] {
+  const value = ts.skipOuterExpressions(node);
+  const declaration = ts.isIdentifier(value) ? checker.getSymbolAtLocation(value)?.valueDeclaration : undefined;
+  const scope =
+    declaration && ts.findAncestor(declaration, (child: Node) => ts.isFunctionLike(child) || ts.isSourceFile(child));
+  if (!scope) return [];
+  const stages: Expression[] = [];
+  (function visit(child: Node): void {
+    if (
+      ts.isCallExpression(child) &&
+      ts.isPropertyAccessExpression(child.expression) &&
+      stageAddingMethods.has(child.expression.name.text)
+    ) {
+      const receiver = ts.skipOuterExpressions(child.expression.expression);
+      if (ts.isIdentifier(receiver) && checker.getSymbolAtLocation(receiver)?.valueDeclaration === declaration)
+        stages.push(...child.arguments);
+    }
+    ts.forEachChild(child, visit);
+  })(scope);
+  return stages;
 }
 
 function propertyKey(property: ObjectLiteralElementLike): string | undefined {
@@ -218,26 +243,27 @@ function checkFilterObject(filter: ObjectLiteralExpression, context: SecurityRul
       reportValue(property.name, context, contextualReason);
       continue;
     }
-    if (!ts.isPropertyAssignment(property)) continue;
-    const value = ts.skipOuterExpressions(property.initializer);
-    if (key === '$where') {
-      reportWhere(value, context, contextualReason);
-      continue;
-    }
-    if (key !== undefined && logicalOperators.has(key) && ts.isArrayLiteralExpression(value)) {
-      checkLogicalFilterBranches(value, context, contextualReason);
-      continue;
-    }
-    // A nested object is an operator expression (`{ $eq: value }`) or an exact sub-document match, so
-    // only a spread request object, whose keys become operators, is reported inside it.
-    if (ts.isObjectLiteralExpression(value)) {
-      reportNestedSpreads(value, context, contextualReason);
-      continue;
-    }
-    // `{ $or: req.body.branches }`: a value the request supplies under an operator key is as
-    // attacker-shaped as a top-level one.
-    reportValue(value, context, contextualReason);
+    if (ts.isPropertyAssignment(property)) checkFilterField(key, property.initializer, context, contextualReason);
   }
+}
+
+// One `key: value` of a filter, written in the literal or assigned later (`filter.$where = ...`).
+function checkFilterField(
+  key: string | undefined,
+  initializer: Expression,
+  context: SecurityRuleContext,
+  contextualReason?: string,
+) {
+  const value = ts.skipOuterExpressions(initializer);
+  if (key === '$where') return reportWhere(value, context, contextualReason);
+  if (key !== undefined && logicalOperators.has(key) && ts.isArrayLiteralExpression(value))
+    return checkLogicalFilterBranches(value, context, contextualReason);
+  // A nested object is an operator expression (`{ $eq: value }`) or an exact sub-document match, so
+  // only a spread request object, whose keys become operators, is reported inside it.
+  if (ts.isObjectLiteralExpression(value)) return reportNestedSpreads(value, context, contextualReason);
+  // `{ $or: req.body.branches }`: a value the request supplies under an operator key is as
+  // attacker-shaped as a top-level one.
+  reportValue(value, context, contextualReason);
 }
 
 function reportNestedSpreads(nested: ObjectLiteralExpression, context: SecurityRuleContext, contextualReason?: string) {
@@ -252,7 +278,9 @@ function checkLogicalFilterBranches(
 ) {
   for (const element of value.elements) {
     const branch = ts.skipOuterExpressions(element);
-    if (ts.isObjectLiteralExpression(branch)) checkFilterObject(branch, context, contextualReason);
+    // `const branch = { name: req.body.name }; find({ $or: [branch] })` gets the inline checks.
+    const literal = resolveLocalLiteral(branch, context.checker);
+    if (ts.isObjectLiteralExpression(literal)) checkFilterObject(literal, context, contextualReason);
     else reportWhole(branch, context, contextualReason);
   }
 }
@@ -264,7 +292,11 @@ function checkFilter(filter: Expression, context: SecurityRuleContext) {
   if (ts.isObjectLiteralExpression(value)) return checkFilterObject(value, context, reason);
   const local = ts.isIdentifier(value) ? initializerOf(value, context.checker) : undefined;
   const localFilter = local && ts.skipOuterExpressions(local);
-  if (localFilter && ts.isObjectLiteralExpression(localFilter)) checkFilterObject(localFilter, context, reason);
+  if (localFilter && ts.isObjectLiteralExpression(localFilter) && ts.isIdentifier(value)) {
+    checkFilterObject(localFilter, context, reason);
+    for (const { name, assignment } of fieldWritesOf(value, context.checker))
+      checkFilterField(name, assignment.right, context, reason);
+  }
   for (const built of builtFilters(value, context)) checkFilterObject(built, context, reason);
   reportWhole(value, context, reason);
 }
@@ -315,8 +347,12 @@ function check(call: CallExpression, context: SecurityRuleContext) {
   for (const filter of filters) checkFilter(filter, context);
   // Mongoose `where(path, value)`: the second argument is the path's condition.
   const [, condition] = call.arguments;
-  if (method === 'where' && call.arguments.length === 2 && condition)
-    reportValue(condition, context, sanitizerReason(context));
+  if (method !== 'where' || call.arguments.length !== 2 || !condition) return;
+  // `where('name', { ...req.body })` spreads request keys into the condition, as in `find`.
+  const conditionValue = ts.skipOuterExpressions(condition);
+  if (ts.isObjectLiteralExpression(conditionValue))
+    reportNestedSpreads(conditionValue, context, sanitizerReason(context));
+  else reportValue(condition, context, sanitizerReason(context));
 }
 
 export { check, ruleId };
