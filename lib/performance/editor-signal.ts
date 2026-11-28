@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { FSWatcher } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { signalDirectory, isPrivateDirectory, notifyEditor } from './notify-editor.js';
+import { signalDirectory, isPrivateDirectory, notifyEditor } from '../shared/notify-editor.js';
 
 function listenForEditorRefresh(root: string, onRequest: () => void): { close(): void } {
   let watcher: FSWatcher | undefined;

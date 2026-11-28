@@ -44,7 +44,7 @@ npm run bench:recall
 - Keep rules, autofixes, and `README.md` rule anchors / `--help` docs in sync (`test/shared/docs-sync.test.js` enforces this).
 - Include focused positive and negative regression tests for any rule, parser, or autofix change.
 - Keep commits small and focused: one logical change per commit (a rule, a fix, a refactor, a docs update), with its tests in the same commit, and a [Conventional Commits](https://www.conventionalcommits.org/) message such as `fix(rel): ...` or `feat(a11y): ...`. Don't mix unrelated changes, formatting sweeps or dependency updates into a feature commit. Each commit should build and pass its tests.
-- Do not commit built `.js` / `.cjs` artifacts or `.tgz` / `.vsix` archives (they are gitignored).
+- Do not commit built `.js` / `.cjs` artifacts or `.tgz` archives (they are gitignored).
 
 ## Releasing (maintainers)
 

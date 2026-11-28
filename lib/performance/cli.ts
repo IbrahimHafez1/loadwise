@@ -3,7 +3,7 @@ import { loadSettings } from '../shared/config.js';
 import { extractBaselineFlags } from '../shared/baseline.js';
 import type { PolyglotScan } from './polyglot.js';
 import { formatImpact } from './impact.js';
-import { notifyEditor } from './notify-editor.js';
+import { notifyEditor } from '../shared/notify-editor.js';
 import { runAgentCommand } from '../shared/agent-init.js';
 import { parseCommand, readJsonFile, showHelp } from './cli-arguments.js';
 import { printResult, scanFilter } from './cli-output.js';

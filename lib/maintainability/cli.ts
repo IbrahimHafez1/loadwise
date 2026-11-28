@@ -24,7 +24,7 @@ import { readChangedRanges, filterToChangedLines } from './changed-lines.js';
 import { enableCompileCache } from 'node:module';
 import { assignFindingIds } from './finding-ids.js';
 import { findingReason, groupByReason } from '../shared/reason-groups.js';
-import { notifyEditor } from './notify-editor.js';
+import { notifyEditor } from '../shared/notify-editor.js';
 
 // The command-line values `loadwise maint` reads.
 interface ScanValues {

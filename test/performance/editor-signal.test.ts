@@ -7,7 +7,7 @@ import { once, EventEmitter } from 'node:events';
 import test from 'node:test';
 import type { TestContext } from 'node:test';
 import { listenForEditorRefresh, notifyEditor } from '../../lib/performance/editor-signal.js';
-import { signalDirectory } from '../../lib/performance/notify-editor.js';
+import { signalDirectory } from '../../lib/shared/notify-editor.js';
 
 const cli = path.resolve(import.meta.dirname, '../../bin/loadwise.js');
 function workspace(context: TestContext) {
