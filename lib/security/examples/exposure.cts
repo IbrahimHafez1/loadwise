@@ -91,6 +91,18 @@ const examples: RuleExamples = {
     "window.addEventListener('message', (event) => {\n  if (event.origin !== EXPECTED_ORIGIN) return;\n  use(event.data);\n});",
     "Check who sent the message, and name the target origin instead of '*' when sending.",
   ],
+  'client-env-secret-exposed': [
+    '// server-only code\nconst stripe = new Stripe(process.env.STRIPE_SECRET_KEY);',
+    'Read the secret on the server under an unprefixed name; ship only publishable keys to the browser.',
+  ],
+  'jsx-javascript-url': [
+    "const safeHref = /^https?:\\/\\//i.test(next) || /^\\/(?!\\/)/.test(next) ? next : '/';",
+    'Allow only http(s) or same-site relative URLs, then render the checked value in the href.',
+  ],
+  'next-image-any-remote-host': [
+    "const nextConfig = {\n  images: { remotePatterns: [{ protocol: 'https', hostname: 'images.example-cdn.com' }] },\n};",
+    'Name the hosts your images come from.',
+  ],
   'express-missing-helmet': [
     'const app = express();\napp.use(helmet());\napp.listen(3000);',
     'Set the headers in the app, or confirm your proxy or CDN sets them.',

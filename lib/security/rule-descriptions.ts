@@ -67,6 +67,12 @@ const descriptionByRule = {
     'A token, JWT, password or API key is stored in localStorage or sessionStorage, readable by any script on the page.',
   'postmessage-missing-origin-check':
     "postMessage targets '*', or a window message listener reads event.data without checking origin or source.",
+  'client-env-secret-exposed':
+    'A secret-named env variable is read under a browser prefix (NEXT_PUBLIC_, VITE_, REACT_APP_...), so the build ships it to every visitor.',
+  'jsx-javascript-url':
+    'A URL search parameter, router query or location hash starts a JSX href, action or iframe src, so a javascript: URL can run script.',
+  'next-image-any-remote-host':
+    "A Next.js images.remotePatterns entry sets hostname '**', so the image optimizer fetches and serves any host (open proxy).",
   'express-missing-helmet':
     'The Express or NestJS server starts without helmet security headers middleware (contextual: a proxy may set them).',
   'zip-slip-extraction': 'An archive entry controls an extraction path without a recognized containment check.',
