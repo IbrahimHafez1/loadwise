@@ -356,7 +356,8 @@ const descriptionByRule = {
     'An inline object literal is passed to a memo() component, creating a new reference each render and defeating the memo.',
   'react-component-defined-in-component':
     'A component is declared inside another component and rendered as an element, so it remounts on every render and loses its state and DOM.',
-  'angular-ngfor-missing-trackby': 'An *ngFor has no trackBy, so a changed list recreates the DOM of every item.',
+  'angular-ngfor-missing-trackby':
+    'An *ngFor has no trackBy, so a list replaced with new objects recreates the DOM of every item.',
   'angular-subscribe-without-cleanup':
     'An RxJS subscription in a component has no completing operator or ngOnDestroy unsubscribe and keeps running after destruction.',
   'angular-default-change-detection':

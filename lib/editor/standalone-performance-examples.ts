@@ -555,8 +555,8 @@ const standaloneExamples: Record<string, FixExample> = {
   },
   'angular-ngfor-missing-trackby': {
     language: 'typescript',
-    before: '<li *ngFor="let item of items">{{ item.name }}</li>',
-    code: '<li *ngFor="let item of items; trackBy: trackById">{{ item.name }}</li>',
+    before: '@Component({ template: \'<li *ngFor="let item of items"></li>\' })\nclass List {}',
+    code: '@Component({ template: \'<li *ngFor="let item of items; trackBy: trackById"></li>\' })\nclass List {}',
     note: 'Return a stable identifier from trackBy.',
   },
   'angular-subscribe-without-cleanup': {
