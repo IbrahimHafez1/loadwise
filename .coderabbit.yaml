@@ -26,3 +26,13 @@ reviews:
         Follow CONTRIBUTING.md: no `any`, no non-null `!`, no `as` type assertions except `as const` (import and
         export aliases are fine), relative imports use the emitted file's extension
         (`.js` from `.ts`, `.cjs` from `.cts`), descriptive names. A rule or autofix change needs positive and negative tests and matching README docs.
+    - path: 'lib/**'
+      instructions: >-
+        Loadwise is precision-first: a false positive costs more than a missed detection. Label a suggestion that
+        only widens recall (a missed case, a new syntax family) as optional and non-blocking. Reserve Major or
+        Critical for false positives, crashes, wrong output, wrong fixes and security holes.
+    - path: 'changes/**'
+      instructions: >-
+        Each file is a changelog fragment (see changes/README.md). Check that `section` is one of Added, Changed,
+        Deprecated, Removed, Fixed or Security and that the text matches what the pull request changes.
+        CHANGELOG.md is edited only at release, by `npm run changelog`; do not ask for entries in it.
