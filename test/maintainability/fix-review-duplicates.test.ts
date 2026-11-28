@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import ts from 'typescript';
-import { applyFix } from '../../editor/apply-fix.cjs';
+import { applyFix } from '../../lib/editor/apply-fix.js';
 import { attachSiteFixes, buildFix, createFileCache } from '../../lib/maintainability/site-fix.js';
 import { extractImplementations } from '../../lib/maintainability/duplicates.js';
 import type { TestContext } from 'node:test';

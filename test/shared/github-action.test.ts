@@ -177,14 +177,6 @@ test('the action stages and compiles an unbuilt git checkout without devDependen
       filter: (entry) => {
         const rel = path.relative(repository, entry).split(path.sep).join('/');
         if (rel.startsWith('lib/performance/vendor/')) return true;
-        if (
-          rel.startsWith('editor/dist/') ||
-          rel.startsWith('editor/test/') ||
-          rel === 'editor/dist' ||
-          rel === 'editor/test'
-        ) {
-          return false;
-        }
         return !entry.endsWith('.js') && !entry.endsWith('.cjs');
       },
     });
@@ -197,7 +189,6 @@ test('the action stages and compiles an unbuilt git checkout without devDependen
     'LICENSE',
     'bin',
     'lib',
-    'editor',
     'plugin',
     'polyglot',
     'schema',

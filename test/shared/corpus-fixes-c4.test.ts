@@ -7,7 +7,7 @@ import test from 'node:test';
 import ts from 'typescript';
 import { scan } from '../../lib/maintainability/scan.js';
 import { scanChangedFiles } from '../../lib/maintainability/scan-changed.js';
-import { applyChangesToText } from '../../editor/apply-fix.cjs';
+import { applyChangesToText } from '../../lib/editor/apply-fix.js';
 import { scanWithFixes } from '../performance/site-fix-helpers.js';
 import type { FindingFix, FixChange } from '../../lib/shared/types.js';
 import type { MaintainabilityPolicy } from '../../lib/maintainability/types/policy.js';

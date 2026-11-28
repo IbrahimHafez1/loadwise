@@ -1,11 +1,11 @@
 import { pillarOfRule, rulesByPillar } from './rule-registry.js';
-import type { FixExample } from '../../editor/types/fix-example.cjs';
+import type { FixExample } from '../editor/types/fix-example.js';
 import type { PillarName } from './types/pillar-name.js';
-import { exampleFor } from '../../editor/performance-examples.cjs';
-import { exampleFor as exampleForReliabilityExamples } from '../../editor/reliability-examples.cjs';
-import { exampleFor as exampleForMaintainabilityExamples } from '../../editor/maintainability-examples.cjs';
-import { exampleFor as exampleForSecurityExamples } from '../../editor/security-examples.cjs';
-import { exampleFor as exampleForAccessibilityExamples } from '../../editor/accessibility-examples.cjs';
+import { exampleFor } from '../editor/performance-examples.js';
+import { exampleFor as exampleForReliabilityExamples } from '../editor/reliability-examples.js';
+import { exampleFor as exampleForMaintainabilityExamples } from '../editor/maintainability-examples.js';
+import { exampleFor as exampleForSecurityExamples } from '../editor/security-examples.js';
+import { exampleFor as exampleForAccessibilityExamples } from '../editor/accessibility-examples.js';
 
 interface ExplainedPillar {
   name: string;

@@ -2,8 +2,8 @@
 // where those lines still exist; an edit made since the scan moves or removes them and the fix then
 // refuses instead of guessing.
 
-import { isChangeApplied, locateChange } from '../../editor/apply-fix.cjs';
-import type { ApplyResult, TextResult } from '../../editor/apply-fix.cjs';
+import { isChangeApplied, locateChange } from '../editor/apply-fix.js';
+import type { ApplyResult, TextResult } from '../editor/apply-fix.js';
 import type { FindingFix, FixChange } from '../shared/types.js';
 import type { FileAccessors, CaptureChange } from './types/fix-files.js';
 

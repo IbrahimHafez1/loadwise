@@ -6,7 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
-import { applyChangesToText } from '../../editor/apply-fix.cjs';
+import { applyChangesToText } from '../../lib/editor/apply-fix.js';
 import { applyEdits, hunksFor, lineStartsOf, normalize } from '../../lib/shared/fix-hunks.js';
 import { introducedSyntaxError } from '../../lib/shared/fix-safety.js';
 import { labelledLines } from '../../lib/shared/fix-terminal.js';
@@ -23,7 +23,7 @@ import {
 import type { Finding, FixChange, LoadedFile, TextEdit } from '../../lib/shared/types.js';
 import type { FixableFinding } from '../types/findings.js';
 import type { TestContext } from 'node:test';
-import { exampleFor } from '../../editor/performance-examples.cjs';
+import { exampleFor } from '../../lib/editor/performance-examples.js';
 
 const bin = path.resolve(import.meta.dirname, '../../bin/loadwise.js');
 const loadwisePrettier = path.dirname(fileURLToPath(import.meta.resolve('prettier/package.json')));

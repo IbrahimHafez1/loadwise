@@ -1,8 +1,8 @@
 import { diffLines, labelledLines } from '../shared/fix-terminal.js';
 import path from 'node:path';
-import { exampleFor } from '../../editor/reliability-examples.cjs';
-import { exampleFor as securityExample } from '../../editor/security-examples.cjs';
-import { exampleFor as accessibilityExample } from '../../editor/accessibility-examples.cjs';
+import { exampleFor } from '../editor/reliability-examples.js';
+import { exampleFor as securityExample } from '../editor/security-examples.js';
+import { exampleFor as accessibilityExample } from '../editor/accessibility-examples.js';
 import { formatImpact } from './impact.js';
 import { hotPathLabel } from '../shared/hot-path.js';
 import type { Finding, FindingFix } from '../shared/types.js';

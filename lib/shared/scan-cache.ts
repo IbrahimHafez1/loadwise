@@ -62,7 +62,6 @@ function loadwiseFingerprint(): string {
     ...listSources(path.join(root, 'lib')),
     ...listSources(path.join(root, 'bin')),
     ...listSources(path.join(root, 'polyglot'), true),
-    ...listSources(path.join(root, 'editor')),
   ].sort();
   const hash = crypto.createHash('sha1').update(`${version}\n`);
   for (let index = 0; index < sources.length; index++) {

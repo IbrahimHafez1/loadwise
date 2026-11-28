@@ -15,8 +15,8 @@ function isAgentSession(env: NodeJS.ProcessEnv = process.env) {
 function promptReview(args: readonly string[]) {
   if (!isAgentSession()) return;
   const [command = '', subcommand = ''] = args;
-  if (['agent', 'explain', '--version', '-v'].includes(command)) return;
-  if (['perf', 'maint'].includes(command) && ['editor', 'agent'].includes(subcommand)) return;
+  if (['agent', 'explain', 'lsp', '--version', '-v'].includes(command)) return;
+  if (['perf', 'maint'].includes(command) && subcommand === 'agent') return;
   const end = args.indexOf('--');
   const options = end === -1 ? args : args.slice(0, end);
   if (options.some((arg: string) => ['--help', '-h', '--watch'].includes(arg))) return;

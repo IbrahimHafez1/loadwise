@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import ts from 'typescript';
 import { securityRules, polyglotRules, ruleInfo } from '../../lib/security/rule-ids.js';
 import { knownRules } from '../../lib/performance/rule-ids.js';
-import { exampleFor } from '../../editor/security-examples.cjs';
+import { exampleFor } from '../../lib/editor/security-examples.js';
 
 const root = path.join(import.meta.dirname, '..', '..');
 const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8').replaceAll('\r\n', '\n');

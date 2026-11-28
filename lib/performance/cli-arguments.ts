@@ -10,8 +10,6 @@ const usage = `Usage:
   loadwise perf traces trace.json [--threshold 5] [--json]
   loadwise perf plan explain.json [--json]
   loadwise perf polyglot <file-or-directory> ... [--json]
-  loadwise perf editor init
-  loadwise perf editor watch [-p tsconfig.json]
   loadwise perf agent init [--mode ask|auto] [--hook [block|warn|off]]
 
 With no arguments, check tsconfig.json or jsconfig.json in the current directory.

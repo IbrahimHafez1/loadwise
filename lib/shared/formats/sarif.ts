@@ -104,4 +104,4 @@ function formatSarif(entries: readonly ReportEntry[]): string {
   return JSON.stringify({ version: '2.1.0', $schema: sarifSchema, runs }, null, 2);
 }
 
-export { formatSarif };
+export { documentationUrl, formatSarif };

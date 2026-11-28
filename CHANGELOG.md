@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Language server** (`loadwise lsp --stdio`) for any editor with a Language Server Protocol client, such as Neovim, Helix, Zed, Sublime Text, Emacs and VS Code or VSCodium through a generic client; the README has setup snippets. It does everything the VS Code extension did: diagnostics linked to the rule documentation, hovers with the recommendation and the before and after code, **Apply fix**, **Dismiss** and `source.fixAll.loadwise` code actions, code lenses, rescans after saves and watched-file changes through the incremental `perf --watch` process, multi-root workspaces, and the `enabled`, `project`, `cli`, `severity` and `codeLens` settings.
+- **Security findings in the editor**: the language server also runs `loadwise sec` (and `sec polyglot` when the folder has Python, Go, Java, C# or Rust), alongside performance, reliability, maintainability and accessibility.
+- Dismissed findings are saved in `.loadwise/dismissed.json` at the workspace folder root, so they can be shared through version control; `loadwise.showDismissed` and `loadwise.restoreDismissed` bring them back.
+
+### Removed
+
+- **Breaking:** `loadwise perf editor init` and `loadwise perf editor watch`, with the generated `.vscode/tasks.json` watcher task and its problem matcher. Anyone using `perf editor` should delete that task and run `loadwise lsp` from their editor instead; `loadwise perf editor` now exits with a message saying so.
+- The unpublished VS Code extension under `editor/` and its VSIX packager; the language server replaces it. Its shared modules moved to `lib/editor/`.
+
 ### Fixed
 
 - A monorepo package without a `tsconfig.json` or `jsconfig.json` is now checked by the performance, reliability and security checkers with the standalone defaults (ES2022, NodeNext), instead of being skipped with a note. A monorepo made only of such packages is checked too, `--workspace` can select them, and `loadwise fix` no longer refuses to run because of them.

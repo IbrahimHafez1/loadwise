@@ -4,4 +4,3 @@ name: loadwise
 paths-ignore:
   - bench/recall/cases
   - test
-  - editor/test

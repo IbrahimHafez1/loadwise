@@ -6,9 +6,9 @@ import { formatImpact } from './impact.js';
 import { notifyEditor } from './notify-editor.js';
 import { runAgentCommand } from '../shared/agent-init.js';
 import { parseCommand, readJsonFile, showHelp } from './cli-arguments.js';
-import { printResult, scanFilter, selectFindings } from './cli-output.js';
+import { printResult, scanFilter } from './cli-output.js';
 import { projectDirectory, relativeToCwd, sourcePolicy, workspaceTarget } from './cli-policy.js';
-import { checkCode, loadSqlParser } from './cli-scan.js';
+import { checkCode } from './cli-scan.js';
 
 async function checkPlan(args: readonly string[]): Promise<number> {
   const { values, positionals } = parseCommand(args, { json: { type: 'boolean' } });
@@ -55,27 +55,6 @@ async function checkTraces(args: readonly string[]): Promise<number> {
   return findings.length ? 1 : 0;
 }
 
-async function runEditor(args: readonly string[]): Promise<number> {
-  if (args[0] === 'init' && args.length === 1) {
-    const editorSetup = await import('./editor-setup.js');
-    const setup = editorSetup.setupEditor(process.cwd());
-    console.log((setup.changed ? 'Configured ' : 'Already configured: ') + setup.filename);
-    console.log(
-      'Open or reopen the trusted folder in VS Code or Cursor and allow automatic tasks once. Terminal source scans refresh the active watcher.',
-    );
-    return 0;
-  }
-  if (args[0] !== 'watch') throw new Error('Usage: loadwise perf editor init  |  editor watch [-p tsconfig.json]');
-  const { values, positionals } = parseCommand(args.slice(1), { project: { type: 'string', short: 'p' } });
-  if (values.help) return showHelp();
-  if (positionals.length) throw new Error('editor watch accepts only an optional -p project config.');
-  await loadSqlParser();
-  (await import('./editor-watch.js')).watchEditor(process.cwd(), values.project, (inputs) =>
-    checkCode(inputs, selectFindings),
-  );
-  return 0;
-}
-
 // `pillar` picks the rule set: `loadwise perf polyglot` or `loadwise rel polyglot`.
 async function runPolyglot(
   args: readonly string[],
@@ -103,7 +82,7 @@ async function main(args: readonly string[]): Promise<number> {
   // Resolve subcommand dependencies only after selecting the command.
   switch (args[0]) {
     case 'editor':
-      return runEditor(args.slice(1));
+      throw new Error('`loadwise perf editor` was removed. Use the language server, `loadwise lsp`, in your editor.');
     case 'agent':
       return runAgentCommand(args.slice(1));
     case 'migrations':

@@ -12,7 +12,7 @@ const testFiles = [
   'test/accessibility/*.test.js',
   'test/shared/*.test.js',
   'test/plugin/*.test.js',
-  'editor/test/*.test.cjs',
+  'test/editor/*.test.js',
 ];
 
 const run = spawnSync(

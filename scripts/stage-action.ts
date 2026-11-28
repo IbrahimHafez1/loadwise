@@ -32,7 +32,7 @@ if (prebuilt) {
     'package.json',
     'package-lock.json',
     'tsconfig.json',
-    ...files.filter((name) => !name.startsWith('!') && !name.endsWith('.cjs') && !name.startsWith('editor/')),
+    ...files.filter((name) => !name.startsWith('!')),
   ]);
   for (const entry of runtimeEntries) {
     const origin = path.join(source, entry);
@@ -40,16 +40,6 @@ if (prebuilt) {
     const destination = path.join(runtime, entry);
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.cpSync(origin, destination, { recursive: true });
-  }
-  const editorOrigin = path.join(source, 'editor');
-  if (fs.existsSync(editorOrigin)) {
-    fs.cpSync(editorOrigin, path.join(runtime, 'editor'), {
-      recursive: true,
-      filter: (name) => {
-        const rel = path.relative(editorOrigin, name).split(path.sep).join('/');
-        return rel !== 'dist' && !rel.startsWith('dist/') && rel !== 'test' && !rel.startsWith('test/');
-      },
-    });
   }
 }
 

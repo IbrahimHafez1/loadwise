@@ -38,7 +38,7 @@ By default `loadwise check` reports actionable findings across Performance, Reli
 
 **With an AI coding agent**, say **“Run Loadwise”** in your project chat. The agent can run the installed CLI directly. It should check the findings against the code, explain what it would fix or leave alone and why, and let you choose before making edits. [Active-agent workflow and optional MCP setup](#using-loadwise-with-an-active-coding-agent)
 
-**Working manually**, run `npx loadwise check` to see recommendations or `npx loadwise fix --yes` to apply eligible fixes. In VS Code or Cursor, editor diagnostics show findings on hover. [Editor setup](#editor)
+**Working manually**, run `npx loadwise check` to see recommendations or `npx loadwise fix --yes` to apply eligible fixes. In any editor with a language server client, `loadwise lsp` shows findings as diagnostics with hovers and fixes. [Editor setup](#editor-language-server)
 
 ### Try a finding and a fix
 
@@ -265,7 +265,7 @@ If you ran a terminal command yourself and want to share it later, use `npx load
 
 ### Using Loadwise without AI
 
-Run `npx loadwise check` to see findings or `npx loadwise fix --yes` to scan and apply automatic fixes. With editor diagnostics enabled, hover over a finding to see its recommendation. Findings that require judgment remain available for manual review. [Editor setup](#editor)
+Run `npx loadwise check` to see findings or `npx loadwise fix --yes` to scan and apply automatic fixes. With the language server running in your editor, hover over a finding to see its recommendation. Findings that require judgment remain available for manual review. [Editor setup](#editor-language-server)
 
 ### Claude Code plugin
 
@@ -290,26 +290,132 @@ npx loadwise agent init --hook off     # removes only this block
 
 The hook runs `loadwise check --staged` from the project folder, so every tool that commits through git sees findings from the selected checkers on the staged lines. It writes a marked block into the hooks folder (honouring `core.hooksPath`) or into `.husky/pre-commit` when `.husky/` exists, appends to a hook you already have, and rerunning it replaces only its own block, including blocks written by earlier releases. With lefthook it edits nothing and prints the command to add. `git commit --no-verify` skips the hook.
 
-## Editor
+## Editor (language server)
 
-Set up the editor task once from the project root.
+`loadwise lsp` is a language server for any editor with a Language Server Protocol client. It shows findings from all five checkers (performance, reliability, maintainability, security and accessibility) as diagnostics, with hovers, fixes, dismissals and code lenses. It needs Node.js 22+ and this package in the project (`npm install --save-dev loadwise`) or on the PATH. Every editor starts it the same way:
 
 ```sh
-npx loadwise perf editor init
+npx loadwise lsp --stdio
 ```
 
-Commit the generated `.vscode/tasks.json`. Open the trusted folder in VS Code or Cursor and allow automatic tasks once; the watcher then starts on every folder open (reopen the folder if it was already open during setup). **Tasks: Manage Automatic Tasks** controls the workspace's choice. Findings from the performance, reliability, maintainability and accessibility checkers appear in **View > Problems**. This works across supported source languages, including mixed-language projects, and needs Node.js 22+ on PATH and this package under `node_modules`.
+On Windows, use `npx.cmd` where the editor does not resolve `npx` itself. Choose the file types each editor attaches it to; the snippets below cover JavaScript, TypeScript and Python, and the checkers also read Go, Java, C#, Rust, HTML, Vue and Svelte.
 
-Saving a file or completing a source scan from the project terminal refreshes the running watcher. The editor uses its configured project and rules even when the terminal command uses different flags, and a running watcher picks up package reinstalls. The default scan uses a root `tsconfig.json` or `jsconfig.json`, or explicit JS/TS files discovered by the watcher; append `-p` and a relative path to the task's arguments (it runs `perf editor watch [-p tsconfig.json]`) to use another config.
+**Neovim 0.11+** (`init.lua`):
 
-Hover over an underline to read the finding. The first line shows a source-based rewrite, an illustrative example or a review action. The hover retains the original finding and, where applicable, the code comparison.
+```lua
+vim.lsp.config('loadwise', {
+  cmd = { 'npx', 'loadwise', 'lsp', '--stdio' },
+  filetypes = { 'javascript', 'javascriptreact', 'typescript', 'typescriptreact', 'python' },
+  root_markers = { 'loadwise.config.json', 'tsconfig.json', 'jsconfig.json', 'package.json', '.git' },
+  init_options = { loadwise = { severity = 'default' } },
+})
+vim.lsp.enable('loadwise')
+```
 
-The [editor extension](editor/README.md) is not published yet; a language server for every editor is planned. Built from source (`python editor/package-vsix.py`), it adds syntax-highlighted hover examples, related-location links and fix actions in VS Code or Cursor:
+With an older Neovim and nvim-lspconfig, register the same settings as a custom server:
 
-- Each fixable line shows **Apply fix** and **Dismiss** CodeLens buttons, the hover has the same two links, and the Quick Fix menu offers the same actions.
-- The shortcuts are the same on every OS: **Ctrl+Alt+.** applies the fix on the cursor line, **Ctrl+Alt+Shift+.** applies all fixes in the file, and **Ctrl+Alt+,** dismisses the finding on the cursor line.
-- **Loadwise: Apply all fixes in this file** (also on save as `source.fixAll.loadwise`) applies every fix in one undoable edit.
-- A finding, or a rule in one file, can be dismissed and restored with **Show dismissed findings**. `loadwise.severity` shows all findings at one level.
+```lua
+require('lspconfig.configs').loadwise = {
+  default_config = {
+    cmd = { 'npx', 'loadwise', 'lsp', '--stdio' },
+    filetypes = { 'javascript', 'javascriptreact', 'typescript', 'typescriptreact', 'python' },
+    root_dir = require('lspconfig.util').root_pattern('loadwise.config.json', 'tsconfig.json', 'package.json', '.git'),
+  },
+}
+require('lspconfig').loadwise.setup({})
+```
+
+**Helix** (`languages.toml`), added beside each language's own server:
+
+```toml
+[language-server.loadwise]
+command = "npx"
+args = ["loadwise", "lsp", "--stdio"]
+
+[[language]]
+name = "typescript"
+language-servers = ["typescript-language-server", "loadwise"]
+
+[[language]]
+name = "python"
+language-servers = ["pylsp", "loadwise"]
+```
+
+**Zed** (`settings.json`). Zed starts only language servers that an extension registers; with one that registers `loadwise`, these settings choose the command and the languages it runs for:
+
+```json
+{
+  "lsp": {
+    "loadwise": {
+      "binary": { "path": "npx", "arguments": ["loadwise", "lsp", "--stdio"] },
+      "initialization_options": { "loadwise": { "severity": "default" } }
+    }
+  },
+  "languages": {
+    "TypeScript": { "language_servers": ["...", "loadwise"] },
+    "Python": { "language_servers": ["...", "loadwise"] }
+  }
+}
+```
+
+**Sublime Text** with the LSP package (**Preferences > Package Settings > LSP > Settings**):
+
+```json
+{
+  "clients": {
+    "loadwise": {
+      "enabled": true,
+      "command": ["npx", "loadwise", "lsp", "--stdio"],
+      "selector": "source.js | source.jsx | source.ts | source.tsx | source.python",
+      "initializationOptions": { "loadwise": { "severity": "default" } }
+    }
+  }
+}
+```
+
+**Emacs** with eglot. Eglot runs one server per buffer, so for these modes Loadwise takes the place of another server:
+
+```elisp
+(with-eval-after-load 'eglot
+  (add-to-list 'eglot-server-programs
+               '((js-mode js-ts-mode typescript-ts-mode tsx-ts-mode python-mode python-ts-mode)
+                 . ("npx" "loadwise" "lsp" "--stdio"))))
+```
+
+**VS Code and VSCodium**: install a generic Language Server Protocol client extension from Open VSX and set its server command to `npx loadwise lsp --stdio`. To apply eligible fixes on save, add `"editor.codeActionsOnSave": { "source.fixAll.loadwise": "explicit" }` to your settings.
+
+### What you see
+
+- Each finding is a diagnostic with its checker as the source (`loadwise perf`, `loadwise maint`, `loadwise sec`) and its rule as the code, linked to the rule's documentation. Related locations, such as the other imports of a dependency cycle, are listed with it. Rule levels from `loadwise.config.json` decide the severity: by default declared contract violations are errors and other findings warnings. Live-database findings, which name a table rather than a file, appear on the first line of `package.json`.
+- Hover over a finding to read the recommendation on the first line (a source-based rewrite, an illustrative example or a review action), then the original finding and the before and after code, highlighted for the file's language.
+- The code actions on a flagged line are **Apply fix: <rule>** when the checker has a rewrite, **Dismiss this finding** and **Dismiss <rule> in this file**, and **Apply all Loadwise fixes in this file** when there are several. Fixes that span several files, or create a migration file, apply all-or-nothing. A fix never overwrites an existing file, and it refuses code that changed since the scan, comparing against the editor's unsaved text. The `source.fixAll.loadwise` action applies every eligible fix in the file as one undoable edit and leaves fixes that need individual review for **Apply fix**.
+- Code lenses put **Apply fix** and **Dismiss** above each fixable line, and **Apply all** on the first line of a file with several fixes.
+- A dismissed finding stays hidden until its flagged line changes; a rule dismissed for a file stays hidden in that file. Dismissals are saved in `.loadwise/dismissed.json` at the workspace folder root, never in your code, and you can commit the file to share them.
+
+### What gets scanned
+
+Each workspace folder is scanned when the server starts and again after every change: a save in the editor, or a change by git, another editor or a code generator to a source file, `schema.prisma`, a SQL migration, `package.json`, `tsconfig*.json`, `jsconfig*.json`, `loadwise.config.json` or `.loadwise/dismissed.json`. Rapid changes are grouped, and a completed source scan in the project terminal refreshes the editor too. Performance, reliability and accessibility come from the incremental `loadwise perf --watch` process, which re-analyzes only changed files, restarts when a config file or package changes, and falls back to full rescans if it stops. Maintainability and security rerun on each change, and the polyglot rules run when the folder has Python, Go, Java, C# or Rust files. The default project is a root `tsconfig.json` or `jsconfig.json`; in a monorepo, open individual packages as workspace folders or set `project`. Progress appears while a scan runs, and scan counts and errors go to the editor's language server log.
+
+### Commands and settings
+
+| Command                     | Action                                                     |
+| --------------------------- | ---------------------------------------------------------- |
+| `loadwise.scan`             | Rescan every workspace folder now                          |
+| `loadwise.applyFix`         | Apply one fix (from a code action or code lens)            |
+| `loadwise.applyAllFixes`    | Apply every eligible fix in a file (its URI as argument)   |
+| `loadwise.dismiss`          | Dismiss a finding or a rule in a file                      |
+| `loadwise.showDismissed`    | List dismissed findings, with Restore and Restore all      |
+| `loadwise.restoreDismissed` | Restore the given dismissal, or every one without argument |
+
+Settings go in the client's `initializationOptions` or its `loadwise` configuration section (per workspace folder when the editor supports it):
+
+| Setting    | Default     | Effect                                                                        |
+| ---------- | ----------- | ----------------------------------------------------------------------------- |
+| `enabled`  | `true`      | Show diagnostics for the folder                                               |
+| `project`  | `""`        | TypeScript or JavaScript project config, relative to the folder               |
+| `cli`      | `""`        | Absolute path to another `bin/loadwise.js`, such as a development build       |
+| `severity` | `"default"` | `error`, `warning`, `information` or `hint` shows every finding at that level |
+| `codeLens` | `true`      | Show the Apply fix and Dismiss code lenses                                    |
 
 # Performance checker
 
@@ -774,9 +880,9 @@ Use Node.js 22.13+ for the full development workflow, including the in-memory SQ
 
 ### Source conventions
 
-The CLI and checkers are TypeScript (`.ts`) compiled in place to ES modules (`.js`, not committed) by `npm run build`, while shared VS Code modules under `editor/` are `.cts` compiled to CommonJS (`.cjs`); `npm test` builds first and `npm run typecheck` checks without emitting. Import with the runtime extension (`.js` or `.cjs`). The compiler runs in `strict` mode.
+The CLI and checkers are TypeScript (`.ts`) compiled in place to ES modules (`.js`, not committed) by `npm run build`, while the security example tables under `lib/security/examples/` are `.cts` compiled to CommonJS (`.cjs`); `npm test` builds first and `npm run typecheck` checks without emitting. Import with the runtime extension (`.js` or `.cjs`). The compiler runs in `strict` mode.
 
-- Write ES `import`/`export`, with imports at the top of the file. `require()` is limited to the files listed under `overrides` in `.oxlintrc.json`, where load order or startup cost forbids a top-level import (the compiler must be chosen before the rules load, and `maint --staged` must not load TypeScript). Lazy loads in an async function use `await import()`. Do not add files to that list.
+- Write ES `import`/`export`, with imports at the top of the file. Oxlint rejects `require()`. Where load order or startup cost forbids a top-level import (the compiler must be chosen before the rules load, and `maint --staged` must not load TypeScript), load lazily in an async function with `await import()`.
 - No `any` and no `as` assertions (`as const` is fine) in new code. Narrow with type guards, give a function a precise type, or use overloads. A deliberate exception needs a lint-disable comment that says why.
 - Types shared by two or more files live in the `types/` folder of their area (`lib/performance/types/`, `lib/security/types/`, `lib/maintainability/types/`, `lib/shared/types/`, `test/types/`), one topic per file. Cross-pillar types are in `lib/shared/types.ts`. A type used by one file stays in that file.
 - Comments wrap at 100 columns, and Prettier formats everything. `.vscode/settings.json` formats on save, and the pre-commit hook in `hooks/` formats and lints staged files (`npm install` enables it).

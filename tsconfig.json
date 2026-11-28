@@ -11,23 +11,18 @@
     "skipLibCheck": true,
     "incremental": true,
     "tsBuildInfoFile": ".tsbuildinfo",
-    "strict": true,
-    "paths": {
-      "vscode": ["./editor/types/vscode-module.d.cts"]
-    }
+    "strict": true
   },
   "include": [
     "lib/shared/ambient.d.ts",
     "bin/**/*.ts",
     "lib/**/*.ts",
     "lib/**/*.cts",
-    "editor/**/*.cts",
     "plugin/**/*.ts",
     "polyglot/**/*.ts",
     "scripts/**/*.ts",
     "bench/**/*.ts",
-    "test/**/*.ts",
-    "test/types/fake-vscode.cts"
+    "test/**/*.ts"
   ],
   "exclude": [
     "node_modules",

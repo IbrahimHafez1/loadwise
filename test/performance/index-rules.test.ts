@@ -6,7 +6,7 @@ import type { Finding, ProgramAdapter } from '../../lib/shared/types.js';
 import { reasonOf } from '../types/finding-reason.js';
 import { findSourceFile } from '../types/source-files.js';
 import { asSnapshot } from '../types/partial-snapshot.js';
-import { exampleFor } from '../../editor/performance-examples.cjs';
+import { exampleFor } from '../../lib/editor/performance-examples.js';
 import { useSnapshot } from '../../lib/performance/schema/context.js';
 import { withProgram } from './helpers.js';
 import { analyzeFile } from '../../lib/performance/analyze.js';

@@ -15,7 +15,6 @@
     "bin/*.js",
     "lib/**/*.js",
     "lib/security/examples/*.cjs",
-    "editor/**/*.cjs",
     "plugin/**/*.js",
     "polyglot/**/*.js",
     "scripts/**/*.js",
@@ -47,13 +46,5 @@
         "null": "ignore"
       }
     ]
-  },
-  "overrides": [
-    {
-      "files": ["editor/test/extension.test.cts"],
-      "rules": {
-        "typescript/no-require-imports": "off"
-      }
-    }
-  ]
+  }
 }
