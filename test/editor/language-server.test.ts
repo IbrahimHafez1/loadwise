@@ -234,7 +234,7 @@ test('diagnostics carry the checker, rule link, severity and related locations, 
   assert.equal(first.source, 'loadwise perf');
   assert.equal(first.code, 'array-repeated-membership');
   assert.equal(first.severity, 2);
-  assert.match(String(record(first.codeDescription).href), /#array-repeated-membership$/);
+  assert.match(String(record(first.codeDescription).href), /\/docs\/rules\/array-repeated-membership\.md$/);
   assert.deepEqual(record(first.range).start, { line: 0, character: 0 });
   assert.deepEqual(
     String(first.message).split('\n').slice(1),

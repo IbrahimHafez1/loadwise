@@ -13,8 +13,7 @@ import { exampleFor as accessibilityExample } from './accessibility-examples.js'
 import { getFindingComparison, inlineComparison } from './finding-comparison.js';
 import { rangeContains, samePosition, validateRange, wordRangeAt } from './editor-document.js';
 import { isRealPathInside } from './workspace-paths.js';
-import { pillarOfRule } from '../shared/rule-registry.js';
-import { documentationUrl } from '../shared/formats/sarif.js';
+import { ruleDocUrl } from '../shared/rule-docs.js';
 import type { EditorDocument } from './editor-document.js';
 import type { Finding, FindingFix, FixChange } from '../shared/types.js';
 import type { Comparison, CodeComparison } from './types/comparison.js';
@@ -358,7 +357,8 @@ function buildDiagnostic(
     source: anchor.source,
     code: finding.ruleId,
   };
-  if (pillarOfRule(finding.ruleId)) diagnostic.codeDescription = { href: documentationUrl + '#' + finding.ruleId };
+  const documentation = ruleDocUrl(finding.ruleId);
+  if (documentation) diagnostic.codeDescription = { href: documentation };
   return diagnostic;
 }
 

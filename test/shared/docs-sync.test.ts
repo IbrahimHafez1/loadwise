@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { RULE_DOCS_DIR, isChecker, isFixable, readPages, readRegistry, renderReadme } from '../../scripts/rule-docs.js';
+import { ruleDocUrl } from '../../lib/shared/rule-docs.js';
 
 const root = path.join(import.meta.dirname, '..', '..');
 const binEntry = path.join(root, 'bin', 'loadwise.js');
@@ -97,6 +98,15 @@ test('each rule page matches the registry', () => {
   assert.deepEqual(mismatches, []);
 });
 
+// SARIF helpUri and the editor's codeDescription link here, so every linked rule needs its page.
+test('every rule documentation link points at an existing page', () => {
+  const missing = ruleIds.filter((ruleId) => {
+    const url = ruleDocUrl(ruleId);
+    return !url || !fs.existsSync(path.join(root, RULE_DOCS_DIR, path.posix.basename(url)));
+  });
+  assert.deepEqual(missing, []);
+});
+
 test('the README rule index is generated from the rule pages', async () => {
   const generated = await renderReadme(
     path.join(root, 'README.md'),
@@ -106,7 +116,7 @@ test('the README rule index is generated from the rule pages', async () => {
   assert.equal(generated, readme, 'README.md rule index is stale. Run: npm run docs:rules');
 });
 
-// SARIF helpUri points at README#<rule-id>, so the index keeps one anchor per rule. syntax-error skips the
+// Older SARIF reports link to README#<rule-id>, so the index keeps one anchor per rule. syntax-error skips the
 // unparsable file instead of becoming a finding, so it has none.
 test('every rule id has exactly one README anchor', () => {
   const anchorCount = (ruleId: string) => readme.split(`<a id="${ruleId}"></a>`).length - 1;

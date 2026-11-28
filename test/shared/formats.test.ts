@@ -110,7 +110,7 @@ test('SARIF registers every security rule and formats security findings at warni
   for (const { id, shortDescription, helpUri } of run.tool.driver.rules) {
     assert.match(shortDescription.text, /^[^\n]{10,140}\.$/);
     assert.equal(shortDescription.text, descriptionBySecurityRule[id]);
-    assert.equal(helpUri, `https://github.com/IbrahimHafez1/loadwise#${id}`);
+    assert.equal(helpUri, `https://github.com/IbrahimHafez1/loadwise/blob/main/docs/rules/${id}.md`);
   }
   assert.deepEqual(
     run.tool.driver.rules.map(({ id }: SarifRule) => id),
@@ -166,7 +166,10 @@ test('sarif has one run per reported pillar with rules, levels, locations and fi
     performance.tool.driver.rules.map(({ id }: SarifRule) => id),
     ['pg-query-in-loop'],
   );
-  assert.equal(performance.tool.driver.rules[0].helpUri, 'https://github.com/IbrahimHafez1/loadwise#pg-query-in-loop');
+  assert.equal(
+    performance.tool.driver.rules[0].helpUri,
+    'https://github.com/IbrahimHafez1/loadwise/blob/main/docs/rules/pg-query-in-loop.md',
+  );
   assert.equal(performance.tool.driver.rules[0].shortDescription.text, descriptionByRule['pg-query-in-loop']);
   assert.deepEqual(
     performance.results.map(({ level }: SarifResult) => level),
