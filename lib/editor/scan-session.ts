@@ -13,7 +13,7 @@ import { hasFileWithSuffix, markupSuffixes, polyglotSuffixes, sourceSuffixes } f
 import { isMarkupFile } from '../accessibility/markup-files.js';
 import { listenForEditorRefresh } from '../performance/editor-signal.js';
 import { hasInfrastructureFiles } from '../security/files/index.js';
-import { coveringConfig, discoverWorkspaces, plainJavaScriptSources } from '../shared/workspaces.js';
+import { configlessSources, coveringConfig, hasWorkspaceSources } from '../shared/workspaces.js';
 import type { PerfWatchHandle } from './perf-watch.js';
 import type { Finding } from '../shared/types.js';
 
@@ -191,9 +191,7 @@ async function configTarget(root: string, setting: string): Promise<SourceTarget
 // These walk the tree synchronously, so they run only for a folder without a config, once per
 // change of its files.
 function probeConfiglessInputs(root: string): ConfiglessInputs {
-  const hasSources = Boolean(
-    discoverWorkspaces(root).packages.length || plainJavaScriptSources(root) || coveringConfig(root),
-  );
+  const hasSources = Boolean(hasWorkspaceSources(root) || configlessSources(root) || coveringConfig(root));
   return { hasSources, hasInfrastructure: !hasSources && hasInfrastructureFiles(root) };
 }
 
