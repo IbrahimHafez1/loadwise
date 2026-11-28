@@ -529,8 +529,13 @@ function edgeRunCharacters(node: PatternNode, fromEnd: boolean): CodePointRange[
   if (characters) return characters;
   switch (node.kind) {
     case 'group':
-    case 'quant':
       return edgeRunCharacters(node.body, fromEnd);
+    case 'quant':
+      // A `{0}` body never runs. An unbounded loop whose body can match a single character
+      // (`(?:a\s*)+`) is itself a run over those characters.
+      if (node.max === 0) return [];
+      if (node.max !== Infinity) return edgeRunCharacters(node.body, fromEnd);
+      return normalize([...singleCharacters(node.body), ...edgeRunCharacters(node.body, fromEnd)]);
     case 'alt':
       return normalize(node.alternatives.flatMap((alternative) => edgeRunCharacters(alternative, fromEnd)));
     case 'seq': {
@@ -547,6 +552,37 @@ function edgeRunCharacters(node: PatternNode, fromEnd: boolean): CodePointRange[
   }
 }
 
+// The characters `node` can match as a whole one-character match: `a` for `a\s*`.
+function singleCharacters(node: PatternNode): CodePointRange[] {
+  switch (node.kind) {
+    case 'char':
+      return node.ranges;
+    case 'group':
+      return singleCharacters(node.body);
+    case 'alt':
+      return normalize(node.alternatives.flatMap(singleCharacters));
+    case 'quant':
+      return node.max === 0 || node.min > 1 ? [] : singleCharacters(node.body);
+    case 'seq': {
+      const required = node.items.filter((item) => !nullable(item));
+      if (required.length > 1) return [];
+      if (required.length === 1) return singleCharacters(required[0]);
+      return normalize(node.items.flatMap(singleCharacters));
+    }
+    default:
+      return [];
+  }
+}
+
+// The items of a sequence with plain (unquantified, single-branch) groups spliced in, so
+// `^a*(?:a+$)` is checked like `^a*a+$`.
+function flattenGroups(items: readonly PatternNode[]): PatternNode[] {
+  return items.flatMap((item) => {
+    if (item.kind !== 'group' || item.body.kind === 'alt') return [item];
+    return flattenGroups(item.body.kind === 'seq' ? item.body.items : [item.body]);
+  });
+}
+
 // Two unbounded repeats over overlapping characters with nothing required between them
 // (`\s+.*\s+$`,
 // `\w+\s*\w+$`) can split one run of n characters in n ways. The split is only retried when
@@ -554,7 +590,8 @@ function edgeRunCharacters(node: PatternNode, fromEnd: boolean): CodePointRange[
 // (`(ab)+(ac)+`) are left alone: their first characters can overlap without any text matching both.
 // A repeat at the edge of a group or loop counts too: the trailing `\s*` of `(?:\w+\(\)\s*)+` and
 // a later `\s*` split the same run, as do `^\s*` and the `\s*` inside an optional `(?:\w*\s*=>)?`.
-function hasAmbiguousRun(items: readonly PatternNode[], followed: boolean) {
+function hasAmbiguousRun(sequence: readonly PatternNode[], followed: boolean) {
+  const items = flattenGroups(sequence);
   // Characters of the repeats that the next item can take over because everything since them can
   // match empty.
   let reachable: CodePointRange[] = [];
@@ -655,16 +692,16 @@ function fixedRegex(expression: Expression | undefined, checker: CheckerAdapter,
 }
 
 // `text.slice(0, 200)`: a fixed-length cut keeps the input short enough for polynomial patterns.
+// A negative end such as `slice(0, -1)` is a prefix-minus expression, not a numeric literal, so it
+// does not count. `substring` swaps its arguments when the start is larger, so `substring(start,
+// 200)` returns everything from 200 to `start`; it needs a literal start too.
 function isTruncated(subject: Expression) {
   const node = ts.skipOuterExpressions(subject);
   const method = ts.isCallExpression(node) ? methodName(node) : undefined;
-  return (
-    ts.isCallExpression(node) &&
-    method !== undefined &&
-    truncatingMethods.has(method) &&
-    node.arguments.length === 2 &&
-    ts.isNumericLiteral(ts.skipOuterExpressions(node.arguments[1]))
-  );
+  if (!ts.isCallExpression(node) || method === undefined || !truncatingMethods.has(method)) return false;
+  const [start, end] = node.arguments;
+  if (node.arguments.length !== 2 || !ts.isNumericLiteral(ts.skipOuterExpressions(end))) return false;
+  return method !== 'substring' || ts.isNumericLiteral(ts.skipOuterExpressions(start));
 }
 
 const parameterReason =
