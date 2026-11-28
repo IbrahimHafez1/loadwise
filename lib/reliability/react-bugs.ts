@@ -145,11 +145,12 @@ function checkAsyncEffects(
 
 // --- react-effect-sets-state-every-render ---
 
-function updaterResults(updater: FunctionWithBody): Expression[] {
+// A bare `return` hands back undefined, which is `undefined` here so it counts as a result that never changes the value.
+function updaterResults(updater: FunctionWithBody): (Expression | undefined)[] {
   if (!ts.isBlock(updater.body)) return [withoutParentheses(updater.body)];
-  const results: Expression[] = [];
+  const results: (Expression | undefined)[] = [];
   walkSkippingFunctions(updater.body, (node: Node) => {
-    if (ts.isReturnStatement(node) && node.expression) results.push(withoutParentheses(node.expression));
+    if (ts.isReturnStatement(node)) results.push(node.expression && withoutParentheses(node.expression));
   });
   return results;
 }
@@ -192,7 +193,7 @@ function isFreshValue(argument: Expression, checker: CheckerAdapter): boolean {
   const updater = functionBodyOf(value, checker);
   if (!updater || updater.parameters.length === 0) return false;
   const results = updaterResults(updater);
-  return results.length > 0 && results.every(changesValue);
+  return results.length > 0 && results.every((result) => result !== undefined && changesValue(result));
 }
 
 function freshSetterCall(expression: Expression, checker: CheckerAdapter): CallExpression | undefined {
@@ -215,14 +216,16 @@ function unconditionalSetterCall(body: Node, checker: CheckerAdapter): CallExpre
 }
 
 // React treats an explicit `undefined` like an omitted dependency array.
-function hasNoDependencies(effect: CallExpression): boolean {
+function hasNoDependencies(effect: CallExpression, checker: CheckerAdapter): boolean {
   if (effect.arguments.length === 1) return true;
   const dependencies = effect.arguments[1] && withoutParentheses(effect.arguments[1]);
   return (
     effect.arguments.length === 2 &&
     dependencies !== undefined &&
     ts.isIdentifier(dependencies) &&
-    dependencies.text === 'undefined'
+    dependencies.text === 'undefined' &&
+    // A local `const undefined = []` is an ordinary binding, not the global value.
+    !checker.getSymbolAtLocation(dependencies)?.declarations?.length
   );
 }
 
@@ -234,7 +237,7 @@ function checkEffectLoops(
   findings: Finding[],
 ) {
   for (const effect of effects) {
-    if (!hasNoDependencies(effect)) continue;
+    if (!hasNoDependencies(effect, checker)) continue;
     const callback = functionBodyOf(effect.arguments[0], checker);
     const setterCall = callback && unconditionalSetterCall(callback.body, checker);
     if (!setterCall) continue;
@@ -314,12 +317,58 @@ function isCallbackArgument(node: Node): boolean {
 
 // Callbacks passed straight to a call (`items.forEach(...)`) run as part of the function; a nested helper that is
 // only declared does not, and is checked as a function of its own.
-function walkRunningCode(root: Node, visit: (node: Node) => void) {
+// Two branches of one `if` or `?:` never both run, so each is walked with the facts known before the branch.
+function walkRunningCode(root: Node, visit: (node: Node) => void, branches: BranchTracker) {
   (function walk(node: Node): void {
     if (node !== root && ts.isFunctionLike(node) && !isCallbackArgument(node)) return;
     visit(node);
-    ts.forEachChild(node, walk);
+    const exclusive = exclusiveBranches(node);
+    if (!exclusive) return ts.forEachChild(node, walk);
+    walk(exclusive.condition);
+    branches.begin();
+    walk(exclusive.first);
+    branches.next();
+    if (exclusive.second) walk(exclusive.second);
+    branches.end();
   })(root);
+}
+
+function exclusiveBranches(node: Node): { condition: Node; first: Node; second: Node | undefined } | undefined {
+  if (ts.isIfStatement(node))
+    return { condition: node.expression, first: node.thenStatement, second: node.elseStatement };
+  if (ts.isConditionalExpression(node))
+    return { condition: node.condition, first: node.whenTrue, second: node.whenFalse };
+}
+
+interface BranchTracker {
+  begin(): void;
+  next(): void;
+  end(): void;
+}
+
+// Mutations made before a branch stay visible inside it; after it, a mutation from either branch counts.
+function branchTrackerFor(mutated: Set<object>): BranchTracker {
+  const open: { before: Set<object>; fromBranches: Set<object> }[] = [];
+  const closeBranch = (frame: { fromBranches: Set<object> }) => {
+    for (const symbol of mutated) frame.fromBranches.add(symbol);
+  };
+  return {
+    begin: () => open.push({ before: new Set(mutated), fromBranches: new Set() }),
+    next() {
+      const frame = open[open.length - 1];
+      if (!frame) return;
+      closeBranch(frame);
+      mutated.clear();
+      for (const symbol of frame.before) mutated.add(symbol);
+    },
+    end() {
+      const frame = open.pop();
+      if (!frame) return;
+      closeBranch(frame);
+      mutated.clear();
+      for (const symbol of frame.fromBranches) mutated.add(symbol);
+    },
+  };
 }
 
 function checkStateMutations(sourceFile: SourceFile, file: string, checker: CheckerAdapter, findings: Finding[]) {
@@ -331,17 +380,21 @@ function checkStateMutations(sourceFile: SourceFile, file: string, checker: Chec
     const aliases = new Map<object, object>();
     const setterCalls: { call: CallExpression; setter: StateSetter }[] = [];
     // Source order puts the mutation before the setter call it feeds; a mutation after the call is another update.
-    walkRunningCode(node.body, (inner: Node) => {
-      recordAlias(inner, checker, aliases);
-      const symbol = mutatedSymbolOf(inner, checker, aliases);
-      if (symbol) mutated.add(symbol);
-      if (!ts.isCallExpression(inner)) return;
-      const setter = stateSetterCalledBy(inner, checker);
-      const argument = inner.arguments[0] && withoutParentheses(inner.arguments[0]);
-      if (!setter?.stateSymbol || !argument || !ts.isIdentifier(argument)) return;
-      if (checker.getSymbolAtLocation(argument) === setter.stateSymbol && mutated.has(setter.stateSymbol))
-        setterCalls.push({ call: inner, setter });
-    });
+    walkRunningCode(
+      node.body,
+      (inner: Node) => {
+        recordAlias(inner, checker, aliases);
+        const symbol = mutatedSymbolOf(inner, checker, aliases);
+        if (symbol) mutated.add(symbol);
+        if (!ts.isCallExpression(inner)) return;
+        const setter = stateSetterCalledBy(inner, checker);
+        const argument = inner.arguments[0] && withoutParentheses(inner.arguments[0]);
+        if (!setter?.stateSymbol || !argument || !ts.isIdentifier(argument)) return;
+        if (checker.getSymbolAtLocation(argument) === setter.stateSymbol && mutated.has(setter.stateSymbol))
+          setterCalls.push({ call: inner, setter });
+      },
+      branchTrackerFor(mutated),
+    );
     for (const { call } of setterCalls) {
       if (reported.has(call)) continue;
       reported.add(call);
@@ -424,7 +477,8 @@ function checkListKeys(sourceFile: SourceFile, file: string, checker: CheckerAda
         findingAt(
           sourceFile,
           file,
-          item,
+          // A callback declared in another file has offsets that mean nothing here, so point at the `.map` call.
+          item.getSourceFile() === sourceFile ? item : node,
           'react-list-missing-key',
           ts.isJsxFragment(item)
             ? 'This list item is a `<>...</>` fragment, which cannot take a key, so React cannot tell the items apart when the list changes. Use `<Fragment key={...}>` instead.'
@@ -460,11 +514,17 @@ function isClientComponent(sourceFile: SourceFile): boolean {
   return false;
 }
 
-function isProcessEnv(expression: Expression): boolean {
+// A parameter or variable named `process` is not Node's global; the global is declared only in declaration files.
+function isLocalBinding(identifier: Expression, checker: CheckerAdapter): boolean {
+  const declarations = checker.getSymbolAtLocation(identifier)?.declarations;
+  return Boolean(declarations?.some((declaration) => !declaration.getSourceFile().isDeclarationFile));
+}
+
+function isProcessEnv(expression: Expression, checker: CheckerAdapter): boolean {
   const target = withoutParentheses(expression);
   if (!ts.isPropertyAccessExpression(target) || target.name.text !== 'env') return false;
   const owner = withoutParentheses(target.expression);
-  return ts.isIdentifier(owner) && owner.text === 'process';
+  return ts.isIdentifier(owner) && owner.text === 'process' && !isLocalBinding(owner, checker);
 }
 
 interface EnvironmentRead {
@@ -473,15 +533,16 @@ interface EnvironmentRead {
   at: Node;
 }
 
-function environmentReadsIn(node: Node): EnvironmentRead[] {
-  if (ts.isPropertyAccessExpression(node) && isProcessEnv(node.expression)) return [{ name: node.name.text, at: node }];
-  if (ts.isElementAccessExpression(node) && isProcessEnv(node.expression)) {
+function environmentReadsIn(node: Node, checker: CheckerAdapter): EnvironmentRead[] {
+  if (ts.isPropertyAccessExpression(node) && isProcessEnv(node.expression, checker))
+    return [{ name: node.name.text, at: node }];
+  if (ts.isElementAccessExpression(node) && isProcessEnv(node.expression, checker)) {
     const key = withoutParentheses(node.argumentExpression);
     return [{ name: ts.isStringLiteralLike(key) ? key.text : undefined, at: node }];
   }
   // `const { API_SECRET } = process.env` reads each listed name.
   if (ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name) && node.initializer) {
-    if (!isProcessEnv(node.initializer)) return [];
+    if (!isProcessEnv(node.initializer, checker)) return [];
     return node.name.elements
       .filter((element) => !element.dotDotDotToken)
       .map((element) => {
@@ -553,10 +614,10 @@ function isGuardedForServer(node: Node): boolean {
   return false;
 }
 
-function checkClientEnvironment(sourceFile: SourceFile, file: string, findings: Finding[]) {
+function checkClientEnvironment(sourceFile: SourceFile, file: string, checker: CheckerAdapter, findings: Finding[]) {
   if (!isClientComponent(sourceFile) || !sourceFile.text.includes('process.env')) return;
   walkNodes(sourceFile, (node: Node) => {
-    for (const read of environmentReadsIn(node)) {
+    for (const read of environmentReadsIn(node, checker)) {
       if (read.name !== undefined && browserSafeEnvironmentName.test(read.name)) continue;
       if (isGuardedForServer(read.at)) continue;
       findings.push(
@@ -582,7 +643,7 @@ function checkReactBugs(
 ): Finding[] {
   if (isIgnoredSource(sourceFile, file)) return [];
   const findings: Finding[] = [];
-  checkClientEnvironment(sourceFile, file, findings);
+  checkClientEnvironment(sourceFile, file, checker, findings);
   const isScript = /\.[cm]?js$/.test(file) && sourceFile.text.includes('.map(');
   const mentionsReact = sourceFile.text.includes('react') || /\.[jt]sx$/.test(file) || isScript;
   if (!mentionsReact) return findings;

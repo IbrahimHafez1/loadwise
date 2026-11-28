@@ -171,7 +171,7 @@ test('react-async-effect-callback resolves an effect callback passed by name', (
 test('react-state-mutated-in-place sees compound writes, collections, aliases and nested state', () => {
   const view = (statements: string) => `${reactImport}export function View() {
     const [items, setItems] = useState<number[]>([]);
-    const [state, setState] = useState({ count: 0, items: [] as number[] });
+    const [state, setState] = useState<{ count: number; items: number[] }>({ count: 0, items: [] });
     const [seen, setSeen] = useState(new Set<number>());
     const [lookup, setLookup] = useState(new Map<number, number>());
     function update(item: number) {
@@ -250,4 +250,61 @@ useEffect(load, []);`;
 useEffect(load, []);`),
     [],
   );
+});
+
+test('react-list-missing-key anchors a callback from another file at the map call', () => {
+  const caller = `export const List = ({ rows }: { rows: string[] }) => <ul>{rows.map(renderRow)}</ul>;`;
+  const otherFile = `function renderRow(row: string) {
+  return <li>{row}</li>;
+}`;
+  const findings = withProgram(
+    'export {};',
+    { ...packages, 'other.tsx': otherFile, 'view.tsx': caller },
+    (program) => {
+      assert.ok(program.getSourceFiles);
+      const sourceFile = program.getSourceFiles().find((file) => file.fileName.endsWith('view.tsx'));
+      assert.ok(sourceFile);
+      return checkReactBugs(sourceFile, 'view.tsx', program.getTypeChecker());
+    },
+    // Legacy detection keeps a file without imports or exports a script, so its function is global.
+    { ...options, moduleDetection: ts.ModuleDetectionKind.Legacy },
+  );
+  assert.deepEqual(
+    findings.map(({ ruleId, line, column }) => ({ ruleId, line, column })),
+    [{ ruleId: 'react-list-missing-key', line: 1, column: caller.indexOf('rows.map') + 1 }],
+  );
+});
+
+test('react-effect-sets-state-every-render ignores an updater that can return undefined and a shadowed undefined', () => {
+  const view = (effect: string) => `${reactImport}export function View() {
+    const [items, setItems] = useState<number[] | undefined>(undefined);
+    ${effect}
+    return null;
+  }`;
+  const looping = view('useEffect(() => { setItems((previous) => { return [1]; }); });');
+  assert.deepEqual(ruleIds(looping), ['react-effect-sets-state-every-render']);
+  const bareReturn = view(
+    'useEffect(() => { setItems((previous) => { if (previous === undefined) return; return []; }); });',
+  );
+  assert.deepEqual(ruleIds(bareReturn), []);
+  const shadowed = view('const undefined: number[] = []; useEffect(() => { setItems([1]); }, undefined);');
+  assert.deepEqual(ruleIds(shadowed), []);
+});
+
+test('react-state-mutated-in-place keeps the branches of one if separate', () => {
+  const view = (statements: string) => `${reactImport}export function View({ editing }: { editing: boolean }) {
+    const [items, setItems] = useState<number[]>([]);
+    function update(item: number) {
+      ${statements}
+    }
+    return null;
+  }`;
+  assert.deepEqual(ruleIds(view('if (editing) items.push(item); else setItems(items);')), []);
+  assert.deepEqual(ruleIds(view('items.push(item); if (editing) setItems(items);')), ['react-state-mutated-in-place']);
+  assert.deepEqual(ruleIds(view('if (editing) items.push(item); setItems(items);')), ['react-state-mutated-in-place']);
+});
+
+test('next-server-env-in-client ignores a local binding named process', () => {
+  const local = `'use client';\nexport function read(process: { env: { locale: string } }) { return process.env.locale; }`;
+  assert.deepEqual(ruleIds(local, 'client.ts'), []);
 });
