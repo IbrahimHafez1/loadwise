@@ -48,7 +48,10 @@ function calleeName(call: CallExpression): string | undefined {
 // `setTimeout(() => process.exit(1))`); one that is merely declared or stored does not end the process.
 function isDormantFunction(node: Node): boolean {
   if (!ts.isFunctionLike(node)) return false;
-  return !ts.isCallExpression(node.parent) && !ts.isNewExpression(node.parent);
+  let parent = node.parent;
+  // `(() => { ... })()` wraps the function in parentheses before the call.
+  while (ts.isParenthesizedExpression(parent)) parent = parent.parent;
+  return !ts.isCallExpression(parent) && !ts.isNewExpression(parent);
 }
 
 // Callbacks handed to these run after the surrounding try block has finished, so an enclosing catch cannot see them.
@@ -57,6 +60,16 @@ const deferredCallName = /^(?:setTimeout|setInterval|setImmediate|nextTick|queue
 function isDeferredCallback(node: Node): boolean {
   return (
     ts.isFunctionLike(node) && ts.isCallExpression(node.parent) && deferredCallName.test(calleeName(node.parent) ?? '')
+  );
+}
+
+// A Promise executor's throw becomes a rejection instead of leaving the handler.
+function isPromiseExecutor(node: Node): boolean {
+  return (
+    ts.isFunctionLike(node) &&
+    ts.isNewExpression(node.parent) &&
+    ts.isIdentifier(node.parent.expression) &&
+    node.parent.expression.text === 'Promise'
   );
 }
 
@@ -78,7 +91,10 @@ function endsOrRethrows(handler: Node): boolean {
       visit(node.tryBlock, swallowed || cancelsThrow || node.catchClause !== undefined);
       if (node.catchClause) visit(node.catchClause, swallowed || cancelsThrow);
       if (node.finallyBlock) visit(node.finallyBlock, swallowed);
-    } else ts.forEachChild(node, (child) => visit(child, swallowed && !isDeferredCallback(child)));
+    } else
+      ts.forEachChild(node, (child) =>
+        visit(child, isPromiseExecutor(child) || (swallowed && !isDeferredCallback(child))),
+      );
   };
   ts.forEachChild(handler, (child) => visit(child, false));
   return ends;

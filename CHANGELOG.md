@@ -22,7 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Security rule `next-image-any-remote-host`: `hostname: '**'` in Next.js `images.remotePatterns` turns the image optimizer into an open proxy.
 - `switch-not-exhaustive` reports a `switch` over a union of literals or an enum that misses members and has no `default`, when the function then returns nothing or a variable declared without a value is read afterwards.
 - `pool-without-connection-timeout` reports a `pg` `Pool` or `Client` created without `connectionTimeoutMillis`, whose default waits for a connection forever.
-- `uncaught-exception-continues` reports a `process.on('uncaughtException')` handler that neither exits, rethrows nor starts a shutdown.
+- `uncaught-exception-continues` reports a `process.on('uncaughtException')` handler that neither exits, rethrows, sets `process.exitCode` nor starts a shutdown.
 
 ### Removed
 
