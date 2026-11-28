@@ -2,6 +2,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { dismissalsPath } from './dismissals.js';
+import { isNamedConfigFile } from '../security/files/index.js';
 
 /** What a changed file means for the folder's scans. */
 export type FileChangeKind = 'source' | 'config' | 'dismissals' | 'ignored';
@@ -36,6 +37,10 @@ const watchedGlobs = [
   '**/tsconfig*.json',
   '**/jsconfig*.json',
   '**/loadwise.config.json',
+  // The files the security checker reads without a source config: env files, Dockerfiles and Compose files.
+  '**/.env*',
+  '**/*{Dockerfile,dockerfile}*',
+  '**/*compose*.{yml,yaml}',
   '**/' + dismissalsPath.split(path.sep).join('/'),
 ];
 
@@ -54,7 +59,8 @@ function classifyChange(root: string, filename: string, project = ''): FileChang
   if (configPatterns.some((pattern) => pattern.test(name)) || segments.slice(0, -1).includes('migrations'))
     return 'config';
   const suffix = suffixOf(filename);
-  return sourceSuffixes.has(suffix) || markupSuffixes.has(suffix) ? 'source' : 'ignored';
+  if (sourceSuffixes.has(suffix) || markupSuffixes.has(suffix)) return 'source';
+  return isNamedConfigFile(filename) ? 'source' : 'ignored';
 }
 
 // Breadth first, so a match near the root ends the walk early.

@@ -7,6 +7,7 @@ import { bulkFixesFor, fixAllEdit, fixEdit, missingFolders } from './fix-edits.j
 import { isRealPathInside } from './workspace-paths.js';
 import { errorCode, errorMessage } from '../shared/error-code.js';
 import { isRecord } from '../shared/is-record.js';
+import type { WorkspaceEdit } from 'vscode-languageserver';
 import type { FixEdit } from './fix-edits.js';
 import type { FolderState, ServerContext } from './language-server.js';
 import type { WorkspaceChange, WorkspaceFix } from './diagnostics.js';
@@ -85,11 +86,14 @@ function removeEmptyFolders(folders: readonly string[]): void {
   }
 }
 
-// Only a transactional editor rolls back the operations before a failed one.
-function mayBePartlyApplied(context: ServerContext, failedChange: number | undefined, createsFiles: boolean): boolean {
-  if (!failedChange) return false;
+// Only a transactional editor guarantees a rollback; `undo` is an attempt. A failure at the first
+// operation ran nothing before it, while a missing index says nothing either way.
+function mayBePartlyApplied(context: ServerContext, edit: WorkspaceEdit, failedChange: number | undefined): boolean {
+  const operations = edit.documentChanges?.length ?? Object.keys(edit.changes ?? {}).length;
+  if (operations < 2 || failedChange === 0) return false;
+  const createsFiles = edit.documentChanges?.some((change) => 'kind' in change) ?? false;
   const { failureHandling } = context.fixWorkspace();
-  if (failureHandling === 'transactional' || failureHandling === 'undo') return false;
+  if (failureHandling === 'transactional') return false;
   return failureHandling !== 'textOnlyTransactional' || createsFiles;
 }
 
@@ -109,8 +113,8 @@ async function applyEdit(context: ServerContext, { edit, createdFiles }: FixEdit
     if (!result.applied) removeEmptyFolders(made);
   }
   if (result.applied) return true;
-  const partial = mayBePartlyApplied(context, result.failedChange, createdFiles.length > 0)
-    ? ' The editor kept the changes before the one that failed; undo them or check the files the fix names.'
+  const partial = mayBePartlyApplied(context, edit, result.failedChange)
+    ? ' The editor may have kept changes made before the failure; undo them or check the files the fix names.'
     : '';
   window.showWarningMessage(failure + partial);
   return false;
