@@ -102,10 +102,11 @@ function oneLine(text: string, limit: number) {
 
 // The taint of a field that holds either its earlier value or the written one.
 function eitherField(earlier: TaintResult | undefined, written: TaintResult): TaintResult {
-  if (!earlier) return written;
-  if (!earlier.objectFields) return earlier;
+  if (!earlier?.objectFields) return earlier ?? written;
   if (!written.objectFields) return written;
-  return { ...written, objectFields: new Map([...earlier.objectFields, ...written.objectFields]) };
+  const fields = new Map(earlier.objectFields);
+  for (const [name, field] of written.objectFields) fields.set(name, eitherField(fields.get(name), field));
+  return { ...written, objectFields: fields };
 }
 
 function step(node: Node): TraceStep {
@@ -525,7 +526,7 @@ function createTaint(program: ProgramAdapter): TaintApi {
       const assigned = partOf(resolve(assignment.right, state), true);
       // `record = req.body`: a value with unknown fields taints every field.
       if (assigned && !assigned.objectFields) return withStep(assigned, assignment);
-      for (const [name, field] of assigned?.objectFields ?? []) if (!fields.has(name)) fields.set(name, field);
+      for (const [name, field] of assigned?.objectFields ?? []) fields.set(name, eitherField(fields.get(name), field));
     }
     return { ...initial, objectFields: fields };
   }

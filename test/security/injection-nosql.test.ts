@@ -236,6 +236,19 @@ test('a stage pushed after aggregate runs is silent unless a loop runs the call 
   assert.deepEqual(nosqlLines(source), [[11, 'D']]);
 });
 
+test('a stage pushed in an outer loop reaches an aggregate inside an inner loop', () => {
+  const source = route(
+    'const pipeline: object[] = [];',
+    'for (let outer = 0; outer < 2; outer++) {',
+    '  for (let inner = 0; inner < 1; inner++) {',
+    '    User.aggregate(pipeline);',
+    '  }',
+    '  pipeline.push({ $match: { name: req.body.name } });',
+    '}',
+  );
+  assert.deepEqual(nosqlLines(source), [[10, 'D']]);
+});
+
 test('a field written to a local $or branch is reported, an $eq-wrapped one is silent', () => {
   const source = route(
     'const branch: Record<string, unknown> = {};',
