@@ -7,6 +7,9 @@ import { once, EventEmitter } from 'node:events';
 import { watchProject } from '../../lib/performance/watch.js';
 import type { Finding } from '../../lib/shared/types.js';
 
+const retryIntervalMs = 5_000;
+const retryAttempts = 8;
+
 type WatchResult = Parameters<Parameters<typeof watchProject>[1]['onResult']>[0];
 
 test(
@@ -54,11 +57,23 @@ export type Labels = string[];`;
       onError: (error: unknown) => updates.emit('update', error),
     };
     // Each step is named in the test output, so a missed file event shows which edit it was.
-    async function edit(filename: string, text: string) {
-      context.diagnostic(`editing ${path.basename(filename)}: ${text.slice(0, 40)}`);
-      const next = once(updates, 'update');
-      fs.writeFileSync(filename, text);
-      return (await next)[0];
+    // macOS can drop the event for a write made soon after the watcher started, so the change is
+    // repeated until the watcher reports it instead of waiting once for a fixed time.
+    async function change(description: string, apply: () => void) {
+      context.diagnostic(description);
+      const received = once(updates, 'update');
+      let arrived = false;
+      void received.then(() => {
+        arrived = true;
+      });
+      for (let attempt = 0; attempt < retryAttempts && !arrived; attempt++) {
+        apply();
+        await Promise.race([received, new Promise((resolve) => setTimeout(resolve, retryIntervalMs))]);
+      }
+      return (await received)[0];
+    }
+    function edit(filename: string, text: string) {
+      return change(`editing ${path.basename(filename)}: ${text.slice(0, 40)}`, () => fs.writeFileSync(filename, text));
     }
 
     const initial = once(updates, 'update');
@@ -102,9 +117,7 @@ export type Labels = string[];`;
     assert.ok(incompatibleConfig instanceof Error);
     assert.match(incompatibleConfig.message, /module.*NodeNext/);
     assert.deepEqual(await edit(config, validConfig), { scannedFiles: 2, findings: [] });
-    const deletion = once(updates, 'update');
-    fs.unlinkSync(config);
-    const [missingConfig] = await deletion;
+    const missingConfig = await change('deleting tsconfig.json', () => fs.rmSync(config, { force: true }));
     assert.ok(missingConfig instanceof Error);
     assert.match(missingConfig.message, /config does not exist/);
     assert.deepEqual(await edit(config, validConfig), { scannedFiles: 2, findings: [] });
