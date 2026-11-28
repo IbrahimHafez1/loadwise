@@ -349,3 +349,33 @@ test('react-async-effect-callback anchors a callback from another file at the ef
     [{ ruleId: 'react-async-effect-callback', line: 3, column: 3 }],
   );
 });
+
+test('react-effect-sets-state-every-render does not count an updater that falls through or a clock read', () => {
+  const view = (effect: string) => `${reactImport}export function View() {
+    const [items, setItems] = useState<number[] | undefined>(undefined);
+    const [stamp, setStamp] = useState(0);
+    ${effect}
+    return null;
+  }`;
+  const fallsThrough = view(
+    'useEffect(() => { setItems((previous) => { if (previous !== undefined) return []; }); });',
+  );
+  assert.deepEqual(ruleIds(fallsThrough), []);
+  const alwaysNew = view(
+    'useEffect(() => { setItems((previous) => { if (previous) { return [1]; } else { return [2]; } }); });',
+  );
+  assert.deepEqual(ruleIds(alwaysNew), ['react-effect-sets-state-every-render']);
+  assert.deepEqual(ruleIds(view('useEffect(() => { setStamp(Date.now()); });')), []);
+});
+
+test('react-state-mutated-in-place records a mutation after its call arguments run', () => {
+  const view = (statements: string) => `${reactImport}export function View() {
+    const [items, setItems] = useState<number[]>([]);
+    function update() {
+      ${statements}
+    }
+    return null;
+  }`;
+  assert.deepEqual(ruleIds(view('items.push((setItems(items), 1));')), []);
+  assert.deepEqual(ruleIds(view('items.push(1); setItems(items);')), ['react-state-mutated-in-place']);
+});
