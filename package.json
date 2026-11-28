@@ -78,6 +78,7 @@
     "bench:recall": "node bench/recall/runner.js",
     "build": "tsc -p tsconfig.json",
     "changelog": "npm run build && node scripts/changelog.js",
+    "docs:rules": "npm run build && node scripts/rule-docs.js",
     "clean": "node -e \"import('node:fs').then(fs=>import('node:path').then(p=>{const walk=d=>{if(!fs.existsSync(d))return;for(const e of fs.readdirSync(d,{withFileTypes:true})){const f=p.join(d,e.name);if(e.isDirectory()&&e.name!=='node_modules'&&!f.includes('vendor'))walk(f);else if((e.name.endsWith('.js')&&fs.existsSync(f.slice(0,-3)+'.ts'))||(e.name.endsWith('.cjs')&&fs.existsSync(f.slice(0,-4)+'.cts')))fs.unlinkSync(f);}};['bin','lib','plugin','polyglot','scripts','bench','test'].forEach(walk);fs.rmSync('.tsbuildinfo',{force:true});}))\"",
     "prepack": "npm run build",
     "prepare": "node -e \"import('node:child_process').then(c=>{c.execSync('git rev-parse --git-dir',{stdio:'ignore'});c.execSync('git config core.hooksPath hooks')}).catch(()=>{})\"",
