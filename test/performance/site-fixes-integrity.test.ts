@@ -264,6 +264,17 @@ test('pool created from request data, a later constant or a reconnecting client 
       "  return pool.query('SELECT 1');",
       '});',
     ],
+    'name shadowed in a switch case clause': [
+      "router.get('/users', async (request) => {",
+      '  const pool = new Pool();',
+      '  switch (request.query) {',
+      '    case 1:',
+      '      const pool = makePool();',
+      '      if (request) { pool.end(); }',
+      '  }',
+      "  return pool.query('SELECT 1');",
+      '});',
+    ],
     'redis client connected per call': [
       "router.get('/users', async () => {",
       '  const client = createClient();',

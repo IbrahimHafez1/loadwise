@@ -367,6 +367,7 @@ function redeclaresName(node: Node, name: string): boolean {
     ts.isFunctionLike(node) ||
     ts.isClassLike(node) ||
     ts.isBlock(node) ||
+    ts.isCaseBlock(node) ||
     ts.isCatchClause(node) ||
     ts.isIterationStatement(node, false);
   return opensScope && bindingNamesWithin(node).has(name);
