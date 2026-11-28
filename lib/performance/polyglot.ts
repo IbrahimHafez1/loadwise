@@ -66,6 +66,17 @@ export async function resolveAstGrepBinary(): Promise<string | undefined> {
   }
 }
 
+async function diskCasedPath(input: string): Promise<string> {
+  const { root } = path.parse(input);
+  let current = root;
+  for (const segment of input.slice(root.length).split(path.sep).filter(Boolean)) {
+    const candidate = path.join(current, segment);
+    const actualName = path.basename(await realpathNative(candidate));
+    current = path.join(current, actualName.toLowerCase() === segment.toLowerCase() ? actualName : segment);
+  }
+  return current;
+}
+
 async function resolveInputs(paths: readonly string[]): Promise<{ inputs: Set<string>; explicitFiles: Set<string> }> {
   const inputs = new Set<string>();
   const explicitFiles = new Set<string>();
@@ -81,11 +92,9 @@ async function resolveInputs(paths: readonly string[]): Promise<{ inputs: Set<st
     }
     if (process.platform === 'darwin') {
       // The default macOS volume ignores case, so a differently cased spelling of the same file
-      // must not be scanned twice. Only the final name is normalized; symlinked parents stay as given.
-      const actual = await realpathNative(input);
-      if (path.basename(actual).toLowerCase() === path.basename(input).toLowerCase()) {
-        input = path.join(path.dirname(input), path.basename(actual));
-      }
+      // must not be scanned twice. Every component takes its on-disk case, so a directory input and
+      // a file inside it share one spelling; symlinked components keep the name they were given.
+      input = await diskCasedPath(input);
     } else if (process.platform === 'win32') {
       // Preserve symlinks and distinct entries in case-sensitive directories.
       const actual = await realpathNative(input);
