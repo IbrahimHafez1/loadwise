@@ -92,15 +92,23 @@ test('a catastrophic fixed regex run on request text is reported', () => {
   );
 });
 
-test('safe patterns, fixed text, capped input and runtime-built regexes are silent', () => {
+test('safe patterns, fixed text, capped polynomial input and runtime-built regexes are silent', () => {
   const source = route(
     '/^[a-z]+(-[a-z]+)*$/.test(req.query.slug);',
     "emailPattern.test('admin@example.com');",
-    'emailPattern.test(req.body.email.slice(0, 254));',
+    String.raw`/\s+.*\s+$/.test(req.body.email.slice(0, 254));`,
     "req.query.q.split(',');",
     "new RegExp(String(req.query.flags) === 'x' ? '(a+)+' : 'a').test(req.query.q);",
   );
   assert.deepEqual(redosLines(source), []);
+});
+
+test('a length cap does not make an exponential pattern safe', () => {
+  const source = route(
+    'emailPattern.test(req.body.email.slice(0, 254));',
+    "new RegExp('^(a+)+$').exec(String(req.query.q).substring(0, 64));",
+  );
+  assert.deepEqual(redosLines(source), [5, 6]);
 });
 
 test('overlapping unbounded repeats in sequence are polynomial when something after them can fail', () => {
@@ -133,6 +141,43 @@ test('separated, disjoint, bounded, unfollowed and multi-character repeats are n
     String.raw`^(?:ab)+(?:ac)+$`,
     String.raw`^a+\ba+$`,
     String.raw`^(?:\d+)?\.\d+$`,
+  ];
+  for (const pattern of quietPatterns) assert.equal(isCatastrophicPattern(pattern), false, pattern);
+});
+
+// The propagation-only handler regex in lib/accessibility/template-attributes.ts with the call loop
+// it had before fc7a5fd (PR #7): each call's trailing `\s*` and the final `\s*` split the spaces in
+// `e.stopPropagation()<spaces>|| doSomething()`.
+const handlerWithLoopTailRun = String.raw`^\s*(?:(?:\([\w$]*\)|[\w$]+)\s*=>\s*)?(?:\{\s*)?(?:[\w$]+\.(?:stopPropagation|preventDefault)\(\)(?:\s*;)?\s*)+\}?\s*$`;
+// The same regex as it was before 3226c7d: `^\s*` and the arrow parameter's `\s*` split leading
+// spaces.
+const handlerWithLeadingGroupRun = String.raw`^\s*(?:\(?[\w$]*\)?\s*=>\s*)?(?:\{\s*)?(?:[\w$]+\.(?:stopPropagation|preventDefault)\(\)\s*(?:;\s*)?)+(?:\}\s*)?$`;
+
+test('a repeat at the edge of a group or loop overlapping a neighbouring repeat is polynomial', () => {
+  const polynomialPatterns = [
+    handlerWithLoopTailRun,
+    handlerWithLeadingGroupRun,
+    String.raw`^(?:x\s*)+\s*$`,
+    String.raw`^(?:x\s+)+\}?[ \t]*$`,
+    String.raw`^\s*(?:\w*\s*=>)?x$`,
+    String.raw`^a*(?:.*b)c$`,
+  ];
+  for (const pattern of polynomialPatterns) assert.equal(isCatastrophicPattern(pattern), true, pattern);
+});
+
+test('group edges separated by a required character or over disjoint characters are not polynomial', () => {
+  const quietPatterns = [
+    // The current propagation-only and empty handler regexes.
+    String.raw`^\s*(?:(?:\([\w$]*\)|[\w$]+)\s*=>\s*)?(?:\{\s*)?(?:[\w$]+\.(?:stopPropagation|preventDefault)\(\)\s*(?:;\s*)?)+(?:\}\s*)?$`,
+    String.raw`^\s*(?:(?:\([\w$]*\)|[\w$]+)\s*=>\s*)?\{\s*\}\}?\s*$`,
+    String.raw`^(?:x\s*)+$`,
+    String.raw`^(?:x\s*)+;\s*$`,
+    String.raw`^\s*(?:x\s*=>)?y$`,
+    String.raw`^(?:\d+,)+\d+$`,
+    String.raw`^(?:a\s*)+\w+$`,
+    // An anchored line ending in `.*$` stays exempt when the anchor or the `.*` sits in a group.
+    String.raw`(^[\t ]*).*$`,
+    String.raw`^([^/]*)(\/?.*)$`,
   ];
   for (const pattern of quietPatterns) assert.equal(isCatastrophicPattern(pattern), false, pattern);
 });
