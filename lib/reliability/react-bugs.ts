@@ -560,8 +560,8 @@ function checkClientEnvironment(sourceFile: SourceFile, file: string, findings: 
           read.at,
           'next-server-env-in-client',
           read.name === undefined
-            ? "`process.env` is read with a computed key in a 'use client' file, and Next.js inlines only literal NEXT_PUBLIC_ names into the browser bundle, so the value is undefined there. Read it on the server and pass it down."
-            : `\`process.env.${read.name}\` is read in a 'use client' file, but Next.js only exposes variables prefixed with NEXT_PUBLIC_ to the browser, so it is undefined there. Read it on the server and pass it down, or rename it with the prefix if it is safe to publish.`,
+            ? "`process.env` is read with a computed key in a 'use client' file, and Next.js inlines only literal NEXT_PUBLIC_ names into the browser bundle, so the value is undefined there. Read it on the server and pass only a non-sensitive derived value to the Client Component, never the raw value."
+            : `\`process.env.${read.name}\` is read in a 'use client' file, but Next.js only exposes variables prefixed with NEXT_PUBLIC_ to the browser, so it is undefined there. Read it on the server and pass only a non-sensitive derived value to the Client Component, never the raw value. Rename it with the NEXT_PUBLIC_ prefix only if it is safe to publish.`,
         ),
       );
     }
