@@ -249,7 +249,7 @@ function createScanSession(options: ScanSessionOptions): ScanSession {
   let inputs: Promise<FolderInputs> | undefined;
   let configless: ConfiglessInputs | undefined;
   // Scans finished in a terminal ask the editor to refresh through the shared signal folder.
-  const refreshListener = listenForEditorRefresh(root, () => schedule());
+  const refreshListener = listenForEditorRefresh(root, () => schedule({ filesAddedOrRemoved: true }));
 
   function log(id: string, text: string): void {
     options.log(name + ' / ' + id + ' — ' + text);

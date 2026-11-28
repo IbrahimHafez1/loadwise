@@ -6,6 +6,7 @@ import test from 'node:test';
 import { pathToFileURL } from 'node:url';
 import type { TestContext } from 'node:test';
 import { isRecord } from '../../lib/shared/is-record.js';
+import { notifyEditor } from '../../lib/shared/notify-editor.js';
 import { startLspClient, until } from './lsp-client.js';
 import type { LspClient } from './lsp-client.js';
 
@@ -558,6 +559,23 @@ test('with the watcher running, template findings come from an accessibility sca
   writeReport(workspace, 'a11y.json', []);
   client.notify('workspace/didChangeWatchedFiles', { changes: [{ uri: htmlUri, type: 2 }] });
   await until(() => client.diagnostics.get(htmlUri)?.length === 0, 'a rescan after a template change');
+});
+
+test('a terminal scan refresh picks up a template the editor never reported', async (context) => {
+  const workspace = createWorkspace(temporaryBase(), 'shop', { 'tsconfig.json': '{}', 'orders.ts': ordersText });
+  writeReport(workspace, 'watch.json', [finding('orders.ts', 'array-repeated-membership')]);
+  const client = await startServer(context, workspace);
+  const ordersUri = fileUri(workspace, 'orders.ts');
+  await until(() => codes(client.diagnostics.get(ordersUri)).join() === 'array-repeated-membership', 'the watcher');
+
+  // Clients without watched-file registration send no creation notice, so only the refresh reveals it.
+  fs.writeFileSync(path.join(workspace.root, 'index.html'), '<img src="a.png">\n');
+  writeReport(workspace, 'a11y.json', [finding('index.html', 'img-alt')]);
+  notifyEditor(workspace.root);
+  await until(
+    () => codes(client.diagnostics.get(fileUri(workspace, 'index.html'))).join() === 'img-alt',
+    'the template',
+  );
 });
 
 test('a folder without a config is scanned the way loadwise check scans it', async (context) => {
