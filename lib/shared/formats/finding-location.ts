@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { contractRules } from './contract-rules.js';
+import { realTarget } from '../real-target.js';
 import type { Finding } from '../types.js';
 import type { FindingLevel, FormatPillar, RepositoryPath } from '../types/report-formats.js';
 
@@ -21,11 +22,14 @@ function findRepositoryRoot(start: string): string {
   }
 }
 
+// Both sides are resolved: a checker may report from a resolved working directory while the
+// repository was found through a symlinked parent (macOS /var -> /private/var), which would turn the
+// path into a chain of "../".
 function repositoryPathFor(findingRoot: string, repositoryDirectory = findingRoot): RepositoryPath {
-  const repository = findRepositoryRoot(repositoryDirectory);
+  const repository = realTarget(findRepositoryRoot(repositoryDirectory));
   return (file: string | undefined) =>
     path
-      .relative(repository, path.resolve(findingRoot, file ?? ''))
+      .relative(repository, realTarget(path.resolve(findingRoot, file ?? '')))
       .split(path.sep)
       .join('/');
 }

@@ -53,7 +53,9 @@ export type Labels = string[];`;
       onResult: (result: WatchResult) => updates.emit('update', result),
       onError: (error: unknown) => updates.emit('update', error),
     };
+    // Each step is named in the test output, so a missed file event shows which edit it was.
     async function edit(filename: string, text: string) {
+      context.diagnostic(`editing ${path.basename(filename)}: ${text.slice(0, 40)}`);
       const next = once(updates, 'update');
       fs.writeFileSync(filename, text);
       return (await next)[0];
