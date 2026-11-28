@@ -129,3 +129,17 @@ test('uncaught-exception-continues needs the process exit code and ignores funct
   ];
   for (const source of quiet) assert.deepEqual(scanHandler(source), [], source);
 });
+
+test('uncaught-exception-continues ignores reassigned helpers and treats async helper throws as rejections', () => {
+  const reported = [
+    "process.on('uncaughtException', (error) => { let action = () => { throw error; }; action = () => { console.error(error); }; action(); });",
+    "process.on('uncaughtException', (error) => { async function run() { throw error; } run().catch(console.error); });",
+  ];
+  for (const source of reported) assert.equal(scanHandler(source)[0]?.ruleId, 'uncaught-exception-continues', source);
+  const quiet = [
+    "process.on('uncaughtException', (error) => { const action = () => { throw error; }; action(); });",
+    "process.on('uncaughtException', (error) => { function run() { throw error; } run(); });",
+    "process.on('uncaughtException', (error) => { async function run() { process.exit(1); } void run(); });",
+  ];
+  for (const source of quiet) assert.deepEqual(scanHandler(source), [], source);
+});

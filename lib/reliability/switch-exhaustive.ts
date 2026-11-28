@@ -9,6 +9,7 @@ import type {
   Block,
   CaseOrDefaultClause,
   Expression,
+  Identifier,
   Node,
   SourceFile,
   SwitchStatement,
@@ -76,6 +77,8 @@ function returnsValueWithin(root: Node, checker: CheckerAdapter): boolean {
   ts.forEachChild(root, visit);
   return found;
 }
+
+const undefinedAdmittingFlags = ts.TypeFlags.Undefined | ts.TypeFlags.Unknown;
 
 function unionAdmitsUndefined(type: TypeAdapter): boolean {
   return type.isUnion() && (type.types ?? []).some((member) => (member.flags & ts.TypeFlags.Undefined) !== 0);
@@ -222,6 +225,21 @@ function isAssignmentTarget(identifier: Node): boolean {
   return isPlainAssignment(parent) && parent.left === identifier;
 }
 
+// The declaration a read of the identifier resolves to. A declaration's own name is not a read, and a shorthand
+// `{ value }` reads the variable `value` unless it sits in a destructuring target such as `({ value } = box)`.
+function readDeclaration(identifier: Identifier, checker: CheckerAdapter): Node | undefined {
+  const parent = identifier.parent;
+  if (ts.isVariableDeclaration(parent) && parent.name === identifier) return;
+  if (ts.isShorthandPropertyAssignment(parent) && parent.name === identifier) {
+    const isDestructuringTarget = ts.findAncestor(
+      parent,
+      (ancestor) => isPlainAssignment(ancestor) && isWithin(parent, ancestor.left),
+    );
+    return isDestructuringTarget ? undefined : checker.getShorthandAssignmentValueSymbol(parent)?.valueDeclaration;
+  }
+  return checker.getSymbolAtLocation(identifier)?.valueDeclaration;
+}
+
 // Whether the declaration has no value of its own, no assignment outside the switch can supply one, and the code after
 // the switch reads it.
 function leavesUnsetValueRead(
@@ -236,7 +254,7 @@ function leavesUnsetValueRead(
   if (!isWithin(declaration, body)) return false;
   // A type that admits undefined says the code already handles the unset case.
   const declaredType = checker.getTypeAtLocation(declaration.name);
-  if ((declaredType.flags & ts.TypeFlags.Undefined) !== 0 || unionAdmitsUndefined(declaredType)) return false;
+  if ((declaredType.flags & undefinedAdmittingFlags) !== 0 || unionAdmitsUndefined(declaredType)) return false;
   let assignedElsewhere = false;
   let readAfter = false;
   walkNodes(body, (node) => {
@@ -246,9 +264,7 @@ function leavesUnsetValueRead(
     if (!ts.isIdentifier(node) || node.getStart() < statement.end || isAssignmentTarget(node)) return;
     // `typeof value` in a type position names the variable without reading it.
     if (ts.findAncestor(node, ts.isTypeQueryNode)) return;
-    readAfter =
-      readAfter ||
-      (checker.getSymbolAtLocation(node)?.valueDeclaration === declaration && runsUnconditionally(node, body));
+    readAfter = readAfter || (readDeclaration(node, checker) === declaration && runsUnconditionally(node, body));
   });
   return readAfter && !assignedElsewhere;
 }

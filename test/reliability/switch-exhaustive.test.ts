@@ -125,3 +125,17 @@ test('switch-not-exhaustive reaches switches nested in final blocks, counts null
     "type M = 'a' | 'b' | 'c';\ndeclare function fail(): never;\nexport function f(m: M) { switch (m) { case 'a': return fail(); case 'b': return fail(); } }";
   assert.deepEqual(scan(quiet), [], quiet);
 });
+
+test('switch-not-exhaustive skips unknown variables, declaration names and reads through shorthand properties', () => {
+  const head = "type M = 'a' | 'b';\nexport function f(m: M) {";
+  const quiet = [
+    `${head} let value: unknown; switch (m) { case 'a': value = 1; break; } return value; }`,
+    `${head} switch (m) { case 'a': value = 1; break; } var value: number; return 0; }`,
+  ];
+  for (const source of quiet) assert.deepEqual(scan(source), [], source);
+  const reported = [
+    `${head} let value: number; switch (m) { case 'a': value = 1; break; } return { value }; }`,
+    `${head} let value: number; switch (m) { case 'a': value = 1; break; } return value; }`,
+  ];
+  for (const source of reported) assert.equal(scan(source)[0]?.ruleId, 'switch-not-exhaustive', source);
+});
