@@ -65,6 +65,26 @@ const examples: Record<string, { before: string; code: string; note: string }> =
     code: 'function start() {\n  const timer = setInterval(poll, 1000);\n  return () => clearInterval(timer);\n}',
     note: 'Keep the handle so the owner can stop the timer.',
   },
+  'child-process-without-error-listener': {
+    before: "const child = spawn('convert', [input, output]);",
+    code: "const child = spawn('convert', [input, output]);\nchild.on('error', (error) => {\n  logger.error('convert failed to start', error);\n});",
+    note: "Without an 'error' listener a failed spawn throws an uncaught exception and crashes the process.",
+  },
+  'error-rethrown-without-cause': {
+    before: "try {\n  await saveOrder(order);\n} catch (error) {\n  throw new Error('Order not saved');\n}",
+    code: "try {\n  await saveOrder(order);\n} catch (error) {\n  throw new Error('Order not saved', { cause: error });\n}",
+    note: 'The cause keeps the original message and stack reachable.',
+  },
+  'throw-non-error': {
+    before: "throw 'order not found';",
+    code: "throw new Error('order not found');",
+    note: 'An Error carries a stack trace; a thrown string or object does not.',
+  },
+  'error-logged-without-stack': {
+    before: 'try {\n  await sync();\n} catch (error) {\n  logger.error(error.message);\n}',
+    code: "try {\n  await sync();\n} catch (error) {\n  logger.error('sync failed', error);\n}",
+    note: 'Pass the error itself so the logger records the stack.',
+  },
 };
 
 const scriptLanguages = ['javascript', 'javascriptreact', 'typescript', 'typescriptreact'];

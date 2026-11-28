@@ -66,6 +66,11 @@ function respawnWithLargerHeap(scriptPath: string, args: readonly string[]): voi
   );
   const forward = (signal: NodeJS.Signals) => child.kill(signal);
   for (const signal of forwardedSignals) process.on(signal, forward);
+  child.on('error', (error) => {
+    for (const signal of forwardedSignals) process.off(signal, forward);
+    process.stderr.write(`loadwise: could not restart with a larger heap: ${error.message}\n`);
+    process.exitCode = 2;
+  });
   child.on('exit', (code) => {
     for (const signal of forwardedSignals) process.off(signal, forward);
     process.exitCode = code ?? 2;
