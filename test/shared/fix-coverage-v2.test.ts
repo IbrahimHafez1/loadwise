@@ -320,6 +320,7 @@ test('performance & maintainability new fixers + idempotency + no-op', () => {
     'findById',
   );
   assert.equal(lean?.after, 'const u = await User.findById(id).lean();\n');
+  assert.equal(lean?.requiresReview, true);
   assert.equal(
     runBuilder(
       databasePerf['mongoose-hydrate-for-to-object'],
