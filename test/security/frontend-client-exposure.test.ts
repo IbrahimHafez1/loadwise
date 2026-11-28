@@ -110,6 +110,8 @@ test('client-env-secret-exposed: publishable, anon and public keys, flags and se
     'process.env.VITE_STRIPE_SECRET_KEY;',
     'import.meta.env.NEXT_PUBLIC_STRIPE_SECRET_KEY;',
     'import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;',
+    // Expo inlines only dot access.
+    "process.env['EXPO_PUBLIC_CLIENT_SECRET'];",
     // Plain Vite exposes only `VITE_` on import.meta.env; `PUBLIC_` is Astro's prefix.
     'import.meta.env.PUBLIC_DB_PASSWORD;',
     'const config = { env: { NEXT_PUBLIC_STRIPE_SECRET_KEY: 1 } };\nconfig.env.NEXT_PUBLIC_STRIPE_SECRET_KEY;',
@@ -136,6 +138,7 @@ type ProjectScan = (ruleId: string, source: string, fileName?: string) => Return
 function withDiskProject<Result>(
   manifest: object | null,
   callback: (scan: ProjectScan, writeManifest: (next: object) => void) => Result,
+  outerManifest: object = { dependencies: { react: 'latest' } },
 ) {
   const outer = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-frontend-'));
   const directory = path.join(outer, 'app');
@@ -146,7 +149,7 @@ function withDiskProject<Result>(
   };
   const writeManifest = (next: object) => writeFile('package.json', JSON.stringify(next));
   try {
-    fs.writeFileSync(path.join(outer, 'package.json'), JSON.stringify({ dependencies: { react: 'latest' } }));
+    fs.writeFileSync(path.join(outer, 'package.json'), JSON.stringify(outerManifest));
     for (const [name, content] of Object.entries(urlStubs)) writeFile(name, content);
     if (manifest) writeManifest(manifest);
     const scan: ProjectScan = (ruleId, source, fileName = 'view.tsx') => {
@@ -181,6 +184,15 @@ test('client-env-secret-exposed: import.meta.env.PUBLIC_ is exposed in Astro pro
   assert.equal(scan('export const key = import.meta.env.VITE_API_SECRET;').length, 0);
 });
 
+test('client-env-secret-exposed: a Vite app nested under an Astro workspace root keeps the Vite prefix', () => {
+  const viteApp = { devDependencies: { vite: '^6.0.0' } };
+  const astroRoot = { dependencies: { astro: '^5.0.0', react: 'latest' } };
+  const scan = (source: string) =>
+    withDiskProject(viteApp, (scanProject) => scanProject('client-env-secret-exposed', source, 'env.ts'), astroRoot);
+  assert.equal(scan('export const key = import.meta.env.VITE_API_SECRET;').length, 1);
+  assert.equal(scan('export const key = import.meta.env.PUBLIC_API_SECRET;').length, 0);
+});
+
 test('jsx-javascript-url: untrusted values that start a link, form action or frame src are reported', () => {
   const sources = [
     `${reactHeader}export const View = () => <a href={location.hash.slice(1)}>Go</a>;`,
@@ -196,6 +208,7 @@ test('jsx-javascript-url: untrusted values that start a link, form action or fra
     `${reactHeader}export const View = () => <a href={location.pathname.slice(1)}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={new URL(location.href).searchParams.get('next') ?? '/'}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={new URL(location.href).hash.slice(1)}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={String(location.hash.slice(1))}>Go</a>;`,
   ];
   for (const source of sources) {
     const found = urlFindingsOf(source);
@@ -220,6 +233,7 @@ test('jsx-javascript-url: constant prefixes, own addresses, props, fetched data 
     `${reactHeader}declare function Custom(props: { href: string }): null;\nexport const View = () => <Custom href={location.hash} />;`,
     `${reactHeader}import { useRouter } from 'next/navigation';\nexport function View() { const router = useRouter(); return <a href={'/' + String(router)}>Go</a>; }`,
     `${reactHeader}export const View = () => <a href={decodeURIComponent(location.hash)}>Anchor</a>;`,
+    `${reactHeader}export const View = () => <a href={String(location.hash)}>Anchor</a>;`,
     `${reactHeader}export const View = () => <a href={encodeURIComponent(location.hash.slice(1))}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={' ' + location.href}>Share</a>;`,
     `${reactHeader}export const View = () => <a href={new URL(location.href).origin}>Home</a>;`,

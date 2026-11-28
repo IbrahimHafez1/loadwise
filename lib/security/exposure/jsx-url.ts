@@ -31,9 +31,9 @@ const SCHEME_SAFE_PATHS = new Set([
 const HOST_MEMBERS = new Set(['origin', 'host', 'hostname']);
 // `?q=1` and `#x` are relative URLs; only a slice or parse of them can start with a scheme.
 const RELATIVE_PART_MEMBERS = new Set(['search', 'hash']);
-// These keep what their input starts with: a decoded `#x` still starts with `#`, and `new URL(x)`
-// keeps the scheme of `x`.
-const PREFIX_PRESERVING_CALLS = new Set(['decodeURI', 'decodeURIComponent', 'encodeURI', 'URL']);
+// These keep what their input starts with: a decoded or `String`-converted `#x` still starts with
+// `#`, and `new URL(x)` keeps the scheme of `x`.
+const PREFIX_PRESERVING_CALLS = new Set(['decodeURI', 'decodeURIComponent', 'encodeURI', 'String', 'URL']);
 // These escape `:`, so their output can never be read as a scheme.
 const SCHEME_ESCAPING_CALLS = new Set(['encodeURIComponent', 'escape']);
 // The elements on which each attribute loads or navigates to its URL.
