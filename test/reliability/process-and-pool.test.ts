@@ -104,6 +104,8 @@ test('uncaught-exception-continues reads prependOnceListener, same-file methods 
 
 test('uncaught-exception-continues needs the process exit code and ignores functions that are never called', () => {
   const reported = [
+    "process.on('uncaughtException', (error) => { try { throw error; } finally { return; } });",
+    "process.on('uncaughtException', (error) => { try { [error].forEach((value) => { throw value; }); } catch (caught) { console.error(caught); } });",
     "process.on('uncaughtException', (error) => { try { throw error; } catch (caught) { console.error(caught); } });",
     "const state = { exitCode: 0 };\nprocess.on('uncaughtException', (error) => { state.exitCode = 1; console.error(error); });",
     "process.on('uncaughtException', (error) => { const rethrow = () => { throw error; }; console.error(error); });",
