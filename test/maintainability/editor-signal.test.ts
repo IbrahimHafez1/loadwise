@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
-import { signalDirectory } from '../../lib/maintainability/notify-editor.js';
+import { signalDirectory } from '../../lib/shared/notify-editor.js';
 
 test('successful source scans consume only active editor registrations, with identical CLI output', () => {
   const cli = path.resolve(import.meta.dirname, '../../bin/loadwise.js');

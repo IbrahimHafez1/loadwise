@@ -16,7 +16,7 @@ import type { SourceCheckValues } from './types/source-check-values.js';
 import type { ChangedScope } from './types/source-scan-values.js';
 import { coveringConfig, configlessSources, projectConfig } from '../shared/workspaces.js';
 import { enableCompileCache } from 'node:module';
-import { notifyEditor } from './notify-editor.js';
+import { notifyEditor } from '../shared/notify-editor.js';
 import { sourceHistoryProject } from '../shared/fix-history.js';
 import { applyChosenFixes, applyFixes } from './fix-cli.js';
 import { findProjectRoot, loadSnapshot, useSnapshot } from './schema/context.js';
