@@ -244,6 +244,8 @@ function leavesUnsetValueRead(
       assignedElsewhere = assignedElsewhere || assignedDeclarations(node.left, checker).includes(declaration);
     }
     if (!ts.isIdentifier(node) || node.getStart() < statement.end || isAssignmentTarget(node)) return;
+    // `typeof value` in a type position names the variable without reading it.
+    if (ts.findAncestor(node, ts.isTypeQueryNode)) return;
     readAfter =
       readAfter ||
       (checker.getSymbolAtLocation(node)?.valueDeclaration === declaration && runsUnconditionally(node, body));

@@ -112,6 +112,7 @@ test('switch-not-exhaustive reaches switches nested in final blocks, counts null
   ];
   for (const source of reported) assert.equal(scan(source)[0]?.ruleId, 'switch-not-exhaustive', source);
   const quietTail = [
+    "type M = 'a' | 'b';\nexport function f(m: M) { let value: number; switch (m) { case 'a': value = 1; break; } const fallback: typeof value = 0; return fallback; }",
     "type M = 'a' | 'b';\nexport function f(m: M) { try { switch (m) { case 'a': return 1; } } finally { return 0; } }",
     "type M = 'a' | 'b';\nexport function f(m: M) { try { switch (m) { case 'a': return 1; } } finally { throw new Error('x'); } }",
     "type M = 'a' | 'b';\nexport function f(m: M) { let value: number; switch (m) { case 'a': value = 1; break; } return m === 'a' ? value : 0; }",
