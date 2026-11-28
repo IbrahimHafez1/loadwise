@@ -24,5 +24,8 @@ export default {
   'vue-v-html-unsanitized': { needs: 'syntax' },
   'frontend-storage-secret-token': { needs: 'syntax' },
   'postmessage-missing-origin-check': { needs: 'syntax' },
+  'client-env-secret-exposed': { needs: 'syntax' },
+  'jsx-javascript-url': { needs: 'syntax' },
+  'next-image-any-remote-host': { needs: 'syntax' },
   'express-missing-helmet': { needs: 'types' },
 };

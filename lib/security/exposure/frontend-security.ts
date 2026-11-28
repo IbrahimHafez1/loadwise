@@ -4,7 +4,8 @@
 // - angular-bypass-security-trust
 // - vue-v-html-unsanitized
 // - frontend-storage-secret-token
-// - postmessage-missing-origin-check Receivers are recognised by their DOM library types or
+// - postmessage-missing-origin-check
+// - jsx-javascript-url Receivers are recognised by their DOM library types or
 // imports, never by variable names. The browser has no request object, so a value counts as
 // untrusted when it traces to the URL, the referrer, cookies, a postMessage payload or a form
 // field; other dynamic values are contextual.
@@ -20,6 +21,7 @@ import type {
   Expression,
   Identifier,
   JsxAttribute,
+  NewExpression,
   Node,
   ObjectBindingPattern,
   ObjectLiteralElementLike,
@@ -85,6 +87,22 @@ const URL_CONTROLLED_PATHS = [
   'document.cookie',
   'window.name',
 ];
+const SCHEME_SAFE_PATHS = new Set([
+  ...['location', 'window.location', 'self.location', 'document.location'].flatMap((base) =>
+    ['href', 'pathname', 'origin', 'host', 'hostname'].map((member) => `${base}.${member}`),
+  ),
+  'document.URL',
+  'document.documentURI',
+  'document.referrer',
+]);
+// `?q=1` and `#x` are relative URLs; only a slice or parse of them can start with a scheme.
+const RELATIVE_PART_MEMBERS = new Set(['search', 'hash']);
+const URL_ATTRIBUTES = new Set(['href', 'action', 'formAction', 'xlinkHref']);
+const FRAME_TAGS = new Set(['iframe', 'frame', 'embed']);
+const SEARCH_PARAM_READERS = new Set(['get', 'getAll']);
+const SEARCH_PARAMS_MODULES = new Set(['next/navigation', 'react-router', 'react-router-dom']);
+const NEXT_ROUTER_MODULE = 'next/router';
+const NEXT_LINK_MODULE = 'next/link';
 const REACT_PACKAGES = ['react', 'preact'];
 const REACT_TYPES_PATH = /\/node_modules\/(?:@types\/)?(?:react|preact)\//;
 const SENSITIVE_KEY_WORDS =
@@ -272,14 +290,16 @@ function assessMember(
   context: SecurityRuleContext,
   depth: number,
 ): Assessment | undefined {
-  if (ts.isPropertyAccessExpression(node)) {
-    const urlLabel = urlControlledLabel(node, context);
-    if (urlLabel) return untrustedValue(urlLabel);
-    if (isMessageEventData(node, context)) return untrustedValue('The `postMessage` payload');
-    if (node.name.text === 'value' && declaredInDomInterface(node.name, context, FORM_FIELD_INTERFACES))
-      return untrustedValue('A form field value');
-  }
-  return assess(node.expression, context, depth + 1);
+  const label = ts.isPropertyAccessExpression(node) ? untrustedMemberLabel(node, context) : undefined;
+  return label ? untrustedValue(label) : assess(node.expression, context, depth + 1);
+}
+
+function untrustedMemberLabel(node: PropertyAccessExpression, context: SecurityRuleContext) {
+  const urlLabel = urlControlledLabel(node, context);
+  if (urlLabel) return urlLabel;
+  if (isMessageEventData(node, context)) return 'The `postMessage` payload';
+  if (node.name.text === 'value' && declaredInDomInterface(node.name, context, FORM_FIELD_INTERFACES))
+    return 'A form field value';
 }
 
 function assessIdentifier(identifier: Identifier, context: SecurityRuleContext, depth: number): Assessment | undefined {
@@ -624,6 +644,106 @@ function checkJsxAttribute(attribute: JsxAttribute, context: SecurityRuleContext
   });
 }
 
+// Only a value at the start of a URL picks its scheme: `/search?q=${query}` can never become
+// `javascript:`. The page's own address and referrer are always http(s) URLs, and an untouched
+// `location.hash` or `location.search` starts with `#` or `?`.
+function isOwnAddress(node: Expression, context: SecurityRuleContext, transformed: boolean) {
+  const chain = memberChain(node);
+  if (!chain || !declaredInDefaultLibrary(chain.root, context)) return false;
+  const relativePart = !transformed && ts.isPropertyAccessExpression(node) && RELATIVE_PART_MEMBERS.has(node.name.text);
+  return SCHEME_SAFE_PATHS.has(chain.path) || relativePart;
+}
+
+// `searchParams.get('next')` with `useSearchParams` from next/navigation or react-router, or
+// `useRouter().query` from next/router.
+function routerQueryLabel(node: Expression, context: SecurityRuleContext) {
+  if (ts.isCallExpression(node)) {
+    const callee = unwrap(node.expression);
+    const readsParam = ts.isPropertyAccessExpression(callee) && SEARCH_PARAM_READERS.has(callee.name.text);
+    const module = readsParam ? originModule(callee.expression, context) : undefined;
+    return module !== undefined && SEARCH_PARAMS_MODULES.has(module) ? 'A URL search parameter' : undefined;
+  }
+  if (!ts.isPropertyAccessExpression(node) || node.name.text !== 'query') return;
+  return originModule(node.expression, context) === NEXT_ROUTER_MODULE ? 'The router query' : undefined;
+}
+
+// The untrusted source that decides a URL's scheme, or undefined when the value starts with a
+// constant, is opaque or comes from the app itself. Only untrusted sources are reported: a prop or
+// fetched link is how most apps render links.
+function urlLeadSource(
+  expression: Expression,
+  context: SecurityRuleContext,
+  depth = 0,
+  transformed = false,
+): string | undefined {
+  const node = unwrap(expression);
+  if (!node || depth > MAX_DEPTH || isOwnAddress(node, context, transformed)) return;
+  const next = (part: Expression) => urlLeadSource(part, context, depth + 1, transformed);
+  if (ts.isTemplateExpression(node)) return node.head.text === '' ? next(node.templateSpans[0].expression) : undefined;
+  if (ts.isConditionalExpression(node)) return next(node.whenTrue) ?? next(node.whenFalse);
+  if (ts.isBinaryExpression(node)) {
+    const operator = node.operatorToken.kind;
+    if (operator === ts.SyntaxKind.PlusToken) return next(node.left);
+    const fallback = operator === ts.SyntaxKind.QuestionQuestionToken || operator === ts.SyntaxKind.BarBarToken;
+    return fallback ? (next(node.left) ?? next(node.right)) : undefined;
+  }
+  const routerLabel = routerQueryLabel(node, context);
+  if (routerLabel) return routerLabel;
+  if (ts.isCallExpression(node) || ts.isNewExpression(node)) return leadOfLibraryCall(node, context, depth);
+  if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
+    const label = ts.isPropertyAccessExpression(node) ? untrustedMemberLabel(node, context) : undefined;
+    return label ?? next(node.expression);
+  }
+  if (!ts.isIdentifier(node) || declaredInDefaultLibrary(node, context)) return;
+  const initializer = declaredInitializer(node, context);
+  return initializer && next(initializer);
+}
+
+// `decodeURIComponent(x)`, `x.slice(1)`, `new URL(x)`: standard library calls pass their first
+// input through; project functions (a `safeUrl` helper) are opaque.
+function leadOfLibraryCall(call: CallExpression | NewExpression, context: SecurityRuleContext, depth: number) {
+  const callee = unwrap(call.expression);
+  const nameNode = ts.isPropertyAccessExpression(callee) ? callee.name : callee;
+  if (!ts.isIdentifier(nameNode) || !declaredInDefaultLibrary(nameNode, context)) return;
+  const input = ts.isPropertyAccessExpression(callee) ? callee.expression : call.arguments?.[0];
+  return input && urlLeadSource(input, context, depth + 1, true);
+}
+
+function urlAttributeOf(attribute: JsxAttribute) {
+  if (!ts.isIdentifier(attribute.name)) return;
+  const element = attribute.parent.parent;
+  const tagName = element.tagName;
+  if (!ts.isIdentifier(tagName)) return;
+  const name = attribute.name.text;
+  if (/^[a-z]/.test(tagName.text)) {
+    const isUrlAttribute = URL_ATTRIBUTES.has(name) || (name === 'src' && FRAME_TAGS.has(tagName.text));
+    return isUrlAttribute ? name : undefined;
+  }
+  return name === 'href' ? name : undefined;
+}
+
+// Component links count only when they render a plain anchor: `<Link>` from next/link.
+function isUrlSink(attribute: JsxAttribute, context: SecurityRuleContext) {
+  const tagName = attribute.parent.parent.tagName;
+  if (ts.isIdentifier(tagName) && /^[a-z]/.test(tagName.text)) return true;
+  return moduleOfDeclaration(declarationsOf(tagName, context)[0]) === NEXT_LINK_MODULE;
+}
+
+function checkJsxUrlAttribute(attribute: JsxAttribute, context: SecurityRuleContext) {
+  const name = urlAttributeOf(attribute);
+  const initializer = attribute.initializer;
+  if (context.fileContext.isTestSource || !name || !initializer) return;
+  if (!ts.isJsxExpression(initializer) || !initializer.expression) return;
+  if (!isUrlSink(attribute, context)) return;
+  const source = urlLeadSource(initializer.expression, context);
+  if (!source) return;
+  context.report(
+    attribute,
+    'jsx-javascript-url',
+    `${source} decides the scheme of \`${name}\`, so a \`javascript:\` URL runs script when the link or form is used (XSS). Allow only http(s) or relative URLs, for example \`new URL(value, location.origin).protocol === 'https:'\`, before rendering it.`,
+  );
+}
+
 // `h('div', { innerHTML })` with `h` imported from vue, or the Vue 2 `domProps: { innerHTML }` form
 // in a vue file.
 function isVueRenderOptions(property: PropertyAssignment, context: SecurityRuleContext) {
@@ -646,4 +766,4 @@ function checkProperty(property: Node, context: SecurityRuleContext) {
   });
 }
 
-export { checkAssignment, checkCall, checkJsxAttribute, checkProperty };
+export { checkAssignment, checkCall, checkJsxAttribute, checkJsxUrlAttribute, checkProperty };
