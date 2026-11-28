@@ -23,8 +23,11 @@ test('every maintainability rule id has a valid impact level and none is invente
 
 test('the README lists the impact level of every maintainability rule', () => {
   const readme = fs.readFileSync(path.resolve(import.meta.dirname, '../../README.md'), 'utf8');
+  // syntax-error skips the file instead of becoming a finding, so the rule index has no row for it.
   const wrong = Object.entries(impactByRule).filter(
-    ([rule, level]) => !new RegExp(['\\|\\s*`', rule, '`\\s*\\|\\s*', level, '\\s*\\|'].join('')).test(readme),
+    ([rule, level]) =>
+      rule !== 'syntax-error' &&
+      !new RegExp(['\\[`', rule, '`\\]\\([^)]*\\)\\s*\\|\\s*', level, '\\s*\\|'].join('')).test(readme),
   );
   assert.deepEqual(wrong, []);
 });

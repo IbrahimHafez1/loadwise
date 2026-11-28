@@ -41,7 +41,7 @@ npm run bench:recall
 
 `npm run check` runs Prettier format checks, `oxlint --deny-warnings`, `tsc -p tsconfig.json`, and the full Node test suite.
 
-- Keep rules, autofixes, and `README.md` rule anchors / `--help` docs in sync (`test/shared/docs-sync.test.js` enforces this).
+- Keep rules, autofixes, and `--help` docs in sync. A new rule adds a page `docs/rules/<rule-id>.md` (copy a neighbouring page for the frontmatter and sections) and runs `npm run docs:rules` to refresh the rule index in `README.md`, instead of editing a README table (`test/shared/docs-sync.test.js` enforces this).
 - Include focused positive and negative regression tests for any rule, parser, or autofix change.
 - Keep commits small and focused: one logical change per commit (a rule, a fix, a refactor, a docs update), with its tests in the same commit, and a [Conventional Commits](https://www.conventionalcommits.org/) message such as `fix(rel): ...` or `feat(a11y): ...`. Don't mix unrelated changes, formatting sweeps or dependency updates into a feature commit. Each commit should build and pass its tests.
 - Add a changelog fragment instead of editing `CHANGELOG.md`: one file `changes/<short-kebab-slug>.md` with `section: Added|Changed|Deprecated|Removed|Fixed|Security` in its frontmatter and the entry text as the body, written like a `CHANGELOG.md` bullet without the leading `- `. [changes/README.md](changes/README.md) has an example. This keeps open pull requests from conflicting over the same lines.
