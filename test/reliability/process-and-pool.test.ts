@@ -104,6 +104,10 @@ test('uncaught-exception-continues reads prependOnceListener, same-file methods 
 
 test('uncaught-exception-continues needs the process exit code and ignores functions that are never called', () => {
   const reported = [
+    "process.on('uncaughtException', (error) => { console.error(error); process.exitCode = undefined; });",
+    "process.on('uncaughtException', (error) => { process.exitCode = 1; process.exitCode = undefined; });",
+    "process.on('uncaughtException', (error) => { Promise.resolve().then(() => { throw error; }).catch(console.error); });",
+    "process.on('uncaughtException', (error) => { const process = { exitCode: 0 }; process.exitCode = 1; console.error(error); });",
     "process.on('uncaughtException', (error) => { new Promise(() => { throw error; }).catch(console.error); });",
     "process.on('uncaughtException', (error) => { try { throw error; } finally { return; } });",
     "process.on('uncaughtException', (error) => { try { [error].forEach((value) => { throw value; }); } catch (caught) { console.error(caught); } });",
@@ -116,6 +120,9 @@ test('uncaught-exception-continues needs the process exit code and ignores funct
   }
   const quiet = [
     "process.on('uncaughtException', (error) => { (() => { throw error; })(); });",
+    "process.on('uncaughtException', (error) => { function fail() { throw error; } fail(); });",
+    "let current = (error: Error) => { process.exit(1); };\ncurrent = (error: Error) => { console.error(error); };\nprocess.on('uncaughtException', current);",
+    "const process = { on(event: string, listener: () => void) {} };\nprocess.on('uncaughtException', () => { console.error('x'); });",
     "process.on('uncaughtException', (error) => { try { console.error(error); } finally { throw error; } });",
     "process.on('uncaughtException', (error) => { try { throw error; } catch (caught) { throw caught; } });",
     "process.on('uncaughtException', (error) => { console.error(error); setTimeout(() => process.exit(1), 100); });",
