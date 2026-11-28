@@ -83,6 +83,13 @@ function isDormantFunction(node: Node): boolean {
   return !ts.isCallExpression(parent) && !ts.isNewExpression(parent);
 }
 
+// Only the callback positions of a deferring call; later arguments such as `setTimeout(callback, delay, data)` are data.
+function callbackArguments(call: CallExpression, name: string): readonly Expression[] {
+  if (name === 'then') return call.arguments.slice(0, 2);
+  if (name === 'on' || name === 'once') return call.arguments.slice(1, 2);
+  return call.arguments.slice(0, 1);
+}
+
 function isDeferredCallback(node: Node): boolean {
   return (
     ts.isFunctionLike(node) && ts.isCallExpression(node.parent) && deferredCallName.test(calleeName(node.parent) ?? '')
@@ -172,7 +179,7 @@ function endsOrRethrows(handler: Node, checker: CheckerAdapter): boolean {
     if (callee) visitHelper(callee, swallowed);
     if (!deferredCallName.test(name)) return;
     // A named function handed to a scheduler runs later, like an inline callback.
-    for (const argument of call.arguments) {
+    for (const argument of callbackArguments(call, name)) {
       const scheduled = localFunction(argument, handler, checker);
       if (scheduled) visitHelper(scheduled, promiseReactionName.test(name));
     }

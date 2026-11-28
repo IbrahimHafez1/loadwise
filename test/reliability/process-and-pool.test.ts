@@ -152,6 +152,7 @@ test('uncaught-exception-continues follows named callbacks passed to schedulers'
   for (const source of quiet) assert.deepEqual(scanHandler(source), [], source);
   const reported = [
     "process.on('uncaughtException', () => { function finish() { process.exit(1); } console.error('x'); });",
+    "process.on('uncaughtException', () => { function finish() { process.exit(1); } setTimeout(() => { console.error('uncaught'); }, 100, finish); });",
   ];
   for (const source of reported) assert.equal(scanHandler(source)[0]?.ruleId, 'uncaught-exception-continues', source);
 });
