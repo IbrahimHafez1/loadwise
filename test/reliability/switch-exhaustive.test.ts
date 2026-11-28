@@ -76,3 +76,37 @@ test('switch-not-exhaustive stays quiet when the unset case is typed as undefine
   ];
   for (const source of quiet) assert.deepEqual(scan(source), [], source);
 });
+
+test('switch-not-exhaustive matches variables by binding, not by name', () => {
+  const quiet = [
+    "type M = 'a' | 'b' | 'c';\nexport function f(m: M) { let value = 0; switch (m) { case 'a': value = 1; break; } function unused() { let value: string; return value; } return value; }",
+    "type M = 'a' | 'b' | 'c';\nexport function f(m: M, box: { value: number }) { let value: number; switch (m) { case 'a': value = 1; break; } return box.value; }",
+  ];
+  for (const source of quiet) assert.deepEqual(scan(source), [], source);
+});
+
+test('switch-not-exhaustive accepts an assignment outside the switch and reports a definite-assignment variable', () => {
+  const quiet = [
+    "type M = 'a' | 'b' | 'c';\nexport function f(m: M) { let value: number; value = 0; switch (m) { case 'a': value = 1; break; } return value; }",
+    "type M = 'a' | 'b' | 'c';\nexport function f(m: M) { let value: number; switch (m) { case 'a': value = 1; break; } value = 2; return value; }",
+  ];
+  for (const source of quiet) assert.deepEqual(scan(source), [], source);
+  const reported = [
+    "type M = 'a' | 'b' | 'c';\nexport function f(m: M) { let value!: number; switch (m) { case 'a': value = 1; break; } return value; }",
+    "type M = 'a' | 'b' | 'c';\nexport function f(m: M) { let value: number; switch (m) { case 'a': [value] = [1]; break; } return value; }",
+    "type M = 'a' | 'b' | 'c';\nexport function f(m: M) { let value: number; switch (m) { case 'a': ({ value } = { value: 1 }); break; } return value; }",
+  ];
+  for (const source of reported) assert.equal(scan(source)[0]?.ruleId, 'switch-not-exhaustive', source);
+});
+
+test('switch-not-exhaustive reaches switches nested in final blocks, counts null and ignores never returns', () => {
+  const reported = [
+    "type M = 'a' | 'b' | 'c';\nexport function f(m: M, ok: boolean) { if (ok) { switch (m) { case 'a': return 1; case 'b': return 2; } } else { return 0; } }",
+    "type M = 'a' | 'b' | 'c';\nexport function f(m: M) { try { switch (m) { case 'a': return 1; case 'b': return 2; } } finally { console.log(m); } }",
+    "type M = 'a' | 'b' | 'c';\nexport function f(m: M) { switch (m) { case 'a': return null; case 'b': return null; } }",
+  ];
+  for (const source of reported) assert.equal(scan(source)[0]?.ruleId, 'switch-not-exhaustive', source);
+  const quiet =
+    "type M = 'a' | 'b' | 'c';\ndeclare function fail(): never;\nexport function f(m: M) { switch (m) { case 'a': return fail(); case 'b': return fail(); } }";
+  assert.deepEqual(scan(quiet), [], quiet);
+});

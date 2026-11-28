@@ -71,3 +71,45 @@ test('uncaught-exception-continues stays quiet when the handler ends the process
   ];
   for (const source of quiet) assert.deepEqual(scanHandler(source), [], source);
 });
+
+test('pool-without-connection-timeout follows import aliases and reads quoted, disabled and URL options', () => {
+  const reported = [
+    "import { Pool as PgPool } from 'pg';\nexport const pool = new PgPool({ max: 1 });",
+    "import { Pool } from 'pg';\nexport const pool = new Pool({ connectionTimeoutMillis: 0 });",
+    "import { Pool } from 'pg';\nexport const pool = new Pool({ connectionTimeoutMillis: undefined });",
+    "import { Client } from 'pg';\nexport const client = new Client('postgres://timeout:pw@timeout.example/db?application_name=timeout');",
+  ];
+  for (const source of reported) {
+    assert.equal(scanPool(source)[0]?.ruleId, 'pool-without-connection-timeout', source);
+  }
+  const quiet = [
+    "import { Pool } from 'pg';\nexport const pool = new Pool({ 'connectionTimeoutMillis': 5000 });",
+    "import { Pool } from 'pg';\nexport const pool = new Pool({ ['connectionTimeoutMillis']: 5000 });",
+  ];
+  for (const source of quiet) assert.deepEqual(scanPool(source), [], source);
+});
+
+test('uncaught-exception-continues reads prependOnceListener, same-file methods and properties', () => {
+  const sources = [
+    "process.prependOnceListener('uncaughtException', (error) => { console.error(error); });",
+    "const handlers = { crash(error: Error) { console.error(error); } };\nprocess.on('uncaughtException', handlers.crash);",
+    "const handlers = { crash: (error: Error) => { console.error(error); } };\nprocess.on('uncaughtException', handlers.crash);",
+  ];
+  for (const source of sources) {
+    assert.equal(scanHandler(source)[0]?.ruleId, 'uncaught-exception-continues', source);
+  }
+});
+
+test('uncaught-exception-continues needs the process exit code and ignores functions that are never called', () => {
+  const reported = [
+    "const state = { exitCode: 0 };\nprocess.on('uncaughtException', (error) => { state.exitCode = 1; console.error(error); });",
+    "process.on('uncaughtException', (error) => { const rethrow = () => { throw error; }; console.error(error); });",
+  ];
+  for (const source of reported) {
+    assert.equal(scanHandler(source)[0]?.ruleId, 'uncaught-exception-continues', source);
+  }
+  const quiet = [
+    "process.on('uncaughtException', (error) => { console.error(error); setTimeout(() => process.exit(1), 100); });",
+  ];
+  for (const source of quiet) assert.deepEqual(scanHandler(source), [], source);
+});
