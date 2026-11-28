@@ -59,12 +59,13 @@ test('a cap set to undefined or null still reports, and the legacy completions r
       [
         "client.chat.completions.create({ model: 'm', max_tokens: undefined });",
         "client.responses.create({ model: 'm', max_output_tokens: void 0 });",
+        "client.responses.create({ model: 'm', max_output_tokens: null });",
         "client.completions.create({ model: 'm' });",
       ].join('\n'),
     legacyFiles,
   );
   assert.deepEqual(
     findings.map(({ ruleId, line }) => [ruleId, line]),
-    [3, 4].map((line) => [rule, line]),
+    [3, 4, 5].map((line) => [rule, line]),
   );
 });
