@@ -44,11 +44,20 @@ npm run bench:recall
 - Keep rules, autofixes, and `README.md` rule anchors / `--help` docs in sync (`test/shared/docs-sync.test.js` enforces this).
 - Include focused positive and negative regression tests for any rule, parser, or autofix change.
 - Keep commits small and focused: one logical change per commit (a rule, a fix, a refactor, a docs update), with its tests in the same commit, and a [Conventional Commits](https://www.conventionalcommits.org/) message such as `fix(rel): ...` or `feat(a11y): ...`. Don't mix unrelated changes, formatting sweeps or dependency updates into a feature commit. Each commit should build and pass its tests.
+- Add a changelog fragment instead of editing `CHANGELOG.md`: one file `changes/<short-kebab-slug>.md` with `section: Added|Changed|Deprecated|Removed|Fixed|Security` in its frontmatter and the entry text as the body, written like a `CHANGELOG.md` bullet without the leading `- `. [changes/README.md](changes/README.md) has an example. This keeps open pull requests from conflicting over the same lines.
 - Do not commit built `.js` / `.cjs` artifacts or `.tgz` archives (they are gitignored).
+
+## Pull request size
+
+Keep a pull request to one or two rules. A refactor that touches many rules or shared code goes in its own pull request, so it can be reviewed and reverted on its own.
+
+## Review comments
+
+Loadwise is precision-first: a false alarm costs more than a missed detection. These block a merge until fixed: false positives, crashes, wrong output, wrong fixes, and docs that misstate behavior. A missed case (recall widening) or a new syntax family does not block. Reply to it, open an issue or a tracked follow-up, and resolve the thread.
 
 ## Releasing (maintainers)
 
-1. In a pull request, bump `version` in `package.json` and `plugin/.claude-plugin/plugin.json` and move the `[Unreleased]` notes in `CHANGELOG.md` under the new version.
+1. In a pull request, run `npm run changelog` to fold the fragments in `changes/` into `[Unreleased]`, bump `version` in `package.json` and `plugin/.claude-plugin/plugin.json`, and move the `[Unreleased]` notes in `CHANGELOG.md` under the new version.
 2. After it merges, tag the merge commit `vX.Y.Z` and push the tag. The `release` workflow runs the full check and stages the npm publish through Trusted Publishing (no token).
 3. Approve the staged version on npmjs.com with 2FA; only then does it go live. A `-` in the version (for example `v0.6.0-rc.1`) publishes under the `next` dist-tag instead of `latest`. Approve stages in version order and reject an older pending one, since approving it later would move the dist-tag back to the older version.
 4. The workflow's GitHub release job waits up to two hours for the approval, then creates the GitHub release and, for a stable `v0.x` version, moves the `v0` Action tag. If it timed out, approve the version and re-run the failed job.
