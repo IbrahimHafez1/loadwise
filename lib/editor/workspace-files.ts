@@ -10,6 +10,8 @@ const sourceSuffixes = new Set(
   'js jsx ts tsx mjs mts cjs cts py go java cs rs rb php kt kts c h cc cpp cxx hpp hh hxx'.split(' '),
 );
 const polyglotSuffixes = new Set(['py', 'go', 'java', 'cs', 'rs']);
+// Templates outside the TypeScript program, which the accessibility checker reads on its own.
+const markupSuffixes = new Set(['html', 'htm', 'vue', 'svelte']);
 const ignoredFolders = new Set(
   '.git node_modules dist build coverage .next .nuxt .venv venv __pycache__ target vendor'.split(' '),
 );
@@ -26,7 +28,7 @@ const configPatterns = [
 
 /** The globs the server asks the editor to watch. */
 const watchedGlobs = [
-  '**/*.{' + [...sourceSuffixes].join(',') + '}',
+  '**/*.{' + [...sourceSuffixes, ...markupSuffixes].join(',') + '}',
   '**/schema.prisma',
   '**/*.sql',
   '**/migrations/**',
@@ -41,15 +43,18 @@ function suffixOf(filename: string): string {
   return path.extname(filename).slice(1).toLowerCase();
 }
 
-function classifyChange(root: string, filename: string): FileChangeKind {
+// `project` is the folder's loadwise.project setting, which can name a config of any file name.
+function classifyChange(root: string, filename: string, project = ''): FileChangeKind {
   const relative = path.relative(root, filename);
   if (relative === dismissalsPath) return 'dismissals';
+  if (project.trim() && path.relative(path.resolve(root, project.trim()), filename) === '') return 'config';
   const segments = relative.split(path.sep);
   if (segments.some((segment) => ignoredFolders.has(segment))) return 'ignored';
   const name = path.basename(filename);
   if (configPatterns.some((pattern) => pattern.test(name)) || segments.slice(0, -1).includes('migrations'))
     return 'config';
-  return sourceSuffixes.has(suffixOf(filename)) ? 'source' : 'ignored';
+  const suffix = suffixOf(filename);
+  return sourceSuffixes.has(suffix) || markupSuffixes.has(suffix) ? 'source' : 'ignored';
 }
 
 // Breadth first, so a match near the root ends the walk early.
@@ -70,4 +75,4 @@ async function hasFileWithSuffix(root: string, suffixes: ReadonlySet<string>): P
   return false;
 }
 
-export { classifyChange, hasFileWithSuffix, polyglotSuffixes, sourceSuffixes, watchedGlobs };
+export { classifyChange, hasFileWithSuffix, markupSuffixes, polyglotSuffixes, sourceSuffixes, watchedGlobs };

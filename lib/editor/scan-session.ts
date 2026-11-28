@@ -1,15 +1,19 @@
 // One workspace folder's scans. Performance, reliability and accessibility come from the
-// incremental `perf -p <config> --watch --json` process; maintainability, security and the polyglot
-// rules rerun after each change, debounced. Rapid changes coalesce into one scan of the newest
-// state, and a change during a scan aborts the stale child.
+// incremental `perf -p <config> --watch --json` process when the folder has one config to follow;
+// maintainability, security, templates and the polyglot rules rerun after each change, debounced.
+// The folder's inputs are chosen the way `loadwise check` chooses them. Rapid changes coalesce into
+// one scan of the newest state, and a change during a scan aborts the stale child.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import type { ExecFileOptionsWithStringEncoding } from 'node:child_process';
 import { promisify } from 'node:util';
 import { startPerfWatch } from './perf-watch.js';
-import { hasFileWithSuffix, polyglotSuffixes, sourceSuffixes } from './workspace-files.js';
+import { hasFileWithSuffix, markupSuffixes, polyglotSuffixes, sourceSuffixes } from './workspace-files.js';
+import { isMarkupFile } from '../accessibility/markup-files.js';
 import { listenForEditorRefresh } from '../performance/editor-signal.js';
+import { hasInfrastructureFiles } from '../security/files/index.js';
+import { coveringConfig, discoverWorkspaces, plainJavaScriptSources } from '../shared/workspaces.js';
 import type { PerfWatchHandle } from './perf-watch.js';
 import type { Finding } from '../shared/types.js';
 
@@ -58,9 +62,16 @@ interface ScanTask {
   id: string;
   source: string;
   args: string[] | null;
-  watch?: boolean;
-  /** Findings the running watcher already shows; scanned on their own only without it. */
-  watched?: boolean;
+  /** Starts the incremental watcher on this project instead of running `args` once. */
+  watchProject?: string;
+  /** Keeps only the findings in markup files, because the watcher shows the rest. */
+  markupOnly?: boolean;
+}
+
+/** The `-p` input of the source checkers, and whether the incremental watcher can follow it. */
+interface SourceTarget {
+  project: string;
+  watchable: boolean;
 }
 
 /** The incremental watcher of one folder; `pending` is set until its first report. */
@@ -74,6 +85,15 @@ interface ActivePerfWatch {
 interface FolderInputs {
   hasSource: boolean;
   hasPolyglot: boolean;
+  hasMarkup: boolean;
+}
+
+/** What `loadwise check` scans in a folder without a config of its own. */
+interface ConfiglessInputs {
+  /** Workspace packages, plain JavaScript beside a package.json, or an ancestor config: `-p .` finds them. */
+  hasSources: boolean;
+  /** Dockerfiles, workflows and other files the security checker reads without a config. */
+  hasInfrastructure: boolean;
 }
 
 /** A failed child process: `execFile` rejects with an Error that also carries the exit code and output. */
@@ -155,15 +175,59 @@ function explicitProject(root: string, setting: string): string {
   return relative;
 }
 
-function scanTasks(project: string | undefined, inputs: FolderInputs): ScanTask[] {
+// Like `loadwise check`: a tsconfig.json beside a jsconfig.json is passed as the folder, so the
+// JavaScript only the jsconfig covers is scanned too. The watcher follows one config, so that
+// folder gets full scans instead.
+async function configTarget(root: string, setting: string): Promise<SourceTarget | undefined> {
+  const explicit = explicitProject(root, setting);
+  if (explicit) return { project: explicit, watchable: true };
+  const own = await firstExisting(root, ['tsconfig.json', 'jsconfig.json']);
+  if (own === 'tsconfig.json' && (await exists(path.join(root, 'jsconfig.json')))) {
+    return { project: '.', watchable: false };
+  }
+  return own ? { project: own, watchable: true } : undefined;
+}
+
+// These walk the tree synchronously, so they run only for a folder without a config, once per
+// change of its files.
+function probeConfiglessInputs(root: string): ConfiglessInputs {
+  const hasSources = Boolean(
+    discoverWorkspaces(root).packages.length || plainJavaScriptSources(root) || coveringConfig(root),
+  );
+  return { hasSources, hasInfrastructure: !hasSources && hasInfrastructureFiles(root) };
+}
+
+function accessibilityArgs(project: string | undefined, inputs: FolderInputs): string[] | null {
+  if (project) return ['a11y', '-p', project];
+  // Without a config the checker reads the markup files alone.
+  return inputs.hasMarkup ? ['a11y', '-p', '.'] : null;
+}
+
+function scanTasks(
+  target: SourceTarget | undefined,
+  watching: boolean,
+  inputs: FolderInputs,
+  configless: ConfiglessInputs | undefined,
+): ScanTask[] {
+  const project = target?.project;
+  const sourceArgs = (command: string) => (project ? [command, '-p', project] : null);
   const hasMaintainabilityInput = Boolean(project) || inputs.hasSource;
+  const securityArgs = project ? sourceArgs('sec') : configless?.hasInfrastructure ? ['sec', '-p', '.'] : null;
   return [
-    { id: perf, source: perf, args: project ? ['perf', '-p', project] : null, watch: true },
+    { id: perf, source: perf, args: sourceArgs('perf'), watchProject: watching ? project : undefined },
     // The watcher reports reliability and accessibility with performance, under the perf label whose fix commands still apply them.
-    { id: perf + '-reliability', source: perf, args: project ? ['rel', '-p', project] : null, watched: true },
-    { id: perf + '-accessibility', source: perf, args: project ? ['a11y', '-p', project] : null, watched: true },
+    { id: perf + '-reliability', source: perf, args: watching ? null : sourceArgs('rel') },
+    // The watcher reads only the TypeScript program, so templates still need a scan of their own.
+    watching
+      ? {
+          id: perf + '-accessibility',
+          source: perf,
+          args: inputs.hasMarkup ? sourceArgs('a11y') : null,
+          markupOnly: true,
+        }
+      : { id: perf + '-accessibility', source: perf, args: accessibilityArgs(project, inputs) },
     { id: maint, source: maint, args: hasMaintainabilityInput ? ['maint', '.'] : null },
-    { id: sec, source: sec, args: project ? ['sec', '-p', project] : null },
+    { id: sec, source: sec, args: securityArgs },
     { id: perf + '-polyglot', source: perf, args: inputs.hasPolyglot ? ['perf', 'polyglot', '.'] : null },
     { id: perf + '-polyglot-reliability', source: perf, args: inputs.hasPolyglot ? ['rel', 'polyglot', '.'] : null },
     { id: sec + '-polyglot', source: sec, args: inputs.hasPolyglot ? ['sec', 'polyglot', '.'] : null },
@@ -185,6 +249,7 @@ function createScanSession(options: ScanSessionOptions): ScanSession {
   // Set when the watcher dies; full rescans take over until a config change restarts it.
   let watchUnavailable = false;
   let inputs: Promise<FolderInputs> | undefined;
+  let configless: ConfiglessInputs | undefined;
   // Scans finished in a terminal ask the editor to refresh through the shared signal folder.
   const refreshListener = listenForEditorRefresh(root, () => schedule());
 
@@ -242,30 +307,30 @@ function createScanSession(options: ScanSessionOptions): ScanSession {
     options.onStatus();
   }
   async function probeInputs(): Promise<FolderInputs> {
-    const [hasSource, hasPolyglot] = await Promise.all([
+    const [hasSource, hasPolyglot, hasMarkup] = await Promise.all([
       hasFileWithSuffix(root, sourceSuffixes),
       hasFileWithSuffix(root, polyglotSuffixes),
+      hasFileWithSuffix(root, markupSuffixes),
     ]);
-    return { hasSource, hasPolyglot };
+    return { hasSource, hasPolyglot, hasMarkup };
   }
-  async function runTask(
-    task: ScanTask,
-    script: string,
-    project: string | undefined,
-    restart: boolean,
-    scanSignal: AbortSignal,
-  ) {
-    if (!task.args) {
-      if (task.watch) stopWatch();
-      clear(task.id);
-      return;
-    }
+  async function sourceTarget(setting: string): Promise<SourceTarget | undefined> {
+    const target = await configTarget(root, setting);
+    if (target) return target;
+    configless ??= probeConfiglessInputs(root);
+    return configless.hasSources ? { project: '.', watchable: false } : undefined;
+  }
+  async function runTask(task: ScanTask, script: string, restart: boolean, scanSignal: AbortSignal) {
+    if (!task.args) return clear(task.id);
     if (!path.isAbsolute(script)) throw new Error('The loadwise.cli setting must be an absolute path.');
-    if (task.watch && !watchUnavailable && project) return ensureWatch(script, project, restart);
-    if (task.watched && !watchUnavailable && project) return clear(task.id);
+    if (task.watchProject !== undefined) return ensureWatch(script, task.watchProject, restart);
     const findings = await readFindings(script, task.args, root, scanSignal);
     if (scanSignal.aborted || disposed.signal.aborted) return;
-    show(task.id, task.source, findings);
+    show(
+      task.id,
+      task.source,
+      task.markupOnly ? findings.filter(({ file }) => file !== undefined && isMarkupFile(file)) : findings,
+    );
   }
   async function scan(version: number, scanSignal: AbortSignal): Promise<void> {
     const restart = restartRequested;
@@ -277,15 +342,16 @@ function createScanSession(options: ScanSessionOptions): ScanSession {
       for (const id of reports.keys()) clear(id);
       return;
     }
-    const project =
-      explicitProject(root, settings.project) || (await firstExisting(root, ['tsconfig.json', 'jsconfig.json']));
+    const target = await sourceTarget(settings.project);
+    const watching = Boolean(target?.watchable) && !watchUnavailable;
+    if (!watching) stopWatch();
     inputs ??= probeInputs();
-    const tasks = scanTasks(project, await inputs);
+    const tasks = scanTasks(target, watching, await inputs, configless);
     const script = settings.cli || options.defaultCli;
     for (const task of tasks) {
       if (disposed.signal.aborted || version !== revision) return;
       try {
-        await runTask(task, script, project, restart, scanSignal);
+        await runTask(task, script, restart, scanSignal);
       } catch (error) {
         if (disposed.signal.aborted || version !== revision) return;
         clear(task.id);
@@ -324,7 +390,10 @@ function createScanSession(options: ScanSessionOptions): ScanSession {
   function schedule({ restart = false, filesAddedOrRemoved = false } = {}): void {
     if (disposed.signal.aborted) return;
     restartRequested ||= restart;
-    if (restart || filesAddedOrRemoved) inputs = undefined;
+    if (restart || filesAddedOrRemoved) {
+      inputs = undefined;
+      configless = undefined;
+    }
     revision++;
     clearTimeout(timer);
     activeScan?.abort();
