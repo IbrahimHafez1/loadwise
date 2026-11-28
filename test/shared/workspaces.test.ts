@@ -5,9 +5,16 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import type { TestContext } from 'node:test';
-import { discoverWorkspaces } from '../../lib/shared/workspaces.js';
+import { configlessSources, discoverWorkspaces } from '../../lib/shared/workspaces.js';
 import type { Finding } from '../../lib/shared/types.js';
 import { executable } from '../../lib/performance/native-runtime.js';
+
+let nativeSkip: string | false = false;
+try {
+  executable();
+} catch {
+  nativeSkip = 'optional native compiler is absent';
+}
 
 const cli = path.resolve(import.meta.dirname, '../../bin/loadwise.js');
 const slowSource = fs.readFileSync(path.resolve(import.meta.dirname, '../../examples/slow.ts'), 'utf8');
@@ -132,7 +139,7 @@ test('a package without a config is checked with the standalone defaults on both
     discoverWorkspaces(root).withoutConfig.map(({ name }) => name),
     ['bare', 'plain'],
   );
-  for (const engine of ['js', 'native']) {
+  for (const engine of nativeSkip ? ['js'] : ['js', 'native']) {
     const run = loadwise(root, 'perf', '-p', '.', '--engine', engine, '--json');
     assert.equal(run.code, 1, run.stderr);
     const report = JSON.parse(run.stdout);
@@ -278,13 +285,6 @@ test('maint --workspace keeps only the chosen packages, by name or path, in chec
   assert.equal(loadwise(root, 'maint', '.', '--workspace', 'missing').code, 2);
 });
 
-let nativeSkip: string | false = false;
-try {
-  executable();
-} catch {
-  nativeSkip = 'optional native compiler is absent';
-}
-
 test('two configs on the TypeScript 7 engine report a shared file once', { skip: nativeSkip }, (context) => {
   const root = monorepo(context, {
     'package.json': { workspaces: ['packages/*'] },
@@ -297,4 +297,56 @@ test('two configs on the TypeScript 7 engine report a shared file once', { skip:
   const report = JSON.parse(loadwise(root, 'perf', '-p', '.', '--engine', 'native', '--json').stdout);
   assert.equal(report.scannedFiles, 1);
   assert.equal(report.findings.length, 3);
+});
+
+test('JavaScript under a sub-folder jsconfig, or a git-ignored tsconfig, is not checked with the defaults', (context) => {
+  const root = monorepo(context, {
+    'jsconfig-package/package.json': { name: 'js' },
+    'jsconfig-package/src/jsconfig.json': { compilerOptions: { paths: { '@/*': ['./*'] } } },
+    'jsconfig-package/src/index.js': syncReadSource,
+    'ignored-package/package.json': { name: 'ignored' },
+    'ignored-package/.gitignore': 'src/tsconfig.json\n',
+    'ignored-package/src/tsconfig.json': tsconfig,
+    'ignored-package/src/index.ts': quietSource,
+    'plain-package/package.json': { name: 'plain' },
+    'plain-package/index.js': syncReadSource,
+  });
+  assert.equal(configlessSources(path.join(root, 'jsconfig-package')), undefined);
+  assert.equal(configlessSources(path.join(root, 'ignored-package')), undefined);
+  assert.equal(configlessSources(path.join(root, 'plain-package'))?.length, 1);
+});
+
+test('a monorepo whose only package keeps its TypeScript under a sub-folder tsconfig names it as skipped', (context) => {
+  const root = monorepo(context, {
+    'package.json': { workspaces: ['packages/*'] },
+    'packages/nested/package.json': { name: 'nested' },
+    'packages/nested/src/tsconfig.json': tsconfig,
+    'packages/nested/src/index.ts': slowSource,
+  });
+  const run = loadwise(root, 'perf', '-p', '.', '--json');
+  assert.match(run.stderr, /workspace nested has no tsconfig\.json or jsconfig\.json/);
+});
+
+test('the ignore setting applies to the sources inferred for a package without a config', (context) => {
+  const root = monorepo(context, {
+    'package.json': { name: 'plain' },
+    'index.js': syncReadSource,
+    'fixtures/broken.ts': 'export const = ;\n',
+    'loadwise.config.json': { ignore: ['fixtures/**'] },
+  });
+  const run = loadwise(root, 'perf', '-p', '.', '--json');
+  assert.equal(run.code, 1, run.stderr);
+  assert.doesNotMatch(run.stdout + run.stderr, /broken/);
+  assert.deepEqual(findingFiles(JSON.parse(run.stdout).findings), ['index.js node-sync-fs-in-async']);
+});
+
+test('--workspace on a package without a config keeps the accessibility checker', (context) => {
+  const root = monorepo(context, {
+    'package.json': { workspaces: ['packages/*'] },
+    'packages/plain/package.json': { name: 'plain' },
+    'packages/plain/App.jsx': 'export const App = () => <img src="logo.png" />;\n',
+  });
+  const run = loadwise(root, 'check', '--only', 'a11y', '--workspace', 'plain', '--json');
+  assert.equal(run.code, 1, run.stderr);
+  assert.ok(JSON.parse(run.stdout).accessibility.findings.length > 0);
 });

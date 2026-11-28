@@ -93,7 +93,8 @@ function hasFrontendSources(directory: string): boolean {
 function hasFrontendSourcesInWorkspaces(directory: string, selectors: readonly string[]): boolean {
   if (!selectors.length) return hasFrontendSources(directory);
   try {
-    const chosen = selectWorkspaces(discoverWorkspaces(directory).packages, path.resolve(directory), selectors);
+    const { packages, withoutConfig } = discoverWorkspaces(directory);
+    const chosen = selectWorkspaces([...packages, ...withoutConfig], path.resolve(directory), selectors);
     return chosen.some((workspace) => hasFrontendSources(workspace.directory));
   } catch {
     // An unmatched selector is reported by the checker itself.
