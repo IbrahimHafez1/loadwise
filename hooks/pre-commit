@@ -6,5 +6,5 @@ files=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(cts|ts|js
 # commits into batches below that limit. xargs still exits non-zero when any batch fails.
 max_command_chars=6000
 echo "$files" | xargs -s "$max_command_chars" npx prettier --write --ignore-unknown || exit 1
-echo "$files" | xargs -s "$max_command_chars" git add
+echo "$files" | xargs -s "$max_command_chars" git add || exit 1
 echo "$files" | grep -E '\.(cts|ts)$' | xargs --no-run-if-empty -s "$max_command_chars" npx oxlint --deny-warnings --no-error-on-unmatched-pattern
