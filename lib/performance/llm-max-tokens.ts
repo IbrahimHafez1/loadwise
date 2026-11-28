@@ -27,7 +27,11 @@ function isChatResource(receiver: Expression): boolean {
 function isUnsetValue(property: ObjectLiteralElementLike): boolean {
   if (!ts.isPropertyAssignment(property)) return false;
   const value = ts.skipOuterExpressions(property.initializer);
-  return value.kind === ts.SyntaxKind.NullKeyword || (ts.isIdentifier(value) && value.text === 'undefined');
+  return (
+    value.kind === ts.SyntaxKind.NullKeyword ||
+    ts.isVoidExpression(value) ||
+    (ts.isIdentifier(value) && value.text === 'undefined')
+  );
 }
 
 // True when the key set is fully known and holds no output cap. A spread or computed key may carry

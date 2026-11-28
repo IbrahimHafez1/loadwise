@@ -58,7 +58,7 @@ test('a cap set to undefined or null still reports, and the legacy completions r
     header +
       [
         "client.chat.completions.create({ model: 'm', max_tokens: undefined });",
-        "client.responses.create({ model: 'm', max_output_tokens: null });",
+        "client.responses.create({ model: 'm', max_output_tokens: void 0 });",
         "client.completions.create({ model: 'm' });",
       ].join('\n'),
     legacyFiles,

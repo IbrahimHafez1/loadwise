@@ -364,7 +364,11 @@ function wholeLines(text: string, statement: Node): LineRange | undefined {
 
 function redeclaresName(node: Node, name: string): boolean {
   const opensScope =
-    ts.isFunctionLike(node) || ts.isBlock(node) || ts.isCatchClause(node) || ts.isIterationStatement(node, false);
+    ts.isFunctionLike(node) ||
+    ts.isClassLike(node) ||
+    ts.isBlock(node) ||
+    ts.isCatchClause(node) ||
+    ts.isIterationStatement(node, false);
   return opensScope && bindingNamesWithin(node).has(name);
 }
 

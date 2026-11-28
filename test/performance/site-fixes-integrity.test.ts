@@ -257,6 +257,13 @@ test('pool created from request data, a later constant or a reconnecting client 
       "  return pool.query('SELECT 1');",
       '});',
     ],
+    'name shadowed by a class expression': [
+      "router.get('/users', async () => {",
+      '  const pool = new Pool();',
+      '  const Shadow = class pool { static { pool.end(); } };',
+      "  return pool.query('SELECT 1');",
+      '});',
+    ],
     'redis client connected per call': [
       "router.get('/users', async () => {",
       '  const client = createClient();',
