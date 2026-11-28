@@ -198,6 +198,15 @@ test('client-env-secret-exposed: a Vite app nested under an Astro workspace root
   assert.equal(scan('export const key = import.meta.env.PUBLIC_API_SECRET;').length, 0);
 });
 
+test('client-env-secret-exposed: process.env prefixes stay quiet in a Vite package without their framework', () => {
+  const read = `${processDeclaration}export const key = process.env.NEXT_PUBLIC_DB_PASSWORD;`;
+  const scan = (manifest: object) =>
+    withDiskProject(manifest, (scanProject) => scanProject('client-env-secret-exposed', read, 'env.ts'));
+  assert.equal(scan({ devDependencies: { vite: '^6.0.0' } }).length, 0);
+  assert.equal(scan({ dependencies: { next: '^15.0.0' }, devDependencies: { vite: '^6.0.0' } }).length, 1);
+  assert.equal(scan({ dependencies: { next: '^15.0.0' } }).length, 1);
+});
+
 test('jsx-javascript-url: untrusted values that start a link, form action or frame src are reported', () => {
   const sources = [
     `${reactHeader}export const View = () => <a href={location.hash.slice(1)}>Go</a>;`,
@@ -218,6 +227,10 @@ test('jsx-javascript-url: untrusted values that start a link, form action or fra
     `${reactHeader}export const View = () => <a href={\`/\${location.hash.slice(1)}\`.substring(1)}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={decodeURIComponent(encodeURIComponent(location.hash.slice(1)))}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={location.hash && location.hash.slice(1)}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={\`/\${'x'}\${location.hash.slice(1)}\`.slice(2)}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={(' ' + '\\t') + location.hash.slice(1)}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={window.String(location.hash.slice(1))}>Go</a>;`,
+    `${reactHeader}const target = location.hash.slice(1);\nconst other = location.hash.slice(1);\nexport const View = () => <a href={new URL(other, location.origin).protocol === 'https:' ? target : '/'}>Go</a>;`,
   ];
   for (const source of sources) {
     const found = urlFindingsOf(source);
@@ -248,6 +261,10 @@ test('jsx-javascript-url: constant prefixes, own addresses, props, fetched data 
     `${reactHeader}export const View = () => <a href={decodeURI(encodeURIComponent(location.hash.slice(1)))}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={decodeURIComponent(encodeURI(encodeURIComponent(location.hash.slice(1))))}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={location.hash && '/safe'}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={('/' + '/') + location.hash.slice(1)}>Go</a>;`,
+    `${reactHeader}const target = location.hash.slice(1);\nexport const View = () => <a href={new URL(target, location.origin).protocol === 'https:' ? target : '/'}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={new URL(location.hash.slice(1), location.origin).origin}>Home</a>;`,
+    `${reactHeader}export const View = () => <a href={location.hash.slice(0, 80)}>Anchor</a>;`,
     `${reactHeader}export const View = () => <a href={encodeURIComponent(location.hash.slice(1))}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={' ' + location.href}>Share</a>;`,
     `${reactHeader}export const View = () => <a href={new URL(location.href).origin}>Home</a>;`,

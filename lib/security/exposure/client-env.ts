@@ -13,6 +13,13 @@ const ruleId = 'client-env-secret-exposed';
 // overrides declared public runtime config, so the prefix alone exposes nothing.
 const expoPrefix = 'EXPO_PUBLIC_';
 const processEnvPrefixes = ['NEXT_PUBLIC_', 'REACT_APP_', expoPrefix];
+// The framework that inlines each `process.env` prefix. Vite replaces `process.env` with an empty
+// object, so in a Vite package without that framework the read exposes nothing.
+const processEnvFrameworks = new Map([
+  ['NEXT_PUBLIC_', 'next'],
+  ['REACT_APP_', 'react-scripts'],
+  [expoPrefix, 'expo'],
+]);
 // Vite exposes `VITE_` on `import.meta.env`; Astro replaces it with `PUBLIC_`. SvelteKit keeps
 // Vite's prefix there and uses `PUBLIC_` only for its `$env` modules.
 const vitePrefix = 'VITE_';
@@ -84,7 +91,14 @@ function checkEnvRead(node: PropertyAccessExpression | ElementAccessExpression, 
   // Expo inlines only the dot form; `process.env['EXPO_PUBLIC_X']` stays undefined in the app.
   if (prefix === expoPrefix && ts.isElementAccessExpression(node)) return;
   if (prefixes === importMetaEnvPrefixes && !exposedByBuildTool(prefix, context)) return;
+  if (prefixes === processEnvPrefixes && !inlinedOutsideVite(prefix, context)) return;
   report(node, name, prefix, context);
+}
+
+function inlinedOutsideVite(prefix: string, context: SecurityRuleContext) {
+  const fileName = context.sourceFile.fileName;
+  const framework = processEnvFrameworks.get(prefix);
+  return !projectDeclares(fileName, 'vite') || (framework !== undefined && projectDeclares(fileName, framework));
 }
 
 // Read only after a secret-named match, so ordinary env reads never touch package.json.

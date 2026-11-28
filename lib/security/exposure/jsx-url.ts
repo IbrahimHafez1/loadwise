@@ -21,6 +21,7 @@ import type {
   Expression,
   JsxAttribute,
   NewExpression,
+  Node,
   TemplateExpression,
 } from 'typescript';
 import type { SecurityRuleContext } from '../../shared/types.js';
@@ -48,6 +49,7 @@ const SCHEME_ESCAPING_CALLS = new Set(['encodeURIComponent', 'escape']);
 const COLON_DECODING_CALLS = new Set(['decodeURIComponent', 'unescape']);
 // These can drop a constant start: `('/' + value).slice(1)` starts with `value`.
 const PREFIX_CUTTING_METHODS = new Set(['slice', 'substring', 'substr', 'split']);
+const SUBSTRING_METHODS = new Set(['slice', 'substring', 'substr']);
 // The elements on which each attribute loads or navigates to its URL.
 const URL_ATTRIBUTE_TAGS = new Map([
   ['href', new Set(['a', 'area'])],
@@ -100,22 +102,82 @@ function routerQueryLabel(node: Expression, context: SecurityRuleContext) {
   return originModule(node.expression, context) === NEXT_ROUTER_MODULE ? 'The router query' : undefined;
 }
 
-// The part of a template, conditional or operator expression that starts the value.
-function compoundLeadSource(
-  node: TemplateExpression | ConditionalExpression | BinaryExpression,
+// `' '`, `' ' + '\t'`: the text of a string built only from literals.
+function literalText(node: Expression): string | undefined {
+  const value = unwrap(node);
+  if (ts.isStringLiteralLike(value)) return value.text;
+  if (!ts.isBinaryExpression(value) || value.operatorToken.kind !== ts.SyntaxKind.PlusToken) return;
+  const left = literalText(value.left);
+  const right = left === undefined ? undefined : literalText(value.right);
+  return left === undefined || right === undefined ? undefined : left + right;
+}
+
+// The bindings whose URL protocol a condition reads: `target` in
+// `new URL(target, location.origin).protocol === 'https:'`.
+function protocolCheckedBindings(condition: Expression, context: SecurityRuleContext) {
+  const bindings = new Set<Node>();
+  const visit = (node: Node) => {
+    if (ts.isPropertyAccessExpression(node) && node.name.text === 'protocol') {
+      const parsed = unwrap(node.expression);
+      const input =
+        ts.isNewExpression(parsed) && isGlobalUrl(parsed.expression, context) ? parsed.arguments?.[0] : undefined;
+      const binding = input && ts.isIdentifier(unwrap(input)) ? declarationsOf(unwrap(input), context)[0] : undefined;
+      if (binding) bindings.add(binding);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(condition);
+  return bindings;
+}
+
+function isGlobalUrl(callee: Expression, context: SecurityRuleContext) {
+  const name = unwrap(callee);
+  return ts.isIdentifier(name) && name.text === 'URL' && declaredInDefaultLibrary(name, context);
+}
+
+// A branch that renders the very binding the condition checked the protocol of is guarded.
+function conditionalLeadSource(
+  node: ConditionalExpression,
+  context: SecurityRuleContext,
+  next: (part: Expression) => string | undefined,
+) {
+  const checked = protocolCheckedBindings(node.condition, context);
+  const unguarded = (branch: Expression) => {
+    const value = unwrap(branch);
+    return !(ts.isIdentifier(value) && checked.has(declarationsOf(value, context)[0]));
+  };
+  const whenTrue = unguarded(node.whenTrue) ? next(node.whenTrue) : undefined;
+  return whenTrue ?? (unguarded(node.whenFalse) ? next(node.whenFalse) : undefined);
+}
+
+function templateLeadSource(
+  node: TemplateExpression,
   state: TraceState,
   next: (part: Expression) => string | undefined,
 ) {
-  if (ts.isTemplateExpression(node)) {
-    const headCanLead = !state.prefixCut && !isStrippedUrlPrefix(node.head.text);
-    return headCanLead ? undefined : next(node.templateSpans[0].expression);
+  if (!state.prefixCut) return isStrippedUrlPrefix(node.head.text) ? next(node.templateSpans[0].expression) : undefined;
+  for (const span of node.templateSpans) {
+    const source = next(span.expression);
+    if (source) return source;
   }
-  if (ts.isConditionalExpression(node)) return next(node.whenTrue) ?? next(node.whenFalse);
+}
+
+// The part of a template, conditional or operator expression that starts the value.
+function compoundLeadSource(
+  node: TemplateExpression | ConditionalExpression | BinaryExpression,
+  context: SecurityRuleContext,
+  state: TraceState,
+  next: (part: Expression) => string | undefined,
+) {
+  if (ts.isTemplateExpression(node)) return templateLeadSource(node, state, next);
+  if (ts.isConditionalExpression(node)) return conditionalLeadSource(node, context, next);
   const operator = node.operatorToken.kind;
   if (operator === ts.SyntaxKind.PlusToken) {
     const left = unwrap(node.left);
     if (state.prefixCut) return next(left) ?? next(node.right);
-    return ts.isStringLiteralLike(left) && isStrippedUrlPrefix(left.text) ? next(node.right) : next(left);
+    const prefix = literalText(left);
+    if (prefix === undefined) return next(left);
+    return isStrippedUrlPrefix(prefix) ? next(node.right) : undefined;
   }
   // `a && b` yields `b` whenever `a` is truthy; a falsy `a` cannot hold a scheme.
   if (operator === ts.SyntaxKind.AmpersandAmpersandToken) return next(node.right);
@@ -136,17 +198,36 @@ function urlLeadSource(
   if (!node || depth > MAX_DEPTH || isOwnAddress(node, context, state.transformed)) return;
   const next = (part: Expression) => urlLeadSource(part, context, depth + 1, state);
   if (ts.isTemplateExpression(node) || ts.isConditionalExpression(node) || ts.isBinaryExpression(node))
-    return compoundLeadSource(node, state, next);
+    return compoundLeadSource(node, context, state, next);
   const routerLabel = routerQueryLabel(node, context);
   if (routerLabel) return routerLabel;
   if (ts.isCallExpression(node) || ts.isNewExpression(node)) return leadOfLibraryCall(node, context, depth, state);
   if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
+    if (isParsedUrlHost(node, context)) return;
     const label = ts.isPropertyAccessExpression(node) ? untrustedMemberLabel(node, context) : undefined;
     return label ?? next(node.expression);
   }
   if (!ts.isIdentifier(node) || declaredInDefaultLibrary(node, context)) return;
   const initializer = declaredInitializer(node, context);
   return initializer && next(initializer);
+}
+
+// `new URL(x).origin` is `"null"` for a `javascript:` URL, and no host holds a scheme.
+function isParsedUrlHost(node: Expression, context: SecurityRuleContext) {
+  if (!ts.isPropertyAccessExpression(node) || !HOST_MEMBERS.has(node.name.text)) return false;
+  return context.checker.getTypeAtLocation(node.expression).getSymbol()?.name === 'URL';
+}
+
+// A method such as `x.slice(1)` reads its receiver; a global function, even reached through
+// `window.String(x)`, reads its first argument.
+function callInput(call: CallExpression | NewExpression, nameNode: Node, context: SecurityRuleContext) {
+  const callee = unwrap(call.expression);
+  const isMethod =
+    ts.isPropertyAccessExpression(callee) &&
+    declarationsOf(nameNode, context).some(
+      (declaration) => ts.isMethodSignature(declaration) || ts.isMethodDeclaration(declaration),
+    );
+  return isMethod ? callee.expression : call.arguments?.[0];
 }
 
 // `decodeURIComponent(x)`, `x.slice(1)`, `new URL(x)`: standard library calls pass their first
@@ -165,12 +246,15 @@ function leadOfLibraryCall(
   // `encodeURI` keeps `:` but escapes `%`, so an outer decoder only undoes this layer.
   const escapesPercent = name === 'encodeURI';
   if (escapesColon && !state.decoded) return;
-  const input = ts.isPropertyAccessExpression(callee) ? callee.expression : call.arguments?.[0];
+  const input = callInput(call, nameNode, context);
   if (!input) return;
-  const keepsPrefix = escapesColon || PREFIX_PRESERVING_CALLS.has(name);
+  const cutsStart = cutsPrefix(call, name);
+  // `location.hash.slice(0, 80)` still starts with `#`.
+  const keepsStart = SUBSTRING_METHODS.has(name) && !cutsStart;
+  const keepsPrefix = escapesColon || keepsStart || PREFIX_PRESERVING_CALLS.has(name);
   return urlLeadSource(input, context, depth + 1, {
     transformed: state.transformed || !keepsPrefix,
-    prefixCut: state.prefixCut || cutsPrefix(call, name),
+    prefixCut: state.prefixCut || cutsStart,
     decoded: escapesColon || escapesPercent ? false : state.decoded || COLON_DECODING_CALLS.has(name),
   });
 }
