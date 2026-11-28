@@ -6,7 +6,8 @@ import { isVendoredOrSamplePath } from './source-exclusions.js';
 import type { Node, SourceFile } from 'typescript';
 import type { Finding } from '../shared/types.js';
 
-const TEST_FILE = /(?:^|\/)(?:tests?|__tests__|spec|e2e)\/|\.(?:test|spec|e2e)\.[cm]?[jt]sx?$/i;
+const TEST_FILE =
+  /(?:^|\/)(?:tests?|__tests__|specs?|e2e|integration-tests?|cypress)\/|\.(?:test|spec|e2e|e2e-spec|cy)\.[cm]?[jt]sx?$/i;
 // Code generators (GraphQL codegen, Prisma, OpenAPI clients) write casts and directives the team cannot edit.
 const GENERATED_PATH = /(?:^|\/)(?:__generated__|generated[\w-]*|gen)\/|\.(?:generated|gen)\.[cm]?[jt]sx?$/i;
 const TYPESCRIPT_FILE = /\.[cm]?tsx?$/i;
@@ -16,25 +17,68 @@ const JASMINE_FOCUSED = new Set(['fit', 'fdescribe']);
 const SUPPRESSION_DIRECTIVE = /^(?:\/\/\/?|\/\*+)\s*@ts-(ignore|expect-error|nocheck)\b(.*)$/s;
 const WATCHED_DIRECTIVE = /@ts-(?:ignore|expect-error|nocheck)/;
 
-function isFocusableRunner(node: Node): boolean {
-  if (ts.isIdentifier(node)) return FOCUSABLE_RUNNERS.has(node.text);
-  // Playwright groups tests with `test.describe`.
+// `test.concurrent.only(...)` and `test.describe.serial.only(...)` still focus the runner.
+const RUNNER_MODIFIERS = new Set(['concurrent', 'sequential', 'serial', 'parallel', 'describe']);
+
+// A runner imported under another name (`import { test as nodeTest } from 'node:test'`) is still a runner.
+function runnerNamesOf(sourceFile: SourceFile): Set<string> {
+  const names = new Set(FOCUSABLE_RUNNERS);
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) continue;
+    for (const specifier of bindings.elements) {
+      if (specifier.propertyName && FOCUSABLE_RUNNERS.has(specifier.propertyName.text)) {
+        names.add(specifier.name.text);
+      }
+    }
+  }
+  return names;
+}
+
+function isFocusableRunner(node: Node, runnerNames: ReadonlySet<string>): boolean {
+  if (ts.isIdentifier(node)) return runnerNames.has(node.text);
+  if (ts.isCallExpression(node)) {
+    // `it.each(cases).only(...)`
+    const callee = node.expression;
+    return (
+      ts.isPropertyAccessExpression(callee) &&
+      callee.name.text === 'each' &&
+      isFocusableRunner(callee.expression, runnerNames)
+    );
+  }
   return (
     ts.isPropertyAccessExpression(node) &&
-    ts.isIdentifier(node.expression) &&
-    node.expression.text === 'test' &&
-    node.name.text === 'describe'
+    RUNNER_MODIFIERS.has(node.name.text) &&
+    isFocusableRunner(node.expression, runnerNames)
   );
 }
 
-function isFocusedMember(node: Node): boolean {
-  if (!ts.isPropertyAccessExpression(node) || node.name.text !== 'only' || !isFocusableRunner(node.expression)) {
-    return false;
+function focusedMemberName(node: Node): string | undefined {
+  if (ts.isPropertyAccessExpression(node)) return node.name.text;
+  if (ts.isElementAccessExpression(node) && ts.isStringLiteralLike(node.argumentExpression)) {
+    return node.argumentExpression.text;
   }
-  // `it.only(...)` and `describe.only.each(table)(...)` run focused; a bare `it.only` reference does not.
+}
+
+function isInvokedMember(node: Node): boolean {
   const { parent } = node;
   if (ts.isCallExpression(parent)) return parent.expression === node;
-  return ts.isPropertyAccessExpression(parent) && parent.expression === node && parent.name.text === 'each';
+  return ts.isTaggedTemplateExpression(parent) && parent.tag === node;
+}
+
+function isFocusedMember(node: Node, runnerNames: ReadonlySet<string>): boolean {
+  if (!ts.isPropertyAccessExpression(node) && !ts.isElementAccessExpression(node)) return false;
+  if (focusedMemberName(node) !== 'only' || !isFocusableRunner(node.expression, runnerNames)) return false;
+  // `it.only(...)` and `describe.only.each(table)(...)` run focused; a bare `it.only` or `it.only.each` reference does not.
+  const { parent } = node;
+  if (isInvokedMember(node)) return true;
+  return (
+    ts.isPropertyAccessExpression(parent) &&
+    parent.expression === node &&
+    parent.name.text === 'each' &&
+    isInvokedMember(parent)
+  );
 }
 
 function isJasmineFocusedCall(node: Node): boolean {
@@ -73,8 +117,9 @@ function isTestFile(file: string): boolean {
 function checkFocusedTests(sourceFile: SourceFile, file: string): Finding[] {
   if (!isTestFile(file) || !/\bonly\b|\bf(?:it|describe)\b/.test(sourceFile.text)) return [];
   const findings: Finding[] = [];
+  const runnerNames = runnerNamesOf(sourceFile);
   walkNodes(sourceFile, (node) => {
-    if (!isFocusedMember(node) && !isJasmineFocusedCall(node)) return;
+    if (!isFocusedMember(node, runnerNames) && !isJasmineFocusedCall(node)) return;
     findings.push(
       findingAt(sourceFile, file, node.getStart(sourceFile), {
         ruleId: 'focused-test-committed',
@@ -96,11 +141,21 @@ function suppressionReason(commentText: string): { directive: string; hasReason:
 
 function commentRangesOf(sourceFile: SourceFile): ts.CommentRange[] {
   const seenPositions = new Set<number>();
+  const seenComments = new Set<number>();
   const ranges: ts.CommentRange[] = [];
   walkNodes(sourceFile, (node) => {
     if (seenPositions.has(node.pos)) return;
     seenPositions.add(node.pos);
-    for (const range of ts.getLeadingCommentRanges(sourceFile.text, node.pos) ?? []) ranges.push(range);
+    // A directive after code on the same line (`setup(); // @ts-ignore`) is a trailing comment of the previous token.
+    const found = [
+      ...(ts.getLeadingCommentRanges(sourceFile.text, node.pos) ?? []),
+      ...(ts.getTrailingCommentRanges(sourceFile.text, node.pos) ?? []),
+    ];
+    for (const range of found) {
+      if (seenComments.has(range.pos)) continue;
+      seenComments.add(range.pos);
+      ranges.push(range);
+    }
   });
   return ranges;
 }
@@ -136,7 +191,9 @@ function isDoubleAssertion(node: Node): boolean {
 
 function checkDoubleTypeAssertions(sourceFile: SourceFile, file: string): Finding[] {
   // Tests cast through `unknown` to build partial mocks, which is the accepted way to do it there.
-  if (!TYPESCRIPT_FILE.test(file) || isTestFile(file) || !/\bas\s+(?:unknown|any)\b/.test(sourceFile.text)) return [];
+  if (!TYPESCRIPT_FILE.test(file) || isTestFile(file)) return [];
+  // A comment may sit between `as` and the type, so the cheap prefilter only looks for both words.
+  if (!/\bas\b/.test(sourceFile.text) || !/\b(?:unknown|any)\b/.test(sourceFile.text)) return [];
   const findings: Finding[] = [];
   walkNodes(sourceFile, (node) => {
     if (!isDoubleAssertion(node)) return;

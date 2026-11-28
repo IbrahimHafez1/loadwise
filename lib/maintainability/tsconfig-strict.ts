@@ -8,7 +8,7 @@ const TSCONFIG_FILE = /(?:^|\/)tsconfig(?:\.[\w-]+)*\.json$/i;
 // Configs that exist to compile tests, tooling or sample projects are allowed to be looser.
 const NON_PRODUCTION_CONFIG =
   /(?:^|[./_-])(?:test|tests|spec|e2e|jest|vitest|cypress|playwright|storybook)(?:[./_-]|$)/i;
-const NON_PRODUCTION_FOLDER = /(?:^|\/)(?:tests?|__tests__|e2e|templates?|boilerplates?|starters?)\//i;
+const NON_PRODUCTION_FOLDER = /(?:^|\/)(?:tests?|__tests__|specs?|e2e|templates?|boilerplates?|starters?)\//i;
 const LOOSENED_CHECKS = ['strictNullChecks', 'noImplicitAny'];
 
 function objectProperty(object: ts.ObjectLiteralExpression, name: string): ts.PropertyAssignment | undefined {
@@ -34,8 +34,8 @@ function compilerOptionsOf(sourceFile: ts.JsonSourceFile): ts.ObjectLiteralExpre
 
 function strictnessProblem(options: ts.ObjectLiteralExpression): ts.PropertyAssignment | undefined {
   const strict = objectProperty(options, 'strict');
-  if (strict) return isFalse(strict) ? strict : undefined;
-  // Without `strict`, an explicit opt-out of the two checks that matter most is the same decision.
+  if (isFalse(strict)) return strict;
+  // An explicit opt-out of the two checks that matter most is the same decision, with or without `strict: true`.
   return LOOSENED_CHECKS.map((name) => objectProperty(options, name)).find(isFalse);
 }
 
