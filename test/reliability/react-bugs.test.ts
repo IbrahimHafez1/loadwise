@@ -18,6 +18,7 @@ function ruleIds(source: string, fileName = 'view.tsx'): string[] {
     { ...packages, [fileName]: source },
     (program) => {
       assert.ok(program.getSourceFiles);
+
       const sourceFile = program.getSourceFiles().find((file) => file.fileName.endsWith(fileName));
       assert.ok(sourceFile);
       return checkReactBugs(sourceFile, fileName, program.getTypeChecker()).map(({ ruleId }) => ruleId);
@@ -218,4 +219,22 @@ test('next-server-env-in-client follows the guard branch, computed keys and dest
   assert.deepEqual(ruleIds(client('process.env[String(Math.random())]'), 'client.ts'), flagged);
   assert.deepEqual(ruleIds("'use client';\nconst { API_SECRET } = process.env;\nexport {};", 'client.ts'), flagged);
   assert.deepEqual(ruleIds("'use client';\nconst { NEXT_PUBLIC_URL } = process.env;\nexport {};", 'client.ts'), []);
+});
+
+test('next-server-env-in-client never tells developers to pass the raw value to a Client Component', () => {
+  const sourceText = "'use client';\nexport const value = process.env.DATABASE_URL;";
+  const messages = withProgram(
+    'export {};',
+    { 'client.ts': sourceText },
+    (program) => {
+      assert.ok(program.getSourceFiles);
+      const sourceFile = program.getSourceFiles().find((file) => file.fileName.endsWith('client.ts'));
+      assert.ok(sourceFile);
+      return checkReactBugs(sourceFile, 'client.ts', program.getTypeChecker()).map(({ message }) => message);
+    },
+    options,
+  );
+  assert.equal(messages.length, 1);
+  assert.match(messages[0] ?? '', /non-sensitive derived value/);
+  assert.doesNotMatch(messages[0] ?? '', /pass it down/);
 });
