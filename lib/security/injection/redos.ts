@@ -487,14 +487,64 @@ function canFail(node: PatternNode) {
   return !nullable(node) || node.kind === 'assert' || node.kind === 'lookaround';
 }
 
+function isEveryCharacter(ranges: readonly CodePointRange[]) {
+  return ranges.length === 1 && ranges[0][0] === 0 && ranges[0][1] === maxCodePoint;
+}
+
+// The first atom of `node`, looking into groups and sequences, so `(^[\t ]*)` starts with `^`.
+function leadingAtom(node: PatternNode): PatternNode {
+  let current = node;
+  while (current.kind === 'group' || (current.kind === 'seq' && current.items.length > 0))
+    current = current.kind === 'group' ? current.body : current.items[0];
+  return current;
+}
+
+// `.*` alone, or a group that is `.*` after optional single characters only (`(\/?.*)`).
+function isDotRunEnding(node: PatternNode) {
+  const body = unwrapGroups(node);
+  const items = body.kind === 'seq' ? body.items : [body];
+  const last = items.at(-1);
+  const characters = last && repeatedCharacters(last);
+  return (
+    Boolean(characters && isEveryCharacter(characters)) &&
+    items.slice(0, -1).every((item) => !canFail(item) && edgeRunCharacters(item, false).length === 0)
+  );
+}
+
 function isTrailingDotEndAnchor(items: readonly PatternNode[], index: number, followed: boolean): boolean {
   if (followed || index === 0) return false;
-  const first = items[0];
+  const first = leadingAtom(items[0]);
   if (first.kind !== 'assert' || first.anchor !== '^') return false;
   const tail = items.slice(index + 1);
   if (tail.length !== 1 || tail[0].kind !== 'assert' || tail[0].anchor !== '$') return false;
-  const chars = repeatedCharacters(items[index]);
-  return Boolean(chars && chars.length === 1 && chars[0][0] === 0 && chars[0][1] === maxCodePoint);
+  return isDotRunEnding(items[index]);
+}
+
+// The characters of the unbounded character repeats inside `node` that one end of its match can
+// begin with, because everything between that end and the repeat can match empty: `\s*` in
+// `(?:\(?\w*\)?\s*=>)?` from the start, or in `(?:x\s*)+` from the end. Assertions and required
+// characters stop the walk.
+function edgeRunCharacters(node: PatternNode, fromEnd: boolean): CodePointRange[] {
+  const characters = repeatedCharacters(node);
+  if (characters) return characters;
+  switch (node.kind) {
+    case 'group':
+    case 'quant':
+      return edgeRunCharacters(node.body, fromEnd);
+    case 'alt':
+      return normalize(node.alternatives.flatMap((alternative) => edgeRunCharacters(alternative, fromEnd)));
+    case 'seq': {
+      const ranges: CodePointRange[] = [];
+      const items = fromEnd ? [...node.items].reverse() : node.items;
+      for (const item of items) {
+        ranges.push(...edgeRunCharacters(item, fromEnd));
+        if (canFail(item)) break;
+      }
+      return normalize(ranges);
+    }
+    default:
+      return [];
+  }
 }
 
 // Two unbounded repeats over overlapping characters with nothing required between them
@@ -502,23 +552,22 @@ function isTrailingDotEndAnchor(items: readonly PatternNode[], index: number, fo
 // `\w+\s*\w+$`) can split one run of n characters in n ways. The split is only retried when
 // something after them can fail, so `/\d+\w*/` alone is quiet. Repeats of longer bodies
 // (`(ab)+(ac)+`) are left alone: their first characters can overlap without any text matching both.
+// A repeat at the edge of a group or loop counts too: the trailing `\s*` of `(?:\w+\(\)\s*)+` and
+// a later `\s*` split the same run, as do `^\s*` and the `\s*` inside an optional `(?:\w*\s*=>)?`.
 function hasAmbiguousRun(items: readonly PatternNode[], followed: boolean) {
   // Characters of the repeats that the next item can take over because everything since them can
   // match empty.
   let reachable: CodePointRange[] = [];
   for (const [index, item] of items.entries()) {
     const characters = repeatedCharacters(item);
-    if (!characters) {
-      if (canFail(item)) reachable = [];
-      continue;
-    }
     if (
-      overlaps(reachable, characters) &&
+      overlaps(reachable, characters ?? edgeRunCharacters(item, false)) &&
       (followed || items.slice(index + 1).some(canFail)) &&
       !isTrailingDotEndAnchor(items, index, followed)
     )
       return true;
-    reachable = nullable(item) ? normalize([...reachable, ...characters]) : characters;
+    const trailing = characters ?? edgeRunCharacters(item, true);
+    reachable = canFail(item) ? trailing : normalize([...reachable, ...trailing]);
   }
   return false;
 }
@@ -605,7 +654,7 @@ function fixedRegex(expression: Expression | undefined, checker: CheckerAdapter,
   return { source, flags };
 }
 
-// `text.slice(0, 200)`: a fixed-length cut keeps the input short enough.
+// `text.slice(0, 200)`: a fixed-length cut keeps the input short enough for polynomial patterns.
 function isTruncated(subject: Expression) {
   const node = ts.skipOuterExpressions(subject);
   const method = ts.isCallExpression(node) ? methodName(node) : undefined;
@@ -658,10 +707,12 @@ function message(label: string, kind: BacktrackingKind) {
 
 function checkCall(node: CallExpression, context: SecurityRuleContext) {
   const parts = regexAndSubject(node);
-  if (!parts?.regex || !parts.subject || ts.isSpreadElement(parts.subject) || isTruncated(parts.subject)) return;
+  if (!parts?.regex || !parts.subject || ts.isSpreadElement(parts.subject)) return;
   const regex = fixedRegex(parts.regex, context.checker);
   const kind = regex && backtrackingKind(regex.source, regex.flags);
-  if (!kind) return;
+  // A cap keeps polynomial work small, but exponential backtracking is already catastrophic at a
+  // few dozen characters, so a cut such as `slice(0, 254)` does not make it safe.
+  if (!kind || (kind === 'polynomial' && isTruncated(parts.subject))) return;
   const trace = context.taint.trace(parts.subject, 'regex');
   if (trace) return reportTraced(context, node, ruleId, message(trace.label, kind), trace);
   const parameterName = parameterSubjectName(parts.subject, context.checker);

@@ -27,6 +27,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Maintainability rules: `focused-test-committed` (`.only`, `fit` and `fdescribe` in test files), `ts-suppression-without-reason` (`@ts-ignore`, `@ts-expect-error` and `@ts-nocheck` with no explanation), `double-type-assertion` (`as unknown as T` and `as any as T`) and `tsconfig-strict-disabled` (`"strict": false`, or `strictNullChecks` or `noImplicitAny` turned off without `strict`).
+- `regex-catastrophic-backtracking` now finds polynomial backtracking between a repeat at the edge of a group or loop and a neighbouring repeat over the same characters, such as the trailing `\s*` of `(?:\w+\(\)\s*)+` followed by `\s*$`, or `^\s*` followed by an optional `(?:\w*\s*=>)?`.
+- `regex-catastrophic-backtracking` no longer treats a fixed-length cut such as `text.slice(0, 254)` as safe for a pattern that backtracks exponentially; the cut still silences polynomial patterns, where a short input keeps the work small.
 
 ## [0.5.1] - 2026-11-27
 

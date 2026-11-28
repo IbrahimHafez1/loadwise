@@ -630,6 +630,15 @@
       "file": "index.js",
       "line": 5,
       "source": "Generic Express cookie auth without CSRF pattern"
+    },
+    {
+      "id": "loadwise-handler-whitespace-redos",
+      "pillar": "sec",
+      "ruleId": "regex-catastrophic-backtracking",
+      "project": "loadwise-handler-whitespace-redos",
+      "file": "index.js",
+      "line": 3,
+      "source": "Loadwise PR #7 review: overlapping whitespace quantifiers around a loop (generic pattern, no single advisory)"
     }
   ]
 }
