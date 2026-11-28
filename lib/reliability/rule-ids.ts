@@ -47,6 +47,11 @@ const sourceRules = [
   'error-rethrown-without-cause',
   'throw-non-error',
   'error-logged-without-stack',
+  'react-effect-sets-state-every-render',
+  'react-async-effect-callback',
+  'react-state-mutated-in-place',
+  'react-list-missing-key',
+  'next-server-env-in-client',
 ];
 
 const migrationRules = [
@@ -158,6 +163,11 @@ const impactByRule: Readonly<Record<string, ImpactLevel>> = {
   'error-rethrown-without-cause': 'low',
   'throw-non-error': 'medium',
   'error-logged-without-stack': 'low',
+  'react-effect-sets-state-every-render': 'high',
+  'react-async-effect-callback': 'medium',
+  'react-state-mutated-in-place': 'high',
+  'react-list-missing-key': 'medium',
+  'next-server-env-in-client': 'high',
   'csharp-disposable-without-using': 'medium',
   'python-bare-except': 'medium',
   'python-swallowed-exception': 'medium',
@@ -261,6 +271,16 @@ const descriptionByRule: Readonly<Record<string, string>> = {
     'A catch block throws a new error without the caught one, so the original message and stack are lost.',
   'throw-non-error': 'A string, number or object literal is thrown instead of an Error, so there is no stack trace.',
   'error-logged-without-stack': 'A catch block logs only error.message and carries on, so the stack trace is lost.',
+  'react-effect-sets-state-every-render':
+    'An effect with no dependency array sets state to a new value on every run, so the component re-renders forever.',
+  'react-async-effect-callback':
+    'An async function is passed to useEffect, so its promise is treated as the cleanup function and its errors go unhandled.',
+  'react-state-mutated-in-place':
+    'A useState value is mutated in place and passed to its own setter, so React sees the same reference and skips the re-render.',
+  'react-list-missing-key':
+    'An element or fragment returned from .map() has no key prop, so React cannot track items when the list changes.',
+  'next-server-env-in-client':
+    "A 'use client' file reads a process.env variable without the NEXT_PUBLIC_ prefix, so it is undefined in the browser.",
   'csharp-disposable-without-using':
     'A C# stream, connection or other IDisposable is created without using, so an exception leaks it.',
   'python-bare-except': 'A bare except also catches SystemExit and KeyboardInterrupt, hiding shutdowns and bugs.',

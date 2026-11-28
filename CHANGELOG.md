@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Reliability rules: `child-process-without-error-listener` (a spawned child process with no `error` listener crashes the parent when the spawn fails), `error-rethrown-without-cause`, `throw-non-error` and `error-logged-without-stack`.
 - Performance rule `llm-call-without-max-tokens` reports OpenAI chat completions and responses calls that set no output token limit.
 - `pool-created-per-request-or-item` now also covers `S3Client`, `OpenAI`, `Anthropic` and `Stripe` clients created per request or loop item.
+- Reliability rules for React and Next.js bugs that break an app at runtime: `react-effect-sets-state-every-render`, `react-async-effect-callback`, `react-state-mutated-in-place`, `react-list-missing-key` and `next-server-env-in-client`. None has an automatic fix.
 
 ### Removed
 

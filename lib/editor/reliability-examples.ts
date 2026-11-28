@@ -85,6 +85,31 @@ const examples: Record<string, { before: string; code: string; note: string }> =
     code: "try {\n  await sync();\n} catch (error) {\n  logger.error({ err: error }, 'sync failed');\n}",
     note: 'Pass the error itself so the logger records the stack.',
   },
+  'react-effect-sets-state-every-render': {
+    before: 'useEffect(() => {\n  setItems([...items, next]);\n});',
+    code: 'useEffect(() => {\n  setItems((previous) => [...previous, next]);\n}, [next]);',
+    note: 'Without a dependency array the effect runs after every render, and each run renders again.',
+  },
+  'react-async-effect-callback': {
+    before: 'useEffect(async () => {\n  await load();\n}, []);',
+    code: 'useEffect(() => {\n  void (async () => {\n    await load();\n  })();\n}, []);',
+    note: 'The effect callback must return nothing or a cleanup function, not a promise.',
+  },
+  'react-state-mutated-in-place': {
+    before: 'items.push(item);\nsetItems(items);',
+    code: 'setItems([...items, item]);',
+    note: 'React skips the render when the setter receives the same reference.',
+  },
+  'react-list-missing-key': {
+    before: 'rows.map((row) => <li>{row.name}</li>)',
+    code: 'rows.map((row) => <li key={row.id}>{row.name}</li>)',
+    note: 'A stable key lets React match items between renders.',
+  },
+  'next-server-env-in-client': {
+    before: "'use client';\nconst url = process.env.API_URL;",
+    code: "'use client';\nconst url = process.env.NEXT_PUBLIC_API_URL;",
+    note: 'Next.js only inlines NEXT_PUBLIC_ variables into the browser bundle.',
+  },
 };
 
 const scriptLanguages = ['javascript', 'javascriptreact', 'typescript', 'typescriptreact'];
