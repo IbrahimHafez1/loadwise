@@ -113,6 +113,23 @@ function finallyReturns(statement: TryStatement): boolean {
   return (statement.finallyBlock?.statements ?? []).some((inner) => ts.isReturnStatement(inner));
 }
 
+// A `let` or `var` may have been reassigned, so its initializer is not trustworthy.
+function isMutableVariable(declaration: Node | undefined): boolean {
+  return (
+    declaration !== undefined &&
+    ts.isVariableDeclaration(declaration) &&
+    !(ts.getCombinedNodeFlags(declaration) & ts.NodeFlags.Const)
+  );
+}
+
+// An async function turns a throw into a rejected promise instead of letting it escape.
+function isAsyncFunction(node: Node): boolean {
+  return (
+    ts.canHaveModifiers(node) &&
+    (ts.getModifiers(node) ?? []).some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword)
+  );
+}
+
 function functionOf(declaration: Node | undefined): Node | undefined {
   if (!declaration || declaration.getSourceFile().isDeclarationFile) return;
   if (ts.isFunctionDeclaration(declaration) || ts.isMethodDeclaration(declaration)) return declaration;
@@ -127,7 +144,9 @@ function functionOf(declaration: Node | undefined): Node | undefined {
 function localCallee(call: CallExpression, handler: Node, checker: CheckerAdapter): Node | undefined {
   const callee = ts.skipOuterExpressions(call.expression);
   if (!ts.isIdentifier(callee)) return;
-  const target = functionOf(checker.getSymbolAtLocation(callee)?.valueDeclaration);
+  const declaration = checker.getSymbolAtLocation(callee)?.valueDeclaration;
+  if (isMutableVariable(declaration)) return;
+  const target = functionOf(declaration);
   return target && target.pos >= handler.pos && target.end <= handler.end ? target : undefined;
 }
 
@@ -156,7 +175,7 @@ function endsOrRethrows(handler: Node, checker: CheckerAdapter): boolean {
       const helper = ts.isCallExpression(node) ? localCallee(node, handler, checker) : undefined;
       if (helper && !visitedHelpers.has(helper)) {
         visitedHelpers.add(helper);
-        visitChildren(helper, swallowed);
+        visitChildren(helper, swallowed || isAsyncFunction(helper));
       }
       visitChildren(node, swallowed);
     }
@@ -172,14 +191,7 @@ function handlerBody(handler: Expression, checker: CheckerAdapter): Node | undef
   if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) return expression;
   if (!ts.isIdentifier(expression) && !ts.isPropertyAccessExpression(expression)) return;
   const declaration = checker.getSymbolAtLocation(expression)?.valueDeclaration;
-  // A `let` or `var` may have been reassigned before registration, so its initializer is not trustworthy.
-  if (
-    declaration &&
-    ts.isVariableDeclaration(declaration) &&
-    !(ts.getCombinedNodeFlags(declaration) & ts.NodeFlags.Const)
-  ) {
-    return;
-  }
+  if (isMutableVariable(declaration)) return;
   return functionOf(declaration);
 }
 
