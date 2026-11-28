@@ -130,8 +130,10 @@ test('a local Number shadow does not make Number.isInteger a guard', () => {
 });
 
 test('logical assignments carry request data into a later sink', () => {
-  for (const operator of ['||=', '??=', '&&=']) {
-    const body = `let cmd = ''; cmd ${operator} String(req.query.cmd); exec(cmd);`;
+  // Each start value lets the operator assign: `''` is falsy, `undefined` nullish, `'echo'` truthy.
+  const startValues: Record<string, string> = { '||=': "''", '??=': 'undefined', '&&=': "'echo'" };
+  for (const [operator, start] of Object.entries(startValues)) {
+    const body = `let cmd: string | undefined = ${start}; cmd ${operator} String(req.query.cmd); exec(cmd);`;
     assert.equal(routeLines(body, 'command-injection').length, 1, operator);
   }
 });
@@ -147,8 +149,8 @@ test('a negated character class holding a slash does not prove a file name has n
   const negated =
     'const name = String(req.query.name); if (/[^a-z/]/.test(name)) return; fs.readFileSync(path.join("/srv", name));';
   assert.equal(routeLines(negated, 'path-traversal').length, 1);
-  const positive =
-    'const name = String(req.query.name); if (/[/\\]/.test(name)) return; fs.readFileSync(path.join("/srv", name));';
+  // `String.raw` keeps both backslashes, so the fixture's regex is the valid `/[/\\]/`.
+  const positive = String.raw`const name = String(req.query.name); if (/[/\\]/.test(name)) return; fs.readFileSync(path.join("/srv", name));`;
   assert.equal(routeLines(positive, 'path-traversal').length, 0);
 });
 
@@ -225,4 +227,34 @@ test('a shadowed numeric helper is not a numeric sanitizer', () => {
     isNumeric(`${declaration} const Math = { floor: (value: string) => value }; sink(Math.floor(raw));`),
     false,
   );
+});
+
+test('a compound assignment written as the sink argument carries request data', () => {
+  assert.equal(routeLines("let cmd = 'ls '; exec(cmd += String(req.query.cmd));", 'command-injection').length, 1);
+  assert.equal(routeLines("let cmd = 'ls '; exec(cmd += ' -l');", 'command-injection').length, 0);
+});
+
+test('a getter over a spread field keeps the field tainted, a clean data property does not', () => {
+  const base = 'const base = { cmd: String(req.query.cmd) };';
+  const getter = `${base} const options = { ...base, get cmd() { return String(req.query.cmd); } }; exec(options.cmd);`;
+  assert.equal(routeLines(getter, 'command-injection').length, 1);
+  const clean = `${base} const options = { ...base, cmd: 'safe' }; exec(options.cmd);`;
+  assert.equal(routeLines(clean, 'command-injection').length, 0);
+});
+
+test('a field written after an object literal initializer carries its own taint', () => {
+  const tainted =
+    'const record: Record<string, string> = { other: String(req.query.o) }; record.name = String(req.query.n); exec(record.name);';
+  assert.equal(routeLines(tainted, 'command-injection').length, 1);
+  const fromEmpty =
+    "const record: Record<string, string> = {}; record['name'] = String(req.query.n); exec(record.name);";
+  assert.equal(routeLines(fromEmpty, 'command-injection').length, 1);
+  const otherField =
+    "const record: Record<string, string> = {}; record.name = 'safe'; record.other = String(req.query.o); exec(record.name);";
+  assert.equal(routeLines(otherField, 'command-injection').length, 0);
+});
+
+test('reassigning a let object with a value of unknown fields taints every field', () => {
+  const body = 'let record = { other: String(req.query.o) }; record = req.body; exec(record.name);';
+  assert.equal(routeLines(body, 'command-injection').length, 1);
 });

@@ -1,6 +1,8 @@
 // Helpers shared by the injection rules: trace wording and tiering, global and locally created
 // values.
 import { ts } from '../../performance/compiler.js';
+import { fieldWritesTo } from '../taint/guards.js';
+import type { FieldWrite } from '../taint/guards.js';
 import type {
   CallExpression,
   Expression,
@@ -95,6 +97,24 @@ function initializerOf(identifier: MemberName, checker: CheckerAdapter): Express
   if (ts.isBinaryExpression(declaration)) return ts.skipOuterExpressions(declaration.right);
 }
 
+// The field writes (`options.shell = true`) to the local object `identifier` names, which change
+// what its literal initializer says.
+function fieldWritesOf(identifier: Identifier, checker: CheckerAdapter): FieldWrite[] {
+  const declaration = valueDeclaration(identifier, checker);
+  if (!declaration || !ts.isVariableDeclaration(declaration)) return [];
+  const scope = ts.findAncestor(declaration, (node: Node) => ts.isFunctionLike(node) || ts.isSourceFile(node));
+  return scope ? fieldWritesTo(declaration, scope, checker) : [];
+}
+
+// The arguments in the positions the callee receives them: `f(...['a', b])` passes `'a'`, then `b`.
+// A spread of anything else stays a spread, since the positions it fills are unknown.
+function positionalArguments(args: readonly Expression[]): Expression[] {
+  return args.flatMap((argument) => {
+    const spread = ts.isSpreadElement(argument) ? ts.skipOuterExpressions(argument.expression) : undefined;
+    return spread && ts.isArrayLiteralExpression(spread) ? positionalArguments(spread.elements) : [argument];
+  });
+}
+
 // The value of `module.exports = value` or `export = value` in a project source file.
 function moduleExportValue(sourceFile: SourceFile, checker: CheckerAdapter): Expression | undefined {
   if (sourceFile.isDeclarationFile) return;
@@ -155,4 +175,15 @@ function createdBy(
   return false;
 }
 
-export { sourceSuffix, hopReason, reportTraced, methodName, isGlobalName, calledExport, initializerOf, createdBy };
+export {
+  sourceSuffix,
+  hopReason,
+  reportTraced,
+  methodName,
+  isGlobalName,
+  calledExport,
+  initializerOf,
+  fieldWritesOf,
+  positionalArguments,
+  createdBy,
+};

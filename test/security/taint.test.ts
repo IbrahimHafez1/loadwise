@@ -3,9 +3,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { withContext, sinkArgument, stubs } from './helpers.js';
+import { withProgram } from '../performance/helpers.js';
+import { createTaint } from '../../lib/security/taint/index.js';
 import * as ts from 'typescript';
 import type { Expression, Node, SourceFile } from 'typescript';
-import type { SecurityRuleContext, SinkKind } from '../../lib/shared/types.js';
+import type { ProgramAdapter, SecurityRuleContext, SinkKind } from '../../lib/shared/types.js';
 
 const sinkDeclaration = 'declare function sink(value: unknown): void;';
 
@@ -318,4 +320,27 @@ test('a reassigned record uses its later fields', () => {
     "let record = { a: req.query.x, b: 'fixed' }; record = { a: 'fixed', b: req.query.y }; sink(record.b);",
   );
   assert.ok(traced(source));
+});
+
+test('a lookup that throws does not leave the expression cached as clean', () => {
+  const source = expressRoute('sink(req.query.id);');
+  withProgram(source, stubs.express, (program: ProgramAdapter, sourceFile: SourceFile) => {
+    const checker = program.getTypeChecker();
+    let failNextTypeLookup = true;
+    const failingOnce: ProgramAdapter = {
+      ...program,
+      getTypeChecker: () => ({
+        ...checker,
+        getTypeAtLocation(node: Node) {
+          if (!failNextTypeLookup) return checker.getTypeAtLocation(node);
+          failNextTypeLookup = false;
+          throw new Error('type lookup failed');
+        },
+      }),
+    };
+    const taint = createTaint(failingOnce);
+    const argument = sinkArgument(sourceFile);
+    assert.throws(() => taint.trace(argument, 'sql'), /type lookup failed/);
+    assert.ok(taint.trace(argument, 'sql'));
+  });
 });

@@ -291,6 +291,50 @@ function assignmentsTo(declaration: Declaration, scope: Node, checker: CheckerAd
   return byDeclaration.get(declaration) ?? [];
 }
 
+/** A write to one field of an object binding; `name` is undefined for a computed key. */
+interface FieldWrite {
+  name: string | undefined;
+  assignment: BinaryExpression;
+}
+
+const fieldWriteIndexes = new WeakMap<CheckerAdapter, WeakMap<Node, Map<Node, FieldWrite[]>>>();
+
+function writtenFieldName(target: Expression): string | undefined {
+  if (ts.isPropertyAccessExpression(target)) return target.name.text;
+  if (!ts.isElementAccessExpression(target)) return;
+  const key = ts.skipOuterExpressions(target.argumentExpression);
+  return ts.isStringLiteralLike(key) || ts.isNumericLiteral(key) ? key.text : undefined;
+}
+
+// The `object.field = value` and `object['field'] = value` writes (also `+=`, `||=`, `??=`, `&&=`)
+// to fields of `declaration` inside `scope`, in source order. `const` pins only the binding, so a
+// literal initializer is not the whole value once a field is written. Indexed once per scope, as
+// `assignmentsTo` is.
+function fieldWritesTo(declaration: Declaration, scope: Node, checker: CheckerAdapter): FieldWrite[] {
+  let byScope = fieldWriteIndexes.get(checker);
+  if (!byScope) fieldWriteIndexes.set(checker, (byScope = new WeakMap()));
+  let byDeclaration = byScope.get(scope);
+  if (!byDeclaration) {
+    byDeclaration = new Map();
+    const writes = byDeclaration;
+    (function visit(node: Node): void {
+      if (
+        ts.isBinaryExpression(node) &&
+        valueAssignmentOperators.has(node.operatorToken.kind) &&
+        (ts.isPropertyAccessExpression(node.left) || ts.isElementAccessExpression(node.left))
+      ) {
+        const object = ts.skipOuterExpressions(node.left.expression);
+        const written = ts.isIdentifier(object) ? checker.getSymbolAtLocation(object)?.valueDeclaration : undefined;
+        if (written && !writes.has(written)) writes.set(written, []);
+        if (written) writes.get(written)?.push({ name: writtenFieldName(node.left), assignment: node });
+      }
+      ts.forEachChild(node, visit);
+    })(scope);
+    byScope.set(scope, byDeclaration);
+  }
+  return byDeclaration.get(declaration) ?? [];
+}
+
 // A parameter, a `const`, or a name destructured from either.
 function isStableDeclaration(declaration: Node) {
   let current: Node = declaration;
@@ -363,4 +407,5 @@ function isGuardedByCondition(use: Node, evidence: EvidenceTest): boolean {
   return false;
 }
 
-export { isBuiltinReference, isGuardedUse, isGuardedByCondition, isReassigned, assignmentsTo };
+export { isBuiltinReference, isGuardedUse, isGuardedByCondition, isReassigned, assignmentsTo, fieldWritesTo };
+export type { FieldWrite };

@@ -130,3 +130,26 @@ test('a spread argument and a local alias of a global evaluator are still sinks'
   );
   assert.deepEqual(findings(source, 'code-injection'), [9, 11, 13]);
 });
+
+test('a chained evaluator alias is a sink and a literal spread passes its elements in order', () => {
+  const source = route(
+    'const run = eval;',
+    'const again = run;',
+    'again(req.body.expression);',
+    "eval(...['1', req.body.extra]);",
+    "new Function(...['a', req.body.code]);",
+  );
+  assert.deepEqual(findings(source, 'code-injection'), [11, 13]);
+});
+
+test('an aliased eval of a parameter is contextual, as a direct eval is', () => {
+  const source = 'const run = eval;\nexport function evaluate(text: string) { return run(text); }';
+  const { typed } = lintBothWays(source, packages);
+  const contextual = typed.filter(
+    (finding: LocatedFinding) => finding.ruleId === 'code-injection' && finding.contextualReason,
+  );
+  assert.deepEqual(
+    contextual.map((finding: LocatedFinding) => finding.line),
+    [2],
+  );
+});
