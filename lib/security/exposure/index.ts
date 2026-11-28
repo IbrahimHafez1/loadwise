@@ -13,6 +13,7 @@ import * as passwordResponse from './password-response.js';
 import * as storageAcl from './storage-acl.js';
 import * as urlSecrets from './url-secrets.js';
 import * as frontend from './frontend-security.js';
+import * as jsxUrl from './jsx-url.js';
 import * as clientEnv from './client-env.js';
 import * as nextImageConfig from './next-image-config.js';
 import * as backend from './backend-security-mastery.js';
@@ -52,7 +53,7 @@ export const checks = {
   PropertyAccessExpression: [urlSecrets.checkPropertyAccess, clientEnv.checkEnvRead],
   ElementAccessExpression: [clientEnv.checkEnvRead],
   ImportSpecifier: [clientEnv.checkImportSpecifier],
-  JsxAttribute: [frontend.checkJsxAttribute, frontend.checkJsxUrlAttribute],
+  JsxAttribute: [frontend.checkJsxAttribute, jsxUrl.checkJsxUrlAttribute],
   PropertyAssignment: [
     cors.checkCorsProperty,
     graphql.checkProperty,
