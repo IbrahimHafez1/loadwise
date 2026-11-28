@@ -280,7 +280,7 @@ const descriptionByRule: Readonly<Record<string, string>> = {
   'react-list-missing-key':
     'An element or fragment returned from .map() has no key prop, so React cannot track items when the list changes.',
   'next-server-env-in-client':
-    "A 'use client' file reads a process.env variable without the NEXT_PUBLIC_ prefix, so it is undefined in the browser.",
+    "A 'use client' file reads a process.env variable without the NEXT_PUBLIC_ prefix, so it is unavailable in the browser by default.",
   'csharp-disposable-without-using':
     'A C# stream, connection or other IDisposable is created without using, so an exception leaks it.',
   'python-bare-except': 'A bare except also catches SystemExit and KeyboardInterrupt, hiding shutdowns and bugs.',

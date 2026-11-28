@@ -88,7 +88,7 @@ const examples: Record<string, { before: string; code: string; note: string }> =
   'react-effect-sets-state-every-render': {
     before: 'useEffect(() => {\n  setItems([...items, next]);\n});',
     code: 'useEffect(() => {\n  setItems((previous) => [...previous, next]);\n}, [next]);',
-    note: 'Without a dependency array the effect runs after every render, and each run renders again.',
+    note: 'Without a dependency array the effect runs after every render, and each run renders again. Keep `next` stable (a primitive or memoised value) or the loop continues.',
   },
   'react-async-effect-callback': {
     before: 'useEffect(async () => {\n  await load();\n}, []);',
