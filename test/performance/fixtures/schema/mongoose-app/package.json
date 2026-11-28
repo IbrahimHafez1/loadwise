@@ -2,6 +2,6 @@
   "name": "mongoose-app-fixture",
   "private": true,
   "dependencies": {
-    "mongoose": "8.0.0"
+    "mongoose": "8.24.11"
   }
 }
