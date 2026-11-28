@@ -9,11 +9,12 @@ import type { Finding } from '../shared/types.js';
 
 // Only the built-in error classes: a domain or HTTP error (AppError, NotFoundException) usually translates a failure on
 // purpose, while a plain Error thrown from a catch block is just a worse copy of the original.
-const builtInError = /^(?:Error|TypeError|RangeError|SyntaxError|ReferenceError)$/;
+const builtInError = /^(?:Error|TypeError|RangeError|SyntaxError|ReferenceError|EvalError|URIError|AggregateError)$/;
 // A failure level: a warning that drops the stack is usually a deliberate downgrade of an expected failure.
 const failureLogMethods = new Set(['error', 'fatal']);
 // Fixtures, end-to-end helpers, test utilities and one-off migrations throw and log loosely on purpose.
-const looseFolder = /(?:^|\/)(?:__fixtures__|__mocks__|fixtures?|e2e|migrations?|[\w-]*test[\w-]*)\//i;
+const looseFolder =
+  /(?:^|\/)(?:__fixtures__|__mocks__|fixtures?|e2e|migrations?|tests?|__tests__|testing|test[-_][\w-]*|[\w-]*[-_]tests?)\//i;
 const loggerName = /^(?:console|_?logger|_?log)$/i;
 
 function insideNestedFunction(node: Node, container: Node): boolean {
@@ -37,14 +38,16 @@ function caughtName(clause: CatchClause): string | undefined {
 function mentions(root: Node, name: string): boolean {
   let found = false;
   walkNodes(root, (node: Node) => {
-    if (ts.isIdentifier(node) && node.text === name) found = true;
+    const isPropertyName = ts.isPropertyAccessExpression(node.parent) && node.parent.name === node;
+    if (ts.isIdentifier(node) && node.text === name && !isPropertyName) found = true;
   });
   return found;
 }
 
 function constructedName(expression: Expression): string | undefined {
-  const callee = ts.isNewExpression(expression) ? expression.expression : undefined;
-  if (!callee) return;
+  // `throw Error('x')` constructs the same error as `throw new Error('x')`.
+  if (!ts.isNewExpression(expression) && !ts.isCallExpression(expression)) return;
+  const callee = expression.expression;
   if (ts.isIdentifier(callee)) return callee.text;
   return ts.isPropertyAccessExpression(callee) ? callee.name.text : undefined;
 }
@@ -73,6 +76,8 @@ function isErrorValue(expression: Expression): string | undefined {
   const value = ts.skipOuterExpressions(expression);
   if (ts.isStringLiteralLike(value) || ts.isTemplateExpression(value)) return 'a string';
   if (ts.isNumericLiteral(value) || ts.isBigIntLiteral(value)) return 'a number';
+  if (ts.isPrefixUnaryExpression(value) && isErrorValue(value.operand) === 'a number') return 'a number';
+  if (ts.isIdentifier(value) && value.text === 'undefined') return 'undefined';
   if (ts.isObjectLiteralExpression(value)) return 'an object literal';
   if (ts.isArrayLiteralExpression(value)) return 'an array';
   if (value.kind === ts.SyntaxKind.TrueKeyword || value.kind === ts.SyntaxKind.FalseKeyword) return 'a boolean';
