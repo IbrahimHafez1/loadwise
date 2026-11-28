@@ -308,3 +308,44 @@ test('next-server-env-in-client ignores a local binding named process', () => {
   const local = `'use client';\nexport function read(process: { env: { locale: string } }) { return process.env.locale; }`;
   assert.deepEqual(ruleIds(local, 'client.ts'), []);
 });
+
+test('react-state-mutated-in-place ignores a mutation on a branch that returns before the setter', () => {
+  const view = (statements: string) => `${reactImport}export function View({ editing }: { editing: boolean }) {
+    const [items, setItems] = useState<number[]>([]);
+    function update(item: number) {
+      ${statements}
+    }
+    return null;
+  }`;
+  assert.deepEqual(ruleIds(view('if (editing) { items.push(item); return; } setItems(items);')), []);
+  assert.deepEqual(ruleIds(view('if (editing) { items.push(item); } setItems(items);')), [
+    'react-state-mutated-in-place',
+  ]);
+});
+
+test('next-server-env-in-client ignores a typeof guard on a local window binding', () => {
+  const guarded = (parameter: string) =>
+    `'use client';\nexport function read(${parameter}) { return typeof window === 'undefined' ? process.env.DATABASE_URL : ''; }`;
+  assert.deepEqual(ruleIds(guarded(''), 'client.ts'), []);
+  assert.deepEqual(ruleIds(guarded('window?: object'), 'client.ts'), ['next-server-env-in-client']);
+});
+
+test('react-async-effect-callback anchors a callback from another file at the effect call', () => {
+  const caller = `${reactImport}export function View() {\n  useEffect(load, []);\n  return null;\n}`;
+  const otherFile = `async function load() {\n  await fetch('/a');\n}\n\n\n\n\n\n\n\n`;
+  const findings = withProgram(
+    'export {};',
+    { ...packages, 'other.tsx': otherFile, 'view.tsx': caller },
+    (program) => {
+      assert.ok(program.getSourceFiles);
+      const sourceFile = program.getSourceFiles().find((file) => file.fileName.endsWith('view.tsx'));
+      assert.ok(sourceFile);
+      return checkReactBugs(sourceFile, 'view.tsx', program.getTypeChecker());
+    },
+    { ...options, moduleDetection: ts.ModuleDetectionKind.Legacy },
+  );
+  assert.deepEqual(
+    findings.map(({ ruleId, line, column }) => ({ ruleId, line, column })),
+    [{ ruleId: 'react-async-effect-callback', line: 3, column: 3 }],
+  );
+});

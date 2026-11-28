@@ -135,7 +135,8 @@ function checkAsyncEffects(
       findingAt(
         sourceFile,
         file,
-        callback,
+        // A callback declared in another file has offsets that mean nothing here, so point at the effect call.
+        callback.getSourceFile() === sourceFile ? callback : effect,
         'react-async-effect-callback',
         'An async effect callback returns a promise, which React treats as the cleanup function: React warns, the effect never cleans up, and a rejection goes unhandled. Declare an async function inside the effect and call it.',
       ),
@@ -327,9 +328,9 @@ function walkRunningCode(root: Node, visit: (node: Node) => void, branches: Bran
     walk(exclusive.condition);
     branches.begin();
     walk(exclusive.first);
-    branches.next();
+    branches.next(leavesFunction(exclusive.first));
     if (exclusive.second) walk(exclusive.second);
-    branches.end();
+    branches.end(exclusive.second !== undefined && leavesFunction(exclusive.second));
   })(root);
 }
 
@@ -340,31 +341,38 @@ function exclusiveBranches(node: Node): { condition: Node; first: Node; second: 
     return { condition: node.condition, first: node.whenTrue, second: node.whenFalse };
 }
 
+// A branch that returns or throws never reaches the code after the `if`, so its facts must not flow there.
+function leavesFunction(branch: Node): boolean {
+  const statements = ts.isBlock(branch) ? branch.statements : [branch];
+  return statements.some((statement) => ts.isReturnStatement(statement) || ts.isThrowStatement(statement));
+}
+
 interface BranchTracker {
   begin(): void;
-  next(): void;
-  end(): void;
+  next(firstLeaves: boolean): void;
+  end(secondLeaves: boolean): void;
 }
 
 // Mutations made before a branch stay visible inside it; after it, a mutation from either branch counts.
 function branchTrackerFor(mutated: Set<object>): BranchTracker {
   const open: { before: Set<object>; fromBranches: Set<object> }[] = [];
-  const closeBranch = (frame: { fromBranches: Set<object> }) => {
+  const closeBranch = (frame: { fromBranches: Set<object> }, leaves: boolean) => {
+    if (leaves) return;
     for (const symbol of mutated) frame.fromBranches.add(symbol);
   };
   return {
     begin: () => open.push({ before: new Set(mutated), fromBranches: new Set() }),
-    next() {
+    next(firstLeaves) {
       const frame = open[open.length - 1];
       if (!frame) return;
-      closeBranch(frame);
+      closeBranch(frame, firstLeaves);
       mutated.clear();
       for (const symbol of frame.before) mutated.add(symbol);
     },
-    end() {
+    end(secondLeaves) {
       const frame = open.pop();
       if (!frame) return;
-      closeBranch(frame);
+      closeBranch(frame, secondLeaves);
       mutated.clear();
       for (const symbol of frame.fromBranches) mutated.add(symbol);
     },
@@ -554,10 +562,16 @@ function environmentReadsIn(node: Node, checker: CheckerAdapter): EnvironmentRea
   return [];
 }
 
-function isServerTypeofCheck(operand: Expression): boolean {
+function isServerTypeofCheck(operand: Expression, checker: CheckerAdapter): boolean {
   const target = withoutParentheses(operand);
   const subject = ts.isTypeOfExpression(target) ? withoutParentheses(target.expression) : undefined;
-  return subject !== undefined && ts.isIdentifier(subject) && serverGlobals.has(subject.text);
+  // A parameter or variable named `window` is not the browser global, so a typeof check on it says nothing.
+  return (
+    subject !== undefined &&
+    ts.isIdentifier(subject) &&
+    serverGlobals.has(subject.text) &&
+    !isLocalBinding(subject, checker)
+  );
 }
 
 function isUndefinedLiteral(operand: Expression): boolean {
@@ -571,18 +585,18 @@ function flipped(branch: ServerBranch | undefined): ServerBranch | undefined {
 }
 
 // Which branch of `condition` only runs on the server (`typeof window === 'undefined'` is true there, `!==` is false).
-function serverBranchOf(condition: Expression): ServerBranch | undefined {
+function serverBranchOf(condition: Expression, checker: CheckerAdapter): ServerBranch | undefined {
   const target = withoutParentheses(condition);
   if (ts.isPrefixUnaryExpression(target) && target.operator === ts.SyntaxKind.ExclamationToken)
-    return flipped(serverBranchOf(target.operand));
+    return flipped(serverBranchOf(target.operand, checker));
   if (ts.isBinaryExpression(target)) {
     const kind = target.operatorToken.kind;
     const isEquals = kind === ts.SyntaxKind.EqualsEqualsEqualsToken || kind === ts.SyntaxKind.EqualsEqualsToken;
     const isNotEquals =
       kind === ts.SyntaxKind.ExclamationEqualsEqualsToken || kind === ts.SyntaxKind.ExclamationEqualsToken;
     const comparesTypeof =
-      (isServerTypeofCheck(target.left) && isUndefinedLiteral(target.right)) ||
-      (isServerTypeofCheck(target.right) && isUndefinedLiteral(target.left));
+      (isServerTypeofCheck(target.left, checker) && isUndefinedLiteral(target.right)) ||
+      (isServerTypeofCheck(target.right, checker) && isUndefinedLiteral(target.left));
     if (!comparesTypeof) return;
     if (isEquals) return 'whenTrue';
     return isNotEquals ? 'whenFalse' : undefined;
@@ -604,11 +618,11 @@ function branchTaken(ancestor: Node, child: Node): { condition: Expression; bran
 }
 
 // Server-only branches legitimately read secrets; the other branch of the same guard runs in the browser.
-function isGuardedForServer(node: Node): boolean {
+function isGuardedForServer(node: Node, checker: CheckerAdapter): boolean {
   let child = node;
   for (let ancestor = node.parent; ancestor; ancestor = ancestor.parent) {
     const taken = branchTaken(ancestor, child);
-    if (taken && serverBranchOf(taken.condition) === taken.branch) return true;
+    if (taken && serverBranchOf(taken.condition, checker) === taken.branch) return true;
     child = ancestor;
   }
   return false;
@@ -619,7 +633,7 @@ function checkClientEnvironment(sourceFile: SourceFile, file: string, checker: C
   walkNodes(sourceFile, (node: Node) => {
     for (const read of environmentReadsIn(node, checker)) {
       if (read.name !== undefined && browserSafeEnvironmentName.test(read.name)) continue;
-      if (isGuardedForServer(read.at)) continue;
+      if (isGuardedForServer(read.at, checker)) continue;
       findings.push(
         findingAt(
           sourceFile,
