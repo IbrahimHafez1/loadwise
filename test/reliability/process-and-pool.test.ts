@@ -143,3 +143,15 @@ test('uncaught-exception-continues ignores reassigned helpers and treats async h
   ];
   for (const source of quiet) assert.deepEqual(scanHandler(source), [], source);
 });
+
+test('uncaught-exception-continues follows named callbacks passed to schedulers', () => {
+  const quiet = [
+    "process.on('uncaughtException', () => { function finish() { process.exit(1); } setTimeout(finish, 100); });",
+    "process.on('uncaughtException', (error) => { const crash = () => { throw error; }; setImmediate(crash); });",
+  ];
+  for (const source of quiet) assert.deepEqual(scanHandler(source), [], source);
+  const reported = [
+    "process.on('uncaughtException', () => { function finish() { process.exit(1); } console.error('x'); });",
+  ];
+  for (const source of reported) assert.equal(scanHandler(source)[0]?.ruleId, 'uncaught-exception-continues', source);
+});
