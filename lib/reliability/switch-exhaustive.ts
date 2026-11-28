@@ -12,6 +12,7 @@ import type {
   Node,
   SourceFile,
   SwitchStatement,
+  TryStatement,
 } from 'typescript';
 import type { CheckerAdapter, Finding, TypeAdapter } from '../shared/types.js';
 
@@ -77,9 +78,22 @@ function unionAdmitsUndefined(type: TypeAdapter): boolean {
   return type.isUnion() && (type.types ?? []).some((member) => (member.flags & ts.TypeFlags.Undefined) !== 0);
 }
 
+// Only an async function unwraps a returned promise; a plain function hands the promise itself to its caller.
+function isInsideAsyncFunction(node: Node): boolean {
+  for (let current = node.parent; current; current = current.parent) {
+    if (ts.isFunctionLike(current)) {
+      return (
+        ts.canHaveModifiers(current) &&
+        !!ts.getModifiers(current)?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword)
+      );
+    }
+  }
+  return false;
+}
+
 function isEmptyValue(expression: Expression, checker: CheckerAdapter): boolean {
   const type = checker.getTypeAtLocation(expression);
-  const awaited = checker.getAwaitedType(type) ?? type;
+  const awaited = isInsideAsyncFunction(expression) ? (checker.getAwaitedType(type) ?? type) : type;
   return (awaited.flags & emptyValueFlags) !== 0;
 }
 
@@ -90,6 +104,13 @@ function enclosingFunctionBody(node: Node): Block | undefined {
   }
 }
 
+// A `finally` block that always returns or throws replaces whatever the try and catch blocks did.
+function finallyAlwaysExits(statement: TryStatement): boolean {
+  return (statement.finallyBlock?.statements ?? []).some(
+    (inner) => ts.isReturnStatement(inner) || ts.isThrowStatement(inner),
+  );
+}
+
 // Whether nothing runs after the statement before the function ends: it closes its block, or the branch or try block
 // that does.
 function endsFunctionBody(statement: Node, body: Block): boolean {
@@ -97,7 +118,7 @@ function endsFunctionBody(statement: Node, body: Block): boolean {
   while (current !== body) {
     const parent: Node = current.parent;
     if (ts.isBlock(parent) && parent.statements.at(-1) !== current) return false;
-    if (ts.isTryStatement(parent) && parent.finallyBlock === current) return false;
+    if (ts.isTryStatement(parent) && (parent.finallyBlock === current || finallyAlwaysExits(parent))) return false;
     const passesThrough =
       ts.isBlock(parent) || ts.isIfStatement(parent) || ts.isTryStatement(parent) || ts.isCatchClause(parent);
     if (!passesThrough) return false;
@@ -151,6 +172,41 @@ function assignedWithin(statement: SwitchStatement, checker: CheckerAdapter): Se
   return declarations;
 }
 
+const conditionalFlowKinds = new Set([
+  ts.SyntaxKind.IfStatement,
+  ts.SyntaxKind.ConditionalExpression,
+  ts.SyntaxKind.ForStatement,
+  ts.SyntaxKind.ForInStatement,
+  ts.SyntaxKind.ForOfStatement,
+  ts.SyntaxKind.WhileStatement,
+  ts.SyntaxKind.DoStatement,
+  ts.SyntaxKind.CaseClause,
+  ts.SyntaxKind.DefaultClause,
+  ts.SyntaxKind.TryStatement,
+  ts.SyntaxKind.CatchClause,
+]);
+const shortCircuitOperators = new Set([
+  ts.SyntaxKind.AmpersandAmpersandToken,
+  ts.SyntaxKind.BarBarToken,
+  ts.SyntaxKind.QuestionQuestionToken,
+]);
+
+// Whether the node runs on every path through the function body: not behind a branch, a loop, a short-circuit or a nested
+// function that may never be called.
+function runsUnconditionally(node: Node, body: Block): boolean {
+  for (let current = node; current !== body; current = current.parent) {
+    const parent = current.parent;
+    if (ts.isFunctionLike(parent) || ts.isClassLike(parent) || conditionalFlowKinds.has(parent.kind)) return false;
+    if (
+      ts.isBinaryExpression(parent) &&
+      parent.right === current &&
+      shortCircuitOperators.has(parent.operatorToken.kind)
+    )
+      return false;
+  }
+  return true;
+}
+
 function isAssignmentTarget(identifier: Node): boolean {
   const parent = identifier.parent;
   return isPlainAssignment(parent) && parent.left === identifier;
@@ -174,11 +230,13 @@ function leavesUnsetValueRead(
   let assignedElsewhere = false;
   let readAfter = false;
   walkNodes(body, (node) => {
-    if (isPlainAssignment(node) && !isWithin(node, statement.caseBlock)) {
+    if (isPlainAssignment(node) && !isWithin(node, statement.caseBlock) && runsUnconditionally(node, body)) {
       assignedElsewhere = assignedElsewhere || assignedDeclarations(node.left, checker).includes(declaration);
     }
     if (!ts.isIdentifier(node) || node.getStart() < statement.end || isAssignmentTarget(node)) return;
-    readAfter = readAfter || checker.getSymbolAtLocation(node)?.valueDeclaration === declaration;
+    readAfter =
+      readAfter ||
+      (checker.getSymbolAtLocation(node)?.valueDeclaration === declaration && runsUnconditionally(node, body));
   });
   return readAfter && !assignedElsewhere;
 }
