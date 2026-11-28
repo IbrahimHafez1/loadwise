@@ -92,7 +92,7 @@ const examples: Record<string, { before: string; code: string; note: string }> =
   },
   'react-async-effect-callback': {
     before: 'useEffect(async () => {\n  await load();\n}, []);',
-    code: 'useEffect(() => {\n  void (async () => {\n    await load();\n  })();\n}, []);',
+    code: 'useEffect(() => {\n  void (async () => {\n    try {\n      await load();\n    } catch (error) {\n      reportError(error);\n    }\n  })();\n}, []);',
     note: 'The effect callback must return nothing or a cleanup function, not a promise.',
   },
   'react-state-mutated-in-place': {

@@ -132,3 +132,90 @@ test('next-server-env-in-client reports server variables in a use client file on
     [],
   );
 });
+
+const stateView = (effect: string) => `${reactImport}export function View() {
+    const [items, setItems] = useState<number[]>([]);
+    const [ready, setReady] = useState(false);
+    const [count, setCount] = useState(0);
+    ${effect}
+    return null;
+  }`;
+const loopRule = ['react-effect-sets-state-every-render'];
+
+test('react-effect-sets-state-every-render covers expression bodies, returns, undefined dependencies and block updaters', () => {
+  assert.deepEqual(ruleIds(stateView('useEffect(() => setItems([]));')), loopRule);
+  assert.deepEqual(ruleIds(stateView('useEffect(() => { return setItems([1]); });')), loopRule);
+  assert.deepEqual(ruleIds(stateView('useEffect(() => { setItems([1]); }, undefined);')), loopRule);
+  assert.deepEqual(
+    ruleIds(stateView('useEffect(() => { setCount((previous) => { return previous + 1; }); });')),
+    loopRule,
+  );
+});
+
+test('react-effect-sets-state-every-render ignores updaters that settle on the current value', () => {
+  assert.deepEqual(ruleIds(stateView('useEffect(() => { setReady((previous) => previous || true); });')), []);
+  assert.deepEqual(ruleIds(stateView('useEffect(() => { setCount((previous) => previous + 0); });')), []);
+  assert.deepEqual(ruleIds(stateView('useEffect(() => { setCount((previous) => previous * 1); });')), []);
+});
+
+test('react-async-effect-callback resolves an effect callback passed by name', () => {
+  const declared = `${reactImport}async function load() { await fetch('/a'); }
+    useEffect(load, []);`;
+  assert.deepEqual(ruleIds(declared), ['react-async-effect-callback']);
+  const assigned = `${reactImport}const load = async () => { await fetch('/a'); };
+    useEffect(load, []);`;
+  assert.deepEqual(ruleIds(assigned), ['react-async-effect-callback']);
+});
+
+test('react-state-mutated-in-place sees compound writes, collections, aliases and nested state', () => {
+  const view = (statements: string) => `${reactImport}export function View() {
+    const [items, setItems] = useState<number[]>([]);
+    const [state, setState] = useState({ count: 0, items: [] as number[] });
+    const [seen, setSeen] = useState(new Set<number>());
+    const [lookup, setLookup] = useState(new Map<number, number>());
+    function update(item: number) {
+      ${statements}
+    }
+    return null;
+  }`;
+  const flagged = ['react-state-mutated-in-place'];
+  assert.deepEqual(ruleIds(view('state.count += 1; setState(state);')), flagged);
+  assert.deepEqual(ruleIds(view('state.count++; setState(state);')), flagged);
+  assert.deepEqual(ruleIds(view('state.items.push(item); setState(state);')), flagged);
+  assert.deepEqual(ruleIds(view('seen.add(item); setSeen(seen);')), flagged);
+  assert.deepEqual(ruleIds(view('lookup.delete(item); setLookup(lookup);')), flagged);
+  assert.deepEqual(ruleIds(view('const alias = items; alias.push(item); setItems(items);')), flagged);
+  assert.deepEqual(ruleIds(view('const next = [...items]; next.push(item); setItems(next);')), []);
+  assert.deepEqual(ruleIds(view('items.map((value) => value).sort(); setItems(items);')), []);
+  assert.deepEqual(ruleIds(view('const helper = () => { items.push(item); }; setItems(items);')), []);
+  assert.deepEqual(ruleIds(view('[1].forEach((value) => items.push(value)); setItems(items);')), flagged);
+});
+
+test('react-list-missing-key resolves named callbacks, array unions and JavaScript files', () => {
+  const named = `const renderRow = (row: string) => <li>{row}</li>;
+    export const List = ({ rows }: { rows: string[] }) => <ul>{rows.map(renderRow)}</ul>;`;
+  assert.deepEqual(ruleIds(named), ['react-list-missing-key']);
+  const union = `export const List = ({ rows }: { rows: string[] | number[] }) => <ul>{rows.map((row) => <li>{row}</li>)}</ul>;`;
+  assert.deepEqual(ruleIds(union), ['react-list-missing-key']);
+  const script = `export const List = ({ rows }) => <ul>{rows.map((row) => <li>{row}</li>)}</ul>;`;
+  assert.deepEqual(ruleIds(script, 'list.js'), ['react-list-missing-key']);
+});
+
+test('react-list-missing-key skips a file that selects a keyless JSX runtime without importing it', () => {
+  const solid = `/** @jsxImportSource solid-js */
+    export const List = ({ rows }: { rows: string[] }) => <ul>{rows.map((row) => <li>{row}</li>)}</ul>;`;
+  assert.deepEqual(ruleIds(solid), []);
+});
+
+test('next-server-env-in-client follows the guard branch, computed keys and destructuring', () => {
+  const client = (expression: string) => `'use client';\nexport const value = ${expression};`;
+  const flagged = ['next-server-env-in-client'];
+  const serverFirst = "typeof window === 'undefined'";
+  const browserFirst = "typeof window !== 'undefined'";
+  assert.deepEqual(ruleIds(client(`${serverFirst} ? undefined : process.env.API_SECRET`), 'client.ts'), flagged);
+  assert.deepEqual(ruleIds(client(`${browserFirst} ? process.env.API_SECRET : undefined`), 'client.ts'), flagged);
+  assert.deepEqual(ruleIds(client(`${browserFirst} ? undefined : process.env.API_SECRET`), 'client.ts'), []);
+  assert.deepEqual(ruleIds(client('process.env[String(Math.random())]'), 'client.ts'), flagged);
+  assert.deepEqual(ruleIds("'use client';\nconst { API_SECRET } = process.env;\nexport {};", 'client.ts'), flagged);
+  assert.deepEqual(ruleIds("'use client';\nconst { NEXT_PUBLIC_URL } = process.env;\nexport {};", 'client.ts'), []);
+});

@@ -26,7 +26,7 @@ function analyzeFile(program: ProgramAdapter, sourceFile: SourceFile): Finding[]
     ...checkResourceLeaks(sourceFile, file, checker),
     ...checkChildProcesses(sourceFile, file, checker),
     ...checkErrorValues(sourceFile, file),
-    ...checkReactBugs(sourceFile, file, checker),
+    ...checkReactBugs(sourceFile, file, checker, program.getCompilerOptions().jsxImportSource),
   ];
   const hasReviewComments = reviewMarkers.some((marker) => sourceFile.text.includes(marker));
   return findings.map((finding) => {

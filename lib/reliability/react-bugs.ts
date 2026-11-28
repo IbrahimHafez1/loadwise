@@ -4,11 +4,21 @@
 import { ts } from '../performance/compiler.js';
 import { REACT_EFFECTS, REACT_MODULES, importedName, walkSkippingFunctions } from '../performance/frontend-helpers.js';
 import { walkNodes } from './walk.js';
-import { isAccess, isIgnoredSource, withoutParentheses } from './source-helpers.js';
-import type { ArrowFunction, CallExpression, Expression, FunctionExpression, Node, SourceFile } from 'typescript';
+import { isAccess, isAssignmentOperator, isIgnoredSource, withoutParentheses } from './source-helpers.js';
+import type {
+  ArrowFunction,
+  Block,
+  CallExpression,
+  Expression,
+  FunctionDeclaration,
+  FunctionExpression,
+  Node,
+  SourceFile,
+} from 'typescript';
 import type { CheckerAdapter, Finding } from '../shared/types.js';
 
-type FunctionWithBody = ArrowFunction | FunctionExpression;
+type FunctionWithBody = ArrowFunction | FunctionExpression | (FunctionDeclaration & { body: Block });
+type ServerBranch = 'whenTrue' | 'whenFalse';
 
 interface StateSetter {
   setterSymbol: object;
@@ -27,6 +37,10 @@ const mutatingArrayMethods = new Set([
   'fill',
   'copyWithin',
 ]);
+// Map and Set methods that change the collection they are called on.
+const mutatingCollectionMethods = new Set(['set', 'add', 'delete', 'clear']);
+const collectionTypeNames = new Set(['Map', 'Set', 'WeakMap', 'WeakSet']);
+const jsxImportSourcePragma = /@jsxImportSource\s+(\S+)/;
 // Calls that always hand back a new array, so a setter given one gets a new value on every render.
 const freshArrayMethods = new Set(['map', 'filter', 'slice', 'concat', 'flat', 'flatMap', 'toSorted', 'toReversed']);
 // JSX runtimes where list items are not reconciled by `key`.
@@ -34,17 +48,32 @@ const keylessJsxModules = /^(?:solid-js|@solidjs\/|vue|@vue\/|@builder\.io\/qwik
 const clientDirective = 'use client';
 // Next.js inlines these into the browser bundle.
 const browserSafeEnvironmentName = /^(?:NEXT_PUBLIC_|NODE_ENV$|NEXT_RUNTIME$)/;
-const serverOnlyGuard =
-  /typeof\s+window\s*[!=]==?\s*['"]undefined['"]|typeof\s+document\s*[!=]==?\s*['"]undefined['"]|isServer|import\.meta\.env\.SSR/;
+const serverGlobals = new Set(['window', 'document']);
 
 function findingAt(sourceFile: SourceFile, file: string, node: Node, ruleId: string, message: string): Finding {
   const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
   return { file, line: position.line + 1, column: position.character + 1, ruleId, message };
 }
 
-function functionBodyOf(node: Expression | undefined): FunctionWithBody | undefined {
+function hasBlockBody(declaration: FunctionDeclaration): declaration is FunctionDeclaration & { body: Block } {
+  return declaration.body !== undefined;
+}
+
+// An inline function, or a function declared elsewhere in the file and passed by name.
+function functionBodyOf(node: Expression | undefined, checker: CheckerAdapter): FunctionWithBody | undefined {
   const target = node && withoutParentheses(node);
-  return target && (ts.isArrowFunction(target) || ts.isFunctionExpression(target)) ? target : undefined;
+  if (!target) return;
+  if (ts.isArrowFunction(target) || ts.isFunctionExpression(target)) return target;
+  if (!ts.isIdentifier(target)) return;
+  const declaration = checker.getSymbolAtLocation(target)?.declarations?.[0];
+  if (declaration && ts.isFunctionDeclaration(declaration)) return hasBlockBody(declaration) ? declaration : undefined;
+  const initializer =
+    declaration && ts.isVariableDeclaration(declaration) && declaration.initializer
+      ? withoutParentheses(declaration.initializer)
+      : undefined;
+  return initializer && (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer))
+    ? initializer
+    : undefined;
 }
 
 function reactEffectCall(node: Node, checker: CheckerAdapter): CallExpression | undefined {
@@ -86,9 +115,15 @@ function isAsync(callback: FunctionWithBody): boolean {
   return Boolean(callback.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword));
 }
 
-function checkAsyncEffects(effects: CallExpression[], sourceFile: SourceFile, file: string, findings: Finding[]) {
+function checkAsyncEffects(
+  effects: CallExpression[],
+  sourceFile: SourceFile,
+  file: string,
+  checker: CheckerAdapter,
+  findings: Finding[],
+) {
   for (const effect of effects) {
-    const callback = functionBodyOf(effect.arguments[0]);
+    const callback = functionBodyOf(effect.arguments[0], checker);
     if (!callback || !isAsync(callback)) continue;
     findings.push(
       findingAt(
@@ -104,6 +139,29 @@ function checkAsyncEffects(effects: CallExpression[], sourceFile: SourceFile, fi
 
 // --- react-effect-sets-state-every-render ---
 
+function updaterResults(updater: FunctionWithBody): Expression[] {
+  if (!ts.isBlock(updater.body)) return [withoutParentheses(updater.body)];
+  const results: Expression[] = [];
+  walkSkippingFunctions(updater.body, (node: Node) => {
+    if (ts.isReturnStatement(node) && node.expression) results.push(withoutParentheses(node.expression));
+  });
+  return results;
+}
+
+function isZeroLiteral(expression: Expression): boolean {
+  const value = withoutParentheses(expression);
+  return ts.isNumericLiteral(value) && Number(value.text) === 0;
+}
+
+// `prev => prev`, `prev || true` and `prev + 0` settle on a value React bails out on; `prev + 1` and `[...prev, x]` never do.
+function changesValue(result: Expression): boolean {
+  if (ts.isArrayLiteralExpression(result) || ts.isObjectLiteralExpression(result)) return true;
+  if (!ts.isBinaryExpression(result)) return false;
+  const kind = result.operatorToken.kind;
+  const isArithmetic = kind === ts.SyntaxKind.PlusToken || kind === ts.SyntaxKind.MinusToken;
+  return isArithmetic && !isZeroLiteral(result.left) && !isZeroLiteral(result.right);
+}
+
 function returnsOrThrows(statement: Node): boolean {
   let exits = false;
   walkSkippingFunctions(statement, (node: Node) => {
@@ -114,7 +172,7 @@ function returnsOrThrows(statement: Node): boolean {
 
 // A setter given the value it already holds bails out of the re-render, so only arguments that are a new object,
 // array or computed number each time keep the loop going.
-function isFreshValue(argument: Expression): boolean {
+function isFreshValue(argument: Expression, checker: CheckerAdapter): boolean {
   const value = withoutParentheses(argument);
   if (ts.isObjectLiteralExpression(value) || ts.isArrayLiteralExpression(value) || ts.isNewExpression(value))
     return true;
@@ -125,26 +183,41 @@ function isFreshValue(argument: Expression): boolean {
       ts.isIdentifier(callee.expression) && callee.expression.text === 'Date' && callee.name.text === 'now';
     return isClock || freshArrayMethods.has(callee.name.text);
   }
-  const updater = functionBodyOf(value);
+  const updater = functionBodyOf(value, checker);
   if (!updater || updater.parameters.length === 0) return false;
-  const result = ts.isBlock(updater.body) ? undefined : withoutParentheses(updater.body);
-  // `prev => prev` and a literal result are no change; `prev + 1` and `[...prev, x]` always are.
-  return Boolean(
-    result &&
-    (ts.isBinaryExpression(result) || ts.isArrayLiteralExpression(result) || ts.isObjectLiteralExpression(result)),
-  );
+  const results = updaterResults(updater);
+  return results.length > 0 && results.every(changesValue);
+}
+
+function freshSetterCall(expression: Expression, checker: CheckerAdapter): CallExpression | undefined {
+  const call = withoutParentheses(expression);
+  if (!ts.isCallExpression(call) || !stateSetterCalledBy(call, checker)) return;
+  return call.arguments[0] && isFreshValue(call.arguments[0], checker) ? call : undefined;
 }
 
 function unconditionalSetterCall(body: Node, checker: CheckerAdapter): CallExpression | undefined {
-  if (!ts.isBlock(body)) return;
+  if (!ts.isBlock(body)) return ts.isExpression(body) ? freshSetterCall(body, checker) : undefined;
   for (const statement of body.statements) {
+    // `return setItems([])` still runs the setter before it leaves.
+    if (ts.isReturnStatement(statement)) return statement.expression && freshSetterCall(statement.expression, checker);
     // A guard before the call (an early return, a thrown error) makes the update conditional.
     if (returnsOrThrows(statement) && !ts.isExpressionStatement(statement)) return;
     if (!ts.isExpressionStatement(statement)) continue;
-    const call = withoutParentheses(statement.expression);
-    if (!ts.isCallExpression(call) || !stateSetterCalledBy(call, checker)) continue;
-    if (call.arguments[0] && isFreshValue(call.arguments[0])) return call;
+    const call = freshSetterCall(statement.expression, checker);
+    if (call) return call;
   }
+}
+
+// React treats an explicit `undefined` like an omitted dependency array.
+function hasNoDependencies(effect: CallExpression): boolean {
+  if (effect.arguments.length === 1) return true;
+  const dependencies = effect.arguments[1] && withoutParentheses(effect.arguments[1]);
+  return (
+    effect.arguments.length === 2 &&
+    dependencies !== undefined &&
+    ts.isIdentifier(dependencies) &&
+    dependencies.text === 'undefined'
+  );
 }
 
 function checkEffectLoops(
@@ -155,8 +228,8 @@ function checkEffectLoops(
   findings: Finding[],
 ) {
   for (const effect of effects) {
-    if (effect.arguments.length !== 1) continue;
-    const callback = functionBodyOf(effect.arguments[0]);
+    if (!hasNoDependencies(effect)) continue;
+    const callback = functionBodyOf(effect.arguments[0], checker);
     const setterCall = callback && unconditionalSetterCall(callback.body, checker);
     if (!setterCall) continue;
     findings.push(
@@ -173,24 +246,74 @@ function checkEffectLoops(
 
 // --- react-state-mutated-in-place ---
 
-function stateSymbolOfRoot(expression: Expression, checker: CheckerAdapter): object | undefined {
+// An alias is followed back to the state it points at, so `const alias = items; alias.push(x)` changes `items`.
+function stateSymbolOfRoot(
+  expression: Expression,
+  checker: CheckerAdapter,
+  aliases: Map<object, object>,
+): object | undefined {
   let current = withoutParentheses(expression);
   while (isAccess(current)) current = withoutParentheses(current.expression);
-  return ts.isIdentifier(current) ? checker.getSymbolAtLocation(current) : undefined;
+  const symbol = ts.isIdentifier(current) ? checker.getSymbolAtLocation(current) : undefined;
+  return symbol && (aliases.get(symbol) ?? symbol);
 }
 
-function mutatedSymbolOf(node: Node, checker: CheckerAdapter): object | undefined {
+function isCollection(receiver: Expression, checker: CheckerAdapter): boolean {
+  const type = checker.getNonNullableType(checker.getTypeAtLocation(receiver));
+  const name = type.getSymbol()?.name;
+  return name !== undefined && collectionTypeNames.has(name);
+}
+
+function isMutatingCall(callee: Expression, checker: CheckerAdapter): boolean {
+  if (!ts.isPropertyAccessExpression(callee)) return false;
+  if (mutatingArrayMethods.has(callee.name.text)) return true;
+  return mutatingCollectionMethods.has(callee.name.text) && isCollection(callee.expression, checker);
+}
+
+function mutatedSymbolOf(node: Node, checker: CheckerAdapter, aliases: Map<object, object>): object | undefined {
   if (ts.isCallExpression(node)) {
     const callee = withoutParentheses(node.expression);
-    // Only the state value itself, so `items.sort()` counts but `items.map(...).sort()` (a copy) does not.
-    const isDirect = ts.isPropertyAccessExpression(callee) && ts.isIdentifier(withoutParentheses(callee.expression));
-    if (!isDirect || !mutatingArrayMethods.has(callee.name.text)) return;
-    return stateSymbolOfRoot(callee.expression, checker);
+    // A call result in the chain (`items.map(...).sort()`) is a copy, and the root lookup finds no state behind it.
+    return isMutatingCall(callee, checker) && ts.isPropertyAccessExpression(callee)
+      ? stateSymbolOfRoot(callee.expression, checker, aliases)
+      : undefined;
   }
-  if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+  if (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind)) {
     const target = withoutParentheses(node.left);
-    return isAccess(target) ? stateSymbolOfRoot(target, checker) : undefined;
+    return isAccess(target) ? stateSymbolOfRoot(target, checker, aliases) : undefined;
   }
+  if (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) {
+    const isStep = node.operator === ts.SyntaxKind.PlusPlusToken || node.operator === ts.SyntaxKind.MinusMinusToken;
+    const target = withoutParentheses(node.operand);
+    return isStep && isAccess(target) ? stateSymbolOfRoot(target, checker, aliases) : undefined;
+  }
+}
+
+// `const alias = items` makes `alias` another name for the same state value.
+function recordAlias(node: Node, checker: CheckerAdapter, aliases: Map<object, object>) {
+  if (!ts.isVariableDeclaration(node) || !ts.isIdentifier(node.name) || !node.initializer) return;
+  const source = stateSymbolOfRoot(node.initializer, checker, aliases);
+  const initializer = withoutParentheses(node.initializer);
+  const aliasSymbol = checker.getSymbolAtLocation(node.name);
+  if (source && aliasSymbol && ts.isIdentifier(initializer)) aliases.set(aliasSymbol, source);
+}
+
+function isCallbackArgument(node: Node): boolean {
+  return (
+    (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
+    ts.isCallExpression(node.parent) &&
+    node.parent.arguments.some((argument) => argument === node)
+  );
+}
+
+// Callbacks passed straight to a call (`items.forEach(...)`) run as part of the function; a nested helper that is
+// only declared does not, and is checked as a function of its own.
+function walkRunningCode(root: Node, visit: (node: Node) => void) {
+  (function walk(node: Node): void {
+    if (node !== root && ts.isFunctionLike(node) && !isCallbackArgument(node)) return;
+    visit(node);
+    ts.forEachChild(node, walk);
+  })(root);
 }
 
 function checkStateMutations(sourceFile: SourceFile, file: string, checker: CheckerAdapter, findings: Finding[]) {
@@ -199,10 +322,12 @@ function checkStateMutations(sourceFile: SourceFile, file: string, checker: Chec
   walkNodes(sourceFile, (node: Node) => {
     if (!ts.isFunctionLike(node) || !('body' in node) || !node.body) return;
     const mutated = new Set<object>();
+    const aliases = new Map<object, object>();
     const setterCalls: { call: CallExpression; setter: StateSetter }[] = [];
     // Source order puts the mutation before the setter call it feeds; a mutation after the call is another update.
-    walkNodes(node.body, (inner: Node) => {
-      const symbol = mutatedSymbolOf(inner, checker);
+    walkRunningCode(node.body, (inner: Node) => {
+      recordAlias(inner, checker, aliases);
+      const symbol = mutatedSymbolOf(inner, checker, aliases);
       if (symbol) mutated.add(symbol);
       if (!ts.isCallExpression(inner)) return;
       const setter = stateSetterCalledBy(inner, checker);
@@ -274,7 +399,9 @@ function isReactChildrenHelper(receiver: Expression): boolean {
 // Known non-array receivers (immutable collections, observables) are left alone; an unresolved type is trusted.
 function mayBeArray(receiver: Expression, checker: CheckerAdapter): boolean {
   const type = checker.getNonNullableType(checker.getTypeAtLocation(receiver));
-  return Boolean(type.flags & ts.TypeFlags.Any) || checker.isArrayType(type);
+  if (type.flags & ts.TypeFlags.Any) return true;
+  const members = type.isUnion() && type.types ? type.types : [type];
+  return members.every((member) => checker.isArrayType(member));
 }
 
 function checkListKeys(sourceFile: SourceFile, file: string, checker: CheckerAdapter, findings: Finding[]) {
@@ -283,7 +410,7 @@ function checkListKeys(sourceFile: SourceFile, file: string, checker: CheckerAda
     const callee = withoutParentheses(node.expression);
     if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'map') return;
     if (isReactChildrenHelper(callee.expression) || !mayBeArray(callee.expression, checker)) return;
-    const callback = functionBodyOf(node.arguments[0]);
+    const callback = functionBodyOf(node.arguments[0], checker);
     if (!callback) return;
     for (const item of returnedFrom(callback)) {
       if (!isJsxItem(item) || hasKeyOrSpread(item)) continue;
@@ -300,6 +427,12 @@ function checkListKeys(sourceFile: SourceFile, file: string, checker: CheckerAda
       );
     }
   });
+}
+
+// A `@jsxImportSource` pragma wins over the project setting, and either can name a runtime without keys.
+function usesKeylessJsx(sourceFile: SourceFile, projectJsxImportSource: string | undefined): boolean {
+  const runtime = jsxImportSourcePragma.exec(sourceFile.text)?.[1] ?? projectJsxImportSource;
+  return Boolean(runtime && keylessJsxModules.test(runtime)) || importsKeylessJsx(sourceFile);
 }
 
 function importsKeylessJsx(sourceFile: SourceFile): boolean {
@@ -328,25 +461,88 @@ function isProcessEnv(expression: Expression): boolean {
   return ts.isIdentifier(owner) && owner.text === 'process';
 }
 
-function environmentNameRead(node: Node): { name: string; at: Node } | undefined {
-  if (ts.isPropertyAccessExpression(node) && isProcessEnv(node.expression)) return { name: node.name.text, at: node };
+interface EnvironmentRead {
+  // Undefined for a computed key, which Next.js cannot inline whatever the name.
+  name: string | undefined;
+  at: Node;
+}
+
+function environmentReadsIn(node: Node): EnvironmentRead[] {
+  if (ts.isPropertyAccessExpression(node) && isProcessEnv(node.expression)) return [{ name: node.name.text, at: node }];
   if (ts.isElementAccessExpression(node) && isProcessEnv(node.expression)) {
     const key = withoutParentheses(node.argumentExpression);
-    return ts.isStringLiteralLike(key) ? { name: key.text, at: node } : undefined;
+    return [{ name: ts.isStringLiteralLike(key) ? key.text : undefined, at: node }];
+  }
+  // `const { API_SECRET } = process.env` reads each listed name.
+  if (ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name) && node.initializer) {
+    if (!isProcessEnv(node.initializer)) return [];
+    return node.name.elements
+      .filter((element) => !element.dotDotDotToken)
+      .map((element) => {
+        const key = element.propertyName ?? element.name;
+        const isNamed = ts.isIdentifier(key) || ts.isStringLiteralLike(key);
+        return { name: isNamed ? key.text : undefined, at: element };
+      });
+  }
+  return [];
+}
+
+function isServerTypeofCheck(operand: Expression): boolean {
+  const target = withoutParentheses(operand);
+  const subject = ts.isTypeOfExpression(target) ? withoutParentheses(target.expression) : undefined;
+  return subject !== undefined && ts.isIdentifier(subject) && serverGlobals.has(subject.text);
+}
+
+function isUndefinedLiteral(operand: Expression): boolean {
+  const target = withoutParentheses(operand);
+  return ts.isStringLiteralLike(target) && target.text === 'undefined';
+}
+
+function flipped(branch: ServerBranch | undefined): ServerBranch | undefined {
+  if (!branch) return;
+  return branch === 'whenTrue' ? 'whenFalse' : 'whenTrue';
+}
+
+// Which branch of `condition` only runs on the server (`typeof window === 'undefined'` is true there, `!==` is false).
+function serverBranchOf(condition: Expression): ServerBranch | undefined {
+  const target = withoutParentheses(condition);
+  if (ts.isPrefixUnaryExpression(target) && target.operator === ts.SyntaxKind.ExclamationToken)
+    return flipped(serverBranchOf(target.operand));
+  if (ts.isBinaryExpression(target)) {
+    const kind = target.operatorToken.kind;
+    const isEquals = kind === ts.SyntaxKind.EqualsEqualsEqualsToken || kind === ts.SyntaxKind.EqualsEqualsToken;
+    const isNotEquals =
+      kind === ts.SyntaxKind.ExclamationEqualsEqualsToken || kind === ts.SyntaxKind.ExclamationEqualsToken;
+    const comparesTypeof =
+      (isServerTypeofCheck(target.left) && isUndefinedLiteral(target.right)) ||
+      (isServerTypeofCheck(target.right) && isUndefinedLiteral(target.left));
+    if (!comparesTypeof) return;
+    if (isEquals) return 'whenTrue';
+    return isNotEquals ? 'whenFalse' : undefined;
+  }
+  const flag = ts.isPropertyAccessExpression(target) ? target.name : target;
+  const isServerFlag = ts.isIdentifier(flag) && flag.text === 'isServer';
+  return isServerFlag || target.getText() === 'import.meta.env.SSR' ? 'whenTrue' : undefined;
+}
+
+function branchTaken(ancestor: Node, child: Node): { condition: Expression; branch: ServerBranch } | undefined {
+  if (ts.isIfStatement(ancestor)) {
+    if (child === ancestor.thenStatement) return { condition: ancestor.expression, branch: 'whenTrue' };
+    if (child === ancestor.elseStatement) return { condition: ancestor.expression, branch: 'whenFalse' };
+  }
+  if (ts.isConditionalExpression(ancestor)) {
+    if (child === ancestor.whenTrue) return { condition: ancestor.condition, branch: 'whenTrue' };
+    if (child === ancestor.whenFalse) return { condition: ancestor.condition, branch: 'whenFalse' };
   }
 }
 
-// Server-only branches (`typeof window === 'undefined'`) legitimately read secrets.
-function guardOf(ancestor: Node): Node | undefined {
-  if (ts.isIfStatement(ancestor)) return ancestor.expression;
-  return ts.isConditionalExpression(ancestor) ? ancestor.condition : undefined;
-}
-
+// Server-only branches legitimately read secrets; the other branch of the same guard runs in the browser.
 function isGuardedForServer(node: Node): boolean {
+  let child = node;
   for (let ancestor = node.parent; ancestor; ancestor = ancestor.parent) {
-    const guard = guardOf(ancestor);
-    // The read must sit in a branch, not inside the condition itself.
-    if (guard && node.pos > guard.end && serverOnlyGuard.test(guard.getText())) return true;
+    const taken = branchTaken(ancestor, child);
+    if (taken && serverBranchOf(taken.condition) === taken.branch) return true;
+    child = ancestor;
   }
   return false;
 }
@@ -354,25 +550,35 @@ function isGuardedForServer(node: Node): boolean {
 function checkClientEnvironment(sourceFile: SourceFile, file: string, findings: Finding[]) {
   if (!isClientComponent(sourceFile) || !sourceFile.text.includes('process.env')) return;
   walkNodes(sourceFile, (node: Node) => {
-    const read = environmentNameRead(node);
-    if (!read || browserSafeEnvironmentName.test(read.name) || isGuardedForServer(node)) return;
-    findings.push(
-      findingAt(
-        sourceFile,
-        file,
-        read.at,
-        'next-server-env-in-client',
-        `\`process.env.${read.name}\` is read in a 'use client' file, but Next.js only exposes variables prefixed with NEXT_PUBLIC_ to the browser, so it is undefined there. Read it on the server and pass it down, or rename it with the prefix if it is safe to publish.`,
-      ),
-    );
+    for (const read of environmentReadsIn(node)) {
+      if (read.name !== undefined && browserSafeEnvironmentName.test(read.name)) continue;
+      if (isGuardedForServer(read.at)) continue;
+      findings.push(
+        findingAt(
+          sourceFile,
+          file,
+          read.at,
+          'next-server-env-in-client',
+          read.name === undefined
+            ? "`process.env` is read with a computed key in a 'use client' file, and Next.js inlines only literal NEXT_PUBLIC_ names into the browser bundle, so the value is undefined there. Read it on the server and pass it down."
+            : `\`process.env.${read.name}\` is read in a 'use client' file, but Next.js only exposes variables prefixed with NEXT_PUBLIC_ to the browser, so it is undefined there. Read it on the server and pass it down, or rename it with the prefix if it is safe to publish.`,
+        ),
+      );
+    }
   });
 }
 
-function checkReactBugs(sourceFile: SourceFile, file: string, checker: CheckerAdapter): Finding[] {
+function checkReactBugs(
+  sourceFile: SourceFile,
+  file: string,
+  checker: CheckerAdapter,
+  projectJsxImportSource?: string,
+): Finding[] {
   if (isIgnoredSource(sourceFile, file)) return [];
   const findings: Finding[] = [];
   checkClientEnvironment(sourceFile, file, findings);
-  const mentionsReact = sourceFile.text.includes('react') || /\.[jt]sx$/.test(file);
+  const isScript = /\.[cm]?js$/.test(file) && sourceFile.text.includes('.map(');
+  const mentionsReact = sourceFile.text.includes('react') || /\.[jt]sx$/.test(file) || isScript;
   if (!mentionsReact) return findings;
   const effects: CallExpression[] = [];
   const isReactSource = sourceFile.text.includes('useEffect') || sourceFile.text.includes('useLayoutEffect');
@@ -381,10 +587,12 @@ function checkReactBugs(sourceFile: SourceFile, file: string, checker: CheckerAd
       const effect = reactEffectCall(node, checker);
       if (effect) effects.push(effect);
     });
-  checkAsyncEffects(effects, sourceFile, file, findings);
+  checkAsyncEffects(effects, sourceFile, file, checker, findings);
   checkEffectLoops(effects, sourceFile, file, checker, findings);
   if (sourceFile.text.includes('useState')) checkStateMutations(sourceFile, file, checker, findings);
-  if (/\.[jt]sx$/.test(file) && !importsKeylessJsx(sourceFile)) checkListKeys(sourceFile, file, checker, findings);
+  // Plain .js files are parsed with JSX too, so components in them need the same check.
+  if (/\.(?:[jt]sx|[cm]?js)$/.test(file) && !usesKeylessJsx(sourceFile, projectJsxImportSource))
+    checkListKeys(sourceFile, file, checker, findings);
   return findings;
 }
 
