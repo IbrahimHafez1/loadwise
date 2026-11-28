@@ -88,7 +88,7 @@ test('a catastrophic fixed regex run on request text is reported', () => {
   assert.deepEqual(redosLines(source), [5, 7, 8, 9]);
   assert.equal(
     lintWithoutTypes(source, stubs.express)[0].message,
-    'This regular expression can backtrack exponentially on `req.body.email` (ReDoS), blocking the event loop. Rewrite the pattern so no part can match the same text in two ways, or cap the input length first.',
+    'This regular expression can backtrack exponentially on `req.body.email` (ReDoS), blocking the event loop. Rewrite the pattern to remove the nested or overlapping repetition so no part can match the same text in two ways; a length cap does not make it safe.',
   );
 });
 
@@ -208,7 +208,10 @@ test('a polynomial pattern on request text says it backtracks in polynomial time
     findings.map((finding: LocatedFinding) => [finding.ruleId, finding.line]),
     [[ruleId, 5]],
   );
-  assert.match(findings[0].message, /^This regular expression can backtrack in polynomial time on `req\.query\.q`/);
+  assert.equal(
+    findings[0].message,
+    'This regular expression can backtrack in polynomial time on `req.query.q` (ReDoS), blocking the event loop. Rewrite the pattern so no part can match the same text in two ways, or cap the input length first.',
+  );
 });
 
 test('a trailing whitespace run without a leading anchor is polynomial', () => {

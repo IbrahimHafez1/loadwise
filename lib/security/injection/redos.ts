@@ -738,8 +738,15 @@ const growthWording: Record<BacktrackingKind, string> = {
   polynomial: 'in polynomial time',
 };
 
+// A length cap silences only polynomial findings, so exponential ones are told to rewrite.
+const remedyWording: Record<BacktrackingKind, string> = {
+  exponential:
+    'Rewrite the pattern to remove the nested or overlapping repetition so no part can match the same text in two ways; a length cap does not make it safe.',
+  polynomial: 'Rewrite the pattern so no part can match the same text in two ways, or cap the input length first.',
+};
+
 function message(label: string, kind: BacktrackingKind) {
-  return `This regular expression can backtrack ${growthWording[kind]} on \`${label}\` (ReDoS), blocking the event loop. Rewrite the pattern so no part can match the same text in two ways, or cap the input length first.`;
+  return `This regular expression can backtrack ${growthWording[kind]} on \`${label}\` (ReDoS), blocking the event loop. ${remedyWording[kind]}`;
 }
 
 function checkCall(node: CallExpression, context: SecurityRuleContext) {
