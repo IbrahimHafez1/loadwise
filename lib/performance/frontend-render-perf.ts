@@ -21,8 +21,14 @@ type FunctionNode = FunctionDeclaration | ArrowFunction | FunctionExpression;
 const COMPONENT_NAME = /^[A-Z]/;
 // `*ngFor="let item of items; trackBy: byId"`, in either quote style; the expression never contains its own quote.
 const NG_FOR_ATTRIBUTE = /\*ngFor\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
-const STATIC_ARRAY_SOURCE = /\bof\s+\[/;
-const TRACK_BY = /\btrackBy\b/;
+// Only an array of string and number literals keeps its identities; objects, calls and spreads do not.
+const LITERAL_ITEM = String.raw`(?:'[^']*'|"[^"]*"|-?\d+(?:\.\d+)?)`;
+const STATIC_ARRAY_SOURCE = new RegExp(String.raw`\bof\s+\[\s*(?:${LITERAL_ITEM}\s*(?:,\s*${LITERAL_ITEM}\s*)*)?\]`);
+// A `trackBy` binding in the microsyntax (`trackBy: fn` or `trackBy fn`), not a property or variable of that name.
+const TRACK_BY = /(?<![.\w$])trackBy(?:\s*:|\s+[\w$])/;
+const HTML_COMMENT = /<!--[\s\S]*?-->/g;
+const CONTROL_CHARACTERS = /\p{Cc}/gu;
+const REACT_COMPONENT_WRAPPERS = new Set(['memo', 'forwardRef']);
 const HTML_FILE = /\.html?$/i;
 
 // --- React: component defined inside a component
@@ -37,24 +43,42 @@ function isFunctionNode(node: Node): node is FunctionNode {
 function declarationOf(fn: FunctionNode): Node | undefined {
   if (ts.isFunctionDeclaration(fn)) return fn.name ? fn : undefined;
   const parent = fn.parent;
-  return ts.isVariableDeclaration(parent) && parent.initializer === fn ? parent : undefined;
+  if (ts.isVariableDeclaration(parent) && parent.initializer === fn) return parent;
+  return wrappingVariable(fn);
 }
 
 function declaredName(fn: FunctionNode): string | undefined {
   if (ts.isFunctionDeclaration(fn)) return fn.name?.text;
   const parent = fn.parent;
-  if (!ts.isVariableDeclaration(parent) || parent.initializer !== fn) return;
-  return ts.isIdentifier(parent.name) ? parent.name.text : undefined;
+  const variable = ts.isVariableDeclaration(parent) && parent.initializer === fn ? parent : wrappingVariable(fn);
+  return variable && ts.isIdentifier(variable.name) ? variable.name.text : undefined;
+}
+
+// The variable initialised with `memo(fn)` or `forwardRef(fn)`; React documents both as returning a new component.
+function wrappingVariable(fn: FunctionNode) {
+  const wrapper = fn.parent;
+  if (!ts.isCallExpression(wrapper) || wrapper.arguments[0] !== fn) return;
+  const callee = ts.isPropertyAccessExpression(wrapper.expression) ? wrapper.expression.name : wrapper.expression;
+  if (!ts.isIdentifier(callee) || !REACT_COMPONENT_WRAPPERS.has(callee.text)) return;
+  const variable = wrapper.parent;
+  return ts.isVariableDeclaration(variable) && variable.initializer === wrapper ? variable : undefined;
 }
 
 function isJsx(expression: Expression): boolean {
   const target = ts.skipOuterExpressions(expression);
   if (ts.isJsxElement(target) || ts.isJsxSelfClosingElement(target) || ts.isJsxFragment(target)) return true;
   if (ts.isConditionalExpression(target)) return isJsx(target.whenTrue) || isJsx(target.whenFalse);
+  if (ts.isArrayLiteralExpression(target)) return target.elements.some(isJsx);
+  // `items.map(() => <Row />)`: a callback argument that itself returns JSX.
+  if (ts.isCallExpression(target)) {
+    return target.arguments.some((argument) => isFunctionNode(argument) && returnsJsx(argument));
+  }
+  if (!ts.isBinaryExpression(target)) return false;
+  const operator = target.operatorToken.kind;
+  if (operator === ts.SyntaxKind.AmpersandAmpersandToken) return isJsx(target.right);
   return (
-    ts.isBinaryExpression(target) &&
-    target.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken &&
-    isJsx(target.right)
+    (operator === ts.SyntaxKind.BarBarToken || operator === ts.SyntaxKind.QuestionQuestionToken) &&
+    (isJsx(target.left) || isJsx(target.right))
   );
 }
 
@@ -70,14 +94,8 @@ function returnsJsx(fn: FunctionNode): boolean {
 
 // `function Row() {}`, `const Row = () => ...`, `const Row = memo(() => ...)` / `forwardRef(...)`.
 function isComponent(fn: FunctionNode): boolean {
-  const direct = declaredName(fn);
-  if (direct) return COMPONENT_NAME.test(direct);
-  const wrapper = fn.parent;
-  if (!ts.isCallExpression(wrapper) || wrapper.arguments[0] !== fn) return false;
-  const variable = wrapper.parent;
-  return (
-    ts.isVariableDeclaration(variable) && ts.isIdentifier(variable.name) && COMPONENT_NAME.test(variable.name.text)
-  );
+  const name = declaredName(fn);
+  return name !== undefined && COMPONENT_NAME.test(name);
 }
 
 // Only the nearest function counts: a component declared inside a callback of the outer component
@@ -133,7 +151,8 @@ function stringValueOf(initializer: Expression): string | undefined {
 // costs nothing.
 function untrackedLoops(template: string): string[] {
   const loops: string[] = [];
-  for (const match of template.matchAll(NG_FOR_ATTRIBUTE)) {
+  // Angular drops HTML comments, so a commented-out loop renders nothing.
+  for (const match of template.replaceAll(HTML_COMMENT, '').matchAll(NG_FOR_ATTRIBUTE)) {
     const expression = match[1] ?? match[2];
     if (!TRACK_BY.test(expression) && !STATIC_ARRAY_SOURCE.test(expression)) loops.push(expression.trim());
   }
@@ -146,18 +165,28 @@ function metadataProperty(metadata: ObjectLiteralExpression, name: string): Prop
   );
 }
 
-function externalTemplateText(property: PropertyAssignment, sourceFileName: string): string | undefined {
+// A `templateUrl` is relative to its component; an absolute or UNC path would make the scan read an
+// arbitrary location, including a network share.
+function externalTemplate(property: PropertyAssignment, sourceFileName: string) {
   const url = stringValueOf(property.initializer);
-  if (!url || !HTML_FILE.test(url)) return;
-  return ts.sys.readFile(path.resolve(path.dirname(sourceFileName), url));
+  if (!url || !HTML_FILE.test(url) || path.isAbsolute(url) || path.win32.isAbsolute(url)) return;
+  const text = ts.sys.readFile(path.resolve(path.dirname(sourceFileName), url));
+  return text === undefined ? undefined : { url, text };
 }
 
-function reportUntracked(property: PropertyAssignment, loops: string[], context: PerformanceRuleContext) {
+function reportUntracked(
+  property: PropertyAssignment,
+  loops: string[],
+  context: PerformanceRuleContext,
+  templateUrl?: string,
+) {
   const more = loops.length > 1 ? ` (and ${loops.length - 1} more in this template)` : '';
+  const location = templateUrl ? ` in \`${templateUrl}\`` : '';
+  const loop = loops[0].replaceAll(CONTROL_CHARACTERS, ' ');
   context.report(
     property,
     'angular-ngfor-missing-trackby',
-    `\`*ngFor="${loops[0]}"\`${more} has no \`trackBy\`, so when the list changes Angular destroys and recreates the DOM for every item instead of moving the ones that stayed. Add \`trackBy: trackById\` with a function returning a stable identifier, or migrate to \`@for (... ; track item.id)\`.`,
+    `\`*ngFor="${loop}"\`${location}${more} has no \`trackBy\`, so when the list is replaced with new objects Angular destroys and recreates the DOM for every item instead of moving the ones that stayed. Add \`trackBy: trackById\` with a function returning a stable identifier, or migrate to \`@for (... ; track item.id)\`.`,
   );
 }
 
@@ -169,10 +198,10 @@ function checkNgForTrackBy(metadata: ObjectLiteralExpression, context: Performan
     if (loops.length) reportUntracked(inline, loops, context);
   }
   const external = metadataProperty(metadata, 'templateUrl');
-  const externalText = external && externalTemplateText(external, metadata.getSourceFile().fileName);
-  if (!external || !externalText) return;
-  const loops = untrackedLoops(externalText);
-  if (loops.length) reportUntracked(external, loops, context);
+  const template = external && externalTemplate(external, metadata.getSourceFile().fileName);
+  if (!external || !template) return;
+  const loops = untrackedLoops(template.text);
+  if (loops.length) reportUntracked(external, loops, context, template.url);
 }
 
 export { checkComponentInComponent, checkNgForTrackBy, isFunctionNode };

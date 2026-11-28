@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Security findings in the editor**: the language server also runs `loadwise sec` (and `sec polyglot` when the folder has Python, Go, Java, C# or Rust), alongside performance, reliability, maintainability and accessibility.
 - Dismissed findings are saved in `.loadwise/dismissed.json` at the workspace folder root, so they can be shared through version control; `loadwise.showDismissed` and `loadwise.restoreDismissed` bring them back.
 - `react-component-defined-in-component` flags a component declared inside another component and rendered as an element. It is a new component type on every render, so React remounts its subtree and loses its state and DOM.
-- `angular-ngfor-missing-trackby` flags an `*ngFor` with no `trackBy` in an inline `template` or a `templateUrl` HTML file, since a changed list recreates every item's DOM. `@for` blocks already require `track` and are not checked.
+- `angular-ngfor-missing-trackby` flags an `*ngFor` with no `trackBy` in an inline `template` or a `templateUrl` HTML file, since a list replaced with new objects recreates every item's DOM. `@for` blocks already require `track` and are not checked.
 
 ### Removed
 

@@ -561,3 +561,53 @@ export class X {}`;
     fs.rmSync(templateFile, { force: true });
   }
 });
+
+test('react-component-defined-in-component sees wrapped components and JSX returned through fallbacks and lists', () => {
+  const memoized = 'export function List() { const Row = memo(() => <li />); return <Row />; }';
+  const nullish = 'export function List(p: { o?: unknown }) { const Row = () => <li />; return p.o ?? <Row />; }';
+  const fallback = 'export function List(p: { o?: unknown }) { const Row = () => <li />; return p.o || <Row />; }';
+  const mapped =
+    'export function List(p: { n: number[] }) { const Row = () => <li />; return p.n.map(() => <Row />); }';
+  for (const source of [memoized, nullish, fallback, mapped]) {
+    assert.equal(only(`${REACT_IMPORT}${source}`, 'react-component-defined-in-component').length, 1);
+  }
+});
+
+test('react-component-defined-in-component does not treat a map callback assigned to a capitalised name as a component', () => {
+  const source =
+    'export function List(p: { rows: string[] }) { const Rows = p.rows.map(() => { const Cell = () => <li />; return <Cell />; }); return <ul>{Rows}</ul>; }';
+  assert.deepEqual(only(source, 'react-component-defined-in-component'), []);
+});
+
+test('angular-ngfor-missing-trackby ignores commented loops and reports property names, spreads and object arrays', () => {
+  const header = "import { Component } from '@angular/core';\n";
+  const reported = [
+    `'<li *ngFor="let item of model.trackBy">x</li>'`,
+    `'<li *ngFor="let item of [...items]">x</li>'`,
+    `'<li *ngFor="let item of [{ id: 1 }]">x</li>'`,
+  ];
+  for (const template of reported) {
+    const source = `${header}@Component({ selector: 'x', template: ${template} })\nexport class X {}`;
+    assert.equal(only(source, 'angular-ngfor-missing-trackby', 'x.ts').length, 1, template);
+  }
+  const commented = `'<!-- <li *ngFor="let item of items">x</li> -->'`;
+  const source = `${header}@Component({ selector: 'x', template: ${commented} })\nexport class X {}`;
+  assert.deepEqual(only(source, 'angular-ngfor-missing-trackby', 'x.ts'), []);
+});
+
+test('angular-ngfor-missing-trackby names the html file and ignores a templateUrl with no untracked loop or an absolute path', () => {
+  const directory = path.resolve(import.meta.dirname, 'virtual-project');
+  const templateFile = path.join(directory, 'ngfor-clean.component.html');
+  fs.mkdirSync(directory, { recursive: true });
+  fs.writeFileSync(templateFile, '<li *ngFor="let item of items; trackBy: byId">{{ item }}</li>');
+  try {
+    const component = (url: string) => `import { Component } from '@angular/core';
+@Component({ selector: 'x', templateUrl: ${JSON.stringify(url)} })
+export class X {}`;
+    assert.deepEqual(only(component('./ngfor-clean.component.html'), 'angular-ngfor-missing-trackby', 'clean.ts'), []);
+    assert.deepEqual(only(component(templateFile), 'angular-ngfor-missing-trackby', 'clean.ts'), []);
+    assert.deepEqual(only(component('//host/share/x.html'), 'angular-ngfor-missing-trackby', 'clean.ts'), []);
+  } finally {
+    fs.rmSync(templateFile, { force: true });
+  }
+});
