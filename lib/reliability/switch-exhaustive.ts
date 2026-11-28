@@ -49,7 +49,10 @@ function coveredKeys(statement: SwitchStatement, checker: CheckerAdapter): Set<s
   const covered = new Set<string>();
   for (const clause of statement.caseBlock.clauses) {
     if (!ts.isCaseClause(clause)) return;
-    const literal = literalMember(checker.getTypeAtLocation(clause.expression));
+    const caseType = checker.getTypeAtLocation(clause.expression);
+    // `case null` and `case undefined` name no string or number member, so they cover none of them.
+    if (caseType.flags & emptinessFlags) continue;
+    const literal = literalMember(caseType);
     // A case that is not a literal (a variable, a call) could cover anything.
     if (!literal) return;
     covered.add(literal.key);

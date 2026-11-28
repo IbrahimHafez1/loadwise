@@ -93,6 +93,8 @@ test('switch-not-exhaustive accepts an assignment outside the switch and reports
   for (const source of quiet) assert.deepEqual(scan(source), [], source);
   const reported = [
     "type M = 'a' | 'b' | 'c';\nexport function f(m: M, ready: boolean) { let value: number; if (ready) value = 0; switch (m) { case 'a': value = 1; break; } return value; }",
+    "type M = 'a' | 'b' | null;\nexport function f(m: M) { switch (m) { case null: return 0; case 'a': return 1; } }",
+    "type M = 'a' | 'b' | undefined;\nexport function f(m: M) { switch (m) { case undefined: return 0; case 'a': return 1; } }",
     "type M = 'a' | 'b';\nexport function f(m: M) { let value: number; switch (m) { case 'a': value = 1; break; } if (value > 0) return 1; return 0; }",
     "type M = 'a' | 'b' | 'c';\nexport function f(m: M) { let value: number; const init = () => { value = 0; }; switch (m) { case 'a': value = 1; break; } return value; }",
     "type M = 'a' | 'b' | 'c';\nexport function f(m: M) { let value!: number; switch (m) { case 'a': value = 1; break; } return value; }",
