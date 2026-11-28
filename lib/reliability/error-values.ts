@@ -38,12 +38,24 @@ function mentions(root: Node, name: string): boolean {
   return found;
 }
 
-function constructedName(expression: Expression): string | undefined {
-  // `throw Error('x')` constructs the same error as `throw new Error('x')`.
+function constructedName(thrown: Expression): string | undefined {
+  // `throw Error('x')` constructs the same error as `throw new Error('x')`; parentheses change nothing.
+  const expression = ts.skipOuterExpressions(thrown);
   if (!ts.isNewExpression(expression) && !ts.isCallExpression(expression)) return;
-  const callee = expression.expression;
+  const callee = ts.skipOuterExpressions(expression.expression);
   if (ts.isIdentifier(callee)) return callee.text;
   return ts.isPropertyAccessExpression(callee) ? callee.name.text : undefined;
+}
+
+// `new Error('x', { cause: previous })` already keeps a cause, just not the caught one.
+function carriesCause(thrown: Expression): boolean {
+  const expression = ts.skipOuterExpressions(thrown);
+  if (!ts.isNewExpression(expression) && !ts.isCallExpression(expression)) return false;
+  return (expression.arguments ?? []).some(
+    (argument) =>
+      ts.isObjectLiteralExpression(argument) &&
+      argument.properties.some((property) => property.name?.getText() === 'cause'),
+  );
 }
 
 function checkRethrowWithoutCause(clause: CatchClause, sourceFile: SourceFile, file: string, findings: Finding[]) {
@@ -54,7 +66,7 @@ function checkRethrowWithoutCause(clause: CatchClause, sourceFile: SourceFile, f
   const [statement] = clause.block.statements;
   if (clause.block.statements.length !== 1 || !ts.isThrowStatement(statement) || !statement.expression) return;
   const created = constructedName(statement.expression);
-  if (created !== undefined && builtInError.test(created))
+  if (created !== undefined && builtInError.test(created) && !carriesCause(statement.expression))
     findings.push(
       findingAt(
         sourceFile,
@@ -106,6 +118,16 @@ function isFailureLog(node: Node): boolean {
   return ts.isIdentifier(receiver) && loggerName.test(receiver.text);
 }
 
+// `err instanceof Error` only inspects the value, so it neither logs nor hands the error on.
+function isTypeGuard(reference: Identifier): boolean {
+  const guard = reference.parent;
+  return (
+    ts.isBinaryExpression(guard) &&
+    guard.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword &&
+    guard.left === reference
+  );
+}
+
 function isMessageRead(reference: Identifier): boolean {
   const access = reference.parent;
   return ts.isPropertyAccessExpression(access) && access.expression === reference && access.name.text === 'message';
@@ -141,8 +163,9 @@ function checkLoggedWithoutStack(clause: CatchClause, sourceFile: SourceFile, fi
     if (ts.isIdentifier(node) && node.text === name && !isPropertyName && !isShadowedByNestedCatch(node, name, clause))
       references.push(node);
   });
-  if (!references.length || !references.every(isMessageRead)) return;
-  const logged = references.map((reference) => enclosingFailureLog(reference, clause.block)).find(Boolean);
+  const logReads = references.filter((reference) => !isTypeGuard(reference));
+  if (!logReads.length || !logReads.every(isMessageRead)) return;
+  const logged = logReads.map((reference) => enclosingFailureLog(reference, clause.block)).find(Boolean);
   if (!logged) return;
   findings.push(
     findingAt(

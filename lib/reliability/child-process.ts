@@ -47,8 +47,12 @@ function useOf(reference: Node): Use {
   // Listener methods return the emitter, so `child.on('close', f).on('error', g)` still registers one.
   const chained = outermostWrapper(call).parent;
   if (ts.isPropertyAccessExpression(chained)) return useOf(call);
-  // The chain's value is the process itself: passed to a call or returned, it has been handed on.
-  return ts.isCallExpression(chained) || ts.isNewExpression(chained) || ts.isReturnStatement(chained)
+  // The chain's value is the process itself: passed to a call, returned or stored in an alias, it has been handed on.
+  return ts.isCallExpression(chained) ||
+    ts.isNewExpression(chained) ||
+    ts.isReturnStatement(chained) ||
+    ts.isVariableDeclaration(chained) ||
+    ts.isBinaryExpression(chained)
     ? 'escapes'
     : 'plain';
 }

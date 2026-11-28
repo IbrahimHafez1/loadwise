@@ -67,7 +67,7 @@ const examples: Record<string, { before: string; code: string; note: string }> =
   },
   'child-process-without-error-listener': {
     before: "const child = spawn('convert', [input, output]);",
-    code: "const child = spawn('convert', [input, output]);\nchild.on('error', (error) => {\n  logger.error('convert failed to start', error);\n});",
+    code: "const child = spawn('convert', [input, output]);\nchild.on('error', (error) => {\n  logger.error({ err: error }, 'convert failed to start');\n});",
     note: "Without an 'error' listener a failed spawn throws an uncaught exception and crashes the process.",
   },
   'error-rethrown-without-cause': {
@@ -82,7 +82,7 @@ const examples: Record<string, { before: string; code: string; note: string }> =
   },
   'error-logged-without-stack': {
     before: 'try {\n  await sync();\n} catch (error) {\n  logger.error(error.message);\n}',
-    code: "try {\n  await sync();\n} catch (error) {\n  logger.error('sync failed', error);\n}",
+    code: "try {\n  await sync();\n} catch (error) {\n  logger.error({ err: error }, 'sync failed');\n}",
     note: 'Pass the error itself so the logger records the stack.',
   },
 };
