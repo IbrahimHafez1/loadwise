@@ -4,7 +4,7 @@ import { ts } from '../performance/compiler.js';
 import { walkNodes } from './walk.js';
 import { isIgnoredSource } from './source-helpers.js';
 import type { CheckerAdapter, Finding } from '../shared/types.js';
-import type { CallExpression, Expression, Node, SourceFile } from 'typescript';
+import type { CallExpression, Expression, Node, SourceFile, TryStatement } from 'typescript';
 
 const listenerMethods = new Set(['on', 'once', 'addListener', 'prependListener', 'prependOnceListener']);
 // Calls that end the process or start its shutdown, however the project names them.
@@ -51,18 +51,34 @@ function isDormantFunction(node: Node): boolean {
   return !ts.isCallExpression(node.parent) && !ts.isNewExpression(node.parent);
 }
 
-// A throw counts only when it leaves the handler, so one inside a `try` that has a `catch` is not evidence.
+// Callbacks handed to these run after the surrounding try block has finished, so an enclosing catch cannot see them.
+const deferredCallName = /^(?:setTimeout|setInterval|setImmediate|nextTick|queueMicrotask|then|catch|finally|on|once)$/;
+
+function isDeferredCallback(node: Node): boolean {
+  return (
+    ts.isFunctionLike(node) && ts.isCallExpression(node.parent) && deferredCallName.test(calleeName(node.parent) ?? '')
+  );
+}
+
+// A `return` in a finally block cancels a throw from the try or catch block.
+function finallyReturns(statement: TryStatement): boolean {
+  return (statement.finallyBlock?.statements ?? []).some((inner) => ts.isReturnStatement(inner));
+}
+
+// A throw counts only when it leaves the handler, so one inside a `try` that has a `catch`, or whose `finally` returns,
+// is not evidence.
 function endsOrRethrows(handler: Node): boolean {
   let ends = false;
-  const visit = (node: Node, caught: boolean): void => {
+  const visit = (node: Node, swallowed: boolean): void => {
     if (ends || isDormantFunction(node)) return;
-    if ((ts.isThrowStatement(node) && !caught) || isExitCodeAssignment(node)) ends = true;
+    if ((ts.isThrowStatement(node) && !swallowed) || isExitCodeAssignment(node)) ends = true;
     else if (ts.isCallExpression(node) && shutdownCallName.test(calleeName(node) ?? '')) ends = true;
-    else if (ts.isTryStatement(node) && node.catchClause) {
-      visit(node.tryBlock, true);
-      visit(node.catchClause, caught);
-      if (node.finallyBlock) visit(node.finallyBlock, caught);
-    } else ts.forEachChild(node, (child) => visit(child, ts.isFunctionLike(child) ? false : caught));
+    else if (ts.isTryStatement(node)) {
+      const cancelsThrow = finallyReturns(node);
+      visit(node.tryBlock, swallowed || cancelsThrow || node.catchClause !== undefined);
+      if (node.catchClause) visit(node.catchClause, swallowed || cancelsThrow);
+      if (node.finallyBlock) visit(node.finallyBlock, swallowed);
+    } else ts.forEachChild(node, (child) => visit(child, swallowed && !isDeferredCallback(child)));
   };
   ts.forEachChild(handler, (child) => visit(child, false));
   return ends;

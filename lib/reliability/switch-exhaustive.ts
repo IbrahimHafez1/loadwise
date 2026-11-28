@@ -191,12 +191,19 @@ const shortCircuitOperators = new Set([
   ts.SyntaxKind.QuestionQuestionToken,
 ]);
 
+// The condition of an `if` or a ternary is evaluated on every path; only its branches are conditional.
+function isConditionOf(statement: Node, child: Node): boolean {
+  if (ts.isIfStatement(statement)) return statement.expression === child;
+  return ts.isConditionalExpression(statement) && statement.condition === child;
+}
+
 // Whether the node runs on every path through the function body: not behind a branch, a loop, a short-circuit or a nested
 // function that may never be called.
 function runsUnconditionally(node: Node, body: Block): boolean {
   for (let current = node; current !== body; current = current.parent) {
     const parent = current.parent;
-    if (ts.isFunctionLike(parent) || ts.isClassLike(parent) || conditionalFlowKinds.has(parent.kind)) return false;
+    if (ts.isFunctionLike(parent) || ts.isClassLike(parent)) return false;
+    if (conditionalFlowKinds.has(parent.kind) && !isConditionOf(parent, current)) return false;
     if (
       ts.isBinaryExpression(parent) &&
       parent.right === current &&
