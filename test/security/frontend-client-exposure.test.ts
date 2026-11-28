@@ -60,7 +60,6 @@ test('client-env-secret-exposed: secret-named variables under a browser prefix a
     'const token = process.env.NEXT_PUBLIC_AWS_SECRET_ACCESS_TOKEN;',
     'const password = process.env.REACT_APP_ADMIN_PASSWORD;',
     'const secret = process.env.EXPO_PUBLIC_CLIENT_SECRET;',
-    'const url = process.env.NUXT_PUBLIC_DATABASE_URL;',
     'const key = import.meta.env.VITE_AWS_SECRET_ACCESS_KEY;',
     'const key = import.meta.env.VITE_JWT_PRIVATE_KEY;',
   ];
@@ -110,7 +109,8 @@ test('client-env-secret-exposed: publishable, anon and public keys, flags and se
     'process.env.VITE_STRIPE_SECRET_KEY;',
     'import.meta.env.NEXT_PUBLIC_STRIPE_SECRET_KEY;',
     'import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;',
-    // Expo inlines only dot access.
+    // Nuxt exposes only declared public runtime config; Expo inlines only dot access.
+    'process.env.NUXT_PUBLIC_DATABASE_URL;',
     "process.env['EXPO_PUBLIC_CLIENT_SECRET'];",
     // Plain Vite exposes only `VITE_` on import.meta.env; `PUBLIC_` is Astro's prefix.
     'import.meta.env.PUBLIC_DB_PASSWORD;',
@@ -209,6 +209,9 @@ test('jsx-javascript-url: untrusted values that start a link, form action or fra
     `${reactHeader}export const View = () => <a href={new URL(location.href).searchParams.get('next') ?? '/'}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={new URL(location.href).hash.slice(1)}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={String(location.hash.slice(1))}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={('/' + location.hash.slice(1)).slice(1)}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={\`/\${location.hash.slice(1)}\`.substring(1)}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={decodeURIComponent(encodeURIComponent(location.hash.slice(1)))}>Go</a>;`,
   ];
   for (const source of sources) {
     const found = urlFindingsOf(source);
@@ -234,6 +237,9 @@ test('jsx-javascript-url: constant prefixes, own addresses, props, fetched data 
     `${reactHeader}import { useRouter } from 'next/navigation';\nexport function View() { const router = useRouter(); return <a href={'/' + String(router)}>Go</a>; }`,
     `${reactHeader}export const View = () => <a href={decodeURIComponent(location.hash)}>Anchor</a>;`,
     `${reactHeader}export const View = () => <a href={String(location.hash)}>Anchor</a>;`,
+    `${reactHeader}export const View = () => <a href={('/' + location.hash.slice(1)).slice(0, 80)}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={('/?q=' + location.search).toLowerCase()}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={decodeURI(encodeURIComponent(location.hash.slice(1)))}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={encodeURIComponent(location.hash.slice(1))}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={' ' + location.href}>Share</a>;`,
     `${reactHeader}export const View = () => <a href={new URL(location.href).origin}>Home</a>;`,

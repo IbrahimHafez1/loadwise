@@ -14,7 +14,15 @@ import {
   untrustedMemberLabel,
   unwrap,
 } from './frontend-security.js';
-import type { CallExpression, Expression, JsxAttribute, NewExpression } from 'typescript';
+import type {
+  BinaryExpression,
+  CallExpression,
+  ConditionalExpression,
+  Expression,
+  JsxAttribute,
+  NewExpression,
+  TemplateExpression,
+} from 'typescript';
 import type { SecurityRuleContext } from '../../shared/types.js';
 
 const LOCATION_BASES = ['location', 'window.location', 'self.location', 'document.location'];
@@ -33,9 +41,13 @@ const HOST_MEMBERS = new Set(['origin', 'host', 'hostname']);
 const RELATIVE_PART_MEMBERS = new Set(['search', 'hash']);
 // These keep what their input starts with: a decoded or `String`-converted `#x` still starts with
 // `#`, and `new URL(x)` keeps the scheme of `x`.
-const PREFIX_PRESERVING_CALLS = new Set(['decodeURI', 'decodeURIComponent', 'encodeURI', 'String', 'URL']);
-// These escape `:`, so their output can never be read as a scheme.
+const PREFIX_PRESERVING_CALLS = new Set(['decodeURI', 'decodeURIComponent', 'unescape', 'encodeURI', 'String', 'URL']);
+// These escape `:`, so their output can never be read as a scheme unless a decoder around them
+// restores it.
 const SCHEME_ESCAPING_CALLS = new Set(['encodeURIComponent', 'escape']);
+const COLON_DECODING_CALLS = new Set(['decodeURIComponent', 'unescape']);
+// These can drop a constant start: `('/' + value).slice(1)` starts with `value`.
+const PREFIX_CUTTING_METHODS = new Set(['slice', 'substring', 'substr', 'split']);
 // The elements on which each attribute loads or navigates to its URL.
 const URL_ATTRIBUTE_TAGS = new Map([
   ['href', new Set(['a', 'area'])],
@@ -60,6 +72,13 @@ function isStrippedUrlPrefix(text: string) {
 // Only a value at the start of a URL picks its scheme: `/search?q=${query}` can never become
 // `javascript:`. The page's own address and referrer are always http(s) URLs, and an untouched
 // `location.hash` or `location.search` starts with `#` or `?`.
+// `transformed`: a call may have cut off the safe start of the page's own address. `prefixCut`: a
+// call may have dropped a constant start, so the parts after it can lead. `decoded`: a decoder
+// encloses the value and undoes an encoder's escaped `:`.
+type TraceState = { transformed: boolean; prefixCut: boolean; decoded: boolean };
+
+const untouched: TraceState = { transformed: false, prefixCut: false, decoded: false };
+
 function isOwnAddress(node: Expression, context: SecurityRuleContext, transformed: boolean) {
   const chain = memberChain(node);
   if (!chain || !declaredInDefaultLibrary(chain.root, context)) return false;
@@ -81,35 +100,44 @@ function routerQueryLabel(node: Expression, context: SecurityRuleContext) {
   return originModule(node.expression, context) === NEXT_ROUTER_MODULE ? 'The router query' : undefined;
 }
 
+// The part of a template, conditional or operator expression that starts the value.
+function compoundLeadSource(
+  node: TemplateExpression | ConditionalExpression | BinaryExpression,
+  state: TraceState,
+  next: (part: Expression) => string | undefined,
+) {
+  if (ts.isTemplateExpression(node)) {
+    const headCanLead = !state.prefixCut && !isStrippedUrlPrefix(node.head.text);
+    return headCanLead ? undefined : next(node.templateSpans[0].expression);
+  }
+  if (ts.isConditionalExpression(node)) return next(node.whenTrue) ?? next(node.whenFalse);
+  const operator = node.operatorToken.kind;
+  if (operator === ts.SyntaxKind.PlusToken) {
+    const left = unwrap(node.left);
+    if (state.prefixCut) return next(left) ?? next(node.right);
+    return ts.isStringLiteralLike(left) && isStrippedUrlPrefix(left.text) ? next(node.right) : next(left);
+  }
+  const fallback = operator === ts.SyntaxKind.QuestionQuestionToken || operator === ts.SyntaxKind.BarBarToken;
+  return fallback ? (next(node.left) ?? next(node.right)) : undefined;
+}
+
 // The untrusted source that decides a URL's scheme, or undefined when the value starts with a
 // constant, is opaque or comes from the app itself. Only untrusted sources are reported: a prop or
-// fetched link is how most apps render links. `transformed` records a call that may have cut off
-// the safe start of the page's own address.
+// fetched link is how most apps render links.
 function urlLeadSource(
   expression: Expression,
   context: SecurityRuleContext,
   depth = 0,
-  transformed = false,
+  state: TraceState = untouched,
 ): string | undefined {
   const node = unwrap(expression);
-  if (!node || depth > MAX_DEPTH || isOwnAddress(node, context, transformed)) return;
-  const next = (part: Expression) => urlLeadSource(part, context, depth + 1, transformed);
-  if (ts.isTemplateExpression(node))
-    return isStrippedUrlPrefix(node.head.text) ? next(node.templateSpans[0].expression) : undefined;
-  if (ts.isConditionalExpression(node)) return next(node.whenTrue) ?? next(node.whenFalse);
-  if (ts.isBinaryExpression(node)) {
-    const operator = node.operatorToken.kind;
-    if (operator === ts.SyntaxKind.PlusToken) {
-      const left = unwrap(node.left);
-      return ts.isStringLiteralLike(left) && isStrippedUrlPrefix(left.text) ? next(node.right) : next(left);
-    }
-    const fallback = operator === ts.SyntaxKind.QuestionQuestionToken || operator === ts.SyntaxKind.BarBarToken;
-    return fallback ? (next(node.left) ?? next(node.right)) : undefined;
-  }
+  if (!node || depth > MAX_DEPTH || isOwnAddress(node, context, state.transformed)) return;
+  const next = (part: Expression) => urlLeadSource(part, context, depth + 1, state);
+  if (ts.isTemplateExpression(node) || ts.isConditionalExpression(node) || ts.isBinaryExpression(node))
+    return compoundLeadSource(node, state, next);
   const routerLabel = routerQueryLabel(node, context);
   if (routerLabel) return routerLabel;
-  if (ts.isCallExpression(node) || ts.isNewExpression(node))
-    return leadOfLibraryCall(node, context, depth, transformed);
+  if (ts.isCallExpression(node) || ts.isNewExpression(node)) return leadOfLibraryCall(node, context, depth, state);
   if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
     const label = ts.isPropertyAccessExpression(node) ? untrustedMemberLabel(node, context) : undefined;
     return label ?? next(node.expression);
@@ -125,15 +153,29 @@ function leadOfLibraryCall(
   call: CallExpression | NewExpression,
   context: SecurityRuleContext,
   depth: number,
-  transformed: boolean,
+  state: TraceState,
 ) {
   const callee = unwrap(call.expression);
   const nameNode = ts.isPropertyAccessExpression(callee) ? callee.name : callee;
   if (!ts.isIdentifier(nameNode) || !declaredInDefaultLibrary(nameNode, context)) return;
-  if (SCHEME_ESCAPING_CALLS.has(nameNode.text)) return;
+  const name = nameNode.text;
+  const escapesColon = SCHEME_ESCAPING_CALLS.has(name);
+  if (escapesColon && !state.decoded) return;
   const input = ts.isPropertyAccessExpression(callee) ? callee.expression : call.arguments?.[0];
-  const keepsPrefix = PREFIX_PRESERVING_CALLS.has(nameNode.text);
-  return input && urlLeadSource(input, context, depth + 1, transformed || !keepsPrefix);
+  if (!input) return;
+  const keepsPrefix = escapesColon || PREFIX_PRESERVING_CALLS.has(name);
+  return urlLeadSource(input, context, depth + 1, {
+    transformed: state.transformed || !keepsPrefix,
+    prefixCut: state.prefixCut || cutsPrefix(call, name),
+    decoded: escapesColon ? false : state.decoded || COLON_DECODING_CALLS.has(name),
+  });
+}
+
+// `slice(1)` cuts; `slice(0, n)` keeps the start.
+function cutsPrefix(call: CallExpression | NewExpression, name: string) {
+  if (!PREFIX_CUTTING_METHODS.has(name) || !ts.isPropertyAccessExpression(unwrap(call.expression))) return false;
+  const start = call.arguments?.[0];
+  return !(start && ts.isNumericLiteral(start) && Number(start.text) === 0);
 }
 
 function urlAttributeOf(attribute: JsxAttribute) {
