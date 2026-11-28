@@ -569,7 +569,6 @@ function analyzeSources({
     const configless = standaloneFiles.filter(
       (filename) => !isScanned(filename) && (!onlyFiles || onlyFiles(filename)),
     );
-    for (const filename of configless) standaloneRoots.add(repositoryRoot(path.dirname(filename)));
     scan([...leftOut.files, ...configless], standaloneOptions);
     leftOut.note();
   }
