@@ -33,6 +33,6 @@ reviews:
         Critical for false positives, crashes, wrong output, wrong fixes and security holes.
     - path: 'changes/**'
       instructions: >-
-        Each file is a changelog fragment (see changes/README.md). Check that `section` is one of Added, Changed,
+        Each file except changes/README.md, which documents the format, is a changelog fragment. Check that `section` is one of Added, Changed,
         Deprecated, Removed, Fixed or Security and that the text matches what the pull request changes.
         CHANGELOG.md is edited only at release, by `npm run changelog`; do not ask for entries in it.
