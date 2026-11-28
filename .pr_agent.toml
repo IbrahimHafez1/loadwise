@@ -1,7 +1,7 @@
-# Qodo is the standby reviewer: CodeRabbit and Sourcery review pull requests automatically (within
-# their own draft and path filters), and Qodo runs only when someone asks with a review command such
-# as `/agentic_review` (for example when one of the others is down).
-# Keep the Qodo portal's "Code review trigger" on "Manual only" to match.
+# CodeRabbit and Sourcery review pull requests automatically (within their own draft and path filters).
+# Qodo and Greptile are standby reviewers that run only when asked, for example when one of the others
+# is down: comment `/agentic_review` for Qodo or mention `@greptileai` for Greptile.
+# Keep the Qodo portal's "Code review trigger" on "Manual only" to match; greptile.json sets Greptile's.
 
 [github_app]
 # No review or summary when a pull request opens; CodeRabbit already writes the summary.
