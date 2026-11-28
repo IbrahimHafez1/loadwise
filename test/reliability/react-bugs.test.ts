@@ -238,3 +238,16 @@ test('next-server-env-in-client never tells developers to pass the raw value to 
   assert.match(messages[0] ?? '', /non-sensitive derived value/);
   assert.doesNotMatch(messages[0] ?? '', /pass it down/);
 });
+
+test('react-async-effect-callback resolves an overloaded function to its async implementation', () => {
+  const overloaded = `${reactImport}function load(kind: string): Promise<void>;
+function load(kind: number): Promise<void>;
+async function load(kind: unknown): Promise<void> { await fetch(String(kind)); }
+useEffect(load, []);`;
+  assert.deepEqual(ruleIds(overloaded), ['react-async-effect-callback']);
+  assert.deepEqual(
+    ruleIds(`${reactImport}declare function load(): void;
+useEffect(load, []);`),
+    [],
+  );
+});

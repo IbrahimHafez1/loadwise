@@ -65,8 +65,14 @@ function functionBodyOf(node: Expression | undefined, checker: CheckerAdapter): 
   if (!target) return;
   if (ts.isArrowFunction(target) || ts.isFunctionExpression(target)) return target;
   if (!ts.isIdentifier(target)) return;
-  const declaration = checker.getSymbolAtLocation(target)?.declarations?.[0];
-  if (declaration && ts.isFunctionDeclaration(declaration)) return hasBlockBody(declaration) ? declaration : undefined;
+  const declarations = checker.getSymbolAtLocation(target)?.declarations;
+  // An overloaded function has body-less signatures before its implementation.
+  const implementation = declarations?.find(
+    (candidate) => ts.isFunctionDeclaration(candidate) && hasBlockBody(candidate),
+  );
+  if (implementation && ts.isFunctionDeclaration(implementation) && hasBlockBody(implementation)) return implementation;
+  const declaration = declarations?.[0];
+  if (declaration && ts.isFunctionDeclaration(declaration)) return;
   const initializer =
     declaration && ts.isVariableDeclaration(declaration) && declaration.initializer
       ? withoutParentheses(declaration.initializer)
@@ -560,8 +566,8 @@ function checkClientEnvironment(sourceFile: SourceFile, file: string, findings: 
           read.at,
           'next-server-env-in-client',
           read.name === undefined
-            ? "`process.env` is read with a computed key in a 'use client' file, and Next.js inlines only literal NEXT_PUBLIC_ names into the browser bundle, so the value is undefined there. Read it on the server and pass only a non-sensitive derived value to the Client Component, never the raw value."
-            : `\`process.env.${read.name}\` is read in a 'use client' file, but Next.js only exposes variables prefixed with NEXT_PUBLIC_ to the browser, so it is undefined there. Read it on the server and pass only a non-sensitive derived value to the Client Component, never the raw value. Rename it with the NEXT_PUBLIC_ prefix only if it is safe to publish.`,
+            ? "`process.env` is read with a computed key in a 'use client' file, and Next.js inlines only literal NEXT_PUBLIC_ names into the browser bundle, so the value is unavailable there by default. Read it on the server and pass only a non-sensitive derived value to the Client Component, never the raw value."
+            : `\`process.env.${read.name}\` is read in a 'use client' file, but Next.js only exposes variables prefixed with NEXT_PUBLIC_ to the browser by default, so it is unavailable there unless the env option in next.config.js publishes it. Read it on the server and pass only a non-sensitive derived value to the Client Component, never the raw value. Rename it with the NEXT_PUBLIC_ prefix only if it is safe to publish.`,
         ),
       );
     }
