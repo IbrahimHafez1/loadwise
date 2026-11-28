@@ -12,6 +12,7 @@ import { collectModuleUsage } from './module-usage.js';
 import { checkPlacement } from './layout.js';
 import { nonJsLanguages, analyzePolyglot } from './polyglot.js';
 import { readSourceFiles, analyzeSource } from './analyze-source.js';
+import { checkTsconfigStrictness } from './tsconfig-strict.js';
 import { identifierIndexOf, isPrivateManifest } from './source-facts.js';
 import { recordSkippedFile } from '../performance/scan-outcome.js';
 import type { Finding, SkippedFile } from '../shared/types.js';
@@ -252,6 +253,7 @@ async function scan(
     usages.push(analysis.usage);
   }
   for (const finding of polyglot.findings) findings.push(finding);
+  for (const finding of checkTsconfigStrictness(root, inventory)) findings.push(finding);
   reportUnparsablePolyglot(skippedFiles, polyglot);
   for (const finding of duplicates.findings()) findings.push(finding);
   for (const finding of checkGraph({ files: jsFiles, edges, boundaries: policy.boundaries, constEnums }))

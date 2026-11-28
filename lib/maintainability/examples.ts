@@ -31,6 +31,22 @@ const examples: Record<string, RuleExample> = {
     before: ['const zeroed = new Buffer(16);', "const copy = new Buffer('hi', 'utf8');"],
     after: ['const zeroed = Buffer.alloc(16);', "const copy = Buffer.from('hi', 'utf8');"],
   },
+  'focused-test-committed': {
+    before: ["describe.only('checkout', () => {", "  it('adds an item', () => {});", '});'],
+    after: ["describe('checkout', () => {", "  it('adds an item', () => {});", '});'],
+  },
+  'ts-suppression-without-reason': {
+    before: ['// @ts-ignore', 'legacyClient.connect(options);'],
+    after: ['// @ts-expect-error legacyClient types omit the options argument', 'legacyClient.connect(options);'],
+  },
+  'double-type-assertion': {
+    before: ['const response = await fetchUser();', 'const user = response as unknown as User;'],
+    after: ['const response = await fetchUser();', 'const user = parseUser(response);'],
+  },
+  'tsconfig-strict-disabled': {
+    before: ['// tsconfig.json', '{ "compilerOptions": { "strict": false } }'],
+    after: ['// tsconfig.json', '{ "compilerOptions": { "strict": true } }'],
+  },
   'dependency-cycle': {
     before: ['// a.ts: import { total } from "./b";', '// b.ts: import { total } from "./a";'],
     after: [
