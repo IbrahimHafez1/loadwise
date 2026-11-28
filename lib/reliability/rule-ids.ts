@@ -52,6 +52,9 @@ const sourceRules = [
   'react-state-mutated-in-place',
   'react-list-missing-key',
   'next-server-env-in-client',
+  'switch-not-exhaustive',
+  'pool-without-connection-timeout',
+  'uncaught-exception-continues',
 ];
 
 const migrationRules = [
@@ -168,6 +171,9 @@ const impactByRule: Readonly<Record<string, ImpactLevel>> = {
   'react-state-mutated-in-place': 'high',
   'react-list-missing-key': 'medium',
   'next-server-env-in-client': 'high',
+  'switch-not-exhaustive': 'medium',
+  'pool-without-connection-timeout': 'medium',
+  'uncaught-exception-continues': 'high',
   'csharp-disposable-without-using': 'medium',
   'python-bare-except': 'medium',
   'python-swallowed-exception': 'medium',
@@ -281,6 +287,12 @@ const descriptionByRule: Readonly<Record<string, string>> = {
     'An element or fragment returned from .map() has no key prop, so React cannot track items when the list changes.',
   'next-server-env-in-client':
     "A 'use client' file reads a process.env variable without the NEXT_PUBLIC_ prefix, so it is unavailable in the browser by default.",
+  'switch-not-exhaustive':
+    'A switch over a union or enum has no default and misses members, so the missing value leaves the result undefined.',
+  'pool-without-connection-timeout':
+    'A pg Pool or Client sets no connectionTimeoutMillis, so its default of 0 waits for a connection forever.',
+  'uncaught-exception-continues':
+    'An uncaughtException handler neither exits nor rethrows, so the process keeps running in an undefined state.',
   'csharp-disposable-without-using':
     'A C# stream, connection or other IDisposable is created without using, so an exception leaks it.',
   'python-bare-except': 'A bare except also catches SystemExit and KeyboardInterrupt, hiding shutdowns and bugs.',

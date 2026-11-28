@@ -20,6 +20,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Security rule `client-env-secret-exposed`: a secret-named environment variable read with a browser-exposed prefix (`NEXT_PUBLIC_`, `REACT_APP_`, `EXPO_PUBLIC_` with dot access, `import.meta.env.VITE_`, or `PUBLIC_` in Astro projects, SvelteKit `$env/static/public` and `$env/dynamic/public`) is inlined into the client bundle. Publishable, anon and public keys, site keys, DSNs and client ids stay clean. No fix: renaming the variable needs a human.
 - Security rule `jsx-javascript-url`: a URL search parameter (`URLSearchParams`, `useSearchParams` from `next/navigation` or React Router, `useRouter().query` from `next/router`), location hash, form field or `postMessage` payload that starts a JSX `href`, `action`, `formAction` or iframe `src` lets a `javascript:` URL run script. It targets React 18 and older and Preact, read from the nearest `package.json` that declares them; React 19 sanitizes these URLs itself, and an unreadable version keeps the rule silent.
 - Security rule `next-image-any-remote-host`: `hostname: '**'` in Next.js `images.remotePatterns` turns the image optimizer into an open proxy.
+- `switch-not-exhaustive` reports a `switch` over a union of literals or an enum that misses members and has no `default`, when the function then returns nothing or a variable declared without a value is read afterwards.
+- `pool-without-connection-timeout` reports a `pg` `Pool` or `Client` created without `connectionTimeoutMillis`, whose default waits for a connection forever.
+- `uncaught-exception-continues` reports a `process.on('uncaughtException')` handler that neither exits, rethrows nor starts a shutdown.
 
 ### Removed
 
