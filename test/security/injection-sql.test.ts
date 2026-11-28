@@ -302,6 +302,26 @@ test('only a write that can add a value to a const array ends its fixed-text exe
   ]);
 });
 
+test('a parenthesized or asserted alias of a const array ends its fixed-text exemption', () => {
+  const source = [
+    'declare const prisma: any;',
+    "const PARENTHESIZED = ['a', 'b'];",
+    "const ASSERTED = ['a', 'b'];",
+    'export async function run(input: string) {',
+    '  const alias = (PARENTHESIZED);',
+    '  alias[0] = input;',
+    '  const asserted = ASSERTED as string[];',
+    '  asserted.push(input);',
+    '  for (const table of PARENTHESIZED) await prisma.$queryRawUnsafe(`SELECT * FROM ${table}`);',
+    '  for (const table of ASSERTED) await prisma.$queryRawUnsafe(`SELECT * FROM ${table}`);',
+    '}',
+  ].join('\n');
+  assert.deepEqual(sqlFindings(source), [
+    ['prisma-raw-unsafe-dynamic', 9, 'C'],
+    ['prisma-raw-unsafe-dynamic', 10, 'C'],
+  ]);
+});
+
 test('a computed-key write cannot reach an ECMAScript private field', () => {
   const source = [
     'declare const prisma: any;',

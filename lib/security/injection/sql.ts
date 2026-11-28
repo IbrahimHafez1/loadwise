@@ -257,11 +257,25 @@ function hasElementWrites(declaration: Node, symbol: SymbolAdapter, checker: Che
 
 // `const alias = value` or `alias = value`: the value gets a second name that can be mutated.
 function isAliasing(node: Node): node is Expression {
-  const parent = node.parent;
-  if (!parent || !(ts.isIdentifier(node) || ts.isPropertyAccessExpression(node))) return false;
-  if (ts.isVariableDeclaration(parent)) return parent.initializer === node;
+  if (!(ts.isIdentifier(node) || ts.isPropertyAccessExpression(node))) return false;
+  // `const alias = (TABLES)` and `TABLES as string[]` still alias the array.
+  let aliased: Node = node;
+  while (aliased.parent && isTransparentWrapper(aliased.parent)) aliased = aliased.parent;
+  const parent = aliased.parent;
+  if (!parent) return false;
+  if (ts.isVariableDeclaration(parent)) return parent.initializer === aliased;
   return (
-    ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken && parent.right === node
+    ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken && parent.right === aliased
+  );
+}
+
+function isTransparentWrapper(node: Node) {
+  return (
+    ts.isParenthesizedExpression(node) ||
+    ts.isAsExpression(node) ||
+    ts.isSatisfiesExpression(node) ||
+    ts.isNonNullExpression(node) ||
+    ts.isTypeAssertionExpression(node)
   );
 }
 

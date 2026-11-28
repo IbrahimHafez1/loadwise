@@ -157,7 +157,7 @@ function filterArguments(call: CallExpression, method: string, checker: CheckerA
   if (method !== 'aggregate') return [];
   const pipeline = call.arguments[0] && resolveLocalLiteral(call.arguments[0], checker);
   if (!pipeline || !ts.isArrayLiteralExpression(pipeline)) return [];
-  const stages = [...pipeline.elements, ...pushedStages(call.arguments[0], checker)];
+  const stages = [...pipeline.elements, ...pushedStages(call.arguments[0], call, checker)];
   return stages.flatMap((stage) => {
     const value = ts.skipOuterExpressions(stage);
     if (!ts.isObjectLiteralExpression(value)) return [];
@@ -166,8 +166,9 @@ function filterArguments(call: CallExpression, method: string, checker: CheckerA
   });
 }
 
-// `pipeline.push(stage)` after `const pipeline = [...]`: the stages added to a local pipeline.
-function pushedStages(node: Expression, checker: CheckerAdapter): Expression[] {
+// `pipeline.push(stage)` after `const pipeline = [...]`: the stages added to a local pipeline
+// before `aggregate` runs it.
+function pushedStages(node: Expression, aggregate: CallExpression, checker: CheckerAdapter): Expression[] {
   const value = ts.skipOuterExpressions(node);
   const declaration = ts.isIdentifier(value) ? checker.getSymbolAtLocation(value)?.valueDeclaration : undefined;
   const scope =
@@ -181,12 +182,30 @@ function pushedStages(node: Expression, checker: CheckerAdapter): Expression[] {
       stageAddingMethods.has(child.expression.name.text)
     ) {
       const receiver = ts.skipOuterExpressions(child.expression.expression);
-      if (ts.isIdentifier(receiver) && checker.getSymbolAtLocation(receiver)?.valueDeclaration === declaration)
+      if (
+        ts.isIdentifier(receiver) &&
+        checker.getSymbolAtLocation(receiver)?.valueDeclaration === declaration &&
+        runsBefore(child, aggregate, declaration)
+      )
         stages.push(...child.arguments);
     }
     ts.forEachChild(child, visit);
   })(scope);
   return stages;
+}
+
+// A push written after the call reaches it only on a later pass of a loop around both that keeps
+// the same pipeline.
+function runsBefore(push: Node, aggregate: CallExpression, declaration: Node) {
+  if (push.getStart() < aggregate.getStart()) return true;
+  const loop = ts.findAncestor(aggregate, (node: Node) =>
+    encloses(node, declaration) ? 'quit' : ts.isIterationStatement(node, false),
+  );
+  return loop !== undefined && encloses(loop, push);
+}
+
+function encloses(outer: Node, inner: Node) {
+  return outer.getStart() <= inner.getStart() && inner.getEnd() <= outer.getEnd();
 }
 
 function propertyKey(property: ObjectLiteralElementLike): string | undefined {
@@ -280,8 +299,14 @@ function checkLogicalFilterBranches(
     const branch = ts.skipOuterExpressions(element);
     // `const branch = { name: req.body.name }; find({ $or: [branch] })` gets the inline checks.
     const literal = resolveLocalLiteral(branch, context.checker);
-    if (ts.isObjectLiteralExpression(literal)) checkFilterObject(literal, context, contextualReason);
-    else reportWhole(branch, context, contextualReason);
+    if (!ts.isObjectLiteralExpression(literal)) {
+      reportWhole(branch, context, contextualReason);
+      continue;
+    }
+    checkFilterObject(literal, context, contextualReason);
+    if (ts.isIdentifier(branch))
+      for (const { name, assignment } of fieldWritesOf(branch, context.checker))
+        checkFilterField(name, assignment.right, context, contextualReason);
   }
 }
 
