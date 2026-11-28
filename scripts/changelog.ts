@@ -84,7 +84,7 @@ function foldFragments(rootDir: string): string[] {
   const fragments = readFragments(changesDir);
   if (fragments.length === 0) return [];
 
-  const lines = fs.readFileSync(changelogPath, 'utf8').split('\n');
+  const lines = fs.readFileSync(changelogPath, 'utf8').split(/\r?\n/);
   for (const { fragment } of fragments) addToUnreleased(lines, fragment);
   fs.writeFileSync(changelogPath, lines.join('\n'));
   for (const { name } of fragments) fs.rmSync(path.join(changesDir, name));

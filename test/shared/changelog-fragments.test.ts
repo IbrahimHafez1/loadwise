@@ -90,3 +90,11 @@ test('ignores the README in the changes directory', (context) => {
   const root = project(context, { 'README.md': '# not a fragment' });
   assert.deepEqual(foldFragments(root), []);
 });
+
+test('accepts a changelog with CRLF line endings', (context) => {
+  const root = project(context, { 'crlf.md': fragmentText('Fixed', 'Crlf fix.') });
+  const changelogPath = path.join(root, 'CHANGELOG.md');
+  fs.writeFileSync(changelogPath, sampleChangelog.replaceAll('\n', '\r\n'));
+  foldFragments(root);
+  assert.ok(fs.readFileSync(changelogPath, 'utf8').includes('- Existing fix.\n- Crlf fix.\n'));
+});
