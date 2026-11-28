@@ -10,7 +10,7 @@ fixable: manual
 
 ## What it flags
 
-A request handler sends a user record read without a field selection, so its password hash reaches the client. Select or omit the field, or hide it on the model (`select: false`, `@Exclude()`).
+A request handler sends a user record read without a field selection, so its password hash reaches the client. Select or omit the field, or hide it on the model with `select: false`. `@Exclude()` hides it only when the response goes through a class-transformer conversion (`instanceToPlain` or `ClassSerializerInterceptor`); an instance sent directly as JSON still includes the hash.
 
 ## Configuration
 

@@ -14,7 +14,7 @@ An `incr`, `incrby` or `hincrby` followed by `expire` or `pexpire` on the same k
 
 ## How to review or fix
 
-Send both in one `multi()` (with `NX` on Redis 7+) or a Lua script.
+Send both in one `multi()` (with `NX` on Redis 7+) or a Lua script. `NX` keeps the TTL set by the first increment, while a plain `expire` refreshes it on every increment; leave out `NX` if the window should restart on each hit.
 
 ## Configuration
 

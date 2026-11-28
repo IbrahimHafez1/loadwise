@@ -14,7 +14,7 @@ A Mongoose `find`, `findOne` or `findById` result is only null-checked and conve
 
 ## How to review or fix
 
-Append `.lean()` to skip hydration. Skipped when a schema customizes `toObject` or `toJSON`.
+Append `.lean()` to skip hydration. Skipped when a schema customizes `toObject` or `toJSON`. A lean result also skips schema defaults, getters and virtuals, so a stored document that lacks a defaulted field comes back without it; check that callers do not rely on those before applying the change.
 
 ## Configuration
 
