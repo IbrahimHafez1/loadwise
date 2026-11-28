@@ -580,11 +580,17 @@ function mongooseLeanFix({ node, sourceFile }: SiteFixInput): FixResult | undefi
   };
 }
 
+// A lean result skips schema defaults, getters and virtuals, so a field the caller reads can disappear.
+const reviewedLeanFix = requireReview(
+  'A lean result skips schema defaults, getters and virtuals; check that callers do not read them.',
+  mongooseLeanFix,
+);
+
 export default {
   'db-unindexed-foreign-key': reviewedMigration,
   'db-missing-index': reviewedMigration,
   'db-slow-query-plan': reviewedMigration,
   'db-unused-index': reviewedMigration,
   'db-duplicate-index': reviewedMigration,
-  'mongoose-hydrate-for-to-object': mongooseLeanFix,
+  'mongoose-hydrate-for-to-object': reviewedLeanFix,
 };
