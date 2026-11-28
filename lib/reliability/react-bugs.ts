@@ -153,7 +153,20 @@ function updaterResults(updater: FunctionWithBody): (Expression | undefined)[] {
   walkSkippingFunctions(updater.body, (node: Node) => {
     if (ts.isReturnStatement(node)) results.push(node.expression && withoutParentheses(node.expression));
   });
+  // Running off the end returns undefined too.
+  if (!alwaysExits(updater.body)) results.push(undefined);
   return results;
+}
+
+function alwaysExits(statement: Node): boolean {
+  if (ts.isReturnStatement(statement) || ts.isThrowStatement(statement)) return true;
+  if (ts.isBlock(statement)) return statement.statements.some(alwaysExits);
+  return (
+    ts.isIfStatement(statement) &&
+    statement.elseStatement !== undefined &&
+    alwaysExits(statement.thenStatement) &&
+    alwaysExits(statement.elseStatement)
+  );
 }
 
 function isZeroLiteral(expression: Expression): boolean {
@@ -185,11 +198,10 @@ function isFreshValue(argument: Expression, checker: CheckerAdapter): boolean {
   if (ts.isObjectLiteralExpression(value) || ts.isArrayLiteralExpression(value) || ts.isNewExpression(value))
     return true;
   if (ts.isCallExpression(value)) {
+    // `Date.now()` can repeat within one millisecond, so the clock is not a guaranteed change.
     const callee = withoutParentheses(value.expression);
     if (!ts.isPropertyAccessExpression(callee)) return false;
-    const isClock =
-      ts.isIdentifier(callee.expression) && callee.expression.text === 'Date' && callee.name.text === 'now';
-    return isClock || freshArrayMethods.has(callee.name.text);
+    return freshArrayMethods.has(callee.name.text);
   }
   const updater = functionBodyOf(value, checker);
   if (!updater || updater.parameters.length === 0) return false;
@@ -322,15 +334,19 @@ function isCallbackArgument(node: Node): boolean {
 function walkRunningCode(root: Node, visit: (node: Node) => void, branches: BranchTracker) {
   (function walk(node: Node): void {
     if (node !== root && ts.isFunctionLike(node) && !isCallbackArgument(node)) return;
-    visit(node);
     const exclusive = exclusiveBranches(node);
-    if (!exclusive) return ts.forEachChild(node, walk);
-    walk(exclusive.condition);
-    branches.begin();
-    walk(exclusive.first);
-    branches.next(leavesFunction(exclusive.first));
-    if (exclusive.second) walk(exclusive.second);
-    branches.end(exclusive.second !== undefined && leavesFunction(exclusive.second));
+    if (exclusive) {
+      walk(exclusive.condition);
+      branches.begin();
+      walk(exclusive.first);
+      branches.next(leavesFunction(exclusive.first));
+      if (exclusive.second) walk(exclusive.second);
+      branches.end(exclusive.second !== undefined && leavesFunction(exclusive.second));
+    } else {
+      ts.forEachChild(node, walk);
+    }
+    // A node takes effect after its operands run: `items.push((setItems(items), 1))` calls the setter first.
+    visit(node);
   })(root);
 }
 
