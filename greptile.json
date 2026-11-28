@@ -1,0 +1,7 @@
+{
+  "autoReview": [],
+  "strictness": 3,
+  "includeSequenceDiagram": false,
+  "shouldUpdateDescription": false,
+  "ignorePatterns": "lib/performance/vendor/**\nbench/recall/cases/**\npackage-lock.json\nbench/corpus/scores.json"
+}
