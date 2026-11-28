@@ -194,12 +194,21 @@ function pushedStages(node: Expression, aggregate: CallExpression, checker: Chec
   return stages;
 }
 
-// A push written after the call reaches it only on a later pass of a loop around both that keeps
-// the same pipeline. Any such loop counts, not just the innermost one around the call.
+// A push inside a nested function runs only if that function is called, so it counts only when the
+// same function also runs the aggregate. A push written after the call reaches it only on a later
+// pass of a loop around both that keeps the same pipeline: any such loop counts, not just the
+// innermost one, and `for (const pipeline = []; ...)` creates the pipeline once for every pass.
 function runsBefore(push: Node, aggregate: CallExpression, declaration: Node) {
+  const pushFunction = ts.findAncestor(push.parent, (node: Node) => ts.isFunctionLike(node) || ts.isSourceFile(node));
+  if (!pushFunction || !encloses(pushFunction, aggregate)) return false;
   if (push.getStart() < aggregate.getStart()) return true;
-  for (let node: Node | undefined = aggregate.parent; node && !encloses(node, declaration); node = node.parent)
+  for (let node: Node | undefined = aggregate.parent; node; node = node.parent) {
+    const createdOnce =
+      ts.isForStatement(node) && node.initializer !== undefined && encloses(node.initializer, declaration);
+    if (encloses(node, declaration) && !createdOnce) return false;
     if (ts.isIterationStatement(node, false) && encloses(node, push)) return true;
+    if (createdOnce) return false;
+  }
   return false;
 }
 
