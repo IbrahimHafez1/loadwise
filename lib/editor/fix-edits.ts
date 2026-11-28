@@ -2,6 +2,8 @@
 // applies only where they still exist in the editor's buffer (or the saved file when it is not
 // open); code changed since the scan refuses the fix instead of guessing. The edit goes through the
 // editor, so undo restores the original code.
+import fs from 'node:fs';
+import path from 'node:path';
 import { isChangeApplied, locateChange } from './apply-fix.js';
 import type { CreateFile, Range, TextDocumentEdit, TextEdit, WorkspaceEdit } from 'vscode-languageserver';
 import type { EditorDocument } from './editor-document.js';
@@ -18,6 +20,8 @@ export interface FixWorkspace {
   canCreateFiles: boolean;
   /** Whether the editor accepts `documentChanges`; otherwise the edit uses `changes`. */
   supportsDocumentChanges: boolean;
+  /** What the editor does when one operation of an edit fails (`workspaceEdit.failureHandling`). */
+  failureHandling: string | undefined;
 }
 
 interface CreateOperation {
@@ -42,7 +46,13 @@ type FixOperation = CreateOperation | ReplaceOperation;
 
 type FixPlan = { operations: FixOperation[]; error?: undefined } | { error: string; operations?: undefined };
 
-export type FixEditResult = { edit: WorkspaceEdit; error?: undefined } | { error: string; edit?: undefined };
+/** A workspace edit, with the files it creates so their missing folders can be made first. */
+export interface FixEdit {
+  edit: WorkspaceEdit;
+  createdFiles: string[];
+}
+
+export type FixEditResult = (FixEdit & { error?: undefined }) | { error: string; edit?: undefined };
 
 /** The rows a fix already claimed in one file. */
 interface ClaimedFile {
@@ -52,6 +62,7 @@ interface ClaimedFile {
 
 const staleFixMessage = 'The code changed since the last scan. Save the file to rescan, then try again.';
 const noCreateMessage = 'This editor cannot create files through the language server, so the fix was not applied.';
+const overlappingChangesMessage = 'This fix changes the same lines twice, so it was not applied.';
 
 function normalizeNewlines(text: string): string {
   return text.replaceAll('\r\n', '\n');
@@ -97,28 +108,39 @@ function planReplace(change: WorkspaceFix['changes'][number], workspace: FixWork
   return { operations: [operation] };
 }
 
-// Resolves every change of one fix against the current files. Any stale change or existing file to
-// create rejects the whole fix, so a multi-file fix applies all-or-nothing.
+// Resolves every change of one fix against the current files. Any stale change, existing file to
+// create or pair of changes to the same lines rejects the whole fix, so a multi-file fix applies
+// all-or-nothing.
 function planFix(fix: WorkspaceFix, workspace: FixWorkspace): FixPlan {
   const operations: FixOperation[] = [];
+  const claimed = new Map<string, ClaimedFile>();
   let alreadyApplied = 0;
   for (const change of fix.changes) {
     const plan = change.create ? planCreate(change, workspace) : planReplace(change, workspace);
-    if (plan === 'applied') alreadyApplied++;
-    else if (plan.operations === undefined) return plan;
-    else operations.push(...plan.operations);
+    if (plan === 'applied') {
+      alreadyApplied++;
+      continue;
+    }
+    if (plan.operations === undefined) return plan;
+    // Each change is planned against the unchanged file, so two of them on one line would both apply.
+    if (plan.operations.some((operation) => overlaps(claimed, operation))) return { error: overlappingChangesMessage };
+    for (const operation of plan.operations) claim(claimed, operation);
+    operations.push(...plan.operations);
   }
   if (!operations.length && alreadyApplied) return { error: 'This fix is already applied.' };
   return { operations };
 }
 
+// New files come first. An editor that aborts on a failed operation keeps the ones before it, and a
+// created file is easier to spot and delete than a half-rewritten existing one.
 function documentChanges(
   operations: readonly FixOperation[],
   workspace: FixWorkspace,
 ): (TextDocumentEdit | CreateFile)[] {
   const changes: (TextDocumentEdit | CreateFile)[] = [];
   const editsByFile = new Map<string, TextEdit[]>();
-  for (const operation of operations) {
+  const ordered = [...operations.filter(({ create }) => create), ...operations.filter(({ create }) => !create)];
+  for (const operation of ordered) {
     const uri = workspace.uriFor(operation.filename);
     if (operation.create) {
       changes.push({ kind: 'create', uri, options: { overwrite: false, ignoreIfExists: false } });
@@ -152,16 +174,19 @@ function plainChanges(operations: readonly FixOperation[], workspace: FixWorkspa
   return changes;
 }
 
-function workspaceEdit(operations: readonly FixOperation[], workspace: FixWorkspace): WorkspaceEdit {
-  if (workspace.supportsDocumentChanges) return { documentChanges: documentChanges(operations, workspace) };
-  return { changes: plainChanges(operations, workspace) };
+function workspaceEdit(operations: readonly FixOperation[], workspace: FixWorkspace): FixEdit {
+  const createdFiles = operations.flatMap((operation) => (operation.create ? [operation.filename] : []));
+  if (workspace.supportsDocumentChanges) {
+    return { edit: { documentChanges: documentChanges(operations, workspace) }, createdFiles };
+  }
+  return { edit: { changes: plainChanges(operations, workspace) }, createdFiles };
 }
 
 /** The edit applying one fix, or why it cannot apply. */
 function fixEdit(fix: WorkspaceFix, workspace: FixWorkspace): FixEditResult {
   const plan = planFix(fix, workspace);
   if (plan.operations === undefined) return plan;
-  return { edit: workspaceEdit(plan.operations, workspace) };
+  return workspaceEdit(plan.operations, workspace);
 }
 
 function overlaps(claimed: ReadonlyMap<string, ClaimedFile>, operation: FixOperation): boolean {
@@ -200,7 +225,7 @@ function bulkFixesFor(entries: readonly PublishedFinding[]): { eligible: Workspa
 function fixAllEdit(
   fixes: readonly WorkspaceFix[],
   workspace: FixWorkspace,
-): { edit: WorkspaceEdit; applied: number; skipped: number } {
+): FixEdit & { applied: number; skipped: number } {
   const claimed = new Map<string, ClaimedFile>();
   const operations: FixOperation[] = [];
   let applied = 0;
@@ -211,7 +236,21 @@ function fixAllEdit(
     operations.push(...plan.operations);
     applied++;
   }
-  return { edit: workspaceEdit(operations, workspace), applied, skipped: fixes.length - applied };
+  return { ...workspaceEdit(operations, workspace), applied, skipped: fixes.length - applied };
 }
 
-export { bulkFixesFor, fixAllEdit, fixEdit };
+// A workspace edit can create a file but not a folder, and editors differ on whether they make the
+// missing ones, so the server makes them before it sends such an edit.
+/** The folders of the new files that do not exist yet, outermost first. */
+function missingFolders(createdFiles: readonly string[]): string[] {
+  const missing = new Set<string>();
+  for (const filename of createdFiles) {
+    for (let folder = path.dirname(filename); !fs.existsSync(folder); folder = path.dirname(folder)) {
+      if (path.dirname(folder) === folder) break;
+      missing.add(folder);
+    }
+  }
+  return [...missing].sort((left, right) => left.length - right.length);
+}
+
+export { bulkFixesFor, fixAllEdit, fixEdit, missingFolders };

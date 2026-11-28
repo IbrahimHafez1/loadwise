@@ -1,7 +1,7 @@
 // Code actions and code lenses for the published findings of one file.
 import { CodeActionKind } from 'vscode-languageserver';
 import type { CodeAction, CodeLens, Command, Range } from 'vscode-languageserver';
-import { bulkFixesFor, fixAllEdit, fixEdit } from './fix-edits.js';
+import { bulkFixesFor, fixAllEdit, fixEdit, missingFolders } from './fix-edits.js';
 import type { FixWorkspace } from './fix-edits.js';
 import type { PublishedFinding, WorkspaceFix } from './diagnostics.js';
 import type { DismissalEntry } from './types/dismissal.js';
@@ -43,8 +43,10 @@ function applyFixAction(entry: PublishedFinding, fix: WorkspaceFix, workspace: F
     isPreferred: !fix.requiresReview,
   };
   const result = fixEdit(fix, workspace);
-  if (result.edit) action.edit = result.edit;
-  else action.disabled = { reason: result.error };
+  if (result.edit === undefined) action.disabled = { reason: result.error };
+  // A new file in a missing folder goes through the command, which makes the folder first.
+  else if (missingFolders(result.createdFiles).length) action.command = command(title, commands.applyFix, fix);
+  else action.edit = result.edit;
   return action;
 }
 
@@ -86,11 +88,14 @@ function quickFixes(
 }
 
 // Runs for "Fix All" and code actions on save, so it carries the edit itself instead of a command.
-function fixAllActions(entries: readonly PublishedFinding[], workspace: FixWorkspace): CodeAction[] {
+function fixAllActions(entries: readonly PublishedFinding[], uri: string, workspace: FixWorkspace): CodeAction[] {
   const { eligible } = bulkFixesFor(entries);
   if (!eligible.length) return [];
-  const { edit, applied } = fixAllEdit(eligible, workspace);
+  const { edit, applied, createdFiles } = fixAllEdit(eligible, workspace);
   if (!applied) return [];
+  if (missingFolders(createdFiles).length) {
+    return [{ title: applyAllTitle, kind: fixAllKind, command: command(applyAllTitle, commands.applyAllFixes, uri) }];
+  }
   return [{ title: applyAllTitle, kind: fixAllKind, edit }];
 }
 
@@ -104,7 +109,7 @@ function codeActions(
   const actions: CodeAction[] = [];
   if (kindRequested(only, CodeActionKind.QuickFix)) actions.push(...quickFixes(entries, range, uri, workspace));
   // Building the fix-all edit reads files, so it runs only when the editor asks for that kind.
-  if (only && kindRequested(only, fixAllKind)) actions.push(...fixAllActions(entries, workspace));
+  if (only && kindRequested(only, fixAllKind)) actions.push(...fixAllActions(entries, uri, workspace));
   return actions;
 }
 

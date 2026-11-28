@@ -1,10 +1,13 @@
 // The workspace/executeCommand handlers. Arguments come back from the editor, so each one is checked
 // again before it touches a file.
+import fs from 'node:fs';
 import path from 'node:path';
 import { commands } from './actions.js';
-import { bulkFixesFor, fixAllEdit, fixEdit } from './fix-edits.js';
+import { bulkFixesFor, fixAllEdit, fixEdit, missingFolders } from './fix-edits.js';
+import { isRealPathInside } from './workspace-paths.js';
+import { errorCode, errorMessage } from '../shared/error-code.js';
 import { isRecord } from '../shared/is-record.js';
-import type { WorkspaceEdit } from 'vscode-languageserver';
+import type { FixEdit } from './fix-edits.js';
 import type { FolderState, ServerContext } from './language-server.js';
 import type { WorkspaceChange, WorkspaceFix } from './diagnostics.js';
 import type { DismissalEntry } from './types/dismissal.js';
@@ -23,7 +26,8 @@ function changeArgument(context: ServerContext, value: unknown): WorkspaceChange
   if (typeof file !== 'string' || typeof filename !== 'string' || !path.isAbsolute(filename)) return;
   if (typeof before !== 'string' || typeof after !== 'string') return;
   if (typeof line !== 'number' || !Number.isSafeInteger(line) || line < 1) return;
-  if (!context.folderFor(filename)) return;
+  const folder = context.folderFor(filename);
+  if (!folder || !isRealPathInside(folder.root, filename)) return;
   return { file, filename, line, before, after, ...(create === true ? { create: true } : {}) };
 }
 
@@ -52,10 +56,64 @@ function dismissalArgument(context: ServerContext, value: unknown): FolderDismis
   return { folder, entry };
 }
 
-async function applyEdit(context: ServerContext, edit: WorkspaceEdit, failure: string): Promise<boolean> {
-  const { applied } = await context.connection.workspace.applyEdit({ label: 'Loadwise', edit });
-  if (!applied) context.connection.window.showWarningMessage(failure);
-  return applied;
+// Returns the folders it made, so a rejected edit leaves none behind.
+function makeFolders(folders: readonly string[]): string[] {
+  const made: string[] = [];
+  try {
+    for (const folder of folders) {
+      try {
+        fs.mkdirSync(folder);
+        made.push(folder);
+      } catch (error) {
+        if (errorCode(error) !== 'EEXIST') throw error;
+      }
+    }
+  } catch (error) {
+    removeEmptyFolders(made);
+    throw error;
+  }
+  return made;
+}
+
+function removeEmptyFolders(folders: readonly string[]): void {
+  for (const folder of folders.toReversed()) {
+    try {
+      fs.rmdirSync(folder);
+    } catch {
+      // The editor wrote into it after all; the folder stays with its files.
+    }
+  }
+}
+
+// Only a transactional editor rolls back the operations before a failed one.
+function mayBePartlyApplied(context: ServerContext, failedChange: number | undefined, createsFiles: boolean): boolean {
+  if (!failedChange) return false;
+  const { failureHandling } = context.fixWorkspace();
+  if (failureHandling === 'transactional' || failureHandling === 'undo') return false;
+  return failureHandling !== 'textOnlyTransactional' || createsFiles;
+}
+
+async function applyEdit(context: ServerContext, { edit, createdFiles }: FixEdit, failure: string): Promise<boolean> {
+  const { window } = context.connection;
+  let made: string[];
+  try {
+    made = makeFolders(missingFolders(createdFiles));
+  } catch (error) {
+    window.showWarningMessage(failure + ' ' + errorMessage(error));
+    return false;
+  }
+  let result: { applied: boolean; failedChange?: number } = { applied: false };
+  try {
+    result = await context.connection.workspace.applyEdit({ label: 'Loadwise', edit });
+  } finally {
+    if (!result.applied) removeEmptyFolders(made);
+  }
+  if (result.applied) return true;
+  const partial = mayBePartlyApplied(context, result.failedChange, createdFiles.length > 0)
+    ? ' The editor kept the changes before the one that failed; undo them or check the files the fix names.'
+    : '';
+  window.showWarningMessage(failure + partial);
+  return false;
 }
 
 async function applyFix(context: ServerContext, value: unknown): Promise<void> {
@@ -63,15 +121,16 @@ async function applyFix(context: ServerContext, value: unknown): Promise<void> {
   if (!fix) return context.connection.window.showWarningMessage('Loadwise could not read this fix.');
   const result = fixEdit(fix, context.fixWorkspace());
   if (result.edit === undefined) return context.connection.window.showWarningMessage(result.error);
-  await applyEdit(context, result.edit, 'Loadwise could not apply the fix.');
+  await applyEdit(context, result, 'Loadwise could not apply the fix.');
 }
 
 async function applyAllFixes(context: ServerContext, value: unknown): Promise<void> {
   const { window } = context.connection;
   const { eligible, reviewCount } = bulkFixesFor(typeof value === 'string' ? context.entriesFor(value) : []);
   if (!eligible.length && !reviewCount) return window.showInformationMessage('Loadwise has no fixes for this file.');
-  const { edit, applied, skipped } = fixAllEdit(eligible, context.fixWorkspace());
-  if (applied && !(await applyEdit(context, edit, 'Loadwise could not apply the selected fixes.'))) return;
+  const planned = fixAllEdit(eligible, context.fixWorkspace());
+  const { applied, skipped } = planned;
+  if (applied && !(await applyEdit(context, planned, 'Loadwise could not apply the selected fixes.'))) return;
   const summary = 'Loadwise applied ' + applied + ' fix(es)';
   const reviewNote = reviewCount ? ' ' + reviewCount + ' fix(es) require individual review.' : '';
   if (!skipped) window.showInformationMessage(summary + '.' + reviewNote);
@@ -81,11 +140,23 @@ async function applyAllFixes(context: ServerContext, value: unknown): Promise<vo
     );
 }
 
+// A dismissal file that cannot be read or written is left alone, and the editor says why.
+async function saveDismissals(context: ServerContext, save: () => Promise<void>): Promise<boolean> {
+  try {
+    await save();
+    return true;
+  } catch (error) {
+    context.connection.window.showErrorMessage(
+      'Loadwise could not update the dismissed findings: ' + errorMessage(error),
+    );
+    return false;
+  }
+}
+
 async function dismiss(context: ServerContext, value: unknown): Promise<void> {
   const target = dismissalArgument(context, value);
   if (!target) return;
-  await target.folder.dismissals.add(target.entry);
-  context.republish(target.folder);
+  if (await saveDismissals(context, () => target.folder.dismissals.add(target.entry))) context.republish(target.folder);
 }
 
 function allDismissed(context: ServerContext): FolderDismissal[] {
@@ -96,8 +167,7 @@ async function restore(context: ServerContext, restored: readonly FolderDismissa
   const byFolder = new Map<FolderState, DismissalEntry[]>();
   for (const { folder, entry } of restored) byFolder.set(folder, [...(byFolder.get(folder) ?? []), entry]);
   for (const [folder, entries] of byFolder) {
-    await folder.dismissals.remove(entries);
-    context.republish(folder);
+    if (await saveDismissals(context, () => folder.dismissals.remove(entries))) context.republish(folder);
   }
 }
 

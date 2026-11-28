@@ -32,6 +32,7 @@ import { createEditorDocument, readDiskDocument } from './editor-document.js';
 import { createScanSession } from './scan-session.js';
 import { classifyChange, watchedGlobs } from './workspace-files.js';
 import { runCommand } from './server-commands.js';
+import { isInside } from './workspace-paths.js';
 import type { PublishedFinding } from './diagnostics.js';
 import type { EditorDocument } from './editor-document.js';
 import type { FixWorkspace } from './fix-edits.js';
@@ -65,6 +66,8 @@ const usage = 'Usage: loadwise lsp [--stdio]';
 const defaultCli = path.resolve(import.meta.dirname, '../../bin/loadwise.js');
 const severities = new Set(['default', 'error', 'warning', 'information', 'hint']);
 const defaultSettings: LoadwiseSettings = { enabled: true, project: '', cli: '', severity: 'default', codeLens: true };
+// Only these change what the checkers report; severity and code lenses only change how it is shown.
+const scanSettingNames = ['enabled', 'project', 'cli'] as const;
 
 function settingsFrom(value: unknown): Partial<LoadwiseSettings> {
   const section = isRecord(value) && isRecord(value.loadwise) ? value.loadwise : value;
@@ -93,9 +96,23 @@ function filenameOf(uri: string): string | undefined {
   }
 }
 
-function isInside(root: string, filename: string): boolean {
-  const relative = path.relative(root, filename);
-  return relative === '' || (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative));
+function scanSettingsKey(settings: LoadwiseSettings): string {
+  return JSON.stringify(scanSettingNames.map((name) => settings[name]));
+}
+
+// A parent folder and a folder nested in it both report the nested files. One diagnostic is shown
+// for each, taken from the deepest folder, whose settings and dismissals own the file.
+function findingKey({ uri, diagnostic }: PublishedFinding): string {
+  return JSON.stringify([uri, diagnostic.source, diagnostic.code, diagnostic.range, diagnostic.message]);
+}
+
+function uniqueFindings(entries: Iterable<PublishedFinding>): PublishedFinding[] {
+  const unique = new Map<string, PublishedFinding>();
+  for (const entry of entries) {
+    const key = findingKey(entry);
+    if (!unique.has(key)) unique.set(key, entry);
+  }
+  return [...unique.values()];
 }
 
 function parseArguments(args: readonly string[]): void {
@@ -120,6 +137,8 @@ function startServer(connection: Connection): void {
   const openUris = new Map<string, string>();
   const savedVersions = new Map<string, number>();
   const folders = new Map<string, FolderState>();
+  // The latest workspace/configuration request per folder; an older answer arriving later is dropped.
+  const settingsRequests = new Map<FolderState, number>();
   const published = new Map<string, string>();
   let capabilities: ClientCapabilities = {};
   let initialSettings: Partial<LoadwiseSettings> = {};
@@ -145,18 +164,23 @@ function startServer(connection: Connection): void {
   function uriFor(filename: string): string {
     return openUris.get(fileKey(filename)) ?? pathToFileURL(filename).href;
   }
+  function deepestFirst(): FolderState[] {
+    return [...folders.values()].sort((left, right) => right.root.length - left.root.length);
+  }
+  /** Every folder that contains the file, the deepest first. */
+  function foldersFor(filename: string): FolderState[] {
+    return deepestFirst().filter((folder) => isInside(folder.root, filename));
+  }
   function folderFor(filename: string): FolderState | undefined {
-    let best: FolderState | undefined;
-    for (const folder of folders.values()) {
-      if (isInside(folder.root, filename) && (!best || folder.root.length > best.root.length)) best = folder;
-    }
-    return best;
+    return foldersFor(filename)[0];
   }
   function entriesFor(uri: string): PublishedFinding[] {
     const filename = filenameOf(uri);
     if (filename === undefined) return [];
     const key = fileKey(filename);
-    return [...folders.values()].flatMap((folder) => folder.entries.filter((entry) => fileKey(entry.filename) === key));
+    return uniqueFindings(
+      deepestFirst().flatMap((folder) => folder.entries.filter((entry) => fileKey(entry.filename) === key)),
+    );
   }
   function fixWorkspace(): FixWorkspace {
     const workspaceEdit = capabilities.workspace?.workspaceEdit;
@@ -166,6 +190,7 @@ function startServer(connection: Connection): void {
       uriFor,
       keyOf: fileKey,
       supportsDocumentChanges,
+      failureHandling: workspaceEdit?.failureHandling,
       canCreateFiles: supportsDocumentChanges && Boolean(workspaceEdit?.resourceOperations?.includes('create')),
     };
   }
@@ -177,12 +202,10 @@ function startServer(connection: Connection): void {
   // Unchanged files are not resent, and files whose findings are gone get an empty list.
   function sendDiagnostics(): void {
     const next = new Map<string, Diagnostic[]>();
-    for (const folder of folders.values()) {
-      for (const entry of folder.entries) {
-        const list = next.get(entry.uri);
-        if (list) list.push(entry.diagnostic);
-        else next.set(entry.uri, [entry.diagnostic]);
-      }
+    for (const entry of uniqueFindings(deepestFirst().flatMap((folder) => folder.entries))) {
+      const list = next.get(entry.uri);
+      if (list) list.push(entry.diagnostic);
+      else next.set(entry.uri, [entry.diagnostic]);
     }
     for (const uri of published.keys()) {
       if (next.has(uri)) continue;
@@ -208,7 +231,8 @@ function startServer(connection: Connection): void {
     };
     folder.entries = [...folder.session.reports()].flatMap(({ source, findings }) =>
       buildDiagnostics(folder.root, source, findings, {
-        isDismissed: (entry) => folder.dismissals.has(entry),
+        // A nested folder's own dismissal file decides for its files.
+        isDismissed: (entry) => (folderFor(entry.file) ?? folder).dismissals.has(entry),
         severity: settings.severity,
         documentFor: cachedDocumentFor,
         uriFor,
@@ -243,10 +267,11 @@ function startServer(connection: Connection): void {
 
   async function pullSettings(folder: FolderState): Promise<void> {
     if (!capabilities.workspace?.configuration) return;
+    const request = (settingsRequests.get(folder) ?? 0) + 1;
+    settingsRequests.set(folder, request);
     try {
-      folder.folderSettings = settingsFrom(
-        await connection.workspace.getConfiguration({ scopeUri: folder.uri, section: 'loadwise' }),
-      );
+      const settings = await connection.workspace.getConfiguration({ scopeUri: folder.uri, section: 'loadwise' });
+      if (settingsRequests.get(folder) === request) folder.folderSettings = settingsFrom(settings);
     } catch (error) {
       connection.console.error('Could not read the loadwise settings: ' + String(error));
     }
@@ -258,7 +283,7 @@ function startServer(connection: Connection): void {
       root,
       uri,
       name,
-      dismissals: createDismissals(root),
+      dismissals: createDismissals(root, { onProblem: (message) => connection.console.error(message) }),
       entries: [],
       folderSettings: {},
       session: createScanSession({
@@ -282,6 +307,7 @@ function startServer(connection: Connection): void {
     if (!folder || root === undefined) return;
     folder.session.dispose();
     folders.delete(fileKey(root));
+    settingsRequests.delete(folder);
     sendDiagnostics();
     updateProgress();
   }
@@ -291,26 +317,29 @@ function startServer(connection: Connection): void {
     folders.clear();
   }
 
-  // Groups the changes of one notification, so each folder rescans once.
+  // Groups the changes of one notification, so each folder rescans once. A file inside nested
+  // folders changes the scans of each of them.
   function filesChanged(changes: readonly { filename: string; type: FileChangeType }[]): void {
-    const touched = new Map<FolderState, { restart: boolean; filesAddedOrRemoved: boolean; scan: boolean }>();
+    const touched = new Map<FolderState, { restart: boolean; filesAddedOrRemoved: boolean }>();
+    let dismissalsChanged = false;
     for (const { filename, type } of changes) {
-      const folder = folderFor(filename);
-      if (!folder) continue;
-      const kind = classifyChange(folder.root, filename);
-      if (kind === 'ignored') continue;
-      const flags = touched.get(folder) ?? { restart: false, filesAddedOrRemoved: false, scan: false };
-      touched.set(folder, flags);
-      if (kind === 'dismissals') {
-        folder.dismissals.reload();
-        republish(folder);
-        continue;
+      for (const folder of foldersFor(filename)) {
+        const kind = classifyChange(folder.root, filename, settingsFor(folder).project);
+        if (kind === 'ignored') continue;
+        if (kind === 'dismissals') {
+          folder.dismissals.reload();
+          dismissalsChanged = true;
+          continue;
+        }
+        const flags = touched.get(folder) ?? { restart: false, filesAddedOrRemoved: false };
+        touched.set(folder, flags);
+        flags.restart ||= kind === 'config';
+        flags.filesAddedOrRemoved ||= type !== FileChangeType.Changed;
       }
-      flags.scan = true;
-      flags.restart ||= kind === 'config';
-      flags.filesAddedOrRemoved ||= type !== FileChangeType.Changed;
     }
-    for (const [folder, { scan, ...options }] of touched) if (scan) folder.session.schedule(options);
+    // A nested folder's dismissals also hide its files' findings from the parent folder.
+    if (dismissalsChanged) republishAll();
+    for (const [folder, options] of touched) folder.session.schedule(options);
   }
   function watchedFileEvents(events: readonly FileEvent[]): { filename: string; type: FileChangeType }[] {
     return events.flatMap(({ uri, type }) => {
@@ -319,21 +348,23 @@ function startServer(connection: Connection): void {
     });
   }
 
-  function documentOpened(uri: string, version: number): void {
-    const filename = filenameOf(uri);
+  // An editor can open a buffer with unsaved edits, such as one restored from a previous session;
+  // only a buffer that matches the file on disk counts as saved.
+  function documentOpened(document: TextDocument): void {
+    const filename = filenameOf(document.uri);
     if (filename === undefined) return;
-    openUris.set(fileKey(filename), uri);
-    savedVersions.set(fileKey(filename), version);
-    const folder = folderFor(filename);
-    if (folder) republish(folder);
+    openUris.set(fileKey(filename), document.uri);
+    if (readDiskDocument(filename)?.getText() === document.getText())
+      savedVersions.set(fileKey(filename), document.version);
+    else savedVersions.delete(fileKey(filename));
+    foldersFor(filename).forEach(republish);
   }
   function documentClosed(uri: string): void {
     const filename = filenameOf(uri);
     if (filename === undefined) return;
     openUris.delete(fileKey(filename));
     savedVersions.delete(fileKey(filename));
-    const folder = folderFor(filename);
-    if (folder) republish(folder);
+    foldersFor(filename).forEach(republish);
   }
 
   const context: ServerContext = {
@@ -342,7 +373,8 @@ function startServer(connection: Connection): void {
     folderFor,
     entriesFor,
     fixWorkspace,
-    republish,
+    // A dismissal in a nested folder also hides the finding the parent folder reports.
+    republish: republishAll,
   };
 
   connection.onInitialize((params: InitializeParams): InitializeResult => {
@@ -379,7 +411,7 @@ function startServer(connection: Connection): void {
     return { capabilities: serverCapabilities(), serverInfo: { name: 'loadwise', version: packageManifest.version } };
   });
 
-  documents.onDidOpen(({ document }) => documentOpened(document.uri, document.version));
+  documents.onDidOpen(({ document }) => documentOpened(document));
   documents.onDidClose(({ document }) => documentClosed(document.uri));
   documents.onDidSave(({ document }) => {
     const filename = filenameOf(document.uri);
@@ -389,10 +421,17 @@ function startServer(connection: Connection): void {
   });
   connection.onDidChangeWatchedFiles(({ changes }) => filesChanged(watchedFileEvents(changes)));
   connection.onDidChangeConfiguration(async ({ settings }) => {
+    const scanSettings = new Map([...folders.values()].map((folder) => [folder, scanSettingsKey(settingsFor(folder))]));
     if (settings !== null && settings !== undefined) pushedSettings = settingsFrom(settings);
     await Promise.all([...folders.values()].map(pullSettings));
     republishAll();
-    for (const folder of folders.values()) folder.session.schedule({ restart: true });
+    for (const folder of folders.values()) {
+      const previous = scanSettings.get(folder);
+      // A folder added while the settings were read scans on its own.
+      if (previous !== undefined && previous !== scanSettingsKey(settingsFor(folder))) {
+        folder.session.schedule({ restart: true });
+      }
+    }
   });
 
   connection.onHover(({ textDocument, position }) => {
