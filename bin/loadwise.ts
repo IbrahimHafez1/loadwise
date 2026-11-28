@@ -14,6 +14,7 @@ const usage = `Usage:
   loadwise fix --all [performance] [reliability] [maintainability] [security] [accessibility] [--json]
   loadwise fix --handoff [performance] [reliability] [maintainability] [security] [accessibility]
   loadwise explain <rule-id>
+  loadwise lsp [--stdio]
   loadwise --version
   loadwise agent init [--mode ask|auto] [--hook [block|warn|off]]
   loadwise agent instructions
@@ -36,6 +37,7 @@ fix --yes applies automatic edits. fix --all also applies edits marked for revie
 fix --json with --yes or --all records the applied hunks and outstanding findings in its output for review.
 perf, rel, maint, sec and a11y run one checker with its full command set; \`loadwise perf --help\`, \`loadwise rel --help\`, \`loadwise maint --help\` \`loadwise sec --help\` and \`loadwise a11y --help\` list their commands and flags.
 explain prints the rule's default impact, description and an illustrative change when available.
+lsp runs the language server on stdin and stdout for any editor with a Language Server Protocol client: findings from every checker as diagnostics, with hovers, fixes, dismissals and code lenses.
 Recognized coding-agent sessions receive review instructions automatically. agent instructions prints the review workflow. Optional agent init writes it into AGENTS.md and imports it from CLAUDE.md.
 An active agent can run check --json directly or use the loadwise_check MCP tool for a fresh offline report.
 Add --review to a combined check or bulk fix to keep its original report and print the same handoff for any coding agent. agent pending lists saved handoffs for this project.
@@ -53,6 +55,7 @@ async function main(args: readonly string[]): Promise<number> {
   if (command === 'a11y') return (await import('../lib/accessibility/cli.js')).main(rest);
   if (command === 'fix') return (await import('../lib/shared/fix.js')).runFix(rest);
   if (command === 'explain') return (await import('../lib/shared/explain.js')).runExplain(rest);
+  if (command === 'lsp') return (await import('../lib/editor/language-server.js')).runLanguageServer(rest);
   if (command === '--version' || command === '-v') {
     if (rest.length) throw new Error('Usage: loadwise --version');
     console.log(version);

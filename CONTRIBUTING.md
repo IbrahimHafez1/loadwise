@@ -22,10 +22,10 @@ npm run build
 node --import ./test/manual-session.js --test test/shared/fix-resilience.test.js
 ```
 
-For editor extension tests:
+For the language server and editor module tests:
 
 ```sh
-node --import ./test/manual-session.js --test editor/test/*.test.cjs
+node --import ./test/manual-session.js --test test/editor/*.test.js
 ```
 
 ## Before Opening a Pull Request

@@ -4,7 +4,6 @@
     "../../lib/*/types/typescript-*.ts",
     "../../bench/**",
     "../../dist/**",
-    "../../editor/**",
     "../../examples/**",
     "../../hooks/**",
     "../../plugin/**",

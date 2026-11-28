@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { askChoice, labelledLines } from '../shared/fix-terminal.js';
-import { applyFix } from '../../editor/apply-fix.cjs';
+import { applyFix } from '../editor/apply-fix.js';
 import { diffLines, findingLabel } from './finding-text.js';
 import { applyFixSafely } from '../shared/fix-safety.js';
 import type { checkerHistory } from '../shared/fix-history.js';

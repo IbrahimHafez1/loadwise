@@ -53,9 +53,9 @@ test('every --help flag and subcommand is in the README', () => {
   const subcommands = new Set(
     [...helpText.matchAll(/^ {2}loadwise perf ([a-z]+)(?: ([a-z]+))?/gm)]
       .filter((match) => !/^[[<-]/.test(match[1]))
-      .map((match) => (match[1] === 'editor' || match[1] === 'agent' ? `${match[1]} ${match[2]}` : match[1])),
+      .map((match) => (match[1] === 'agent' ? `${match[1]} ${match[2]}` : match[1])),
   );
-  assert.ok(flags.size > 10 && subcommands.size >= 7, 'could not parse --help');
+  assert.ok(flags.size > 10 && subcommands.size >= 5, 'could not parse --help');
   const missing = [...flags, ...subcommands].filter((name) => !readme.includes(name));
   assert.deepEqual(missing, [], `README does not mention: ${missing.join(', ')}`);
 });

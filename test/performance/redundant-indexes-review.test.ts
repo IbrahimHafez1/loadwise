@@ -8,7 +8,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { projectFiles } from './index-rules-fixtures.js';
 import { scanWithFixes, requireFix } from './site-fix-helpers.js';
-import { applyChangesToText } from '../../editor/apply-fix.cjs';
+import { applyChangesToText } from '../../lib/editor/apply-fix.js';
 import { checkRedundantSchemaIndexes } from '../../lib/performance/redundant-indexes.js';
 import { drizzle as drizzleStubs } from './fixtures/schema/orm-stubs.js';
 import type { Finding, ProgramAdapter } from '../../lib/shared/types.js';

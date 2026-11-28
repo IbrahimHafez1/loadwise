@@ -5,7 +5,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import test, { type TestContext } from 'node:test';
 import ts from 'typescript';
-import { applyFix } from '../../editor/apply-fix.cjs';
+import { applyFix } from '../../lib/editor/apply-fix.js';
 import { buildFix, createFileCache } from '../../lib/maintainability/site-fix.js';
 import type { FixChange } from '../../lib/shared/types.js';
 

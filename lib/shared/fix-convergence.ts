@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import * as ts from 'typescript';
-import { applyFix } from '../../editor/apply-fix.cjs';
+import { applyFix } from '../editor/apply-fix.js';
 import { renameWithRetry } from './atomic-write.js';
 import { realTarget } from './real-target.js';
 import { introducedSyntaxError, refusalReason } from './fix-safety.js';

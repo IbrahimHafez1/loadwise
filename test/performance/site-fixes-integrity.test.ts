@@ -11,9 +11,9 @@ import type { Finding, FindingFix, FixChange } from '../../lib/shared/types.js';
 import { fixOf, noteOf, fileOf } from '../types/finding-fix.js';
 import type { PerformancePolicy } from '../../lib/performance/types/performance-policy.js';
 import type { FileMap } from '../types/project-files.js';
-import type { ApplyResult } from '../../editor/apply-fix.cjs';
+import type { ApplyResult } from '../../lib/editor/apply-fix.js';
 import { applyFixes } from '../../lib/performance/fix-cli.js';
-import { applyFix } from '../../editor/apply-fix.cjs';
+import { applyFix } from '../../lib/editor/apply-fix.js';
 
 // Scans `source` as src.ts beside the package stubs, with an optional query policy, and returns the
 // findings of `ruleId` with their site fixes attached.

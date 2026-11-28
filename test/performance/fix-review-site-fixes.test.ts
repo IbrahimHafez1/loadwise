@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import type { TestContext } from 'node:test';
-import { applyFix } from '../../editor/apply-fix.cjs';
+import { applyFix } from '../../lib/editor/apply-fix.js';
 import { scanWithFixes, requireFix } from './site-fix-helpers.js';
 import type { FixChange } from '../../lib/shared/types.js';
 import type { FileMap } from '../types/project-files.js';

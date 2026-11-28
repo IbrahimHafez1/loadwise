@@ -1,6 +1,9 @@
 {
   "version": 1,
   "pillars": {
+    "accessibility": {
+      "findings": []
+    },
     "maintainability": {
       "findings": [
         {
@@ -10,9 +13,21 @@
           "count": 1
         },
         {
+          "ruleId": "large-module",
+          "file": "../../lib/editor/standalone-performance-examples.ts",
+          "fingerprint": "3b890a180539",
+          "count": 1
+        },
+        {
           "ruleId": "unreferenced-file",
           "file": "../../lib/shared/types/cli-finding.ts",
           "fingerprint": "935d8cea16fb",
+          "count": 1
+        },
+        {
+          "ruleId": "unused-export",
+          "file": "../../lib/editor/apply-fix.ts",
+          "fingerprint": "1d6a7c006b4a",
           "count": 1
         },
         {
@@ -294,6 +309,9 @@
       ]
     },
     "performance": {
+      "findings": []
+    },
+    "reliability": {
       "findings": []
     },
     "security": {

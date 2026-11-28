@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import ts from 'typescript';
-import { applyFix } from '../../editor/apply-fix.cjs';
+import { applyFix } from '../../lib/editor/apply-fix.js';
 import {
   accessibilityAnalyzer,
   analyzeSources,

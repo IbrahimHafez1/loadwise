@@ -36,7 +36,8 @@
     "static-analysis",
     "security",
     "cli",
-    "vscode"
+    "language-server",
+    "lsp"
   ],
   "bin": {
     "loadwise": "bin/loadwise.js"
@@ -48,18 +49,6 @@
     "polyglot/",
     "schema/",
     "examples/",
-    "editor/README.md",
-    "editor/control-flow-comparison.cjs",
-    "editor/finding-comparison.cjs",
-    "editor/performance-examples.cjs",
-    "editor/reliability-examples.cjs",
-    "editor/accessibility-examples.cjs",
-    "editor/standalone-performance-examples.cjs",
-    "editor/perf-site-comparison.cjs",
-    "editor/maintainability-examples.cjs",
-    "editor/security-examples.cjs",
-    "editor/source-example.cjs",
-    "editor/apply-fix.cjs",
     "PERFORMANCE.md",
     "LICENSE",
     "!**/*.cts",
@@ -88,14 +77,16 @@
     "bench:traces": "node bench/traces.js",
     "bench:recall": "node bench/recall/runner.js",
     "build": "tsc -p tsconfig.json",
-    "clean": "node -e \"import('node:fs').then(fs=>import('node:path').then(p=>{const walk=d=>{if(!fs.existsSync(d))return;for(const e of fs.readdirSync(d,{withFileTypes:true})){const f=p.join(d,e.name);if(e.isDirectory()&&e.name!=='node_modules'&&!f.includes('vendor'))walk(f);else if((e.name.endsWith('.js')&&fs.existsSync(f.slice(0,-3)+'.ts'))||(e.name.endsWith('.cjs')&&fs.existsSync(f.slice(0,-4)+'.cts')))fs.unlinkSync(f);}};['bin','lib','editor','plugin','polyglot','scripts','bench','test'].forEach(walk);fs.rmSync('.tsbuildinfo',{force:true});}))\"",
+    "clean": "node -e \"import('node:fs').then(fs=>import('node:path').then(p=>{const walk=d=>{if(!fs.existsSync(d))return;for(const e of fs.readdirSync(d,{withFileTypes:true})){const f=p.join(d,e.name);if(e.isDirectory()&&e.name!=='node_modules'&&!f.includes('vendor'))walk(f);else if((e.name.endsWith('.js')&&fs.existsSync(f.slice(0,-3)+'.ts'))||(e.name.endsWith('.cjs')&&fs.existsSync(f.slice(0,-4)+'.cts')))fs.unlinkSync(f);}};['bin','lib','plugin','polyglot','scripts','bench','test'].forEach(walk);fs.rmSync('.tsbuildinfo',{force:true});}))\"",
     "prepack": "npm run build",
     "prepare": "node -e \"import('node:child_process').then(c=>{c.execSync('git rev-parse --git-dir',{stdio:'ignore'});c.execSync('git config core.hooksPath hooks')}).catch(()=>{})\"",
     "lint:fix": "oxlint --fix ."
   },
   "dependencies": {
     "libpg-query": "18.3.0",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "vscode-languageserver": "11.0.0",
+    "vscode-languageserver-textdocument": "1.0.16"
   },
   "optionalDependencies": {
     "@ast-grep/cli": "0.51.3",

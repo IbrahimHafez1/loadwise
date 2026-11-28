@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { TestContext } from 'node:test';
 import ts from 'typescript';
-import { applyChangesToText } from '../../editor/apply-fix.cjs';
+import { applyChangesToText } from '../../lib/editor/apply-fix.js';
 import { scanWithFixes } from './site-fix-helpers.js';
 import { fixOf, requireText } from '../types/finding-fix.js';
 
