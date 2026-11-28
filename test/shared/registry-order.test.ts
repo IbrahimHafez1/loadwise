@@ -117,10 +117,10 @@ const unkeyedRegistryFiles = new Set(['lib/editor/maintainability-examples.ts'])
 test('every rule registry file in lib is checked for order', () => {
   const registryFiles = fs
     .readdirSync(path.join(root, 'lib'), { recursive: true, withFileTypes: true })
-    .filter((entry) => entry.isFile() && !entry.parentPath.includes('vendor'))
-    .filter((entry) => registryFileName.test(entry.name) || path.basename(entry.parentPath) === 'examples')
-    .filter((entry) => /\.c?ts$/.test(entry.name) && !entry.name.endsWith('.d.ts'))
-    .map((entry) => path.relative(root, path.join(entry.parentPath, entry.name)).split(path.sep).join('/'));
+    .filter((entry) => entry.isFile() && /\.c?ts$/.test(entry.name) && !entry.name.endsWith('.d.ts'))
+    .map((entry) => path.relative(root, path.join(entry.parentPath, entry.name)).split(path.sep).join('/'))
+    .filter((file) => !file.split('/').includes('vendor'))
+    .filter((file) => registryFileName.test(path.posix.basename(file)) || file.split('/').at(-2) === 'examples');
   assert.ok(registryFiles.length >= Object.keys(sortedLists).length, 'could not find the registry files');
   for (const file of registryFiles) {
     assert.ok(Object.hasOwn(sortedLists, file) || unkeyedRegistryFiles.has(file), `${file} is not checked for order`);
