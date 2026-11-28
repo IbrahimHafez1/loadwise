@@ -141,8 +141,8 @@ function functionOf(declaration: Node | undefined): Node | undefined {
 }
 
 // The function a call invokes when it is written inside the handler, so a helper that rethrows is read at its call site.
-function localCallee(call: CallExpression, handler: Node, checker: CheckerAdapter): Node | undefined {
-  const callee = ts.skipOuterExpressions(call.expression);
+function localFunction(expression: Expression, handler: Node, checker: CheckerAdapter): Node | undefined {
+  const callee = ts.skipOuterExpressions(expression);
   if (!ts.isIdentifier(callee)) return;
   const declaration = checker.getSymbolAtLocation(callee)?.valueDeclaration;
   if (isMutableVariable(declaration)) return;
@@ -161,6 +161,22 @@ function endsOrRethrows(handler: Node, checker: CheckerAdapter): boolean {
       visit(child, isPromiseExecutor(child) || isPromiseReaction(child) || (swallowed && !isDeferredCallback(child))),
     );
   };
+  const visitHelper = (helper: Node, swallowed: boolean): void => {
+    if (visitedHelpers.has(helper)) return;
+    visitedHelpers.add(helper);
+    visitChildren(helper, swallowed || isAsyncFunction(helper));
+  };
+  const visitCalledHelpers = (call: CallExpression, swallowed: boolean): void => {
+    const name = calleeName(call) ?? '';
+    const callee = localFunction(call.expression, handler, checker);
+    if (callee) visitHelper(callee, swallowed);
+    if (!deferredCallName.test(name)) return;
+    // A named function handed to a scheduler runs later, like an inline callback.
+    for (const argument of call.arguments) {
+      const scheduled = localFunction(argument, handler, checker);
+      if (scheduled) visitHelper(scheduled, promiseReactionName.test(name));
+    }
+  };
   const visit = (node: Node, swallowed: boolean): void => {
     if (ends || isDormantFunction(node)) return;
     if (ts.isThrowStatement(node) && !swallowed) ends = true;
@@ -172,11 +188,7 @@ function endsOrRethrows(handler: Node, checker: CheckerAdapter): boolean {
       if (node.catchClause) visit(node.catchClause, swallowed || cancelsThrow);
       if (node.finallyBlock) visit(node.finallyBlock, swallowed);
     } else {
-      const helper = ts.isCallExpression(node) ? localCallee(node, handler, checker) : undefined;
-      if (helper && !visitedHelpers.has(helper)) {
-        visitedHelpers.add(helper);
-        visitChildren(helper, swallowed || isAsyncFunction(helper));
-      }
+      if (ts.isCallExpression(node)) visitCalledHelpers(node, swallowed);
       visitChildren(node, swallowed);
     }
   };
