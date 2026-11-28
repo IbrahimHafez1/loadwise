@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Dismissed findings are saved in `.loadwise/dismissed.json` at the workspace folder root, so they can be shared through version control; `loadwise.showDismissed` and `loadwise.restoreDismissed` bring them back.
 - `react-component-defined-in-component` flags a component declared inside another component and rendered as an element. It is a new component type on every render, so React remounts its subtree and loses its state and DOM.
 - `angular-ngfor-missing-trackby` flags an `*ngFor` with no `trackBy` in an inline `template` or a `templateUrl` HTML file, since a list replaced with new objects recreates every item's DOM. `@for` blocks already require `track` and are not checked.
+- Reliability rules: `child-process-without-error-listener` (a spawned child process with no `error` listener crashes the parent when the spawn fails), `error-rethrown-without-cause`, `throw-non-error` and `error-logged-without-stack`.
 
 ### Removed
 

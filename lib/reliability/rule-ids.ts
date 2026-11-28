@@ -43,6 +43,10 @@ const sourceRules = [
   'query-runner-not-released',
   'browser-not-closed',
   'interval-not-cleared',
+  'child-process-without-error-listener',
+  'error-rethrown-without-cause',
+  'throw-non-error',
+  'error-logged-without-stack',
 ];
 
 const migrationRules = [
@@ -150,6 +154,10 @@ const impactByRule: Readonly<Record<string, ImpactLevel>> = {
   'query-runner-not-released': 'critical',
   'browser-not-closed': 'high',
   'interval-not-cleared': 'medium',
+  'child-process-without-error-listener': 'high',
+  'error-rethrown-without-cause': 'low',
+  'throw-non-error': 'medium',
+  'error-logged-without-stack': 'low',
   'csharp-disposable-without-using': 'medium',
   'python-bare-except': 'medium',
   'python-swallowed-exception': 'medium',
@@ -247,6 +255,12 @@ const descriptionByRule: Readonly<Record<string, string>> = {
   'browser-not-closed':
     'A Playwright or Puppeteer browser is not closed in a finally block, so an error leaves the process running.',
   'interval-not-cleared': 'A setInterval handle is discarded or never cleared, so the timer outlives its owner.',
+  'child-process-without-error-listener':
+    "A spawned child process has no 'error' listener, so a failed spawn crashes the parent process.",
+  'error-rethrown-without-cause':
+    'A catch block throws a new error without the caught one, so the original message and stack are lost.',
+  'throw-non-error': 'A string, number or object literal is thrown instead of an Error, so there is no stack trace.',
+  'error-logged-without-stack': 'A catch block logs only error.message and carries on, so the stack trace is lost.',
   'csharp-disposable-without-using':
     'A C# stream, connection or other IDisposable is created without using, so an exception leaks it.',
   'python-bare-except': 'A bare except also catches SystemExit and KeyboardInterrupt, hiding shutdowns and bugs.',
