@@ -547,7 +547,11 @@ test('with the watcher running, template findings come from an accessibility sca
   const client = await startServer(context, workspace);
   const htmlUri = fileUri(workspace, 'index.html');
   await until(() => codes(client.diagnostics.get(htmlUri)).join() === 'img-alt', 'the template finding');
-  assert.deepEqual(codes(client.diagnostics.get(fileUri(workspace, 'orders.ts'))), ['array-repeated-membership']);
+  // The watcher publishes separately from the template scan, so its findings can arrive later.
+  await until(
+    () => codes(client.diagnostics.get(fileUri(workspace, 'orders.ts'))).join() === 'array-repeated-membership',
+    'the watcher finding without the duplicate JSX one',
+  );
   assert.match(runLog(workspace), /^a11y -p tsconfig\.json --json$/m);
   assert.match(JSON.stringify(client.serverRequests), /html/);
 
