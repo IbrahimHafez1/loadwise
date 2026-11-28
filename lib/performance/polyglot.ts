@@ -66,11 +66,16 @@ export async function resolveAstGrepBinary(): Promise<string | undefined> {
   }
 }
 
-async function diskCasedPath(input: string): Promise<string> {
+export async function diskCasedPath(input: string): Promise<string> {
   const { root } = path.parse(input);
   let current = root;
   for (const segment of input.slice(root.length).split(path.sep).filter(Boolean)) {
     const candidate = path.join(current, segment);
+    // A symlink's target basename is not an entry of its parent directory, so the given name stays.
+    if ((await fs.promises.lstat(candidate)).isSymbolicLink()) {
+      current = candidate;
+      continue;
+    }
     const actualName = path.basename(await realpathNative(candidate));
     current = path.join(current, actualName.toLowerCase() === segment.toLowerCase() ? actualName : segment);
   }
