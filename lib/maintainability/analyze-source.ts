@@ -11,6 +11,7 @@ import { sourceFacts } from './source-facts.js';
 import { checkUnusedBindings } from './unused-bindings.js';
 import { checkStrayConsole } from './stray-console.js';
 import { checkDeprecatedApis } from './deprecated-apis.js';
+import { checkTypeSafetyHygiene } from './type-safety-hygiene.js';
 import type {
   DiskFacts,
   AnalysisOptions,
@@ -99,6 +100,7 @@ function analyzeSource(
       ...checkUnusedBindings(source, file, compilerOptions ?? {}),
       ...checkStrayConsole(source, file, compilerOptions ?? {}),
       ...checkDeprecatedApis(source, file),
+      ...checkTypeSafetyHygiene(source, file),
     ],
     edges: collectEdges(source, file, resolve, compilerOptions),
     constEnums: exportedConstEnums(source),

@@ -18,6 +18,10 @@ const knownRules = new Set<string>([
   'unused-local-variable',
   'stray-console',
   'deprecated-node-api',
+  'focused-test-committed',
+  'ts-suppression-without-reason',
+  'double-type-assertion',
+  'tsconfig-strict-disabled',
 ]);
 
 // Impact levels (see lib/shared/impact-levels.cjs) for every rule id a maintainability finding can
@@ -43,6 +47,10 @@ const impactByRule: Record<string, ImpactLevel> = {
   'unused-local-variable': 'low',
   'stray-console': 'low',
   'deprecated-node-api': 'medium',
+  'focused-test-committed': 'medium',
+  'ts-suppression-without-reason': 'low',
+  'double-type-assertion': 'low',
+  'tsconfig-strict-disabled': 'medium',
 };
 
 // One-line summaries of every rule above, used where a rule needs a fixed name (SARIF
@@ -67,6 +75,10 @@ const descriptionByRule: Record<string, string> = {
   'unused-local-variable': 'A local variable is assigned but never read.',
   'stray-console': 'A console call in production code bypasses the logger, so its output has no level or structure.',
   'deprecated-node-api': 'A deprecated Node.js API is used: new Buffer(), url.parse() or fs.exists().',
+  'focused-test-committed': 'A committed .only, fit or fdescribe makes the test runner skip every other test.',
+  'ts-suppression-without-reason': 'A @ts-ignore, @ts-expect-error or @ts-nocheck directive has no explanation.',
+  'double-type-assertion': 'A value is cast through unknown or any to a second type, bypassing the type checker.',
+  'tsconfig-strict-disabled': 'A tsconfig turns off strict type checking.',
 };
 
 export { knownRules, impactByRule, descriptionByRule };
