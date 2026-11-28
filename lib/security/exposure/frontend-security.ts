@@ -11,6 +11,7 @@
 // field; other dynamic values are contextual.
 import { ts, isDefaultLibrary } from '../../performance/compiler.js';
 import { moduleName } from '../bindings.js';
+import { rendersJavaScriptUrls } from './react-version.js';
 import { calleeName } from '../../performance/schema/ts-helpers.js';
 import { bodyOf, declaredNameOf, typeAnnotationOf } from '../declarations.js';
 import type {
@@ -736,7 +737,7 @@ function checkJsxUrlAttribute(attribute: JsxAttribute, context: SecurityRuleCont
   if (!ts.isJsxExpression(initializer) || !initializer.expression) return;
   if (!isUrlSink(attribute, context)) return;
   const source = urlLeadSource(initializer.expression, context);
-  if (!source) return;
+  if (!source || !rendersJavaScriptUrls(context.sourceFile.fileName)) return;
   context.report(
     attribute,
     'jsx-javascript-url',

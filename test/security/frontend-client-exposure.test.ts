@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import ts from 'typescript';
@@ -114,6 +117,41 @@ test('client-env-secret-exposed: publishable, anon and public keys, flags and se
 });
 
 const reactHeader = "import * as React from 'react';\n";
+const react18 = { dependencies: { react: '^18.2.0', 'react-dom': '^18.2.0' } };
+const urlStubs = {
+  ...stubs.react,
+  ...stubs.nextNavigation,
+  ...stubs.nextRouter,
+  ...stubs.nextLink,
+  ...stubs.reactRouter,
+};
+
+// jsx-javascript-url reads the project's package.json from disk, so these fixtures are real files.
+function urlFindingsOf(source: string, manifest: object | null = react18) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-jsx-url-'));
+  try {
+    const files: Record<string, string> = { ...urlStubs, 'view.tsx': source };
+    if (manifest) files['package.json'] = JSON.stringify(manifest);
+    for (const [name, content] of Object.entries(files)) {
+      const file = path.join(directory, name);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, content);
+    }
+    const viewFile = path.join(directory, 'view.tsx');
+    const program = ts.createProgram([viewFile], {
+      ...compilerOptions,
+      module: ts.ModuleKind.ESNext,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      types: [],
+      noEmit: true,
+    });
+    const sourceFile = program.getSourceFile(viewFile);
+    assert.ok(sourceFile);
+    return analyzeFile(program, sourceFile).filter((finding) => finding.ruleId === 'jsx-javascript-url');
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+}
 
 test('jsx-javascript-url: untrusted values that start a link, form action or frame src are reported', () => {
   const sources = [
@@ -126,15 +164,8 @@ test('jsx-javascript-url: untrusted values that start a link, form action or fra
     `${reactHeader}import { useRouter } from 'next/router';\nexport function View() { const router = useRouter(); return <a href={String(router.query.redirect)}>Back</a>; }`,
     `${reactHeader}import Link from 'next/link';\nimport { useSearchParams } from 'next/navigation';\nexport function View() { const params = useSearchParams(); return <Link href={params.get('next') ?? '/'}>Back</Link>; }`,
   ];
-  const files = {
-    ...stubs.react,
-    ...stubs.nextNavigation,
-    ...stubs.nextRouter,
-    ...stubs.nextLink,
-    ...stubs.reactRouter,
-  };
   for (const source of sources) {
-    const found = findingsOf('jsx-javascript-url', source, files, 'view.tsx');
+    const found = urlFindingsOf(source);
     assert.equal(found.length, 1, source);
     assert.equal(found[0].contextualReason, undefined, source);
   }
@@ -156,9 +187,25 @@ test('jsx-javascript-url: constant prefixes, own addresses, props, fetched data 
     `${reactHeader}declare function Custom(props: { href: string }): null;\nexport const View = () => <Custom href={location.hash} />;`,
     `${reactHeader}import { useRouter } from 'next/navigation';\nexport function View() { const router = useRouter(); return <a href={'/' + String(router)}>Go</a>; }`,
   ];
-  const files = { ...stubs.react, ...stubs.nextNavigation };
-  for (const source of sources)
-    assert.equal(findingsOf('jsx-javascript-url', source, files, 'view.tsx').length, 0, source);
+  for (const source of sources) assert.equal(urlFindingsOf(source).length, 0, source);
+});
+
+test('jsx-javascript-url: only React 18 and older or Preact render javascript: URLs as written', () => {
+  const source = `${reactHeader}export const View = () => <a href={location.hash.slice(1)}>Go</a>;`;
+  // null: no package.json at all.
+  const projects: [object | null, number][] = [
+    [{ dependencies: { react: '^19.0.0', 'react-dom': '^19.0.0' } }, 0],
+    [{ dependencies: { react: '^18.3.1' } }, 1],
+    [{ devDependencies: { 'react-dom': '~17.0.2' }, dependencies: { react: '^19.0.0' } }, 1],
+    [{ peerDependencies: { react: '^18.0.0 || ^19.0.0' } }, 1],
+    [{ dependencies: { preact: '^10.19.0' } }, 1],
+    [{ dependencies: { react: 'latest' } }, 0],
+    [{ dependencies: { react: 'catalog:' } }, 0],
+    [{ dependencies: { lodash: '^4.17.21' } }, 0],
+    [null, 0],
+  ];
+  for (const [manifest, expected] of projects)
+    assert.equal(urlFindingsOf(source, manifest).length, expected, JSON.stringify(manifest));
 });
 
 test("next-image-any-remote-host: hostname '**' in images.remotePatterns is reported", () => {
