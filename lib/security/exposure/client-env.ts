@@ -95,6 +95,8 @@ function exposedByBuildTool(prefix: string, context: SecurityRuleContext) {
 
 // `import { PUBLIC_STRIPE_SECRET_KEY } from '$env/static/public'`.
 function checkImportSpecifier(specifier: ImportSpecifier, context: SecurityRuleContext) {
+  // `import type` is erased, so no value reaches the browser through it.
+  if (specifier.isTypeOnly || specifier.parent.parent.isTypeOnly) return;
   if (!importedFromSvelteKitPublic(specifier)) return;
   const name = (specifier.propertyName ?? specifier.name).text;
   const prefix = exposedPrefix(name, [svelteKitPublicPrefix]);

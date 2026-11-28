@@ -87,6 +87,11 @@ test('client-env-secret-exposed: SvelteKit public env imports', () => {
   const dynamicImport = "import { env } from '$env/dynamic/public';\nexport const key = env.PUBLIC_DB_PASSWORD;";
   assert.equal(findingsOf('client-env-secret-exposed', staticImport).length, 1);
   assert.equal(findingsOf('client-env-secret-exposed', dynamicImport).length, 1);
+  const typeOnlyImports = [
+    "import type { PUBLIC_DB_PASSWORD } from '$env/static/public';\nexport type Password = typeof PUBLIC_DB_PASSWORD;",
+    "import { type PUBLIC_DB_PASSWORD } from '$env/static/public';\nexport type Password = typeof PUBLIC_DB_PASSWORD;",
+  ];
+  for (const source of typeOnlyImports) assert.equal(findingsOf('client-env-secret-exposed', source).length, 0, source);
   const privateImport =
     "import { STRIPE_SECRET_KEY } from '$env/static/private';\nexport const key = STRIPE_SECRET_KEY;";
   assert.equal(findingsOf('client-env-secret-exposed', privateImport).length, 0);
@@ -212,6 +217,7 @@ test('jsx-javascript-url: untrusted values that start a link, form action or fra
     `${reactHeader}export const View = () => <a href={('/' + location.hash.slice(1)).slice(1)}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={\`/\${location.hash.slice(1)}\`.substring(1)}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={decodeURIComponent(encodeURIComponent(location.hash.slice(1)))}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={location.hash && location.hash.slice(1)}>Go</a>;`,
   ];
   for (const source of sources) {
     const found = urlFindingsOf(source);
@@ -240,6 +246,8 @@ test('jsx-javascript-url: constant prefixes, own addresses, props, fetched data 
     `${reactHeader}export const View = () => <a href={('/' + location.hash.slice(1)).slice(0, 80)}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={('/?q=' + location.search).toLowerCase()}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={decodeURI(encodeURIComponent(location.hash.slice(1)))}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={decodeURIComponent(encodeURI(encodeURIComponent(location.hash.slice(1))))}>Go</a>;`,
+    `${reactHeader}export const View = () => <a href={location.hash && '/safe'}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={encodeURIComponent(location.hash.slice(1))}>Go</a>;`,
     `${reactHeader}export const View = () => <a href={' ' + location.href}>Share</a>;`,
     `${reactHeader}export const View = () => <a href={new URL(location.href).origin}>Home</a>;`,

@@ -117,6 +117,8 @@ function compoundLeadSource(
     if (state.prefixCut) return next(left) ?? next(node.right);
     return ts.isStringLiteralLike(left) && isStrippedUrlPrefix(left.text) ? next(node.right) : next(left);
   }
+  // `a && b` yields `b` whenever `a` is truthy; a falsy `a` cannot hold a scheme.
+  if (operator === ts.SyntaxKind.AmpersandAmpersandToken) return next(node.right);
   const fallback = operator === ts.SyntaxKind.QuestionQuestionToken || operator === ts.SyntaxKind.BarBarToken;
   return fallback ? (next(node.left) ?? next(node.right)) : undefined;
 }
@@ -160,6 +162,8 @@ function leadOfLibraryCall(
   if (!ts.isIdentifier(nameNode) || !declaredInDefaultLibrary(nameNode, context)) return;
   const name = nameNode.text;
   const escapesColon = SCHEME_ESCAPING_CALLS.has(name);
+  // `encodeURI` keeps `:` but escapes `%`, so an outer decoder only undoes this layer.
+  const escapesPercent = name === 'encodeURI';
   if (escapesColon && !state.decoded) return;
   const input = ts.isPropertyAccessExpression(callee) ? callee.expression : call.arguments?.[0];
   if (!input) return;
@@ -167,7 +171,7 @@ function leadOfLibraryCall(
   return urlLeadSource(input, context, depth + 1, {
     transformed: state.transformed || !keepsPrefix,
     prefixCut: state.prefixCut || cutsPrefix(call, name),
-    decoded: escapesColon ? false : state.decoded || COLON_DECODING_CALLS.has(name),
+    decoded: escapesColon || escapesPercent ? false : state.decoded || COLON_DECODING_CALLS.has(name),
   });
 }
 
