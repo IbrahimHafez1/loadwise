@@ -111,6 +111,15 @@ test('a length cap does not make an exponential pattern safe', () => {
   assert.deepEqual(redosLines(source), [5, 6]);
 });
 
+test('a cut that can still return long text does not silence a polynomial pattern', () => {
+  const source = route(
+    String.raw`/\s+.*\s+$/.test(req.body.email.slice(0, -1));`,
+    String.raw`/\s+.*\s+$/.test(req.body.email.substring(Number(req.query.at), 254));`,
+    String.raw`/\s+.*\s+$/.test(req.body.email.substring(0, 254));`,
+  );
+  assert.deepEqual(redosLines(source), [5, 6]);
+});
+
 test('overlapping unbounded repeats in sequence are polynomial when something after them can fail', () => {
   const polynomialPatterns = [
     String.raw`\s+.*\s+$`,
@@ -161,8 +170,17 @@ test('a repeat at the edge of a group or loop overlapping a neighbouring repeat 
     String.raw`^(?:x\s+)+\}?[ \t]*$`,
     String.raw`^\s*(?:\w*\s*=>)?x$`,
     String.raw`^a*(?:.*b)c$`,
+    // `(?:a\s*)+` can take a run of `a`s one per turn, which `\w+` splits with it.
+    String.raw`^(?:a\s*)+\w+$`,
+    // The `$` that fails sits inside the group.
+    String.raw`^a*(?:a+$)`,
   ];
   for (const pattern of polynomialPatterns) assert.equal(isCatastrophicPattern(pattern), true, pattern);
+});
+
+test('a repeat inside a `{0}` quantifier never runs, so it overlaps nothing', () => {
+  assert.equal(isCatastrophicPattern(String.raw`^\s*(?:\s+){0}x$`), false);
+  assert.equal(isCatastrophicPattern(String.raw`^\s*(?:\s+){0,1}x$`), true);
 });
 
 test('group edges separated by a required character or over disjoint characters are not polynomial', () => {
@@ -174,7 +192,9 @@ test('group edges separated by a required character or over disjoint characters 
     String.raw`^(?:x\s*)+;\s*$`,
     String.raw`^\s*(?:x\s*=>)?y$`,
     String.raw`^(?:\d+,)+\d+$`,
-    String.raw`^(?:a\s*)+\w+$`,
+    String.raw`^(?:a\s*)+\d+$`,
+    // Nothing after the group's `a+` can fail, so no split is retried.
+    String.raw`^a*(?:a+)`,
     // An anchored line ending in `.*$` stays exempt when the anchor or the `.*` sits in a group.
     String.raw`(^[\t ]*).*$`,
     String.raw`^([^/]*)(\/?.*)$`,
