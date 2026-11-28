@@ -264,6 +264,12 @@ test('a nested field write that may not run keeps the initializer taint, a plain
   assert.equal(routeLines(overwritten, 'command-injection').length, 0);
 });
 
+test('a let reassignment keeps nested fields from both an earlier field write and the new literal', () => {
+  const body =
+    'let record: Record<string, Record<string, string>> = {}; record.nested = { other: String(req.query.other) }; record = { nested: { cmd: String(req.query.cmd) } }; exec(record.nested.cmd);';
+  assert.equal(routeLines(body, 'command-injection').length, 1);
+});
+
 test('reassigning a let object with a value of unknown fields taints every field', () => {
   const body = 'let record = { other: String(req.query.o) }; record = req.body; exec(record.name);';
   assert.equal(routeLines(body, 'command-injection').length, 1);

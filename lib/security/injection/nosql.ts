@@ -195,13 +195,12 @@ function pushedStages(node: Expression, aggregate: CallExpression, checker: Chec
 }
 
 // A push written after the call reaches it only on a later pass of a loop around both that keeps
-// the same pipeline.
+// the same pipeline. Any such loop counts, not just the innermost one around the call.
 function runsBefore(push: Node, aggregate: CallExpression, declaration: Node) {
   if (push.getStart() < aggregate.getStart()) return true;
-  const loop = ts.findAncestor(aggregate, (node: Node) =>
-    encloses(node, declaration) ? 'quit' : ts.isIterationStatement(node, false),
-  );
-  return loop !== undefined && encloses(loop, push);
+  for (let node: Node | undefined = aggregate.parent; node && !encloses(node, declaration); node = node.parent)
+    if (ts.isIterationStatement(node, false) && encloses(node, push)) return true;
+  return false;
 }
 
 function encloses(outer: Node, inner: Node) {
