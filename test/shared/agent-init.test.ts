@@ -34,7 +34,7 @@ test('MCP configuration pins the executable and project even when the client sta
   assert.deepEqual(JSON.parse(result.stdout), {
     type: 'stdio',
     command: process.execPath,
-    args: [bin, 'agent', 'mcp', project],
+    args: [bin, 'agent', 'mcp', fs.realpathSync(project)],
   });
   for (const args of [['missing'], ['.', '.'], ['--unknown']]) {
     const invalid = run(...args);
