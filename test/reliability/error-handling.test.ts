@@ -132,6 +132,8 @@ test('error-logged-without-stack reports a catch that logs only the message and 
     "try { work(); } catch (err) { logger.error('failed: ' + err.message); }",
     'try { work(); } catch (err) { this.logger.error(`failed: ${err.message}`); return null; }',
     "try { work(); } catch (err) { console.error('failed', err.message); res.status(500).end(); }",
+    'try { work(); } catch (err) { console.error(err.message); try { cleanup(); } catch (err) { console.error(err); } }',
+    'try { work(); } catch (err) { console.error(err.message); try { cleanup(); } catch (err) { console.error(err); } }',
   ];
   for (const source of sources) assert.deepEqual(errorRules(source), ['error-logged-without-stack'], source);
 });

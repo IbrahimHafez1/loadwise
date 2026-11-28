@@ -125,13 +125,21 @@ function exitsOrThrows(block: Block): boolean {
   return exits;
 }
 
+// A nested catch that reuses the name declares its own binding, so its references are not the outer error.
+function isShadowedByNestedCatch(node: Node, name: string, outer: CatchClause): boolean {
+  for (let current: Node | undefined = node; current && current !== outer.block; current = current.parent)
+    if (ts.isCatchClause(current) && caughtName(current) === name) return true;
+  return false;
+}
+
 function checkLoggedWithoutStack(clause: CatchClause, sourceFile: SourceFile, file: string, findings: Finding[]) {
   const name = caughtName(clause);
   if (name === undefined || exitsOrThrows(clause.block)) return;
   const references: Identifier[] = [];
   walkNodes(clause.block, (node: Node) => {
     const isPropertyName = ts.isPropertyAccessExpression(node.parent) && node.parent.name === node;
-    if (ts.isIdentifier(node) && node.text === name && !isPropertyName) references.push(node);
+    if (ts.isIdentifier(node) && node.text === name && !isPropertyName && !isShadowedByNestedCatch(node, name, clause))
+      references.push(node);
   });
   if (!references.length || !references.every(isMessageRead)) return;
   const logged = references.map((reference) => enclosingFailureLog(reference, clause.block)).find(Boolean);
