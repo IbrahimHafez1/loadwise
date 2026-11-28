@@ -108,13 +108,23 @@ test('every registry list keyed by rule id is sorted', () => {
   }
 });
 
-test('every security rule group is checked for order', () => {
-  const securityDirectory = path.join(root, 'lib/security');
-  const groupFiles = fs
-    .readdirSync(securityDirectory, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && fs.existsSync(path.join(securityDirectory, entry.name, 'rule-ids.ts')))
-    .map((entry) => `lib/security/${entry.name}/rule-ids.ts`);
-  for (const file of groupFiles) assert.ok(Object.hasOwn(sortedLists, file), `${file} is not checked for order`);
+// Registry files are found by name, so a new rule-ids, rule-descriptions or examples file anywhere in lib must be
+// added to sortedLists above.
+const registryFileName = /^(?:rule-ids|rule-descriptions|examples|[\w-]+-examples)\.c?ts$/;
+// Registry-named files with no list keyed by rule id: these maps are keyed by language, and rules dispatch in code.
+const unkeyedRegistryFiles = new Set(['lib/editor/maintainability-examples.ts']);
+
+test('every rule registry file in lib is checked for order', () => {
+  const registryFiles = fs
+    .readdirSync(path.join(root, 'lib'), { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile() && !entry.parentPath.includes('vendor'))
+    .filter((entry) => registryFileName.test(entry.name) || path.basename(entry.parentPath) === 'examples')
+    .filter((entry) => /\.c?ts$/.test(entry.name) && !entry.name.endsWith('.d.ts'))
+    .map((entry) => path.relative(root, path.join(entry.parentPath, entry.name)).split(path.sep).join('/'));
+  assert.ok(registryFiles.length >= Object.keys(sortedLists).length, 'could not find the registry files');
+  for (const file of registryFiles) {
+    assert.ok(Object.hasOwn(sortedLists, file) || unkeyedRegistryFiles.has(file), `${file} is not checked for order`);
+  }
 });
 
 test('the config schema lists rule ids in sorted order', () => {
