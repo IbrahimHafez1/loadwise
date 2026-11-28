@@ -12,6 +12,7 @@ import { exampleFor as securityExample } from './security-examples.js';
 import { exampleFor as accessibilityExample } from './accessibility-examples.js';
 import { getFindingComparison, inlineComparison } from './finding-comparison.js';
 import { rangeContains, samePosition, validateRange, wordRangeAt } from './editor-document.js';
+import { isRealPathInside } from './workspace-paths.js';
 import { pillarOfRule } from '../shared/rule-registry.js';
 import { documentationUrl } from '../shared/formats/sarif.js';
 import type { EditorDocument } from './editor-document.js';
@@ -265,8 +266,8 @@ function location(rootPath: string, site: unknown, options: PublishOptions): Fil
   return { filename, uri, range: sourceRange(site, options.documentFor(filename)) };
 }
 
-// Resolves each change of a site fix inside the workspace folder; a path outside it drops the whole
-// fix.
+// Resolves each change of a site fix inside the workspace folder; a path outside it, also through a
+// symbolic link, drops the whole fix.
 function workspaceFix(rootPath: string, fix: FindingFix | undefined): WorkspaceFix | undefined {
   if (!fix || !Array.isArray(fix.changes) || !fix.changes.length) return;
   const changes: WorkspaceChange[] = [];
@@ -280,7 +281,7 @@ function workspaceFix(rootPath: string, fix: FindingFix | undefined): WorkspaceF
       return;
     if (!Number.isSafeInteger(change.line) || change.line < 1) return;
     const filename = insideRoot(rootPath, change.file);
-    if (filename === undefined) return;
+    if (filename === undefined || !isRealPathInside(rootPath, filename)) return;
     changes.push({ ...change, filename });
   }
   return {

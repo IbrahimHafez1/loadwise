@@ -54,7 +54,8 @@ function startLspClient(cwd: string): LspClient {
   function answer(id: unknown, method: string, params: unknown): void {
     serverRequests.push({ method, params });
     const handler = handlers.get(method);
-    send({ id, result: handler ? handler(params) : null });
+    // A handler may answer later, as a slow editor would.
+    void Promise.resolve(handler ? handler(params) : null).then((result) => send({ id, result }));
   }
   function receive(message: unknown): void {
     if (!isRecord(message)) return;

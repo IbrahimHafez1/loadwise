@@ -73,6 +73,17 @@ function createWorkspace(base: string, name: string, files: Record<string, strin
   return { base, root, uri: pathToFileURL(root).href, reports, cli };
 }
 
+// Bounds a wait in the cleanup, so a stuck server cannot hold the test run.
+function within<Value>(promise: Promise<Value>, timeoutMs: number): Promise<Value | undefined> {
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<undefined>((resolve) => {
+    timer = setTimeout(() => resolve(undefined), timeoutMs);
+  });
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+}
+
+const shutdownTimeoutMs = 5_000;
+
 function temporaryBase(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'loadwise-lsp-'));
 }
@@ -99,9 +110,15 @@ async function startServer(
   context.after(async () => {
     // The server must exit before its folder is removed, because Windows refuses to delete a folder in use.
     if (client.child.exitCode === null) {
-      await client.request('shutdown').catch(() => {});
+      await within(
+        client.request('shutdown').catch(() => {}),
+        shutdownTimeoutMs,
+      );
       client.notify('exit');
-      await client.exited;
+      if ((await within(client.exited, shutdownTimeoutMs)) === undefined && client.child.exitCode === null) {
+        client.child.kill();
+        await client.exited;
+      }
     }
     removeDirectory(workspace.base);
   });
@@ -251,6 +268,8 @@ test('hover, code actions, fix-all, code lenses and the apply command edit only 
   const workspace = createWorkspace(temporaryBase(), 'shop', {
     'tsconfig.json': '{}',
     'orders.ts': ordersText,
+    // The migration folder exists, so the editor can create the new file in it directly.
+    'migrations/000_init.sql': '',
   });
   seedOrders(workspace);
   const client = await startServer(context, workspace);
@@ -309,12 +328,12 @@ test('hover, code actions, fix-all, code lenses and the apply command edit only 
   const [fixAll] = await codeActions(client, uri, 0, ['source.fixAll']);
   const fixAllChanges = list(record(record(fixAll).edit).documentChanges).map(record);
   assert.equal(record(fixAll).kind, 'source.fixAll.loadwise');
+  assert.equal(fixAllChanges[0].kind, 'create', 'new files first, so a failed create leaves existing files alone');
   assert.deepEqual(
-    list(fixAllChanges[0].edits).map((edit) => record(edit).newText),
+    list(fixAllChanges[2].edits).map((edit) => record(edit).newText),
     ['ONE();', 'THREE();'],
     'one edit for the whole file, so one undo reverts it',
   );
-  assert.equal(fixAllChanges[1].kind, 'create');
 
   const lenses = list(await client.request('textDocument/codeLens', { textDocument: { uri } }));
   assert.deepEqual(
@@ -438,6 +457,8 @@ test('saves and watched-file changes rescan, workspace folders come and go, and 
     'a rescan after a file change',
   );
   writeReport(shop, 'maint.json', []);
+  const runs = () => fs.readFileSync(path.join(shop.reports, 'runs.log'), 'utf8');
+  const runsBeforeSave = runs().length;
   client.notify('textDocument/didOpen', {
     textDocument: { uri: ordersUri, languageId: 'typescript', version: 1, text: ordersText },
   });
@@ -445,8 +466,10 @@ test('saves and watched-file changes rescan, workspace folders come and go, and 
   await until(() => client.diagnostics.get(ordersUri)?.length === 0, 'a rescan after a save');
   // The checkers run one after another and a newer change cancels the rest of a scan, so security
   // runs once maintainability reports for the latest change.
-  const runs = () => fs.readFileSync(path.join(shop.reports, 'runs.log'), 'utf8');
-  await until(() => /^sec -p tsconfig\.json --json$/m.test(runs()), 'security to run after maintainability');
+  await until(
+    () => /^sec -p tsconfig\.json --json$/m.test(runs().slice(runsBeforeSave)),
+    'security to run again after maintainability',
+  );
 
   const invoiceUri = fileUri(billing, 'invoice.ts');
   client.notify('workspace/didChangeWorkspaceFolders', {
@@ -501,3 +524,188 @@ test(
     assert.equal(startLine(found), 5);
   },
 );
+
+function runLog(workspace: Workspace): string {
+  try {
+    return fs.readFileSync(path.join(workspace.reports, 'runs.log'), 'utf8');
+  } catch {
+    return '';
+  }
+}
+
+const finding = (file: string, ruleId: string, line = 1) => ({ file, line, column: 1, ruleId, message: 'Found.' });
+
+test('with the watcher running, template findings come from an accessibility scan of their own', async (context) => {
+  const workspace = createWorkspace(temporaryBase(), 'shop', {
+    'tsconfig.json': '{}',
+    'orders.ts': ordersText,
+    'index.html': '<img src="a.png">\n',
+  });
+  writeReport(workspace, 'watch.json', [finding('orders.ts', 'array-repeated-membership')]);
+  // The one-shot scan also reports the JSX the watcher already shows; only the template is kept.
+  writeReport(workspace, 'a11y.json', [finding('index.html', 'img-alt'), finding('orders.ts', 'img-alt')]);
+  const client = await startServer(context, workspace);
+  const htmlUri = fileUri(workspace, 'index.html');
+  await until(() => codes(client.diagnostics.get(htmlUri)).join() === 'img-alt', 'the template finding');
+  assert.deepEqual(codes(client.diagnostics.get(fileUri(workspace, 'orders.ts'))), ['array-repeated-membership']);
+  assert.match(runLog(workspace), /^a11y -p tsconfig\.json --json$/m);
+  assert.match(JSON.stringify(client.serverRequests), /html/);
+
+  writeReport(workspace, 'a11y.json', []);
+  client.notify('workspace/didChangeWatchedFiles', { changes: [{ uri: htmlUri, type: 2 }] });
+  await until(() => client.diagnostics.get(htmlUri)?.length === 0, 'a rescan after a template change');
+});
+
+test('a folder without a config is scanned the way loadwise check scans it', async (context) => {
+  const workspace = createWorkspace(temporaryBase(), 'shop', {
+    'package.json': '{"name":"shop"}',
+    'orders.js': ordersText,
+  });
+  writeReport(workspace, 'perf.json', [finding('orders.js', 'array-repeated-membership')]);
+  const client = await startServer(context, workspace);
+  const uri = fileUri(workspace, 'orders.js');
+  await until(() => codes(client.diagnostics.get(uri)).join() === 'array-repeated-membership', 'plain JavaScript');
+  await until(() => /^sec -p \. --json$/m.test(runLog(workspace)), 'the security scan');
+  assert.match(runLog(workspace), /^perf -p \. --json$/m);
+  assert.doesNotMatch(runLog(workspace), /--watch/);
+});
+
+test('a tsconfig.json beside a jsconfig.json is scanned as the folder, like loadwise check', async (context) => {
+  const workspace = createWorkspace(temporaryBase(), 'shop', {
+    'tsconfig.json': '{}',
+    'jsconfig.json': '{}',
+    'orders.ts': ordersText,
+  });
+  const client = await startServer(context, workspace);
+  await until(() => /^sec -p \. --json$/m.test(runLog(workspace)), 'the security scan');
+  assert.match(runLog(workspace), /^perf -p \. --json$/m);
+  assert.match(runLog(workspace), /^rel -p \. --json$/m);
+  assert.doesNotMatch(runLog(workspace), /--watch/);
+  assert.ok(client.child.exitCode === null);
+});
+
+test('nested workspace folders show one diagnostic per finding and both rescan on a change', async (context) => {
+  const base = temporaryBase();
+  const shop = createWorkspace(base, 'shop', { 'pkg/orders.ts': ordersText });
+  const nestedRoot = path.join(shop.root, 'pkg');
+  // The fake checker reads the reports of the folder with the same base name.
+  const nested: Workspace = {
+    ...shop,
+    root: nestedRoot,
+    uri: pathToFileURL(nestedRoot).href,
+    reports: path.join(base, 'cli', 'pkg'),
+  };
+  fs.mkdirSync(nested.reports, { recursive: true });
+  writeReport(shop, 'maint.json', [finding('pkg/orders.ts', 'deep-nesting')]);
+  writeReport(nested, 'maint.json', [finding('orders.ts', 'deep-nesting')]);
+  const client = await startServer(context, shop);
+  // Folder changes are handled once the server has registered for them, after its first folders.
+  await until(() => /maint/.test(runLog(shop)), 'the parent folder to scan');
+  client.notify('workspace/didChangeWorkspaceFolders', {
+    event: { added: [{ uri: nested.uri, name: 'pkg' }], removed: [] },
+  });
+  const uri = fileUri(nested, 'orders.ts');
+  await until(() => /maint/.test(runLog(nested)), 'the nested folder to scan');
+  await until(() => client.diagnostics.get(uri)?.length === 1, 'one diagnostic');
+  assert.equal(
+    (await codeActions(client, uri, 0)).filter((action) => String(record(action).title).startsWith('Dismiss this'))
+      .length,
+    1,
+  );
+
+  const parentRuns = runLog(shop).length;
+  const nestedRuns = runLog(nested).length;
+  client.notify('workspace/didChangeWatchedFiles', { changes: [{ uri, type: 2 }] });
+  await until(
+    () => runLog(shop).length > parentRuns && runLog(nested).length > nestedRuns,
+    'the parent and the nested folder to rescan',
+  );
+});
+
+test('a late answer to an older settings request does not overwrite newer settings', async (context) => {
+  const workspace = createWorkspace(temporaryBase(), 'shop', { 'tsconfig.json': '{}', 'orders.ts': ordersText });
+  seedOrders(workspace);
+  const client = await startServer(context, workspace);
+  let requests = 0;
+  client.onRequest('workspace/configuration', () => {
+    requests++;
+    if (requests === 1) {
+      client.notify('workspace/didChangeConfiguration', { settings: null });
+      return new Promise((resolve) => setTimeout(() => resolve([{ severity: 'error', cli: workspace.cli }]), 500));
+    }
+    return [{ severity: 'hint', cli: workspace.cli }];
+  });
+  client.notify('workspace/didChangeConfiguration', { settings: null });
+  const severities = () =>
+    (client.diagnostics.get(fileUri(workspace, 'orders.ts')) ?? []).map((item) => record(item).severity);
+  await until(() => requests === 2 && severities().length === 4 && severities().every((level) => level === 4), 'hint');
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  assert.ok(
+    severities().every((level) => level === 4),
+    'the older answer arrived later and was dropped',
+  );
+});
+
+test('a severity change republishes without restarting the watcher; a project change restarts it', async (context) => {
+  const workspace = createWorkspace(temporaryBase(), 'shop', { 'tsconfig.json': '{}', 'orders.ts': ordersText });
+  seedOrders(workspace);
+  const client = await startServer(context, workspace, {
+    initializationOptions: { cli: workspace.cli },
+    clientCapabilities: { ...capabilities, workspace: { ...capabilities.workspace, configuration: false } },
+  });
+  const uri = fileUri(workspace, 'orders.ts');
+  const watchRuns = () => runLog(workspace).match(/--watch/g)?.length ?? 0;
+  await until(() => client.diagnostics.get(uri)?.length === 4 && watchRuns() === 1, 'the first scan');
+  client.notify('workspace/didChangeConfiguration', {
+    settings: { loadwise: { cli: workspace.cli, severity: 'hint' } },
+  });
+  const severities = () => (client.diagnostics.get(uri) ?? []).map((item) => record(item).severity);
+  await until(() => severities().join() === '4,4,4,4', 'hint severity');
+  // Longer than the scan debounce, so a restart would have started a second watcher.
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  assert.equal(watchRuns(), 1);
+  client.notify('workspace/didChangeConfiguration', {
+    settings: { loadwise: { cli: workspace.cli, severity: 'hint', project: 'tsconfig.json' } },
+  });
+  await until(() => watchRuns() === 2, 'a new watcher for the new project setting');
+});
+
+test('a dismissal from a buffer opened with unsaved edits records the saved line', async (context) => {
+  const workspace = createWorkspace(temporaryBase(), 'shop', { 'tsconfig.json': '{}', 'orders.ts': ordersText });
+  seedOrders(workspace);
+  const client = await startServer(context, workspace);
+  const uri = fileUri(workspace, 'orders.ts');
+  await until(() => client.diagnostics.get(uri)?.length === 4, 'diagnostics');
+  client.notify('textDocument/didOpen', {
+    textDocument: { uri, languageId: 'typescript', version: 7, text: 'edited();\ntwo();\nthree();\n' },
+  });
+  // The server handles messages in order, so the code actions see the opened buffer.
+  const dismissThis = (await codeActions(client, uri, 0)).find((action) =>
+    String(record(action).title).startsWith('Dismiss this'),
+  );
+  assert.equal(record(commandArgument(dismissThis)).lineText, 'one();');
+});
+
+test('a fix creating a file in a missing folder makes the folder, and removes it when the edit is refused', async (context) => {
+  const workspace = createWorkspace(temporaryBase(), 'shop', { 'tsconfig.json': '{}', 'orders.ts': ordersText });
+  seedOrders(workspace);
+  const client = await startServer(context, workspace);
+  const uri = fileUri(workspace, 'orders.ts');
+  await until(() => client.diagnostics.get(uri)?.length === 4, 'diagnostics');
+  const createAction = record(
+    (await codeActions(client, uri, 1)).find((action) => record(action).title === 'Apply fix: pg-transaction-on-pool'),
+  );
+  assert.equal(createAction.edit, undefined, 'the command makes the folder first');
+  const migrations = path.join(workspace.root, 'migrations');
+  let folderExisted = false;
+  client.onRequest('workspace/applyEdit', () => {
+    folderExisted = fs.existsSync(migrations);
+    return { applied: false };
+  });
+  await client.request('workspace/executeCommand', {
+    command: 'loadwise.applyFix',
+    arguments: [commandArgument(createAction)],
+  });
+  assert.equal(folderExisted, true);
+  assert.equal(fs.existsSync(migrations), false, 'a refused edit leaves no empty folder behind');
+});
