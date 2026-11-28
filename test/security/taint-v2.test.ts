@@ -254,6 +254,16 @@ test('a field written after an object literal initializer carries its own taint'
   assert.equal(routeLines(otherField, 'command-injection').length, 0);
 });
 
+test('a nested field write that may not run keeps the initializer taint, a plain overwrite clears it', () => {
+  const declared = 'const record: { nested: Record<string, string> } = { nested: { cmd: String(req.query.c) } };';
+  const conditional = `${declared} if (req.query.replace) record.nested = { other: String(req.query.o) }; exec(record.nested.cmd);`;
+  assert.equal(routeLines(conditional, 'command-injection').length, 1);
+  const logical = `${declared} record.nested ||= { other: String(req.query.o) }; exec(record.nested.cmd);`;
+  assert.equal(routeLines(logical, 'command-injection').length, 1);
+  const overwritten = `${declared} record.nested = { other: String(req.query.o) }; exec(record.nested.cmd);`;
+  assert.equal(routeLines(overwritten, 'command-injection').length, 0);
+});
+
 test('reassigning a let object with a value of unknown fields taints every field', () => {
   const body = 'let record = { other: String(req.query.o) }; record = req.body; exec(record.name);';
   assert.equal(routeLines(body, 'command-injection').length, 1);

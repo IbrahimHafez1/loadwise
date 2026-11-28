@@ -177,7 +177,6 @@ function createdBy(
 
 export {
   sourceSuffix,
-  hopReason,
   reportTraced,
   methodName,
   isGlobalName,

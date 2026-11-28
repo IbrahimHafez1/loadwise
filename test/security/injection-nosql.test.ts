@@ -221,3 +221,29 @@ test('later filter writes, pushed pipeline stages, local $or branches and where 
     [13, 'D'],
   ]);
 });
+
+test('a stage pushed after aggregate runs is silent unless a loop runs the call again', () => {
+  const source = route(
+    'const pipeline: object[] = [];',
+    'User.aggregate(pipeline);',
+    'pipeline.push({ $match: { name: req.body.name } });',
+    'const looped: object[] = [];',
+    'for (const name of req.body.names) {',
+    '  User.aggregate(looped);',
+    '  looped.push({ $match: { name } });',
+    '}',
+  );
+  assert.deepEqual(nosqlLines(source), [[11, 'D']]);
+});
+
+test('a field written to a local $or branch is reported, an $eq-wrapped one is silent', () => {
+  const source = route(
+    'const branch: Record<string, unknown> = {};',
+    'branch.name = req.body.name;',
+    'User.find({ $or: [branch] });',
+    'const wrapped: Record<string, unknown> = {};',
+    'wrapped.name = { $eq: req.body.name };',
+    'User.find({ $or: [wrapped] });',
+  );
+  assert.deepEqual(nosqlLines(source), [[6, 'D']]);
+});

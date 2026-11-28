@@ -10,7 +10,7 @@ import { propagation } from './propagate.js';
 import { isNumericCall, isPrunedType, isGuarded, stringIsSafe, isRegexEscape } from './sanitizers.js';
 import { validatedField, schemaCall, schemaShape } from './validators.js';
 import { createSummaries, argumentValidations } from './summaries.js';
-import { assignmentsTo, fieldWritesTo } from './guards.js';
+import { assignmentsTo, fieldWritesTo, alwaysOverwrites } from './guards.js';
 import { createUrlControl, isUrlConstructor } from './url-parts.js';
 import type {
   BinaryExpression,
@@ -98,6 +98,14 @@ function isTraced(result: TaintResult | undefined): result is TracedResult {
 function oneLine(text: string, limit: number) {
   const line = text.replaceAll(/\s+/g, ' ').trim();
   return line.length > limit ? line.slice(0, limit - 3) + '...' : line;
+}
+
+// The taint of a field that holds either its earlier value or the written one.
+function eitherField(earlier: TaintResult | undefined, written: TaintResult): TaintResult {
+  if (!earlier) return written;
+  if (!earlier.objectFields) return earlier;
+  if (!written.objectFields) return written;
+  return { ...written, objectFields: new Map([...earlier.objectFields, ...written.objectFields]) };
 }
 
 function step(node: Node): TraceStep {
@@ -543,7 +551,7 @@ function createTaint(program: ProgramAdapter): TaintApi {
       const base = result ?? partOf(written);
       if (!base) continue;
       const fields = new Map(result?.objectFields);
-      fields.set(name, written);
+      fields.set(name, alwaysOverwrites(assignment, declaration) ? written : eitherField(fields.get(name), written));
       result = { ...base, objectFields: fields, objectSteps: result?.objectSteps ?? base.steps.length };
     }
     return result;

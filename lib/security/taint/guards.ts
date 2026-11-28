@@ -14,6 +14,7 @@ import type {
   Node,
   Statement,
   SyntaxKind,
+  VariableDeclaration,
 } from 'typescript';
 import type { CheckerAdapter, SymbolAdapter } from '../../shared/types.js';
 import type { EvidenceTest, SubjectTest } from '../types/condition-guards.js';
@@ -335,6 +336,16 @@ function fieldWritesTo(declaration: Declaration, scope: Node, checker: CheckerAd
   return byDeclaration.get(declaration) ?? [];
 }
 
+// A plain `=` statement in the declaration's own block runs whenever the declaration does. A write
+// inside an `if`, a loop or a callback, or a `||=`, may not run, so the field keeps its earlier value.
+function alwaysOverwrites(assignment: BinaryExpression, declaration: VariableDeclaration) {
+  return (
+    assignment.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    ts.isExpressionStatement(assignment.parent) &&
+    assignment.parent.parent === declaration.parent.parent.parent
+  );
+}
+
 // A parameter, a `const`, or a name destructured from either.
 function isStableDeclaration(declaration: Node) {
   let current: Node = declaration;
@@ -407,5 +418,13 @@ function isGuardedByCondition(use: Node, evidence: EvidenceTest): boolean {
   return false;
 }
 
-export { isBuiltinReference, isGuardedUse, isGuardedByCondition, isReassigned, assignmentsTo, fieldWritesTo };
+export {
+  isBuiltinReference,
+  isGuardedUse,
+  isGuardedByCondition,
+  isReassigned,
+  assignmentsTo,
+  fieldWritesTo,
+  alwaysOverwrites,
+};
 export type { FieldWrite };
